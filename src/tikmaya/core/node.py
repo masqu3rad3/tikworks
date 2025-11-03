@@ -1,7 +1,7 @@
 # node.py — base Node and Plug wrappers
 import maya.cmds as cmds
 from .registry import _NODE_TYPES
-
+from .registry import set_default_factory
 
 class Node:
     """Base wrapper around a Maya dependency node or DAG node."""
@@ -122,3 +122,5 @@ class Plug:
 
     def __repr__(self):
         return f"<Plug '{self.path}'>"
+
+set_default_factory(Node)
