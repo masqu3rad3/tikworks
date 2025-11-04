@@ -67,7 +67,7 @@ class Node:
 
     def __getitem__(self, attr):
         """Get a Plug for the given attribute name."""
-        return Plug(self.name, attr)
+        return Plug(self, attr)
 
     def __repr__(self):
         return f"<{self.__class__.__name__} '{self.name}'>"
