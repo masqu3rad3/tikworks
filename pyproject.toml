@@ -1,0 +1,9 @@
+[build-system]
+requires = []
+
+[project]
+name = "tikworks"
+authors = [{name = "Arda Kutlu", email = "ardakutlu@gmail.com"}]
+requires-python = "> 3.10"
+readme = "README.md"
+dynamic = ["version", "description"]

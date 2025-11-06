@@ -39,8 +39,8 @@ class Node:
     def create(cls, cmd, **kwargs):
         """Create a node using a maya.cmds command name (e.g., 'joint', 'polySphere')."""
         result = cmds.createNode(cmd, **kwargs)
-        if isinstance(result, (list, tuple)):
-            result = result[0]
+        # if isinstance(result, (list, tuple)):
+        #     result = result[0]
 
         node_type = cmds.nodeType(result)
         subclass = _NODE_TYPES.get(node_type, Node)
@@ -48,7 +48,7 @@ class Node:
 
     def delete(self):
         """Delete the node from the scene."""
-        cmds.delete(self.uuid)
+        cmds.delete(self.long_name)
         self._invalidate_cache()
 
     def rename(self, new_name):
@@ -59,7 +59,7 @@ class Node:
 
     def exists(self):
         """Check if the node still exists in the scene."""
-        return cmds.objExists(self.uuid)
+        return cmds.objExists(self.long_name)
 
     def _invalidate_cache(self):
         self._cached_long_name = None

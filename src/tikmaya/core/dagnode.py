@@ -24,10 +24,11 @@ class DagNode(Node):
     def parent(self):
         """Return the parent as a wrapped node (or None if no parent)."""
         mfn = OpenMaya.MFnDagNode(self._dag_path())
-        if mfn.parentCount() == 0:
-            return None
         parent_obj = mfn.parent(0)
         parent_path = OpenMaya.MDagPath.getAPathTo(parent_obj)
+        full_path_name = parent_path.fullPathName()
+        if not full_path_name:
+            return None
         return get_node(parent_path.fullPathName())
 
     @parent.setter
@@ -45,9 +46,9 @@ class DagNode(Node):
     def children(self):
         """Return children as wrapped nodes."""
         mfn = OpenMaya.MFnDagNode(self._dag_path())
-        out = []
+        children_list = []
         for idx in range(mfn.childCount()):
             child_obj = mfn.child(idx)
             child_path = OpenMaya.MDagPath.getAPathTo(child_obj)
-            out.append(get_node(child_path.fullPathName()))
-        return out
+            children_list.append(get_node(child_path.fullPathName()))
+        return children_list

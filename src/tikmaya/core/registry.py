@@ -31,8 +31,8 @@ def get_node(name: str) -> Any:
         return cls(name)
 
     # Try inherited types (e.g., 'dagNode', 'dependNode', etc.)
-    for t in (cmds.nodeType(name, inherited=True) or []):
-        cls = _NODE_TYPES.get(t)
+    for n_t in (cmds.nodeType(name, inherited=True) or []):
+        cls = _NODE_TYPES.get(n_t)
         if cls is not None:
             return cls(name)
 
