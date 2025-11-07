@@ -61,6 +61,14 @@ class Node:
         """Check if the node still exists in the scene."""
         return cmds.objExists(self.long_name)
 
+    def add_attr(self, attr_name, **kwargs):
+        """Add a new attribute to the node."""
+        cmds.addAttr(self.long_name, longName=attr_name, **kwargs)
+
+    def delete_attr(self, attr_name):
+        """Delete an attribute from the node."""
+        cmds.deleteAttr(f"{self.long_name}.{attr_name}")
+
     def _invalidate_cache(self):
         self._cached_long_name = None
         self._cached_short_name = None
@@ -97,20 +105,25 @@ class Plug:
         node_name = cmds.ls(self._parent_uuid, long=True)[0]
         return f"{node_name}.{self._attr}"
 
-    def get(self):
+    def get(self, **kwargs):
         """Get the value of the attribute."""
-        return cmds.getAttr(self.path)
+        return cmds.getAttr(self.path, **kwargs)
 
-    def set(self, value):
+    def set(self, value, **kwargs):
         """Set the value of the attribute."""
         if isinstance(value, (list, tuple)):
-            cmds.setAttr(self.path, *value)
+            cmds.setAttr(self.path, *value, **kwargs)
         elif isinstance(value, (float, int, bool)):
-            cmds.setAttr(self.path, value)
+            cmds.setAttr(self.path, value, **kwargs)
         elif isinstance(value, str):
-            cmds.setAttr(self.path, value, type="string")
+            cmds.setAttr(self.path, value, type="string", **kwargs)
         else:
             raise TypeError(f"Unsupported type for setting attribute: {type(value)}")
+
+    def rename(self, new_attr_name):
+        """Rename the attribute."""
+        cmds.renameAttr(self.path, new_attr_name)
+        self._attr = new_attr_name
 
     def connect(self, other: "Plug", force: bool = True) -> None:
         """Connect this plug to another plug."""
