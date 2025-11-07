@@ -112,7 +112,7 @@ class Plug:
         else:
             raise TypeError(f"Unsupported type for setting attribute: {type(value)}")
 
-    def connect(self, other, force=True):
+    def connect(self, other: "Plug", force: bool = True) -> None:
         """Connect this plug to another plug."""
         cmds.connectAttr(self.path, other.path, force=force)
 
@@ -128,6 +128,13 @@ class Plug:
     def __getitem__(self, attr):
         """Get a child plug (for compound attributes)."""
         return Plug(self, f"{self.attr}.{attr}")
+
+    def __rshift__(self, other: "Plug") -> "Plug":
+        """Connect self to other using `>>` operator and return the right‑hand side for chaining."""
+        if not isinstance(other, Plug):
+            raise TypeError(f"Right operand must be a Plug, got {type(other)}")
+        self.connect(other, force=True)
+        return other
 
     def __repr__(self):
         return f"<Plug '{self.path}'>"

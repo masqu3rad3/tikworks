@@ -60,6 +60,7 @@ def test_rename_invalidate_cache_and_returns_self():
     assert node.long_name.endswith("|renamedX")
 
 
+
 def test_exists_true_then_false_after_delete_and_cache_invalidated():
     t = cmds.createNode("transform", name="toDelete")
     node = Node(cmds.ls(t, long=True)[0])
@@ -68,7 +69,6 @@ def test_exists_true_then_false_after_delete_and_cache_invalidated():
     assert not cmds.objExists(t)
     assert node.name is None
     assert node.long_name is None
-
 
 def test_getitem_returns_plug_and_path_ends_with_attr():
     t = cmds.createNode("transform", name="holder")
@@ -80,12 +80,34 @@ def test_getitem_returns_plug_and_path_ends_with_attr():
     assert plug.path.split(".")[-1] == "foo"
 
 
+def test_plug_getitem_returns_nested_plug():
+    node = Node.create("blendShape", name="bs")
+    # ensure the nested plug exists
+    assert node["input[0]"]["inputGeometry"]
+
+
 def test_plug_set_and_get_numeric_float_on_builtin_attr():
     t = cmds.createNode("transform", name="item")
     node = Node(cmds.ls(t, long=True)[0])
     plug = node["rotateX"]
     plug.set(12.5)
     assert pytest.approx(plug.get(), rel=1e-6) == 12.5
+
+
+def test_rshift_operator_returns_connected_plug():
+    a = Node.create("transform", name="A_shift")
+    b = Node.create("transform", name="B_shift")
+    a["tx"] >> b["tx"]
+    assert cmds.listConnections(b.name) == [a.name]
+
+
+def test_chain_rshift_operator_returns_final_connected_plug():
+    a = Node.create("transform", name="A_chain")
+    b = Node.create("transform", name="B_chain")
+    c = Node.create("transform", name="C_chain")
+    a["ty"] >> b["ty"] >> c["ty"]
+    assert cmds.listConnections(c.name) == [b.name]
+    assert cmds.listConnections(b.name) == [c.name, a.name]
 
 
 def test_plug_set_with_list_single_value_on_builtin_attr():
