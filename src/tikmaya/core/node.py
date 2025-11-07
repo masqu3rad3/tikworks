@@ -76,9 +76,9 @@ class Node:
 class Plug:
     """Represents an attribute plug on a Maya node."""
 
-    def __init__(self, node: Node, attr: str):
+    def __init__(self, node, attr: str):
         """Initialize a Plug for the given node and attribute name."""
-        self._uuid = node.uuid
+        self._parent_uuid = node.uuid
         self._attr = attr
 
     @property
@@ -87,9 +87,14 @@ class Plug:
         return self._attr
 
     @property
+    def uuid(self):
+        """The UUID of the node this plug belongs to."""
+        return self._parent_uuid
+
+    @property
     def path(self):
         """The full attribute path."""
-        node_name = cmds.ls(self._uuid, long=True)[0]
+        node_name = cmds.ls(self._parent_uuid, long=True)[0]
         return f"{node_name}.{self._attr}"
 
     def get(self):
@@ -119,6 +124,10 @@ class Plug:
             sources = cmds.listConnections(self.path, plugs=True, source=True)
             if sources:
                 cmds.disconnectAttr(sources[0], self.path)
+
+    def __getitem__(self, attr):
+        """Get a child plug (for compound attributes)."""
+        return Plug(self, f"{self.attr}.{attr}")
 
     def __repr__(self):
         return f"<Plug '{self.path}'>"
