@@ -138,6 +138,26 @@ class Plug:
             if sources:
                 cmds.disconnectAttr(sources[0], self.path)
 
+    @property
+    def locked(self) -> bool:
+        """Check if the attribute is locked."""
+        return cmds.getAttr(self.path, lock=True)
+
+    @locked.setter
+    def locked(self, state: bool) -> None:
+        """Set the lock state of the attribute."""
+        cmds.setAttr(self.path, edit=True, lock=state)
+
+    def lock(self):
+        """Lock the attribute."""
+        self.locked = True
+
+    def unlock(self):
+        """Unlock the attribute."""
+        self.locked = False
+
+
+
     def __getitem__(self, attr):
         """Get a child plug (for compound attributes)."""
         return Plug(self, f"{self.attr}.{attr}")
