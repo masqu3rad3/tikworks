@@ -20,23 +20,49 @@ def set_default_factory(factory: Type[T]) -> None:
     global _DEFAULT_FACTORY
     _DEFAULT_FACTORY = factory  # type: ignore[assignment]
 
-def get_node(name: str) -> Any:
-    """Return an instance of the correct Node subclass based on Maya node type."""
+def resolve_node_class(name: str):
+    """Return the most specific registered class for a given Maya node."""
     if not cmds.objExists(name):
         raise ValueError(f"Node '{name}' does not exist.")
 
     node_type = cmds.nodeType(name)
     cls = _NODE_TYPES.get(node_type)
-    if cls is not None:
-        return cls(name)
+    if cls:
+        return cls
 
-    # Try inherited types (e.g., 'dagNode', 'dependNode', etc.)
-    for n_t in (cmds.nodeType(name, inherited=True) or []):
-        cls = _NODE_TYPES.get(n_t)
-        if cls is not None:
-            return cls(name)
+    # Inheritance fallback
+    for inherited_type in (cmds.nodeType(name, inherited=True) or []):
+        cls = _NODE_TYPES.get(inherited_type)
+        if cls:
+            return cls
 
-    if _DEFAULT_FACTORY is not None:
-        return _DEFAULT_FACTORY(name)
+    if _DEFAULT_FACTORY:
+        return _DEFAULT_FACTORY
 
     raise LookupError(f"No wrapper registered for '{node_type}' and no default factory set.")
+
+def resolve(name: str) -> Any:
+    """Return an instance of the correct Node subclass based on Maya node type."""
+    cls = resolve_node_class(name)
+    return cls(name)
+
+# def resolve(name: str) -> Any:
+#     """Return an instance of the correct Node subclass based on Maya node type."""
+#     if not cmds.objExists(name):
+#         raise ValueError(f"Node '{name}' does not exist.")
+#
+#     node_type = cmds.nodeType(name)
+#     cls = _NODE_TYPES.get(node_type)
+#     if cls is not None:
+#         return cls(name)
+#
+#     # Try inherited types (e.g., 'dagNode', 'dependNode', etc.)
+#     for n_t in (cmds.nodeType(name, inherited=True) or []):
+#         cls = _NODE_TYPES.get(n_t)
+#         if cls is not None:
+#             return cls(name)
+#
+#     if _DEFAULT_FACTORY is not None:
+#         return _DEFAULT_FACTORY(name)
+#
+#     raise LookupError(f"No wrapper registered for '{node_type}' and no default factory set.")

@@ -2,7 +2,7 @@ from maya.api import OpenMaya
 from maya import cmds
 
 from .node import Node
-from .registry import get_node
+from .registry import resolve
 
 class DagNode(Node):
     """DAG-capable node wrapper with parent/children queries."""
@@ -29,7 +29,7 @@ class DagNode(Node):
         full_path_name = parent_path.fullPathName()
         if not full_path_name:
             return None
-        return get_node(parent_path.fullPathName())
+        return resolve(parent_path.fullPathName())
 
     @parent.setter
     def parent(self, new_parent):
@@ -50,5 +50,5 @@ class DagNode(Node):
         for idx in range(mfn.childCount()):
             child_obj = mfn.child(idx)
             child_path = OpenMaya.MDagPath.getAPathTo(child_obj)
-            children_list.append(get_node(child_path.fullPathName()))
+            children_list.append(resolve(child_path.fullPathName()))
         return children_list

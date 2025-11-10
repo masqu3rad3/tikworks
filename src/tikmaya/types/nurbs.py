@@ -1,4 +1,4 @@
-"""Curve node type wrapper."""
+"""Nurbs surface node type wrapper."""
 
 from maya.api import OpenMaya
 from maya import cmds
@@ -7,15 +7,28 @@ from ..core.shapenode import ShapeNode
 from ..core.registry import register
 
 
-@register("nurbsCurve")
-class Curve(ShapeNode):
-    """Wrapper for NURBS curve nodes."""
+@register("nurbsSurface")
+class Nurbs(ShapeNode):
+    """Wrapper for NURBS surface nodes."""
+    valid_primitives = {"nurbsPlane", "nurbsSphere", "nurbsCylinder",
+                        "nurbsCone", "nurbsTorus"}
+    valid_commands = {'nurbsSurface'}
 
     @classmethod
-    def create(cls, *args, **kwargs):
-        """Create a NURBS curve node."""
-        result = cmds.curve(*args, **kwargs)
-        return Curve(result)
+    def create(cls, cmd, name=None, **kwargs):
+        """Create a nurbs surface or primitive (e.g. nurbsPlane)."""
+        if cmd in cls.valid_primitives:
+            result = getattr(cmds, cmd)(name=name, **kwargs)
+            if isinstance(result, (list, tuple)):
+                result = result[0]
+        elif cmd in cls.valid_commands:
+            result = cmds.createNode(cmd, **kwargs)
+        else:
+            raise ValueError(
+                f"Command '{cmd}' is not valid for creating a Nurbs Surface. "
+                f"Valid "
+                f"commands: {cls.valid_primitives.union(cls.valid_commands)}")
+        return Nurbs(result)
 
     def cvs(self, space="world"):
         """Return all control vertex positions.

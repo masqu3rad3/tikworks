@@ -2,12 +2,22 @@
 import maya.cmds as cmds
 from .registry import _NODE_TYPES
 from .registry import set_default_factory
+from .registry import resolve, resolve_node_class
 
 class Node:
     """Base wrapper around a Maya dependency node or DAG node."""
     is_dag = False
 
-    def __init__(self, long_name):
+    def __new__(cls, name, resolve_type=False, **kwargs):
+        if cls is not Node:
+            return super().__new__(cls)
+
+        # Resolve the node class dynamically if resolve_class is True
+        node_cls = resolve_node_class(name) if resolve_type else cls
+        instance = object.__new__(
+            node_cls)  # Only pass the class type to object.__new__()
+        return instance
+    def __init__(self, long_name, **kwargs):
         if not cmds.objExists(long_name):
             raise ValueError(f"Node '{long_name}' does not exist.")
         self._uuid = cmds.ls(long_name, uuid=True)[0]
@@ -42,9 +52,10 @@ class Node:
         # if isinstance(result, (list, tuple)):
         #     result = result[0]
 
-        node_type = cmds.nodeType(result)
-        subclass = _NODE_TYPES.get(node_type, Node)
-        return subclass(result)
+        # node_type = cmds.nodeType(result)
+        # subclass = _NODE_TYPES.get(node_type, Node)
+        # return subclass(result)
+        return resolve(result)
 
     def delete(self):
         """Delete the node from the scene."""

@@ -9,7 +9,7 @@ except ImportError:
 
 import pytest
 from tikmaya.core.node import Node
-from tikmaya.core.registry import get_node, set_default_factory, register
+from tikmaya.core.registry import resolve, set_default_factory, register
 
 class TestRegistry:
     def test_register_and_get_node(self):
@@ -26,7 +26,7 @@ class TestRegistry:
         joint_name = cmds.joint(name="test_joint")
 
         # Retrieve the node using get_node
-        node = get_node(joint_name)
+        node = resolve(joint_name)
 
         # Check that the returned node is an instance of TestJoint
         assert isinstance(node, TestJoint)
@@ -42,7 +42,7 @@ class TestRegistry:
         transform_name = cmds.createNode("transform", name="test_transform")
 
         # Retrieve the node using get_node
-        node = get_node(transform_name)
+        node = resolve(transform_name)
 
         # Check that the returned node is an instance of Transform
         assert isinstance(node, Node)
@@ -54,7 +54,7 @@ class TestRegistry:
         """Test that get_node raises ValueError for a non-existing node."""
         with pytest.raises(ValueError,
                            match="Node 'nonexistent_node' does not exist."):
-            get_node("nonexistent_node")
+            resolve("nonexistent_node")
 
     def test_get_node_with_default_factory(self):
         """Test that get_node uses the default factory when no specific type is registered."""
@@ -62,7 +62,7 @@ class TestRegistry:
         node_name = cmds.createNode("multiplyDivide", name="test_transform")
 
         # Use get_node to retrieve it
-        node = get_node(node_name)
+        node = resolve(node_name)
 
         # Ensure it returns a Node instance
         assert isinstance(node, Node)
@@ -83,7 +83,7 @@ class TestRegistry:
 
 
         # Retrieve the node using get_node
-        node = get_node(transform_name)
+        node = resolve(transform_name)
 
         # Ensure the returned node uses the inherited CustomDagNode type
         assert isinstance(node, CustomDagNode)
@@ -100,4 +100,4 @@ class TestRegistry:
         # Expect a LookupError when no default factory is set
         with pytest.raises(LookupError,
                            match="No wrapper registered for 'multiplyDivide' and no default factory set."):
-            get_node(node_name)
+            resolve(node_name)

@@ -3,7 +3,7 @@
 from maya import cmds
 from maya.api import OpenMaya
 from ..core.dagnode import DagNode
-from ..core.registry import register, get_node
+from ..core.registry import register, resolve
 
 
 @register("transform")
@@ -25,7 +25,7 @@ class Transform(DagNode):
     @property
     def shapes(self) -> "list[ShapeNode]":
         names = cmds.listRelatives(self.name, shapes=True, fullPath=True) or []
-        return [get_node(s) for s in names]
+        return [resolve(s) for s in names]
 
     @property
     def mdag_path(self):
@@ -38,7 +38,7 @@ class Transform(DagNode):
         """Snap this transform to another transform's position, rotation, and/or scale."""
         node_m_transform = OpenMaya.MFnTransform(self.mdag_path)
         if isinstance(target, str):
-            target = get_node(target)
+            target = resolve(target)
         # if its not a transform, raise error
         if not isinstance(target, Transform):
             raise TypeError(f"Target '{target.name}' is not a Transform node.")
