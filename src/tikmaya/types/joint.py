@@ -8,8 +8,8 @@ class Joint(Transform):
     """Wrapper for joint nodes."""
 
     @classmethod
-    def create(cls, name=None, **kwargs):
-        j = cmds.joint(name=name, **kwargs)
+    def create(cls, **kwargs):
+        j = cmds.joint(**kwargs)
         return cls(j)
 
     def orient(self, xyz=(0, 0, 0)):

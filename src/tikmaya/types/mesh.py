@@ -16,7 +16,12 @@ class Mesh(ShapeNode):
 
     @classmethod
     def create(cls, cmd, **kwargs):
-        """Create a node using a Maya command (e.g. polySphere)."""
+        """Create a mesh or polygon primitive.
+
+        Args:
+            cmd (str): The Maya command to create the mesh (e.g. 'polySphere').
+            **kwargs: Additional keyword arguments to pass to the command.
+        """
         if cmd in cls.valid_primitives:
             result = getattr(cmds, cmd)(**kwargs)
             if isinstance(result, (list, tuple)):
@@ -61,3 +66,48 @@ class Mesh(ShapeNode):
 
         mfn_mesh = OpenMaya.MFnMesh(dag_path)
         return mfn_mesh.getPoints(_space_map[space])
+
+    def vertices_in_radius(self, point_coordinates, radius=0.2):
+        """Return vertex indices within a radius from a point in space.
+
+        Args:
+            point (OpenMaya.MPoint): The center point to measure from.
+            radius (float, optional): The radius distance. Defaults to 0.2.
+        Returns:
+            list: List of vertex indices within the radius.
+        """
+        # point_node = self.resolve_node(point_name_or_node)
+        compare_point = OpenMaya.MPoint(point_coordinates)
+
+        vertex_ids = []
+        for vertex_id, vertex in enumerate(self.vertices()):
+            distance = (vertex - compare_point).length()
+            if distance < radius:
+                vertex_ids.append(vertex_id)
+
+        return vertex_ids
+
+    def unlock_normals(self, soften=False):
+        """Unlock the normals of the specified geometry.
+
+        Args:
+            soften (bool, optional): If true, Defaults to False.
+        """
+
+        # Retrieve the MFnMesh api object.
+        selection_list = OpenMaya.MSelectionList()
+        selection_list.add(self.long_name)
+        mfn_mesh = OpenMaya.MFnMesh(selection_list.getDagPath(0))
+        # if its already unlocked, do not process again.
+        lock_state = any(
+            mfn_mesh.isNormalLocked(normal_index)
+            for normal_index in range(mfn_mesh.numNormals)
+        )
+        if lock_state:
+            mfn_mesh.unlockVertexNormals(OpenMaya.MIntArray(range(mfn_mesh.numVertices)))
+        if soften:
+            edge_ids = OpenMaya.MIntArray(range(mfn_mesh.numEdges))
+            smooths = OpenMaya.MIntArray([True] * mfn_mesh.numEdges)
+            mfn_mesh.setEdgeSmoothings(edge_ids, smooths)
+            mfn_mesh.cleanupEdgeSmoothing()
+            mfn_mesh.updateSurface()

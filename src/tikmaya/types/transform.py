@@ -14,13 +14,10 @@ class Transform(DagNode):
         super().__init__(*args, **kwargs)
 
     @classmethod
-    def create(cls, name=None, **kwargs):
+    def create(cls, **kwargs):
         """Create a transform node."""
-        result = cmds.createNode("transform", name=name, **kwargs)
+        result = cmds.createNode("transform", **kwargs)
         return cls(result)
-
-    def freeze(self, translate=True, rotate=True, scale=True):
-        cmds.makeIdentity(self.name, apply=True, translate=translate, rotate=rotate, scale=scale)
 
     @property
     def shapes(self) -> "list[ShapeNode]":
@@ -33,6 +30,15 @@ class Transform(DagNode):
         selection_ls = OpenMaya.MSelectionList()
         selection_ls.add(self.name)
         return selection_ls.getDagPath(0)
+
+    @property
+    def world_translation(self):
+        """Return the world translation of this transform's rotate pivot."""
+        target_m_transform = OpenMaya.MFnTransform(self.mdag_path)
+        target_rotate_pivot = OpenMaya.MVector(
+            target_m_transform.rotatePivot(OpenMaya.MSpace.kWorld)
+        )
+        return target_rotate_pivot
 
     def snap_to(self, target, position=True, rotation=True, scale=False):
         """Snap this transform to another transform's position, rotation, and/or scale."""
@@ -59,3 +65,7 @@ class Transform(DagNode):
         if scale:
             target_scale = target_m_transform.scale()
             node_m_transform.setScale(target_scale)
+
+    def freeze(self, translate=True, rotate=True, scale=True):
+        """Freeze the transformations on this transform node."""
+        cmds.makeIdentity(self.name, apply=True, translate=translate, rotate=rotate, scale=scale)

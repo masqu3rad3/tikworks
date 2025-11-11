@@ -15,10 +15,10 @@ class Nurbs(ShapeNode):
     valid_commands = {'nurbsSurface'}
 
     @classmethod
-    def create(cls, cmd, name=None, **kwargs):
+    def create(cls, cmd, **kwargs):
         """Create a nurbs surface or primitive (e.g. nurbsPlane)."""
         if cmd in cls.valid_primitives:
-            result = getattr(cmds, cmd)(name=name, **kwargs)
+            result = getattr(cmds, cmd)(**kwargs)
             if isinstance(result, (list, tuple)):
                 result = result[0]
         elif cmd in cls.valid_commands:

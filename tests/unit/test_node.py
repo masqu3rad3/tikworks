@@ -60,7 +60,6 @@ def test_rename_invalidate_cache_and_returns_self():
     assert node.long_name.endswith("|renamedX")
 
 
-
 def test_exists_true_then_false_after_delete_and_cache_invalidated():
     t = cmds.createNode("transform", name="toDelete")
     node = Node(cmds.ls(t, long=True)[0])
@@ -92,6 +91,8 @@ def test_plug_set_and_get_numeric_float_on_builtin_attr():
     plug = node["rotateX"]
     plug.set(12.5)
     assert pytest.approx(plug.get(), rel=1e-6) == 12.5
+    plug.value = 14.5
+    assert pytest.approx(plug.value, rel=1e-6) == 14.5
 
 
 def test_rshift_operator_returns_connected_plug():
@@ -125,6 +126,20 @@ def test_plug_set_and_get_string_attribute():
     p = node["label"]
     p.set("hello world")
     assert p.get() == "hello world"
+
+
+def test_plug_set_and_get_matrix_attribute():
+    t = cmds.createNode("transform", name="matrixHolder")
+    node = Node(cmds.ls(t, long=True)[0])
+    cmds.addAttr(node.name, longName="myMatrix", attributeType="matrix")
+    p = node["myMatrix"]
+    matrix_value = [1.0, 0.0, 0.0, 0.0,
+                    0.0, 1.0, 0.0, 0.0,
+                    0.0, 0.0, 1.0, 0.0,
+                    5.0, 10.0, 15.0, 1.0]
+    p.set(matrix_value)
+    retrieved_value = p.get()
+    assert all(pytest.approx(a, rel=1e-6) == b for a, b in zip(retrieved_value, matrix_value))
 
 
 def test_plug_set_unsupported_type_raises_typeerror():
@@ -183,3 +198,90 @@ def test_node_and_plug_repr_contain_identifiers():
     assert "Node" in repr(node)
     assert "Plug" in repr(plug)
     assert ".attrA" in repr(plug)
+
+
+def test_adding_and_deleting_attributes_from_node_level():
+    t = cmds.createNode("transform", name="attrDelTest")
+    node = Node(cmds.ls(t, long=True)[0])
+    node.add_attr("tempAttr", attributeType="double", keyable=True)
+    plug = node["tempAttr"]
+    assert plug.get() == 0.0  # default value for double attribute
+    node.delete_attr("tempAttr")
+    with pytest.raises(ValueError):
+        plug.get()
+
+
+def test_adding_and_deleting_attributes_from_plug_level():
+    t = cmds.createNode("transform", name="attrDelTest")
+    node = Node(cmds.ls(t, long=True)[0])
+    plug = node["attrDelTest"]
+    plug.create(attributeType="double", keyable=True)
+    assert plug.get() == 0.0  # default value for double attribute
+    plug.delete()
+    with pytest.raises(ValueError):
+        plug.get()
+
+
+def test_attribute_exists():
+    t = cmds.createNode("transform", name="attrExistTest")
+    node = Node(cmds.ls(t, long=True)[0])
+    node.add_attr("existAttr", attributeType="double", keyable=True)
+    plug = node["existAttr"]
+    assert plug.exists() is True
+    plug.delete()
+    assert plug.exists() is False
+
+
+def test_rename_attribute_updates_plug_attr_name():
+    t = cmds.createNode("transform", name="attrRenameTest")
+    node = Node(cmds.ls(t, long=True)[0])
+    node.add_attr("oldAttr", attributeType="double", keyable=True)
+    plug = node["oldAttr"]
+    plug.rename("newAttr")
+    assert plug.attr == "newAttr"
+    assert cmds.objExists(f"{node.name}.newAttr")
+    assert not cmds.objExists(f"{node.name}.oldAttr")
+
+
+def test_lock_and_unlock_attribute():
+    t = cmds.createNode("transform", name="attrLockTest")
+    node = Node(cmds.ls(t, long=True)[0])
+    node.add_attr("lockAttr", attributeType="double", keyable=True)
+    plug = node["lockAttr"]
+    plug.lock()
+    assert cmds.getAttr(plug.path, lock=True) is True
+    plug.unlock()
+    assert cmds.getAttr(plug.path, lock=True) is False
+    # test the property and setter
+    plug.locked = True
+    assert plug.locked is True
+    plug.locked = False
+    assert plug.locked is False
+
+def test_visible_property_and_setter():
+    t = cmds.createNode("transform", name="attrVisibleTest")
+    node = Node(cmds.ls(t, long=True)[0])
+    node.add_attr("visAttr", attributeType="double", keyable=True)
+    plug = node["visAttr"]
+    plug.visible = False
+    assert cmds.getAttr(plug.path, channelBox=True) is False
+    plug.visible = True
+    assert cmds.getAttr(plug.path, channelBox=True) is True
+    assert plug.visible is True
+
+
+def test_keyable_property_and_setter():
+    t = cmds.createNode("transform", name="attrKeyableTest")
+    node = Node(cmds.ls(t, long=True)[0])
+    node.add_attr("keyAttr", attributeType="double", keyable=True)
+    plug = node["keyAttr"]
+    plug.keyable = False
+    assert cmds.getAttr(plug.path, keyable=True) is False
+    plug.keyable = True
+    assert cmds.getAttr(plug.path, keyable=True) is True
+    assert plug.keyable is True
+
+def test_rshift_operator_raises_typeerror_for_nonplug_rhs():
+    a = Node.create("transform", name="A_invalid")
+    with pytest.raises(TypeError):
+        a["tx"] >> "notAPlug"
