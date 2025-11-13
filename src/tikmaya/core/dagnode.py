@@ -2,12 +2,13 @@ from maya.api import OpenMaya
 from maya import cmds
 
 from .node import Node
-from .registry import resolve
+from .registry import register, resolve
 from .decorators import add_aliases
 
 @add_aliases({
     "visibility": "v",
 })
+@register("dagNode")
 class DagNode(Node):
     """DAG-capable node wrapper with parent/children queries."""
     is_dag = True

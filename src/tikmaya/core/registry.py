@@ -30,8 +30,9 @@ def resolve_node_class(name: str):
     if cls:
         return cls
 
-    # Inheritance fallback
-    for inherited_type in (cmds.nodeType(name, inherited=True) or []):
+    # Inheritance fallback. Reverse the order to get most specific first.
+    for inherited_type in reversed(cmds.nodeType(name, inherited=True) or []):
+    # for inherited_type in (cmds.nodeType(name, inherited=True) or []):
         cls = _NODE_TYPES.get(inherited_type)
         if cls:
             return cls

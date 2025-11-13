@@ -4,7 +4,9 @@ from maya import cmds
 
 from .dagnode import DagNode
 from ..types.transform import Transform
+from .registry import register
 
+@register("shape")
 class ShapeNode(DagNode):
     """Base for all nodes that have an associated transform + shape relationship."""
 
