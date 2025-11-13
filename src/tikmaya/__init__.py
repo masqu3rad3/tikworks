@@ -8,6 +8,5 @@ from .types.locator import Locator
 from .types.light import Light
 from .core.registry import resolve
 
-# __all__ = ["Node", "Joint", "Transform", "Mesh", "Curve", "Nurbs", "Locator", "Light", "resolve_node_class"]
 __all__ = ["Node", "Joint", "Transform", "Mesh", "Curve", "Nurbs", "Locator", "Light",
            "resolve"]

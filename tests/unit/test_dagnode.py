@@ -103,3 +103,20 @@ def test_duplicate_child_names_resolve_correct_parent_via_long_name():
 
     assert xA_node.parent.name == "pA"
     assert xB_node.parent.name == "pB"
+
+def test_getting_and_setting_visibility():
+    node = cmds.createNode("transform", name="visNode")
+    node_wrapper = resolve(cmds.ls(node, long=True)[0])
+
+    # Default visibility should be True
+    assert node_wrapper.visibility is True
+
+    # Set visibility to False
+    node_wrapper.visibility = False
+    assert node_wrapper.visibility is False
+    assert cmds.getAttr(f"{node}.visibility") is False
+
+    # Set visibility back to True
+    node_wrapper.visibility = True
+    assert node_wrapper.visibility is True
+    assert cmds.getAttr(f"{node}.visibility") is True

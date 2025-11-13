@@ -3,7 +3,11 @@ from maya import cmds
 
 from .node import Node
 from .registry import resolve
+from .decorators import add_aliases
 
+@add_aliases({
+    "visibility": "v",
+})
 class DagNode(Node):
     """DAG-capable node wrapper with parent/children queries."""
     is_dag = True
@@ -11,6 +15,15 @@ class DagNode(Node):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._cached_dag_path = None
+
+    @property
+    def visibility(self):
+        """Get or set the visibility of this transform node."""
+        return self["visibility"].get()
+
+    @visibility.setter
+    def visibility(self, value):
+        self["visibility"].set(value)
 
     def _dag_path(self):
         """Resolve and cache this node's MDagPath using the long name for disambiguation."""
