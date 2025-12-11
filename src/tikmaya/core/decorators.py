@@ -18,6 +18,7 @@ def add_aliases(aliases):
     """
 
     def decorator(cls):
+        """Attach aliases to the provided class."""
         for original, alias in aliases.items():
             setattr(cls, alias, getattr(cls, original))
         return cls

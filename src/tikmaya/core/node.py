@@ -9,6 +9,7 @@ class Node:
     is_dag = False
 
     def __new__(cls, name, resolve_type=False, **kwargs):
+        """Instantiate the correct node subclass if requested."""
         if cls is not Node:
             return super().__new__(cls)
 
@@ -19,6 +20,7 @@ class Node:
         return instance
 
     def __init__(self, long_name, **kwargs):
+        """Initialize the Node wrapper."""
         if not cmds.objExists(long_name):
             raise ValueError(f"Node '{long_name}' does not exist.")
         self._uuid = cmds.ls(long_name, uuid=True)[0]
@@ -92,6 +94,7 @@ class Node:
         cmds.deleteAttr(f"{self.long_name}.{attr_name}")
 
     def _invalidate_cache(self):
+        """Clear cached names after changes."""
         self._cached_long_name = None
         self._cached_short_name = None
 
@@ -100,6 +103,7 @@ class Node:
         return Plug(self, attr)
 
     def __repr__(self):
+        """Return a debug-friendly representation."""
         return f"<{self.__class__.__name__} '{self.name}'>"
 
 
@@ -297,6 +301,7 @@ class Plug:
         return other
 
     def __repr__(self):
+        """Return a debug-friendly representation."""
         return f"<Plug '{self.path}'>"
 
 

@@ -29,6 +29,7 @@ class Transform(DagNode):
     """Wrapper for transform nodes."""
 
     def __init__(self, *args, **kwargs):
+        """Initialize the Transform wrapper."""
         super().__init__(*args, **kwargs)
 
     @classmethod

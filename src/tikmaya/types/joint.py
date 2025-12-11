@@ -9,8 +9,10 @@ class Joint(Transform):
 
     @classmethod
     def create(cls, **kwargs):
+        """Create and wrap a new joint node."""
         j = cmds.joint(**kwargs)
         return cls(j)
 
     def orient(self, xyz=(0, 0, 0)):
+        """Orient the joint using the provided XYZ values."""
         cmds.joint(self.name, e=True, orientation=xyz)

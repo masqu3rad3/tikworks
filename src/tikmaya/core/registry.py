@@ -13,6 +13,7 @@ def register(node_type: str) -> Callable[[Type[T]], Type[T]]:
     """Decorator for registering Maya node wrappers."""
 
     def inner(cls: Type[T]) -> Type[T]:
+        """Register the class for the given node type."""
         _NODE_TYPES[node_type] = cls
         return cls
 

@@ -16,6 +16,7 @@ class DagNode(Node):
     is_dag = True
 
     def __init__(self, *args, **kwargs):
+        """Initialize the DagNode wrapper."""
         super().__init__(*args, **kwargs)
         self._cached_dag_path = None
 
