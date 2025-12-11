@@ -1,7 +1,7 @@
 """Curve node type wrapper."""
 
-from maya.api import OpenMaya
 from maya import cmds
+from maya.api import OpenMaya
 
 from ..core.shapenode import ShapeNode
 from ..core.registry import register

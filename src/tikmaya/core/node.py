@@ -1,8 +1,7 @@
 # node.py — base Node and Plug wrappers
 import maya.cmds as cmds
 
-from .registry import resolve, resolve_node_class
-from .registry import set_default_factory
+from .registry import resolve, resolve_node_class, set_default_factory
 
 
 class Node:
@@ -10,16 +9,18 @@ class Node:
     is_dag = False
 
     def __new__(cls, name, resolve_type=False, **kwargs):
+        """Instantiate the correct node subclass if requested."""
         if cls is not Node:
             return super().__new__(cls)
 
         # Resolve the node class dynamically if resolve_class is True
         node_cls = resolve_node_class(name) if resolve_type else cls
-        instance = object.__new__(
-            node_cls)  # Only pass the class type to object.__new__()
+        instance = object.__new__(node_cls)
+        # Only pass the class type to object.__new__()
         return instance
 
     def __init__(self, long_name, **kwargs):
+        """Initialize the Node wrapper."""
         if not cmds.objExists(long_name):
             raise ValueError(f"Node '{long_name}' does not exist.")
         self._uuid = cmds.ls(long_name, uuid=True)[0]
@@ -29,8 +30,7 @@ class Node:
     @property
     def long_name(self):
         """The full DAG path of the node."""
-        if not self._cached_long_name or not cmds.objExists(
-                self._cached_long_name):
+        if not self._cached_long_name or not cmds.objExists(self._cached_long_name):
             result = cmds.ls(self.uuid, long=True)
             self._cached_long_name = result[0] if result else None
         return self._cached_long_name
@@ -38,8 +38,7 @@ class Node:
     @property
     def name(self):
         """The name of the node."""
-        if not self._cached_short_name or not cmds.objExists(
-                self._cached_short_name):
+        if not self._cached_short_name or not cmds.objExists(self._cached_short_name):
             result = cmds.ls(self.uuid, long=False)
             self._cached_short_name = result[0] if result else None
         return self._cached_short_name
@@ -51,8 +50,10 @@ class Node:
 
     @classmethod
     def create(cls, cmd, **kwargs):
-        """Create a node using a maya.cmds command name (e.g., 'joint',
-        'polySphere')."""
+        """Create a node using a maya.cmds command name.
+
+        Example: 'joint', 'polySphere'.
+        """
         result = cmds.createNode(cmd, **kwargs)
         return resolve(result)
 
@@ -83,7 +84,7 @@ class Node:
         """
         cmds.addAttr(self.long_name, longName=attr_name, **kwargs)
         return Plug(self, attr_name)
-    #
+
     def delete_attr(self, attr_name):
         """Delete an attribute from the node.
 
@@ -93,6 +94,7 @@ class Node:
         cmds.deleteAttr(f"{self.long_name}.{attr_name}")
 
     def _invalidate_cache(self):
+        """Clear cached names after changes."""
         self._cached_long_name = None
         self._cached_short_name = None
 
@@ -101,6 +103,7 @@ class Node:
         return Plug(self, attr)
 
     def __repr__(self):
+        """Return a debug-friendly representation."""
         return f"<{self.__class__.__name__} '{self.name}'>"
 
 
@@ -135,7 +138,8 @@ class Plug:
     @property
     def visible(self) -> bool:
         """Check if the attribute is visible in the channelbox."""
-        # An attribute is considered visible if it is either keyable or in the channel box
+        # An attribute is considered visible if it is either keyable or in the channel
+        # box.
         _keyable = cmds.getAttr(self.path, keyable=True)
         _channelbox = cmds.getAttr(self.path, channelBox=True)
         return _keyable or _channelbox
@@ -163,14 +167,15 @@ class Plug:
         """Set the keyable state of the attribute.
 
         Args:
-            state (bool): True to make the attribute keyable, False to make it non-keyable.
+            state (bool): True to make the attribute keyable,
+                False to make it non-keyable.
         """
-        # if its not explicitly hidden, we expose it in the channel box when making it keyable
+        # if its not explicitly hidden, we expose it in the channel box when making it
+        # keyable
         if cmds.getAttr(self.path, channelBox=True):
             cmds.setAttr(self.path, edit=True, keyable=state)
         else:
-            cmds.setAttr(self.path, edit=True, keyable=state,
-                         channelBox=not state)
+            cmds.setAttr(self.path, edit=True, keyable=state, channelBox=not state)
 
     @property
     def locked(self) -> bool:
@@ -231,8 +236,7 @@ class Plug:
             _type = _type or "string"
             cmds.setAttr(self.path, value, type=_type, **kwargs)
         else:
-            raise TypeError(
-                f"Unsupported type for setting attribute: {type(value)}")
+            raise TypeError(f"Unsupported type for setting attribute: {type(value)}")
 
     def rename(self, new_attr_name):
         """Rename the attribute.
@@ -297,6 +301,7 @@ class Plug:
         return other
 
     def __repr__(self):
+        """Return a debug-friendly representation."""
         return f"<Plug '{self.path}'>"
 
 

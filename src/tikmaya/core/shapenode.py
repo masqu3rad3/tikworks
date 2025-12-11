@@ -3,14 +3,15 @@
 from maya import cmds
 
 from .dagnode import DagNode
-from ..types.transform import Transform
 from .registry import register
+from ..types.transform import Transform
 
 @register("shape")
 class ShapeNode(DagNode):
     """Base for all nodes that have an associated transform + shape relationship."""
 
     def __init__(self, node_name):
+        """Wrap a shape node, resolving from transform when needed."""
         # Determine if the given node is a shape or transform
         if cmds.nodeType(node_name) in {"transform"}:
             shapes = cmds.listRelatives(node_name, shapes=True, fullPath=True)
