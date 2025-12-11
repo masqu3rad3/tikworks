@@ -4,15 +4,15 @@ Tikmaya overview
 .. note::
    Tikmaya is under active development and the API is still in progress. Expect changes as the wrapper grows alongside production needs.
 
-Tikmaya wraps ``maya.cmds`` with lightweight Python classes so you get typed nodes, predictable attributes, and fewer stringly-typed mistakes. Instead of juggling raw node names and attributes, you work with objects that understand Maya’s DAG and dependency graph.
+Tikmaya wraps ``maya.cmds`` with lightweight Python classes so you get typed nodes, predictable attributes, and fewer string-based mistakes. Instead of juggling raw node names and attributes, you work with objects that understand Maya’s DAG and dependency graph.
 
 Why Tikmaya instead of raw ``cmds``
 -----------------------------------
 
-- **Typed nodes, not strings:** ``tikmaya.resolve("pCube1")`` returns a :class:`tikmaya.Transform` (or another specialized type) so you immediately get transform-specific helpers without manual casting.
-- **Attribute plugs as objects:** :class:`tikmaya.core.node.Plug` exposes ``value``, ``locked``, ``keyable``, and ``visible`` properties, plus chaining with ``>>`` for concise connections—no more repeated ``cmds.connectAttr`` boilerplate.
+- **Typed nodes, not strings:** ``tikmaya.resolve("pCube1")`` returns a :class:`~tikmaya.Transform` (or another specialized type) so you immediately get transform-specific helpers without manual casting.
+- **Attribute plugs as objects:** :class:`~tikmaya.core.node.Plug` exposes ``value``, ``locked``, ``keyable``, and ``visible`` properties, plus chaining with ``>>`` for concise connections—no more repeated ``cmds.connectAttr`` boilerplate.
 - **Cache-aware naming:** Nodes cache their long and short names and keep working after renames, reducing fragile string handling in rigs and tools.
-- **Creation stays discoverable:** :meth:`tikmaya.Node.create` wraps ``cmds.createNode`` but still resolves the correct wrapper type, keeping pipeline conventions while preserving Maya’s flexibility.
+- **Creation stays discoverable:** :meth:`~tikmaya.Node.create` wraps ``cmds.createNode`` but still resolves the correct wrapper type, keeping pipeline conventions while preserving Maya’s flexibility.
 
 Quick start
 -----------
@@ -37,9 +37,9 @@ Quick start
 Key concepts
 ------------
 
-- :class:`tikmaya.Node` is the base wrapper for dependency nodes. It validates existence, caches names, and offers lifecycle helpers like :py:meth:`rename` and :py:meth:`delete`.
-- :class:`tikmaya.core.node.Plug` represents attributes. It supports property-style access for values and UI state (keyable/visible), plus :py:meth:`connect` and :py:meth:`disconnect`.
-- Specialized classes such as :class:`tikmaya.Transform`, :class:`tikmaya.Joint`, :class:`tikmaya.Mesh`, and :class:`tikmaya.Curve` build on :class:`tikmaya.ShapeNode` to expose geometry-friendly behavior while keeping a consistent API surface.
+- :class:`~tikmaya.Node` is the base wrapper for dependency nodes. It validates existence, caches names, and offers lifecycle helpers like :meth:`rename` and :meth:`delete`.
+- :class:`~tikmaya.core.node.Plug` represents attributes. It supports property-style access for values and UI state (keyable/visible), plus :meth:`connect` and :meth:`disconnect`.
+- Specialized DAG wrappers like :class:`~tikmaya.Transform` and :class:`~tikmaya.Joint` extend :class:`~tikmaya.core.dagnode.DagNode`, while shape wrappers such as :class:`~tikmaya.Mesh`, :class:`~tikmaya.Curve`, :class:`~tikmaya.Nurbs`, and :class:`~tikmaya.Light` derive from :class:`~tikmaya.ShapeNode` for geometry- and render-specific behaviors.
 
 Next steps
 ----------
