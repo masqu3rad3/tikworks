@@ -11,7 +11,11 @@ class Locator(ShapeNode):
 
     @classmethod
     def create(cls, **kwargs):
-        """Create a locator node."""
+        """Create a locator node.
+
+        Returns:
+            Locator: Instance of the created locator.
+        """
 
         result = cmds.spaceLocator(**kwargs)
         if isinstance(result, (list, tuple)):

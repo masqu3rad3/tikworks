@@ -1,25 +1,43 @@
 # node.py — base Node and Plug wrappers
 import maya.cmds as cmds
 
-from .registry import resolve, resolve_node_class
-from .registry import set_default_factory
+from .registry import resolve, resolve_node_class, set_default_factory
 
 
 class Node:
-    """Base wrapper around a Maya dependency node or DAG node."""
+    """Wrap a Maya dependency node or DAG node."""
     is_dag = False
 
     def __new__(cls, name, resolve_type=False, **kwargs):
+        """Instantiate the appropriate Node subclass.
+
+        Args:
+            name (str): Maya node name to wrap.
+            resolve_type (bool): Whether to resolve the node class dynamically.
+
+        Raises:
+            ValueError: If the node does not exist when resolving the type.
+
+        Returns:
+            Node: Instance of a Node subclass or Node.
+        """
         if cls is not Node:
             return super().__new__(cls)
 
         # Resolve the node class dynamically if resolve_class is True
         node_cls = resolve_node_class(name) if resolve_type else cls
-        instance = object.__new__(
-            node_cls)  # Only pass the class type to object.__new__()
+        instance = object.__new__(node_cls)
         return instance
 
     def __init__(self, long_name, **kwargs):
+        """Initialize the node wrapper.
+
+        Args:
+            long_name (str): Name or path of the Maya node.
+
+        Raises:
+            ValueError: If the node does not exist.
+        """
         if not cmds.objExists(long_name):
             raise ValueError(f"Node '{long_name}' does not exist.")
         self._uuid = cmds.ls(long_name, uuid=True)[0]
@@ -28,7 +46,11 @@ class Node:
 
     @property
     def long_name(self):
-        """The full DAG path of the node."""
+        """Get the full DAG path of the node.
+
+        Returns:
+            str | None: Long name for the node.
+        """
         if not self._cached_long_name or not cmds.objExists(
                 self._cached_long_name):
             result = cmds.ls(self.uuid, long=True)
@@ -37,7 +59,11 @@ class Node:
 
     @property
     def name(self):
-        """The name of the node."""
+        """Get the short name of the node.
+
+        Returns:
+            str | None: Short name for the node.
+        """
         if not self._cached_short_name or not cmds.objExists(
                 self._cached_short_name):
             result = cmds.ls(self.uuid, long=False)
@@ -46,29 +72,55 @@ class Node:
 
     @property
     def uuid(self):
-        """The UUID of the node."""
+        """Get the UUID of the node.
+
+        Returns:
+            str: Unique identifier for the node.
+        """
         return self._uuid
 
     @classmethod
     def create(cls, cmd, **kwargs):
-        """Create a node using a maya.cmds command name (e.g., 'joint',
-        'polySphere')."""
+        """Create a node using a maya.cmds command name (e.g., 'joint', 'polySphere').
+
+        Args:
+            cmd (str): Maya command used to create the node.
+            **kwargs: Additional keyword arguments passed to the command.
+
+        Returns:
+            Node: Wrapped node instance created by the command.
+        """
         result = cmds.createNode(cmd, **kwargs)
         return resolve(result)
 
     def delete(self):
-        """Delete the node from the scene."""
+        """Delete the node from the scene.
+
+        Returns:
+            None
+        """
         cmds.delete(self.long_name)
         self._invalidate_cache()
 
     def rename(self, new_name):
-        """Rename the node."""
+        """Rename the node.
+
+        Args:
+            new_name (str): New name for the node.
+
+        Returns:
+            Node: Self for chaining.
+        """
         cmds.rename(self.name, new_name)
         self._invalidate_cache()
         return self
 
     def exists(self):
-        """Check if the node still exists in the scene."""
+        """Check if the node still exists in the scene.
+
+        Returns:
+            bool: True if the node exists.
+        """
         return cmds.objExists(self.long_name)
 
     def add_attr(self, attr_name, **kwargs):
@@ -83,59 +135,96 @@ class Node:
         """
         cmds.addAttr(self.long_name, longName=attr_name, **kwargs)
         return Plug(self, attr_name)
-    #
+
     def delete_attr(self, attr_name):
         """Delete an attribute from the node.
 
         Args:
             attr_name (str): The name of the attribute to delete.
+
+        Returns:
+            None
         """
         cmds.deleteAttr(f"{self.long_name}.{attr_name}")
 
     def _invalidate_cache(self):
+        """Clear cached name lookups."""
         self._cached_long_name = None
         self._cached_short_name = None
 
     def __getitem__(self, attr):
-        """Get a Plug for the given attribute name."""
+        """Get a Plug for the given attribute name.
+
+        Args:
+            attr (str): Attribute name to wrap.
+
+        Returns:
+            Plug: Plug for the requested attribute.
+        """
         return Plug(self, attr)
 
     def __repr__(self):
+        """Return a debug representation for the node."""
         return f"<{self.__class__.__name__} '{self.name}'>"
 
 
 class Plug:
-    """Represents an attribute plug on a Maya node."""
+    """Represent an attribute plug on a Maya node."""
 
     def __init__(self, node, attr: str):
-        """Initialize a Plug for the given node and attribute name."""
+        """Initialize a Plug for the given node and attribute name.
+
+        Args:
+            node (Node): Node that owns the attribute.
+            attr (str): Attribute name on the node.
+        """
         self._node = node
         self._attr = attr
 
     @property
     def attr(self):
-        """The attribute name."""
+        """Get the attribute name.
+
+        Returns:
+            str: Attribute identifier.
+        """
         return self._attr
 
     @property
     def path(self):
-        """The full attribute path."""
+        """Get the full attribute path.
+
+        Returns:
+            str: Attribute path including node name.
+        """
         return f"{self._node.name}.{self._attr}"
 
     @property
     def value(self):
-        """Get the value of the attribute."""
+        """Get the value of the attribute.
+
+        Returns:
+            Any: Current attribute value.
+        """
         return self.get()
 
     @value.setter
     def value(self, new_value):
-        """Set the value of the attribute."""
+        """Set the value of the attribute.
+
+        Args:
+            new_value: Value to assign to the attribute.
+        """
         self.set(new_value)
 
     @property
     def visible(self) -> bool:
-        """Check if the attribute is visible in the channelbox."""
-        # An attribute is considered visible if it is either keyable or in the channel box
+        """Check if the attribute is visible in the channelbox.
+
+        Returns:
+            bool: True if visible.
+        """
+        # An attribute is considered visible if it is keyable or in the channel box
         _keyable = cmds.getAttr(self.path, keyable=True)
         _channelbox = cmds.getAttr(self.path, channelBox=True)
         return _keyable or _channelbox
@@ -146,6 +235,9 @@ class Plug:
 
         Args:
             state (bool): True to show the attribute, False to hide.
+
+        Returns:
+            None
         """
         _keyable = cmds.getAttr(self.path, keyable=True)
         if not state:
@@ -155,7 +247,11 @@ class Plug:
 
     @property
     def keyable(self) -> bool:
-        """Check if the attribute is keyable."""
+        """Check if the attribute is keyable.
+
+        Returns:
+            bool: True if keyable.
+        """
         return cmds.getAttr(self.path, keyable=True)
 
     @keyable.setter
@@ -164,17 +260,23 @@ class Plug:
 
         Args:
             state (bool): True to make the attribute keyable, False to make it non-keyable.
+
+        Returns:
+            None
         """
         # if its not explicitly hidden, we expose it in the channel box when making it keyable
         if cmds.getAttr(self.path, channelBox=True):
             cmds.setAttr(self.path, edit=True, keyable=state)
         else:
-            cmds.setAttr(self.path, edit=True, keyable=state,
-                         channelBox=not state)
+            cmds.setAttr(self.path, edit=True, keyable=state, channelBox=not state)
 
     @property
     def locked(self) -> bool:
-        """Check if the attribute is locked."""
+        """Check if the attribute is locked.
+
+        Returns:
+            bool: True if locked.
+        """
         return cmds.getAttr(self.path, lock=True)
 
     @locked.setter
@@ -183,23 +285,39 @@ class Plug:
 
         Args:
             state (bool): True to lock the attribute, False to unlock.
+
+        Returns:
+            None
         """
         cmds.setAttr(self.path, edit=True, lock=state)
 
     def exists(self):
-        """Check if the attribute exists."""
-        return cmds.attributeQuery(self.attr, node=self._node.name, exists=True)
+        """Check if the attribute exists.
+
+        Returns:
+            bool: True if the attribute exists on the node.
+        """
+        return cmds.attributeQuery(
+            self.attr, node=self._node.name, exists=True
+        )
 
     def create(self, **kwargs):
         """Add a new attribute to the node.
 
         Args:
             **kwargs: Additional keyword arguments to pass to cmds.addAttr.
+
+        Returns:
+            None
         """
         cmds.addAttr(self._node.long_name, longName=self.attr, **kwargs)
 
     def delete(self):
-        """Delete an attribute from the node."""
+        """Delete an attribute from the node.
+
+        Returns:
+            None
+        """
         cmds.deleteAttr(f"{self._node.long_name}.{self.attr}")
 
     def get(self, **kwargs):
@@ -207,6 +325,9 @@ class Plug:
 
         Args:
             **kwargs: Additional keyword arguments to pass to cmds.getAttr.
+
+        Returns:
+            Any: Attribute value.
         """
         return cmds.getAttr(self.path, **kwargs)
 
@@ -217,6 +338,12 @@ class Plug:
             value: The value to set. Can be a single value or a list/tuple for
                 multi-value attributes.
             **kwargs: Additional keyword arguments to pass to cmds.setAttr.
+
+        Raises:
+            TypeError: If the value type is unsupported.
+
+        Returns:
+            None
         """
         _type = kwargs.pop("type", None)
         if isinstance(value, (list, tuple)):
@@ -239,6 +366,9 @@ class Plug:
 
         Args:
             new_attr_name (str): The new name for the attribute.
+
+        Returns:
+            None
         """
         cmds.renameAttr(self.path, new_attr_name)
         self._attr = new_attr_name
@@ -250,6 +380,9 @@ class Plug:
             other (Plug): The plug to connect to.
             force (bool): Whether to force the connection, breaking existing
                 connections if necessary.
+
+        Returns:
+            None
         """
         cmds.connectAttr(self.path, other.path, force=force)
 
@@ -260,6 +393,9 @@ class Plug:
         Args:
             other (Plug, optional): The plug to disconnect from. If None,
                 disconnects from the source connection.
+
+        Returns:
+            None
         """
         if other:
             cmds.disconnectAttr(self.path, other.path)
@@ -269,11 +405,19 @@ class Plug:
                 cmds.disconnectAttr(sources[0], self.path)
 
     def lock(self):
-        """Lock the attribute."""
+        """Lock the attribute.
+
+        Returns:
+            None
+        """
         self.locked = True
 
     def unlock(self):
-        """Unlock the attribute."""
+        """Unlock the attribute.
+
+        Returns:
+            None
+        """
         self.locked = False
 
     def __getitem__(self, attr):
@@ -281,6 +425,9 @@ class Plug:
 
         Args:
             attr (str): The child attribute name.
+
+        Returns:
+            Plug: Plug for the compound child attribute.
         """
         return Plug(self, f"{self.attr}.{attr}")
 
@@ -290,6 +437,12 @@ class Plug:
 
         Args:
             other (Plug): The plug to connect to.
+
+        Raises:
+            TypeError: If the right operand is not a Plug.
+
+        Returns:
+            Plug: The right-hand side plug for chaining.
         """
         if not isinstance(other, Plug):
             raise TypeError(f"Right operand must be a Plug, got {type(other)}")
@@ -297,6 +450,7 @@ class Plug:
         return other
 
     def __repr__(self):
+        """Return a debug representation for the plug."""
         return f"<Plug '{self.path}'>"
 
 

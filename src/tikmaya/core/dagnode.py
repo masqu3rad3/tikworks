@@ -1,5 +1,5 @@
-from maya.api import OpenMaya
 from maya import cmds
+from maya.api import OpenMaya
 
 from .node import Node
 from .registry import register, resolve
@@ -10,16 +10,22 @@ from .decorators import add_aliases
 })
 @register("dagNode")
 class DagNode(Node):
-    """DAG-capable node wrapper with parent/children queries."""
+    """Wrap a DAG-capable node with parent/children queries."""
+
     is_dag = True
 
     def __init__(self, *args, **kwargs):
+        """Initialize the DAG node wrapper."""
         super().__init__(*args, **kwargs)
         self._cached_dag_path = None
 
     @property
     def visibility(self):
-        """Get or set the visibility of this transform node."""
+        """Get or set the visibility of this transform node.
+
+        Returns:
+            bool: True if visible, False otherwise.
+        """
         return self["visibility"].get()
 
     @visibility.setter
@@ -27,7 +33,11 @@ class DagNode(Node):
         self["visibility"].set(value)
 
     def _dag_path(self):
-        """Resolve and cache this node's MDagPath using the long name for disambiguation."""
+        """Resolve and cache this node's MDagPath using the long name for disambiguation.
+
+        Returns:
+            OpenMaya.MDagPath: Cached DAG path for the node.
+        """
         if not self._cached_dag_path or not self._cached_dag_path.isValid():
             sel = OpenMaya.MSelectionList()
             sel.add(self.long_name)
@@ -36,7 +46,11 @@ class DagNode(Node):
 
     @property
     def parent(self):
-        """Return the parent as a wrapped node (or None if no parent)."""
+        """Return the parent as a wrapped node (or None if no parent).
+
+        Returns:
+            Node | None: Parent node wrapper or None if no parent.
+        """
         mfn = OpenMaya.MFnDagNode(self._dag_path())
         parent_obj = mfn.parent(0)
         parent_path = OpenMaya.MDagPath.getAPathTo(parent_obj)
@@ -47,18 +61,28 @@ class DagNode(Node):
 
     @parent.setter
     def parent(self, new_parent):
-        """Set a new parent for this node. Pass None to unparent to world."""
+        """Set a new parent for this node. Pass None to unparent to world.
+
+        Args:
+            new_parent (Node | str | None): New parent node or None to unparent.
+        """
         if new_parent is None:
             cmds.parent(self.long_name, world=True)
         else:
-            new_parent_name = new_parent.name if isinstance(new_parent, Node) else str(new_parent)
+            new_parent_name = (
+                new_parent.name if isinstance(new_parent, Node) else str(new_parent)
+            )
             cmds.parent(self.long_name, new_parent_name)
         # Invalidate cached path since parenting can change the full path.
         self._cached_dag_path = None
 
     @property
     def children(self):
-        """Return children as wrapped nodes."""
+        """Return children as wrapped nodes.
+
+        Returns:
+            list[Node]: Wrapped child nodes.
+        """
         mfn = OpenMaya.MFnDagNode(self._dag_path())
         children_list = []
         for idx in range(mfn.childCount()):

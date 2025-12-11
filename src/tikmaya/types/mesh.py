@@ -10,9 +10,15 @@ from ..core.registry import register
 @register("mesh")
 class Mesh(ShapeNode):
     """Wrapper for mesh nodes."""
-    valid_primitives = {"polyCube", "polySphere", "polyPlane", "polyCylinder",
-                        "polyCone", "polyTorus"}
-    valid_commands = {'mesh'}
+    valid_primitives = {
+        "polyCube",
+        "polySphere",
+        "polyPlane",
+        "polyCylinder",
+        "polyCone",
+        "polyTorus",
+    }
+    valid_commands = {"mesh"}
 
     @classmethod
     def create(cls, cmd, **kwargs):
@@ -21,6 +27,12 @@ class Mesh(ShapeNode):
         Args:
             cmd (str): The Maya command to create the mesh (e.g. 'polySphere').
             **kwargs: Additional keyword arguments to pass to the command.
+
+        Raises:
+            ValueError: If the command is not valid for creating a Mesh.
+
+        Returns:
+            Mesh: Instance of the created mesh.
         """
         if cmd in cls.valid_primitives:
             result = getattr(cmds, cmd)(**kwargs)
@@ -46,6 +58,9 @@ class Mesh(ShapeNode):
         Returns:
             OpenMaya.MPointArray
                 Array of vertex positions in the requested space.
+
+        Raises:
+            ValueError: If the requested space is invalid.
         """
         # Map simple string options to MSpace enums
         _space_map = {
@@ -71,7 +86,7 @@ class Mesh(ShapeNode):
         """Return vertex indices within a radius from a point in space.
 
         Args:
-            point (OpenMaya.MPoint): The center point to measure from.
+            point_coordinates (OpenMaya.MPoint): The center point to measure from.
             radius (float, optional): The radius distance. Defaults to 0.2.
         Returns:
             list: List of vertex indices within the radius.
@@ -92,6 +107,9 @@ class Mesh(ShapeNode):
 
         Args:
             soften (bool, optional): If true, Defaults to False.
+
+        Returns:
+            None
         """
 
         # Retrieve the MFnMesh api object.
@@ -104,7 +122,9 @@ class Mesh(ShapeNode):
             for normal_index in range(mfn_mesh.numNormals)
         )
         if lock_state:
-            mfn_mesh.unlockVertexNormals(OpenMaya.MIntArray(range(mfn_mesh.numVertices)))
+            mfn_mesh.unlockVertexNormals(
+                OpenMaya.MIntArray(range(mfn_mesh.numVertices))
+            )
         if soften:
             edge_ids = OpenMaya.MIntArray(range(mfn_mesh.numEdges))
             smooths = OpenMaya.MIntArray([True] * mfn_mesh.numEdges)

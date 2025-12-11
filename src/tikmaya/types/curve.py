@@ -13,7 +13,11 @@ class Curve(ShapeNode):
 
     @classmethod
     def create(cls, *args, **kwargs):
-        """Create a NURBS curve node."""
+        """Create a NURBS curve node.
+
+        Returns:
+            Curve: Instance of the created curve.
+        """
         result = cmds.curve(*args, **kwargs)
         return Curve(result)
 
@@ -28,6 +32,9 @@ class Curve(ShapeNode):
         Returns:
             OpenMaya.MPointArray
                 Array of CV positions in the requested space.
+
+        Raises:
+            ValueError: If the requested space is invalid.
         """
         # Map simple string options to MSpace enums
         _space_map = {

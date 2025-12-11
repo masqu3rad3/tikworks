@@ -10,13 +10,29 @@ from ..core.registry import register
 @register("nurbsSurface")
 class Nurbs(ShapeNode):
     """Wrapper for NURBS surface nodes."""
-    valid_primitives = {"nurbsPlane", "nurbsSphere", "nurbsCylinder",
-                        "nurbsCone", "nurbsTorus"}
-    valid_commands = {'nurbsSurface'}
+    valid_primitives = {
+        "nurbsPlane",
+        "nurbsSphere",
+        "nurbsCylinder",
+        "nurbsCone",
+        "nurbsTorus",
+    }
+    valid_commands = {"nurbsSurface"}
 
     @classmethod
     def create(cls, cmd, **kwargs):
-        """Create a nurbs surface or primitive (e.g. nurbsPlane)."""
+        """Create a nurbs surface or primitive (e.g. nurbsPlane).
+
+        Args:
+            cmd (str): Command to use for creating the surface.
+            **kwargs: Additional keyword arguments for the command.
+
+        Raises:
+            ValueError: If the command is not valid for creating a Nurbs Surface.
+
+        Returns:
+            Nurbs: Instance of the created surface.
+        """
         if cmd in cls.valid_primitives:
             result = getattr(cmds, cmd)(**kwargs)
             if isinstance(result, (list, tuple)):
@@ -26,8 +42,8 @@ class Nurbs(ShapeNode):
         else:
             raise ValueError(
                 f"Command '{cmd}' is not valid for creating a Nurbs Surface. "
-                f"Valid "
-                f"commands: {cls.valid_primitives.union(cls.valid_commands)}")
+                f"Valid commands: {cls.valid_primitives.union(cls.valid_commands)}"
+            )
         return Nurbs(result)
 
     def cvs(self, space="world"):
@@ -41,6 +57,9 @@ class Nurbs(ShapeNode):
         Returns:
             OpenMaya.MPointArray
                 Array of CV positions in the requested space.
+
+        Raises:
+            ValueError: If the requested space is invalid.
         """
         # Map simple string options to MSpace enums
         _space_map = {
