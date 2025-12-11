@@ -28,6 +28,3 @@ develop-eggs/
 
 # Pycharm
 .idea/
-
-# Github
-.github/

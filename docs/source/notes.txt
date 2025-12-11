@@ -1,0 +1,20 @@
+# Notes for Documentation
+
+# initial setup
+
+pip install sphinx
+pip install sphinx furo
+pip install sphinx-autobuild
+sphinx-quickstart docs
+
+To generate the documentation, use the following command:
+make html
+
+# To build the documentation with live reloading, use:
+# This requires the `sphinx-autobuild` package to be installed.
+# You can install it via pip if it's not already installed:
+# pip install sphinx-autobuild
+# Then run the command below in the terminal:
+# Note: Ensure you are in the root directory when running this command.
+
+sphinx-autobuild docs/source docs/build/html
