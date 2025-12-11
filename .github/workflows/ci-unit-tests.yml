@@ -29,11 +29,13 @@ jobs:
           mayapy get-pip.py --user
           mayapy -m pip install --user \
             coverage==5.5 \
-            -r requirements-dev.txt \
-      - name: Environment
+            -r requirements-dev.txt
+      - name: Install tikworks
         run: |
-          export XDG_RUNTIME_DIR=/var/tmp/runtime-root
-          export MAYA_DISABLE_ADP=1
+          mayapy -m pip install --user -e .
       - name: Test with pytest
+        env:
+          XDG_RUNTIME_DIR: /var/tmp/runtime-root
+          MAYA_DISABLE_ADP: 1
         run: |
           mayapy ./tests/unit/invoke.py
