@@ -1,5 +1,6 @@
 [build-system]
-requires = []
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "tikworks"
@@ -7,3 +8,9 @@ authors = [{name = "Arda Kutlu", email = "ardakutlu@gmail.com"}]
 requires-python = "> 3.10"
 readme = "README.md"
 dynamic = ["version", "description"]
+
+[tool.setuptools]
+packages = { find = {} }
+
+[tool.setuptools.packages.find]
+where = ["src"]
