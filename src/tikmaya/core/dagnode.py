@@ -21,7 +21,7 @@ class DagNode(Node):
 
     @property
     def visibility(self):
-        """Get or set the visibility of this transform node.
+        """Visibility flag for this transform node.
 
         Returns:
             bool: True if visible, False otherwise.
@@ -46,7 +46,7 @@ class DagNode(Node):
 
     @property
     def parent(self):
-        """Return the parent as a wrapped node (or None if no parent).
+        """Wrapped parent node, if any.
 
         Returns:
             Node | None: Parent node wrapper or None if no parent.
@@ -61,11 +61,6 @@ class DagNode(Node):
 
     @parent.setter
     def parent(self, new_parent):
-        """Set a new parent for this node. Pass None to unparent to world.
-
-        Args:
-            new_parent (Node | str | None): New parent node or None to unparent.
-        """
         if new_parent is None:
             cmds.parent(self.long_name, world=True)
         else:
@@ -78,7 +73,7 @@ class DagNode(Node):
 
     @property
     def children(self):
-        """Return children as wrapped nodes.
+        """Child nodes wrapped as Node instances.
 
         Returns:
             list[Node]: Wrapped child nodes.

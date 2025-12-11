@@ -46,7 +46,7 @@ class Node:
 
     @property
     def long_name(self):
-        """Get the full DAG path of the node.
+        """Full DAG path of the node.
 
         Returns:
             str | None: Long name for the node.
@@ -59,7 +59,7 @@ class Node:
 
     @property
     def name(self):
-        """Get the short name of the node.
+        """Short name of the node.
 
         Returns:
             str | None: Short name for the node.
@@ -72,7 +72,7 @@ class Node:
 
     @property
     def uuid(self):
-        """Get the UUID of the node.
+        """UUID of the node.
 
         Returns:
             str: Unique identifier for the node.
@@ -176,7 +176,7 @@ class Plug:
 
     @property
     def attr(self):
-        """Get the attribute name.
+        """Attribute name identifier.
 
         Returns:
             str: Attribute identifier.
@@ -185,7 +185,7 @@ class Plug:
 
     @property
     def path(self):
-        """Get the full attribute path.
+        """Full attribute path including the node name.
 
         Returns:
             str: Attribute path including node name.
@@ -194,7 +194,7 @@ class Plug:
 
     @property
     def value(self):
-        """Get the value of the attribute.
+        """Current value of the attribute.
 
         Returns:
             Any: Current attribute value.
@@ -203,16 +203,11 @@ class Plug:
 
     @value.setter
     def value(self, new_value):
-        """Set the value of the attribute.
-
-        Args:
-            new_value: Value to assign to the attribute.
-        """
         self.set(new_value)
 
     @property
     def visible(self) -> bool:
-        """Check if the attribute is visible in the channelbox.
+        """Whether the attribute is visible in the channel box.
 
         Returns:
             bool: True if visible.
@@ -224,11 +219,6 @@ class Plug:
 
     @visible.setter
     def visible(self, state: bool) -> None:
-        """Set the visibility of the attribute in the channel box.
-
-        Args:
-            state (bool): True to show the attribute, False to hide.
-        """
         _keyable = cmds.getAttr(self.path, keyable=True)
         if not state:
             cmds.setAttr(self.path, edit=True, keyable=False, channelBox=False)
@@ -237,7 +227,7 @@ class Plug:
 
     @property
     def keyable(self) -> bool:
-        """Check if the attribute is keyable.
+        """Whether the attribute is keyable.
 
         Returns:
             bool: True if keyable.
@@ -246,11 +236,6 @@ class Plug:
 
     @keyable.setter
     def keyable(self, state: bool) -> None:
-        """Set the keyable state of the attribute.
-
-        Args:
-            state (bool): True to make the attribute keyable, False to make it non-keyable.
-        """
         # if its not explicitly hidden, we expose it in the channel box when making it keyable
         if cmds.getAttr(self.path, channelBox=True):
             cmds.setAttr(self.path, edit=True, keyable=state)
@@ -259,7 +244,7 @@ class Plug:
 
     @property
     def locked(self) -> bool:
-        """Check if the attribute is locked.
+        """Whether the attribute is locked.
 
         Returns:
             bool: True if locked.
@@ -268,11 +253,6 @@ class Plug:
 
     @locked.setter
     def locked(self, state: bool) -> None:
-        """Set the lock state of the attribute.
-
-        Args:
-            state (bool): True to lock the attribute, False to unlock.
-        """
         cmds.setAttr(self.path, edit=True, lock=state)
 
     def exists(self):
