@@ -1,7 +1,7 @@
 """Mesh node type wrapper."""
 
-from maya.api import OpenMaya
 from maya import cmds
+from maya.api import OpenMaya
 
 from ..core.shapenode import ShapeNode
 from ..core.registry import register
@@ -10,9 +10,16 @@ from ..core.registry import register
 @register("mesh")
 class Mesh(ShapeNode):
     """Wrapper for mesh nodes."""
-    valid_primitives = {"polyCube", "polySphere", "polyPlane", "polyCylinder",
-                        "polyCone", "polyTorus"}
-    valid_commands = {'mesh'}
+
+    valid_primitives = {
+        "polyCube",
+        "polySphere",
+        "polyPlane",
+        "polyCylinder",
+        "polyCone",
+        "polyTorus",
+    }
+    valid_commands = {"mesh"}
 
     @classmethod
     def create(cls, cmd, **kwargs):
@@ -31,7 +38,8 @@ class Mesh(ShapeNode):
         else:
             raise ValueError(
                 f"Command '{cmd}' is not valid for creating a Mesh. Valid "
-                f"commands: {cls.valid_primitives.union(cls.valid_commands)}")
+                f"commands: {cls.valid_primitives.union(cls.valid_commands)}"
+            )
         return Mesh(result)
 
     def vertices(self, space="world"):
@@ -104,7 +112,9 @@ class Mesh(ShapeNode):
             for normal_index in range(mfn_mesh.numNormals)
         )
         if lock_state:
-            mfn_mesh.unlockVertexNormals(OpenMaya.MIntArray(range(mfn_mesh.numVertices)))
+            mfn_mesh.unlockVertexNormals(
+                OpenMaya.MIntArray(range(mfn_mesh.numVertices))
+            )
         if soften:
             edge_ids = OpenMaya.MIntArray(range(mfn_mesh.numEdges))
             smooths = OpenMaya.MIntArray([True] * mfn_mesh.numEdges)

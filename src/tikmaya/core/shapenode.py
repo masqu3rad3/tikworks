@@ -3,8 +3,8 @@
 from maya import cmds
 
 from .dagnode import DagNode
-from ..types.transform import Transform
 from .registry import register
+from ..types.transform import Transform
 
 @register("shape")
 class ShapeNode(DagNode):

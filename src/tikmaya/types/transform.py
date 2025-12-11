@@ -2,26 +2,29 @@
 
 from maya import cmds
 from maya.api import OpenMaya
+
+from ..core.decorators import add_aliases
 from ..core.dagnode import DagNode
 from ..core.registry import register, resolve
-from ..core.decorators import add_aliases
 
 
 @register("transform")
-@add_aliases({
-    "translate": "t",
-    "rotate": "r",
-    "scale": "s",
-    "translate_x": "tx",
-    "translate_y": "ty",
-    "translate_z": "tz",
-    "rotate_x": "rx",
-    "rotate_y": "ry",
-    "rotate_z": "rz",
-    "scale_x": "sx",
-    "scale_y": "sy",
-    "scale_z": "sz",
-})
+@add_aliases(
+    {
+        "translate": "t",
+        "rotate": "r",
+        "scale": "s",
+        "translate_x": "tx",
+        "translate_y": "ty",
+        "translate_z": "tz",
+        "rotate_x": "rx",
+        "rotate_y": "ry",
+        "rotate_z": "rz",
+        "scale_x": "sx",
+        "scale_y": "sy",
+        "scale_z": "sz",
+    }
+)
 class Transform(DagNode):
     """Wrapper for transform nodes."""
 
@@ -195,7 +198,8 @@ class Transform(DagNode):
         self["scaleZ"].set(value)
 
     def snap_to(self, target, position=True, rotation=True, scale=False):
-        """Snap this transform to another transform's position, rotation, and/or scale."""
+        """Snap this transform to another transform's position,
+        rotation, and/or scale."""
         node_m_transform = OpenMaya.MFnTransform(self.mdag_path)
         if isinstance(target, str):
             target = resolve(target)
@@ -222,4 +226,10 @@ class Transform(DagNode):
 
     def freeze(self, translate=True, rotate=True, scale=True):
         """Freeze the transformations on this transform node."""
-        cmds.makeIdentity(self.name, apply=True, translate=translate, rotate=rotate, scale=scale)
+        cmds.makeIdentity(
+            self.name,
+            apply=True,
+            translate=translate,
+            rotate=rotate,
+            scale=scale,
+        )

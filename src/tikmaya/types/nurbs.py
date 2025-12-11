@@ -1,7 +1,7 @@
 """Nurbs surface node type wrapper."""
 
-from maya.api import OpenMaya
 from maya import cmds
+from maya.api import OpenMaya
 
 from ..core.shapenode import ShapeNode
 from ..core.registry import register
@@ -10,9 +10,15 @@ from ..core.registry import register
 @register("nurbsSurface")
 class Nurbs(ShapeNode):
     """Wrapper for NURBS surface nodes."""
-    valid_primitives = {"nurbsPlane", "nurbsSphere", "nurbsCylinder",
-                        "nurbsCone", "nurbsTorus"}
-    valid_commands = {'nurbsSurface'}
+
+    valid_primitives = {
+        "nurbsPlane",
+        "nurbsSphere",
+        "nurbsCylinder",
+        "nurbsCone",
+        "nurbsTorus",
+    }
+    valid_commands = {"nurbsSurface"}
 
     @classmethod
     def create(cls, cmd, **kwargs):
@@ -27,7 +33,8 @@ class Nurbs(ShapeNode):
             raise ValueError(
                 f"Command '{cmd}' is not valid for creating a Nurbs Surface. "
                 f"Valid "
-                f"commands: {cls.valid_primitives.union(cls.valid_commands)}")
+                f"commands: {cls.valid_primitives.union(cls.valid_commands)}"
+            )
         return Nurbs(result)
 
     def cvs(self, space="world"):
