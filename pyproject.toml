@@ -10,4 +10,4 @@ readme = "README.md"
 dynamic = ["version", "description"]
 
 [tool.setuptools]
-packages = { find = { where = ["src"] } }
+packages = ["src/tikmaya"]
