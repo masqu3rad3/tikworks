@@ -107,9 +107,6 @@ class Mesh(ShapeNode):
 
         Args:
             soften (bool, optional): If true, Defaults to False.
-
-        Returns:
-            None
         """
 
         # Retrieve the MFnMesh api object.

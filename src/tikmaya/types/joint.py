@@ -23,8 +23,5 @@ class Joint(Transform):
 
         Args:
             xyz (tuple[float, float, float]): Orientation values.
-
-        Returns:
-            None
         """
         cmds.joint(self.name, e=True, orientation=xyz)

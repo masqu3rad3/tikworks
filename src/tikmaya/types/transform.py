@@ -115,9 +115,6 @@ class Transform(DagNode):
 
         Args:
             value (tuple[float, float, float]): Translation values.
-
-        Returns:
-            None
         """
         self["translate"].set((value[0], value[1], value[2]))
 
@@ -136,9 +133,6 @@ class Transform(DagNode):
 
         Args:
             value (tuple[float, float, float]): Rotation values.
-
-        Returns:
-            None
         """
         self["rotate"].set((value[0], value[1], value[2]))
 
@@ -157,9 +151,6 @@ class Transform(DagNode):
 
         Args:
             value (tuple[float, float, float]): Scale values.
-
-        Returns:
-            None
         """
         self["scale"].set((value[0], value[1], value[2]))
 
@@ -178,9 +169,6 @@ class Transform(DagNode):
 
         Args:
             value (float): X translation value.
-
-        Returns:
-            None
         """
         self["translateX"].set(value)
 
@@ -199,9 +187,6 @@ class Transform(DagNode):
 
         Args:
             value (float): Y translation value.
-
-        Returns:
-            None
         """
         self["translateY"].set(value)
 
@@ -220,9 +205,6 @@ class Transform(DagNode):
 
         Args:
             value (float): Z translation value.
-
-        Returns:
-            None
         """
         self["translateZ"].set(value)
 
@@ -241,9 +223,6 @@ class Transform(DagNode):
 
         Args:
             value (float): X rotation value.
-
-        Returns:
-            None
         """
         self["rotateX"].set(value)
 
@@ -262,9 +241,6 @@ class Transform(DagNode):
 
         Args:
             value (float): Y rotation value.
-
-        Returns:
-            None
         """
         self["rotateY"].set(value)
 
@@ -283,9 +259,6 @@ class Transform(DagNode):
 
         Args:
             value (float): Z rotation value.
-
-        Returns:
-            None
         """
         self["rotateZ"].set(value)
 
@@ -304,9 +277,6 @@ class Transform(DagNode):
 
         Args:
             value (float): X scale value.
-
-        Returns:
-            None
         """
         self["scaleX"].set(value)
 
@@ -325,9 +295,6 @@ class Transform(DagNode):
 
         Args:
             value (float): Y scale value.
-
-        Returns:
-            None
         """
         self["scaleY"].set(value)
 
@@ -346,9 +313,6 @@ class Transform(DagNode):
 
         Args:
             value (float): Z scale value.
-
-        Returns:
-            None
         """
         self["scaleZ"].set(value)
 
@@ -363,9 +327,6 @@ class Transform(DagNode):
 
         Raises:
             TypeError: If the target cannot be resolved to a Transform.
-
-        Returns:
-            None
         """
         node_m_transform = OpenMaya.MFnTransform(self.mdag_path)
         if isinstance(target, str):
@@ -401,9 +362,6 @@ class Transform(DagNode):
             translate (bool): Whether to freeze translation.
             rotate (bool): Whether to freeze rotation.
             scale (bool): Whether to freeze scale.
-
-        Returns:
-            None
         """
         cmds.makeIdentity(
             self.name, apply=True, translate=translate, rotate=rotate, scale=scale

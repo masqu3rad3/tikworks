@@ -94,11 +94,7 @@ class Node:
         return resolve(result)
 
     def delete(self):
-        """Delete the node from the scene.
-
-        Returns:
-            None
-        """
+        """Delete the node from the scene."""
         cmds.delete(self.long_name)
         self._invalidate_cache()
 
@@ -141,9 +137,6 @@ class Node:
 
         Args:
             attr_name (str): The name of the attribute to delete.
-
-        Returns:
-            None
         """
         cmds.deleteAttr(f"{self.long_name}.{attr_name}")
 
@@ -231,13 +224,10 @@ class Plug:
 
     @visible.setter
     def visible(self, state: bool) -> None:
-        """Set the visibility of the attribute in the channelbox.
+        """Set the visibility of the attribute in the channel box.
 
         Args:
             state (bool): True to show the attribute, False to hide.
-
-        Returns:
-            None
         """
         _keyable = cmds.getAttr(self.path, keyable=True)
         if not state:
@@ -260,9 +250,6 @@ class Plug:
 
         Args:
             state (bool): True to make the attribute keyable, False to make it non-keyable.
-
-        Returns:
-            None
         """
         # if its not explicitly hidden, we expose it in the channel box when making it keyable
         if cmds.getAttr(self.path, channelBox=True):
@@ -285,9 +272,6 @@ class Plug:
 
         Args:
             state (bool): True to lock the attribute, False to unlock.
-
-        Returns:
-            None
         """
         cmds.setAttr(self.path, edit=True, lock=state)
 
@@ -306,18 +290,11 @@ class Plug:
 
         Args:
             **kwargs: Additional keyword arguments to pass to cmds.addAttr.
-
-        Returns:
-            None
         """
         cmds.addAttr(self._node.long_name, longName=self.attr, **kwargs)
 
     def delete(self):
-        """Delete an attribute from the node.
-
-        Returns:
-            None
-        """
+        """Delete an attribute from the node."""
         cmds.deleteAttr(f"{self._node.long_name}.{self.attr}")
 
     def get(self, **kwargs):
@@ -341,9 +318,6 @@ class Plug:
 
         Raises:
             TypeError: If the value type is unsupported.
-
-        Returns:
-            None
         """
         _type = kwargs.pop("type", None)
         if isinstance(value, (list, tuple)):
@@ -366,9 +340,6 @@ class Plug:
 
         Args:
             new_attr_name (str): The new name for the attribute.
-
-        Returns:
-            None
         """
         cmds.renameAttr(self.path, new_attr_name)
         self._attr = new_attr_name
@@ -380,22 +351,15 @@ class Plug:
             other (Plug): The plug to connect to.
             force (bool): Whether to force the connection, breaking existing
                 connections if necessary.
-
-        Returns:
-            None
         """
         cmds.connectAttr(self.path, other.path, force=force)
 
     def disconnect(self, other=None):
-        """Disconnect this plug from another plug, or from its source if no
-        plug is given.
+        """Disconnect this plug from another plug or from its source if no plug is given.
 
         Args:
             other (Plug, optional): The plug to disconnect from. If None,
                 disconnects from the source connection.
-
-        Returns:
-            None
         """
         if other:
             cmds.disconnectAttr(self.path, other.path)
@@ -405,19 +369,11 @@ class Plug:
                 cmds.disconnectAttr(sources[0], self.path)
 
     def lock(self):
-        """Lock the attribute.
-
-        Returns:
-            None
-        """
+        """Lock the attribute."""
         self.locked = True
 
     def unlock(self):
-        """Unlock the attribute.
-
-        Returns:
-            None
-        """
+        """Unlock the attribute."""
         self.locked = False
 
     def __getitem__(self, attr):

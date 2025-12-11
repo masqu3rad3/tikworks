@@ -40,9 +40,6 @@ def set_default_factory(factory: Type[T]) -> None:
 
     Args:
         factory (Type[T]): Default factory class to instantiate when no match is found.
-
-    Returns:
-        None
     """
     global _DEFAULT_FACTORY
     _DEFAULT_FACTORY = factory  # type: ignore[assignment]
