@@ -6,9 +6,15 @@
 Welcome to tikworks's documentation!
 ====================================
 
+.. warning::
+   Tikmaya is actively being built. The API and documentation may change as features land.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
+   usage/tikmaya_overview
+   API_style_guide
 
 
 
