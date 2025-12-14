@@ -15,7 +15,10 @@ class Curve(ShapeNode):
     def create(cls, *args, **kwargs):
         """Create a NURBS curve node."""
         result = cmds.curve(*args, **kwargs)
-        return Curve(result)
+        curve = cls(result)
+        if kwargs.get("name"):
+            curve.rename(f"{kwargs.get('name')}Shape")
+        return cls(result)
 
     def cvs(self, space="world"):
         """Return all control vertex positions.
