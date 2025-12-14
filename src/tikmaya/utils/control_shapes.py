@@ -2,13 +2,12 @@ import os
 import json
 import logging
 from pathlib import Path
-from maya import cmds
 import maya.api.OpenMaya as om
 
 LOGGER = logging.getLogger(__name__)
 
 
-class ShapeLibrary:
+class ControlShapeLibrary:
     """
     Singleton-like manager for accessing controller shape data.
     """
@@ -22,7 +21,7 @@ class ShapeLibrary:
         # Assumes this file is in tikmaya/utils/shapes.py
         current_dir = Path(__file__).absolute().parent
         root_dir = current_dir.parent
-        core_path = root_dir / "data" / "shapes"
+        core_path = root_dir / "data" / "control_shapes"
         self.register_path(core_path)
 
         # 2. Add User Path (Env Var Override)
@@ -123,7 +122,7 @@ class ShapeLibrary:
         }
 
         if normalize and all_points:
-            final_data = ShapeLibrary._normalize_data(final_data, all_points)
+            final_data = ControlShapeLibrary._normalize_data(final_data, all_points)
 
         return final_data
 

@@ -14,7 +14,7 @@ import logging
 from tikmaya.core.registry import resolve
 from tikmaya.types.transform import Transform
 from tikmaya.types.curve import Curve
-from tikmaya.utils.shapes import ShapeLibrary  # Import the manager
+from tikmaya.utils.control_shapes import ControlShapeLibrary  # Import the manager
 
 LOG = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ class Controller:
 
         if isinstance(shape, str):
             # Resolve via Library
-            lib = ShapeLibrary.get_instance()
+            lib = ControlShapeLibrary.get_instance()
             shape_data = lib.load(shape)
             if not shape_data:
                 LOG.error("Shape %s not found.", shape)
