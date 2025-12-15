@@ -4,35 +4,132 @@ Tikmaya Developer Guidelines
 This document outlines the conventions and patterns used throughout **Tikmaya**.
 It serves as a reference for contributors and maintainers to keep the codebase consistent, predictable, and Pythonic — while staying closely aligned with the way Maya works.
 
-Each section below provides guidance on naming, structure, and API design philosophy, including:
-- When to use properties versus methods
-- Recommended ordering of functions inside a class
-- Naming consistency and readability practices
-- Shared expectations across all Tikmaya modules
+Tikmaya is intentionally opinionated: clarity and correctness are favored over cleverness or convenience.
+
+The goal is that:
+- APIs read naturally in Python
+- Scene state remains the source of truth
+- Semantic intent is explicit, not inferred
+- Every abstraction has a clear responsibility
+
+Following these guidelines ensures that Tikmaya remains:
+- Easy to reason about
+- Safe for production pipelines
+- Extensible without refactoring existing code
 
 Following these conventions helps ensure that Tikmaya modules remain intuitive, minimal, and maintainable — so that any user familiar with one class can quickly understand another.
 
 API Style Guide (Tikmaya)
-=========================
+========================
 
 This guide defines conventions for writing clean, predictable, and consistent API code in **Tikmaya**.
-It aims to make the library easy to read, maintain, and extend — both for you and for anyone using or contributing to it.
-
-General Philosophy
-------------------
 
 Tikmaya’s API should *feel like Python*, but *behave like Maya*.
+
 That means it should be expressive, explicit when needed, and avoid surprises.
 
 When designing an API surface:
 
-- Think about what makes the most sense to the **user**, not just the developer.
-- Choose names and structures that read naturally::
+- Think about what makes the most sense to the **user**, not just the implementer.
+- Prefer explicit intent over implicit magic.
+- Consistency across modules is more important than individual taste.
 
-    ctrl.locked = True      # feels like an attribute
-    ctrl.lock()             # feels like an action
+Example::
 
-Consistency across modules is more important than personal style.
+    ctrl.locked = True     # state
+    ctrl.lock()            # action
+
+---
+
+Core Architectural Concepts
+===========================
+
+Tikmaya code is organized around three distinct concepts:
+
+1. Types
+2. Roles
+3. Constructs
+
+Each serves a different purpose and must not be conflated.
+
+---
+
+Types
+-----
+
+**Types describe what a node *is*.**
+
+Types live in:
+
+    tikmaya/core/types
+
+A type is a thin, faithful wrapper around a Maya node type.
+
+Examples:
+- Transform
+- Curve
+- Mesh
+
+Rules for Types:
+
+- Each type maps 1:1 to a Maya node type
+- Types are registered in the type registry
+- Types may create nodes
+- Types expose low-level, structural behavior
+- Types never encode semantic meaning
+
+A type should answer questions like:
+- What attributes exist?
+- How do I create this node?
+- How do I query or manipulate its data?
+
+A type should not answer:
+- What is this node used for?
+- What role does it play in a rig?
+
+---
+
+Roles
+-----
+
+**Roles describe what a node *means*.**
+
+Roles live in:
+
+    tikmaya/core/roles
+
+A role is a semantic overlay applied to an existing node.
+
+Examples:
+- Controller
+- DeformerDriver
+- SpaceSwitcher
+
+Rules for Roles:
+
+- Roles are not Maya node types
+- Roles are not registered as types
+- Roles wrap an existing type instance
+- Roles never create new Maya node kinds
+- Roles validate that they wrap a compatible base type
+- Roles encode their identity in the scene
+
+Roles must always be recoverable from the scene.
+
+---
+
+Constructs
+----------
+
+**Constructs orchestrate multiple nodes.**
+
+Constructs live in:
+
+    tikmaya/core/constructs
+
+A construct coordinates several nodes and roles and represents a pattern or setup.
+
+---
 
 Properties vs. Methods
 ----------------------
@@ -197,3 +294,4 @@ Summary Checklist
 +--------------------------------------+----------------------------------+
 | Same structure across all classes    | Predictability matters           |
 +--------------------------------------+----------------------------------+
+

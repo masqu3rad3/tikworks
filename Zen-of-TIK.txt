@@ -1,0 +1,14 @@
+Maya decides what a node is.
+tikmaya decides how to wrap it.
+Trigger decides what it means.
+
+Inheritance is for “is a”.
+Constructs are always “has many”
+
+rules live, not lower layers
+
+If something animates, parents, constrains, or holds identity
+it must be Transform-centric.
+
+If something defines geometry
+it must be Shape-centric.
