@@ -106,10 +106,9 @@ class ControlShapeLibrary:
                 all_points.extend(points)
 
                 shapes_data.append({
-                    "points": points,
-                    "knots": list(fn_curve.knots()),
+                    "point": points,
+                    "knot": list(fn_curve.knots()),
                     "degree": int(fn_curve.degree),
-                    "form": int(fn_curve.form),  # 1=Open, 2=Closed, 3=Periodic
                     "periodic": fn_curve.form == om.MFnNurbsCurve.kPeriodic
                 })
 

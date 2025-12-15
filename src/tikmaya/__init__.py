@@ -8,6 +8,7 @@ from .types.locator import Locator
 from .types.mesh import Mesh
 from .types.nurbs import Nurbs
 from .types.transform import Transform
+from .roles.controller import Controller
 
 __all__ = [
     "Node",
@@ -20,4 +21,5 @@ __all__ = [
     "Locator",
     "Light",
     "resolve",
+    "Controller",
 ]
