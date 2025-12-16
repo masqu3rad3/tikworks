@@ -73,8 +73,14 @@ class ControlShapeLibrary:
             if not path.is_dir():
                 continue
 
-            for json_path in path.glob("*.json"):
+            # get all .json files recursively
+            for json_path in path.rglob("*.json"):
                 self._cache[json_path.stem] = json_path
+
+    def list_shapes(self):
+        if not self._cache:
+            self.refresh()
+        return list(self._cache.keys())
 
     def get_path(self, name):
         if not self._cache:
@@ -100,7 +106,7 @@ class ControlShapeLibrary:
     # ----------------------------------------------------------------
 
     @staticmethod
-    def capture(node_name, normalize=True):
+    def capture(node_name, name=None, normalize=True):
         """Scrape curve data from a transform."""
         node = resolve(node_name)
 
@@ -130,7 +136,7 @@ class ControlShapeLibrary:
             return None
 
         final_data = {
-            "name": node_name,
+            "name": name or node.name,
             "curves": shapes_data
         }
 
@@ -190,7 +196,7 @@ class ControlShapeLibrary:
 
     def capture_to_disk(self, node_name, name=None, folder_path=None, normalize=True):
         """Capture shape data from a node and save it to disk as JSON."""
-        data = self.capture(node_name, normalize=normalize)
+        data = self.capture(node_name, name=name, normalize=normalize)
         if not data:
             LOG.error(f"No curve data found on node '{node_name}'.")
             return None
