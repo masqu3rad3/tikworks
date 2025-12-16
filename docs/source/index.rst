@@ -7,15 +7,8 @@ At its core is **Tikmaya** — a modern, Pythonic wrapper for ``maya.cmds`` that
 .. warning::
    Tikmaya is actively being built. The API and documentation may change as features land.
 
-.. raw:: html
-
-   <div style="padding: 1em; margin-bottom: 1em; background: #f8f9fa; border-radius: 4px;">
-
-**Why TikWorks?** Maya scripting is powerful but verbose. TikWorks brings modern Python patterns to Maya — type safety, object-oriented design, and cleaner syntax — while keeping Maya's flexibility intact.
-
-.. raw:: html
-
-   </div>
+.. tip::
+   **Why TikWorks?** Maya scripting is powerful but verbose. TikWorks brings modern Python patterns to Maya — type safety, object-oriented design, and cleaner syntax — while keeping Maya's flexibility intact.
 
 The TikWorks Ecosystem
 ----------------------

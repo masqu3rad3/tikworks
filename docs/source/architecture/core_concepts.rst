@@ -95,8 +95,8 @@ behavior without creating new Maya node types.
 **Rules for Roles:**
 
 - Roles are **not** Maya node types
-- Roles wrap an existing Type instance
-- Roles validate that they wrap a compatible base Type
+- Roles hold an existing Type instance internally (composition, not inheritance)
+- Roles validate that they hold a compatible base Type
 - Roles encode their identity in the scene (via attributes, metadata)
 - Roles **never** create new Maya node kinds
 
@@ -156,34 +156,6 @@ It's the "assembly" layer.
 .. note::
    The Constructs system is under development. As Tikmaya matures, this will
    become the primary way to build complex rig systems.
-
-The Zen of TIK
---------------
-
-From the project's guiding principles:
-
-.. epigraph::
-
-   Maya decides what a node is.
-   Tikmaya decides how to wrap it.
-   Trigger decides what it means.
-
-   Inheritance is for "is a".
-   Constructs are always "has many".
-
-   If something animates, parents, constrains, or holds identity —
-   it must be Transform-centric.
-
-   If something defines geometry —
-   it must be Shape-centric.
-
-   -- Zen of TIK
-
-This philosophy keeps the codebase clean:
-
-- **Types** inherit from each other (``Joint`` is-a ``Transform``)
-- **Roles** compose with Types (``Controller`` has-a ``Transform``)
-- **Constructs** compose with Roles and Types (``IKChain`` has-many joints)
 
 Registry System
 ---------------
