@@ -28,6 +28,7 @@ def set_default_factory(factory: Type[T]) -> None:
 
 def resolve_node_class(name: str):
     """Return the most specific registered class for a given Maya node."""
+    # if the name is already a class, defined in _NODE_TYPES, return it directly
     if not cmds.objExists(name):
         raise ValueError(f"Node '{name}' does not exist.")
 
@@ -52,5 +53,7 @@ def resolve_node_class(name: str):
 
 def resolve(name: str) -> Any:
     """Return an instance of the correct Node subclass based on Maya node type."""
+    if isinstance(name, tuple(_NODE_TYPES.values())):
+        return name
     cls = resolve_node_class(name)
     return cls(name)
