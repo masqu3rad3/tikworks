@@ -156,7 +156,7 @@ Side-by-Side Comparison
    cmds.setAttr(f"{loc}.translate", 1, 2, 3, type="double3")
    cmds.setAttr(f"{loc}.visibility", False)
 
-   # Tikmaya
+   # Tikmaya (loc is the shape, .transform is its parent)
    loc = tikmaya.Locator.create(name="myLocator")
    loc.transform.translate = (1, 2, 3)
    loc.transform.visibility = False

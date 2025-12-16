@@ -98,12 +98,17 @@ Use the ``create()`` class method on type classes:
    # Create a joint
    jnt = tikmaya.Joint.create(name="arm_jnt")
 
-   # Create a locator
+   # Create a locator (returns the shape node)
    loc = tikmaya.Locator.create(name="myLocator")
+   loc.transform.translate = (1, 2, 3)  # Access parent transform
 
-   # Create geometry
+   # Create geometry (pass the Maya command as first argument)
    sphere = tikmaya.Mesh.create("polySphere", name="mySphere")
    plane = tikmaya.Nurbs.create("nurbsPlane", name="myPlane")
+
+.. note::
+   Shape types like ``Locator``, ``Mesh``, and ``Curve`` return shape node wrappers.
+   Access the parent transform via the ``.transform`` property.
 
 DAG Hierarchy
 -------------
