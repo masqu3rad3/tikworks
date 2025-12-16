@@ -1,0 +1,225 @@
+Why Tikmaya?
+============
+
+Maya scripting with ``maya.cmds`` works, but it has pain points that compound in larger projects.
+Tikmaya addresses these directly.
+
+The Problem with ``maya.cmds``
+------------------------------
+
+**String-based node references are fragile**
+
+In vanilla Maya scripting, everything is a string:
+
+.. code-block:: python
+
+   # Using maya.cmds
+   import maya.cmds as cmds
+
+   cube = cmds.polyCube(name="myCube")[0]
+   cmds.setAttr(f"{cube}.translateX", 5)
+
+   # Later, something renames the node...
+   cmds.rename(cube, "renamedCube")
+
+   # Now your original reference is broken!
+   cmds.setAttr(f"{cube}.translateX", 10)  # Error! "myCube" doesn't exist
+
+This is a constant source of bugs in production scripts. Nodes get renamed:
+
+- By users working in the scene
+- By programmatic operations (parenting, namespacing)
+- Internally by Maya during operations
+
+**Verbose, repetitive code**
+
+Common tasks require multiple ``cmds`` calls:
+
+.. code-block:: python
+
+   # Lock and hide an attribute (cmds)
+   cmds.setAttr("pCube1.scaleX", lock=True)
+   cmds.setAttr("pCube1.scaleX", keyable=False)
+   cmds.setAttr("pCube1.scaleX", channelBox=False)
+
+   # Connect two attributes (cmds)
+   cmds.connectAttr("locator1.translate", "pCube1.translate", force=True)
+
+**No type safety**
+
+You only discover typos at runtime:
+
+.. code-block:: python
+
+   # This typo won't be caught until the script runs
+   cmds.setAttr("pCube1.tranlsateX", 5)  # Misspelled!
+
+How Tikmaya Solves These Problems
+---------------------------------
+
+1. UUID-Based Tracking
+~~~~~~~~~~~~~~~~~~~~~~
+
+**Tikmaya tracks nodes by UUID, not names.** This is the killer feature.
+
+.. code-block:: python
+
+   import tikmaya
+
+   cube = tikmaya.resolve("myCube")
+   cube.translate_x = 5
+
+   # Rename the node - in Maya or programmatically
+   cube.rename("renamedCube")
+
+   # Your reference still works!
+   cube.translate_x = 10  # No error - Tikmaya tracks by UUID
+
+Under the hood, Tikmaya stores the node's UUID when you wrap it. When you access
+properties, it resolves the current name from the UUID. Renames, re-parenting,
+namespace changes — none of them break your reference.
+
+2. Less Code, More Readable
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The same operations become concise and clear:
+
+.. code-block:: python
+
+   # Lock and hide an attribute (Tikmaya)
+   cube["scaleX"].locked = True
+   cube["scaleX"].visible = False
+
+   # Or chain multiple attributes
+   for attr in ["scaleX", "scaleY", "scaleZ"]:
+       cube[attr].locked = True
+       cube[attr].visible = False
+
+   # Connect two attributes with the >> operator
+   locator["translate"] >> cube["translate"]
+
+3. Pythonic and Object-Oriented
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Tikmaya uses Python conventions:
+
+.. code-block:: python
+
+   # Properties for state
+   cube.visibility = False
+   print(cube.translate)
+
+   # Methods for actions
+   cube.freeze(translate=True, rotate=True)
+   cube.snap_to(target)
+
+   # Iteration and comprehensions work naturally
+   children = [child for child in transform.children if child.visibility]
+
+4. Type Support and IDE Completion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Because Tikmaya uses classes with defined properties and methods:
+
+- Your IDE provides autocomplete suggestions
+- Type hints catch errors before runtime
+- Docstrings are always available
+
+.. code-block:: python
+
+   cube = tikmaya.resolve("pCube1")  # Returns Transform
+   cube.  # IDE shows: translate, rotate, scale, freeze(), snap_to(), etc.
+
+5. Automatic Type Resolution
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Tikmaya's registry system automatically wraps nodes with the correct class:
+
+.. code-block:: python
+
+   mesh = tikmaya.resolve("pCubeShape1")      # Returns Mesh
+   joint = tikmaya.resolve("joint1")           # Returns Joint
+   curve = tikmaya.resolve("curveShape1")      # Returns Curve
+
+Each type exposes methods relevant to that node type. A ``Mesh`` has ``vertices()``,
+a ``Curve`` has ``cvs()``, a ``Transform`` has ``freeze()``.
+
+Side-by-Side Comparison
+-----------------------
+
+**Creating and positioning a locator:**
+
+.. code-block:: python
+
+   # maya.cmds
+   loc = cmds.spaceLocator(name="myLocator")[0]
+   cmds.setAttr(f"{loc}.translate", 1, 2, 3, type="double3")
+   cmds.setAttr(f"{loc}.visibility", False)
+
+   # Tikmaya (loc is the shape, .transform is its parent)
+   loc = tikmaya.Locator.create(name="myLocator")
+   loc.transform.translate = (1, 2, 3)
+   loc.transform.visibility = False
+
+**Connecting attributes:**
+
+.. code-block:: python
+
+   # maya.cmds
+   cmds.connectAttr("driver.translateX", "driven.translateX", force=True)
+   cmds.connectAttr("driver.translateY", "driven.translateY", force=True)
+   cmds.connectAttr("driver.translateZ", "driven.translateZ", force=True)
+
+   # Tikmaya
+   driver["translate"] >> driven["translate"]
+
+**Working with transforms after renaming:**
+
+.. code-block:: python
+
+   # maya.cmds - fragile
+   cube_name = cmds.polyCube()[0]
+   # ... 100 lines later, cube_name might be invalid ...
+
+   # Tikmaya - robust
+   cube = tikmaya.resolve(cmds.polyCube()[0])
+   # ... 100 lines later, cube still works even if renamed ...
+
+When to Use Tikmaya
+-------------------
+
+**Use Tikmaya when:**
+
+- Building tools that manipulate existing scene objects
+- Writing rigging scripts that need reliable node references
+- Creating pipelines where nodes may be renamed or re-parented
+- You want cleaner, more maintainable code
+
+**Consider raw ``cmds`` when:**
+
+- Performance-critical inner loops with thousands of iterations
+- One-off scripts where readability doesn't matter
+- Operations that Tikmaya doesn't wrap yet
+
+.. note::
+   Tikmaya and ``cmds`` can coexist. Use ``node.name`` or ``node.long_name`` to pass
+   Tikmaya objects to ``cmds`` functions when needed.
+
+Summary
+-------
+
++---------------------------+----------------------------------+-----------------------------------+
+| Pain Point                | ``maya.cmds``                    | **Tikmaya**                       |
++===========================+==================================+===================================+
+| Node references           | Strings — break on rename        | UUID-backed — survives renames    |
++---------------------------+----------------------------------+-----------------------------------+
+| Code verbosity            | Multiple calls per operation     | Concise properties and methods    |
++---------------------------+----------------------------------+-----------------------------------+
+| Type safety               | None — errors at runtime         | IDE completion, type hints        |
++---------------------------+----------------------------------+-----------------------------------+
+| API style                 | Procedural, flag-heavy           | Pythonic, object-oriented         |
++---------------------------+----------------------------------+-----------------------------------+
+| Debugging                 | String matching errors           | Object inspection, clear errors   |
++---------------------------+----------------------------------+-----------------------------------+
+
+Tikmaya lets you write less code, catch errors earlier, and stop worrying about node names.
