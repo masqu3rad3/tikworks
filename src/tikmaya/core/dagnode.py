@@ -29,6 +29,11 @@ class DagNode(Node):
     def visibility(self, value):
         self["visibility"].set(value)
 
+    @property
+    def dag_path(self):
+        """Return the MDagPath for this node."""
+        return self._dag_path()
+
     def _dag_path(self):
         """Resolve and cache this node's MDagPath using the long name for
         disambiguation."""

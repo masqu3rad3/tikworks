@@ -1,14 +1,75 @@
+The Zen of Tik
+
 Maya decides what a node is.
-tikmaya decides how to wrap it.
-Trigger decides what it means.
+Tikmaya decides how to touch it.
+Trigger decides why it matters.
 
-Inheritance is for “is a”.
-Constructs are always “has many”
+Do not argue with the host.
+Do not leak meaning upward.
+Let each layer breathe its own air.
 
-rules live, not lower layers
+Wrap behavior, not identity.
+Reveal structure, do not invent it.
+A wrapper explains. It does not rule.
 
-If something animates, parents, constrains, or holds identity
-it must be Transform-centric.
+Inheritance is for is.
+Composition is for has.
+When in doubt, add less ancestry.
 
-If something defines geometry
-it must be Shape-centric.
+Rules live where they act.
+Never lower. Rarely higher.
+Gravity belongs close to the ground.
+
+If something moves,
+parents, constrains, or remembers where it is,
+it is Transform-centric.
+
+If something defines form,
+surface, volume, or silhouette,
+it is Shape-centric.
+
+Never confuse motion with meaning.
+Never confuse geometry with intent.
+
+APIs should feel smaller than the system beneath them.
+Power comes from restraint.
+
+If behavior surprises the reader,
+it is in the wrong layer.
+
+Names are contracts.
+Aliases are kindness.
+Ambiguity is technical debt wearing a smile.
+
+Expose the obvious.
+Hide the inevitable.
+Document the sharp edges.
+
+Prefer resolution over reach.
+Prefer wrapping over rewriting.
+Prefer clarity over cleverness.
+
+If Maya already knows the truth,
+ask it.
+If it does not, do not pretend.
+
+The graph is sacred.
+Side effects are confessions.
+Global state is a ghost story.
+
+Tools should compose like sentences,
+not shout like monologues.
+
+A good abstraction disappears.
+A bad one demands attention.
+
+Leave space for rigs you have not met yet.
+Leave exits for decisions you may regret.
+
+Simple things should be simple.
+Complex things should be possible.
+Magical things should be explicit.
+
+Now import tik.
+Read slowly.
+Then build with intent.

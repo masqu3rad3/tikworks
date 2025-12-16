@@ -2,10 +2,22 @@ import os
 import json
 import logging
 from pathlib import Path
+import platform
 import maya.api.OpenMaya as om
 
-LOGGER = logging.getLogger(__name__)
+from tikmaya.core.registry import resolve
 
+LOG = logging.getLogger(__name__)
+
+CURRENT_PLATFORM = platform.system()
+
+def get_home_dir():
+    """Get the user home directory."""
+    # expanduser does not always return the same result (in Maya it returns user/Documents).
+    # This returns the true user folder for all platforms and dccs"""
+    if CURRENT_PLATFORM == "Windows":
+        return os.path.normpath(os.getenv("USERPROFILE"))
+    return os.path.normpath(os.getenv("HOME"))
 
 class ControlShapeLibrary:
     """
@@ -25,9 +37,20 @@ class ControlShapeLibrary:
         self.register_path(core_path)
 
         # 2. Add User Path (Env Var Override)
+        self.user_path = self.resolve_user_path()
+        # if self.user_path:
+        self.register_path(self.user_path)
+
+    def resolve_user_path(self):
         user_path = os.environ.get("TIKMAYA_SHAPES_PATH")
         if user_path:
-            self.register_path(user_path)
+            return Path(user_path).absolute()
+        else:
+            _user_root = get_home_dir()
+            _user_dir = Path(_user_root, "TikWorks", "user_control_shapes")
+            # ensure it exists
+            _user_dir.mkdir(parents=True, exist_ok=True)
+            return _user_dir
 
     @classmethod
     def get_instance(cls):
@@ -62,14 +85,14 @@ class ControlShapeLibrary:
         """Returns the dictionary data for the shape."""
         path = self.get_path(name)
         if not path:
-            LOGGER.warning(f"Shape '{name}' not found in library.")
+            LOG.warning(f"Shape '{name}' not found in library.")
             return None
 
         try:
             with path.open('r') as f:
                 return json.load(f)
         except Exception as e:
-            LOGGER.error(f"Failed to load shape '{name}': {e}")
+            LOG.error(f"Failed to load shape '{name}': {e}")
             return None
 
     # ----------------------------------------------------------------
@@ -78,25 +101,16 @@ class ControlShapeLibrary:
 
     @staticmethod
     def capture(node_name, normalize=True):
-        """
-        Scrapes curve data from a transform.
-        """
-        sel = om.MSelectionList()
-        try:
-            sel.add(node_name)
-            obj = sel.getDependNode(0)
-        except:
-            raise ValueError(f"Node {node_name} not found.")
-
-        dag_path = sel.getDagPath(0)
+        """Scrape curve data from a transform."""
+        node = resolve(node_name)
 
         shapes_data = []
         all_points = []
 
         # Iterate over shapes
-        child_count = dag_path.childCount()
+        child_count = node.dag_path.childCount()
         for idx in range(child_count):
-            child = dag_path.child(idx)
+            child = node.dag_path.child(idx)
             if child.hasFn(om.MFn.kNurbsCurve):
                 fn_curve = om.MFnNurbsCurve(child)
 
@@ -155,17 +169,15 @@ class ControlShapeLibrary:
         # to the pivot. If the user drew it offset, they probably want it offset.
         for curve in data["curves"]:
             new_points = []
-            for point in curve["points"]:
+            for point in curve["point"]:
                 new_points.append((point[0] * scale, point[1] * scale, point[2] * scale))
-            curve["points"] = new_points
+            curve["point"] = new_points
 
         return data
 
     @staticmethod
-    def save_to_disk(data, name, folder_path=None):
-        if not folder_path:
-            folder_path = Path(os.getenv("TEMP") or Path.cwd())
-        else:
+    def save_to_disk(data, name, folder_path):
+        if isinstance(folder_path, str):
             folder_path = Path(folder_path)
 
         filename = f"{name}.json"
@@ -175,3 +187,15 @@ class ControlShapeLibrary:
             json.dump(data, f, indent=4)
 
         return str(full_path)
+
+    def capture_to_disk(self, node_name, name=None, folder_path=None, normalize=True):
+        """Capture shape data from a node and save it to disk as JSON."""
+        data = self.capture(node_name, normalize=normalize)
+        if not data:
+            LOG.error(f"No curve data found on node '{node_name}'.")
+            return None
+
+        if not name:
+            name = node_name.split("|")[-1]
+
+        return self.save_to_disk(data, name, folder_path=folder_path or self.user_path)
