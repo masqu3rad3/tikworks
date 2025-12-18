@@ -234,3 +234,55 @@ class Transform(DagNode):
             rotate=rotate,
             scale=scale,
         )
+
+    def collect_hierarchy(self, node_types=None, include_self=False, max_depth=-1):
+        """Collect nodes in the hierarchy under this transform.
+
+        Args:
+            node_types (list[str], optional): List of node types to include.
+                If None, includes all types. Defaults to None.
+            include_self (bool, optional): Whether to include this node.
+                Defaults to False.
+            max_depth (int, optional): Maximum depth to traverse.
+                -1 for unlimited. Defaults to -1.
+
+        Returns:
+            list[DagNode]: List of collected nodes.
+        """
+        if isinstance(node_types, str):
+            node_types = [node_types]
+        collected = []
+
+        def _collect(current_node, current_depth):
+            if max_depth != -1 and current_depth > max_depth:
+                return
+            if current_depth > 0 or include_self:
+                if node_types is None or current_node.type in node_types:
+                    collected.append(current_node)
+            for child in current_node.children:
+                if isinstance(child, Transform):
+                    _collect(child, current_depth + 1)
+            for shape in current_node.shapes:
+                if node_types is None or shape.type in node_types:
+                    collected.append(shape)
+
+        _collect(self, 0)
+        return collected
+
+    def collect_shape_transforms(self, shape_types=None):
+        """Get transform of shapes under hierarchy of given node.
+
+        Args:
+            shape_type (str or list): Shape type to look for.
+            full_path (bool): Whether to return nodes with their full dag path.
+
+        Returns:
+            list: list of matching transform nodes under given node.
+        """
+        shape_types = shape_types or ["mesh", "nurbsCurve", "nurbsSurface"]
+        shapes = cmds.listRelatives(self.name, type=shape_types, fullPath=True, allDescendents=True) or []
+        nodes = list(
+            set(cmds.listRelatives(shapes, parent=True, fullPath=True))
+        )
+
+        return [Transform(node) for node in nodes]

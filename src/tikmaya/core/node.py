@@ -57,15 +57,20 @@ class Node:
         result = cmds.createNode(cmd, **kwargs)
         return resolve(result)
 
+    @property
+    def type(self):
+        """The type of the node."""
+        return cmds.nodeType(self.long_name)
+
     def delete(self):
         """Delete the node from the scene."""
         cmds.delete(self.long_name)
-        self._invalidate_cache()
+        self.invalidate_cache()
 
     def rename(self, new_name):
         """Rename the node."""
         cmds.rename(self.name, new_name)
-        self._invalidate_cache()
+        self.invalidate_cache()
         return self
 
     def exists(self):
@@ -93,7 +98,17 @@ class Node:
         """
         cmds.deleteAttr(f"{self.long_name}.{attr_name}")
 
-    def _invalidate_cache(self):
+    def has_attr(self, attr_name):
+        """Check if the node has the given attribute.
+
+        Args:
+            attr_name (str): The name of the attribute to check.
+        Returns:
+            bool: True if the attribute exists, False otherwise.
+        """
+        return cmds.attributeQuery(attr_name, node=self.long_name, exists=True)
+
+    def invalidate_cache(self):
         """Clear cached names after changes."""
         self._cached_long_name = None
         self._cached_short_name = None

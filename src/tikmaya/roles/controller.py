@@ -11,12 +11,85 @@ A Controller is a semantic wrapper around a Transform node that:
 from maya import cmds
 import logging
 
+from tikmaya.core.decorators import keepselection
 from tikmaya.core.registry import resolve
 from tikmaya.types.transform import Transform
-from tikmaya.types.curve import Curve
+# from tikmaya.types.curve import Curve
 from tikmaya.utils.control_shapes import ControlShapeLibrary  # Import the manager
 
 LOG = logging.getLogger(__name__)
+
+def replace_curve(orig_curve, new_curve, snap=True, transfer_color=True):
+    """Replace orig_curve with new_curve.
+
+    Args:
+        orig_curve (str): nurbsCurve to replace.
+        new_curve (str): nurbsCurve to replace with.
+        maintain_offset (bool, optional): Match position. Defaults to True.
+    """
+    if snap:
+        new_curve = cmds.duplicate(new_curve, rc=1)[0]
+        cmds.parentConstraint(orig_curve, new_curve)
+
+    orig_shapes = cmds.listRelatives(orig_curve, shapes=True,
+                                         type="nurbsCurve")
+
+    new_shapes = cmds.listRelatives(new_curve, shapes=True,
+                                    type="nurbsCurve")
+
+
+    color = None
+    if transfer_color:
+        if cmds.getAttr(f"{new_curve}.overrideEnabled"):
+            color = cmds.getAttr(f"{new_curve}.overrideColor")
+
+    # Make amount of shapes equal
+    shape_dif = len(orig_shapes) - len(new_shapes)
+    if shape_dif != 0:
+        # If original curve has fewer shapes, create new nulls until equal
+        if shape_dif < 0:
+            for shape in range(0, shape_dif * -1):
+                dupe_curve = cmds.duplicate(orig_shapes, renameChildren=True)[0]
+                dupe_shape = cmds.listRelatives(dupe_curve, shapes=True)[0]
+                orig_shapes.append(dupe_shape)
+                cmds.select(dupe_shape, orig_curve)
+                cmds.parent(relative=True, shape=True)
+                cmds.delete(dupe_curve)
+        # If original curve has more shapes, delete shapes until equal
+        if shape_dif > 0:
+            for shape in range(0, shape_dif):
+                cmds.delete(orig_shapes[shape])
+
+    orig_shapes = cmds.listRelatives(orig_curve, shapes=True)
+    # For each shape, transfer from original to new.
+    for new_shape, orig_shape in zip(new_shapes, orig_shapes):
+        if color:
+            cmds.setAttr(f"{new_shape}.overrideEnabled", 1)
+            cmds.setAttr(f"{new_shape}.overrideColor", color)
+        cmds.connectAttr(
+            f"{new_shape}.worldSpace",
+            f"{orig_shape}.create"
+        )
+
+        cmds.dgeval(f"{orig_shape}.worldSpace")
+        cmds.disconnectAttr(
+            f"{new_shape}.worldSpace",
+            f"{orig_shape}.create"
+        )
+
+        spans = cmds.getAttr(f"{orig_shape}.degree")
+        degree = cmds.getAttr(f"{orig_shape}.spans")
+        for idx in range(0, spans + degree):
+            cmds.xform(
+                f"{orig_shape}.cv[{idx}]",
+                # orig_shape + ".cv[" + str(idx) + "]",
+                # t=cmds.pointPosition(new_shape + ".cv[" + str(idx) + "]"),
+                translation=cmds.pointPosition(f"{new_shape}.cv[{idx}]"),
+                worldSpace=True,
+            )
+
+    if snap:
+        cmds.delete(new_curve)
 
 
 class Controller:
@@ -61,6 +134,18 @@ class Controller:
         return node.has_attr(cls.ROLE_ATTR) and node.get_attr(cls.ROLE_ATTR)
 
     # --------------------------------------------------
+    # properties
+    # --------------------------------------------------
+
+    @property
+    def color(self):
+        self.get_color()
+
+    @color.setter
+    def color(self, value):
+        self.set_color(value)
+
+    # --------------------------------------------------
     # tagging
     # --------------------------------------------------
 
@@ -86,27 +171,24 @@ class Controller:
         Add a curve shape under the controller transform.
         Applies size scaling to the incoming points.
         """
-        # 1. Scale points if size != 1.0
-        # We assume curve_data['points'] is a list of (x,y,z) tuples
         points = curve_data['point']
         if size != 1.0:
             points = [(point[0] * size, point[1] * size, point[2] * size) for point in points]
 
-        # 2. Prepare args for Curve.create
-        # Ensure your Curve.create accepts these args
-        curve = Curve.create(
-            name=self.node.name,
+        curve_trans = cmds.curve(
+            # name=self.node.name,
             point=points,
             knot=curve_data.get('knot'),
             degree=curve_data.get('degree', 3),
             periodic=curve_data.get('periodic', False)
         )
+        curve_shape = cmds.listRelatives(curve_trans, shapes=True, fullPath=True)[0]
+        curve_shape = cmds.rename(curve_shape, f"{self.node.name}Shape#")  # Ensure unique name
 
-        # 3. Shape Parenting Trick
-        # Curve.create likely makes a Transform+Shape. We want just the shape.
-        _excess_transform = curve.transform.name
-        curve.parent = self.node
-        cmds.delete(_excess_transform)
+        self.node.invalidate_cache()
+
+        cmds.parent(curve_shape, self.node.name, relative=True, shape=True)
+        cmds.delete(curve_trans)
 
     def set_shape(self, shape, size=1.0):
         """
@@ -135,6 +217,52 @@ class Controller:
         # Iterate through all curves in the shape definition
         for curve_def in shape_data.get('curves', []):
             self.add_shape(curve_def, size=size)
+
+    @keepselection
+    def replace_shape(self, shape, size=1.0, snap=True, transfer_color=True):
+        """
+        Replace existing controller shapes with new shape.
+
+        Args:
+            shape (str | dict): Name of shape in library OR raw dict data
+            size (float): Scale multiplier (shapes are normalized to 1.0)
+            snap (bool): Whether to snap new shape to old shape position
+            transfer_color (bool): Whether to transfer color from old shape
+        """
+
+
+        # Create new temporary shapes and replace
+        temp_ctrl = Controller.create(
+            name=f"{self.node.name}_tempShape",
+            shape=shape,
+            size=size,
+            color=None
+        )
+        replace_curve(
+            orig_curve=self.node.name,
+            new_curve=temp_ctrl.node.name,
+            snap=snap,
+            transfer_color=transfer_color
+        )
+        temp_ctrl.node.delete()
+
+    def get_color(self):
+        """Get the display color of the controller shapes."""
+        shapes = self.shapes()
+        if not shapes:
+            return None
+
+        shape = shapes[0]
+        if not shape.has_attr("overrideEnabled"):
+            return None
+
+        if not shape["overrideEnabled"].value:
+            return None
+
+        if shape["overrideRGBColors"].value:
+            return shape["overrideColorRGB"].value
+        else:
+            return shape["overrideColor"].value
 
     def set_color(self, color):
         """

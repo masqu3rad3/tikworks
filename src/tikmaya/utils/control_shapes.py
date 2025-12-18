@@ -182,9 +182,12 @@ class ControlShapeLibrary:
         return data
 
     @staticmethod
-    def save_to_disk(data, name, folder_path):
+    def save_to_disk(data, name, folder_path, category=None):
         if isinstance(folder_path, str):
             folder_path = Path(folder_path)
+        if category:
+            folder_path = folder_path / category
+        folder_path.mkdir(parents=True, exist_ok=True)
 
         filename = f"{name}.json"
         full_path = folder_path / filename
@@ -194,7 +197,7 @@ class ControlShapeLibrary:
 
         return str(full_path)
 
-    def capture_to_disk(self, node_name, name=None, folder_path=None, normalize=True):
+    def capture_to_disk(self, node_name, name=None, folder_path=None, category=None, normalize=True):
         """Capture shape data from a node and save it to disk as JSON."""
         data = self.capture(node_name, name=name, normalize=normalize)
         if not data:
@@ -204,4 +207,4 @@ class ControlShapeLibrary:
         if not name:
             name = node_name.split("|")[-1]
 
-        return self.save_to_disk(data, name, folder_path=folder_path or self.user_path)
+        return self.save_to_disk(data, name, folder_path=folder_path or self.user_path, category=category)
