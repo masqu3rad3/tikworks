@@ -21,7 +21,7 @@ __all__ = [
     "Nurbs",
     "Locator",
     "Light",
+    "Controller",
     "resolve",
     "scene",
-    "Controller",
 ]

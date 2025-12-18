@@ -75,17 +75,32 @@ class ControlShapeLibrary:
 
             # get all .json files recursively
             for json_path in path.rglob("*.json"):
-                self._cache[json_path.stem] = json_path
+                # Resolve category relative to the search path
+                # If the file is in a subdirectory, that subdirectory is the category.
+                rel_path = json_path.relative_to(path)
+                category = rel_path.parts[0] if len(rel_path.parts) > 1 else None
+
+                self._cache[json_path.stem] = {
+                    "path": json_path,
+                    "category": category
+                }
 
     def list_shapes(self):
         if not self._cache:
             self.refresh()
         return list(self._cache.keys())
 
+    def get_shape_data(self):
+        """Refresh and returns the full cache dictionary."""
+        if not self._cache:
+            self.refresh()
+        return self._cache
+
     def get_path(self, name):
         if not self._cache:
             self.refresh()
-        return self._cache.get(name)
+        data = self._cache.get(name)
+        return data["path"] if data else None
 
     def load(self, name):
         """Returns the dictionary data for the shape."""
