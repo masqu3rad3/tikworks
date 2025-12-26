@@ -117,6 +117,10 @@ class Node:
         """Get a Plug for the given attribute name."""
         return Plug(self, attr)
 
+    def __str__(self):
+        """Return the node's name as its string representation."""
+        return self.name
+
     def __repr__(self):
         """Return a debug-friendly representation."""
         return f"<{self.__class__.__name__} '{self.name}'>"
@@ -206,6 +210,14 @@ class Plug:
         """
         cmds.setAttr(self.path, edit=True, lock=state)
 
+    @property
+    def children(self):
+        """If the plug is a compund attribute, return its child plugs."""
+        children = cmds.listAttr(self.path, multi=True)
+        if not children:
+            return []
+        return [Plug(self._node, f"{child}") for child in children[1:]]
+
     def exists(self):
         """Check if the attribute exists."""
         return cmds.attributeQuery(self.attr, node=self._node.name, exists=True)
@@ -286,6 +298,47 @@ class Plug:
             sources = cmds.listConnections(self.path, plugs=True, source=True)
             if sources:
                 cmds.disconnectAttr(sources[0], self.path)
+
+    def list_input(self, plugs=False):
+        """List incoming connections to this plug.
+
+        Returns:
+            list of Plug: A list of Plug instances representing the incoming
+                connections.
+        """
+        input_plug = cmds.listConnections(
+            self.path, plugs=True, source=True, destination=False
+        )[0]
+        # input_plugs = raw_inputs[::2] if raw_inputs else []
+        splits = input_plug.split(".")
+        node = resolve(splits[0])
+        if not plugs:
+            return node
+        plugs = splits[1:]
+        return Plug(node, ".".join(plugs))
+
+        # return [Plug(self._node, src.split('.', 1)[1]) for src in sources]
+
+    def list_outputs(self, plugs=False):
+        """List outgoing connections from this plug.
+
+        Returns:
+            list of Plug: A list of Plug instances representing the outgoing
+                connections.
+        """
+        output_plugs = cmds.listConnections(
+            self.path, plugs=True, source=False, destination=True
+        )
+        outputs = []
+        for plug in output_plugs:
+            splits = plug.split(".")
+            node = resolve(splits[0])
+            if not plugs:
+                outputs.append(node)
+            else:
+                plugs = splits[1:]
+                outputs.append(Plug(node, ".".join(plugs)))
+        return outputs
 
     def lock(self):
         """Lock the attribute."""

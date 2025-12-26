@@ -4,8 +4,11 @@ import logging
 from pathlib import Path
 import platform
 import maya.api.OpenMaya as om
+from maya import cmds
 
 from tikmaya.core.registry import resolve
+from tikmaya.types.camera import Camera
+from tikmaya.constructs.panel import Panel
 
 LOG = logging.getLogger(__name__)
 
@@ -120,6 +123,20 @@ class ControlShapeLibrary:
     # IO & CAPTURE UTILS
     # ----------------------------------------------------------------
 
+    def capture_to_disk(self, node_name, name=None, folder_path=None, category=None, normalize=True, thumbnail=True):
+        """Capture shape data from a node and save it to disk as JSON."""
+        data = self.capture(node_name, name=name, normalize=normalize)
+        if not data:
+            LOG.error(f"No curve data found on node '{node_name}'.")
+            return None
+
+        if not name:
+            name = node_name.split("|")[-1]
+
+        if thumbnail:
+            self.capture_thumbnail(node_name, name, folder_path or self.user_path, category=category)
+        return self.save_to_disk(data, name, folder_path=folder_path or self.user_path, category=category)
+
     @staticmethod
     def capture(node_name, name=None, normalize=True):
         """Scrape curve data from a transform."""
@@ -162,9 +179,7 @@ class ControlShapeLibrary:
 
     @staticmethod
     def _normalize_data(data, all_points):
-        """
-        Fits the shape into a 1x1x1 unit cube centered at local 0,0,0.
-        """
+        """Fits the shape into a 1x1x1 unit cube centered at local 0,0,0."""
         # 1. Calculate Bounding Box
         xs = [point[0] for point in all_points]
         ys = [point[1] for point in all_points]
@@ -198,11 +213,8 @@ class ControlShapeLibrary:
 
     @staticmethod
     def save_to_disk(data, name, folder_path, category=None):
-        if isinstance(folder_path, str):
-            folder_path = Path(folder_path)
-        if category:
-            folder_path = folder_path / category
-        folder_path.mkdir(parents=True, exist_ok=True)
+        """Save the given shape data to disk as JSON."""
+        folder_path = ControlShapeLibrary._resolve_folder_path(folder_path, category)
 
         filename = f"{name}.json"
         full_path = folder_path / filename
@@ -212,14 +224,48 @@ class ControlShapeLibrary:
 
         return str(full_path)
 
-    def capture_to_disk(self, node_name, name=None, folder_path=None, category=None, normalize=True):
-        """Capture shape data from a node and save it to disk as JSON."""
-        data = self.capture(node_name, name=name, normalize=normalize)
-        if not data:
-            LOG.error(f"No curve data found on node '{node_name}'.")
-            return None
+    @staticmethod
+    def capture_thumbnail(node_name, name, folder_path, category=None):
+        """Snapshot the thumnbnail of the current viewport for the shape.
 
-        if not name:
-            name = node_name.split("|")[-1]
+        Args:
+            name: Name of the shape.
+            folder_path: (String) File path to save the thumbnail
+            category: (String) Optional sub-folder category.
+        """
+        camera = Camera.create(name="tmp_thumbnail_cam")
+        # panel = Panel(temp_cam, [200, 200], inherit=False)
+        folder_path = ControlShapeLibrary._resolve_folder_path(folder_path, category)
 
-        return self.save_to_disk(data, name, folder_path=folder_path or self.user_path, category=category)
+        filename = f"{name}.jpg"
+        file_path = str(folder_path / filename)
+
+        # create a thumbnail using playblast
+        frame = cmds.currentTime(query=True)
+        store = cmds.getAttr("defaultRenderGlobals.imageFormat")
+        cmds.setAttr(
+            "defaultRenderGlobals.imageFormat", 8
+        )  # This is the value for jpeg
+        cmds.playblast(
+            completeFilename=file_path,
+            forceOverwrite=True,
+            format="image",
+            width=100,
+            height=100,
+            showOrnaments=False,
+            frame=[frame],
+            viewer=False,
+            percent=100,
+        )
+        cmds.setAttr("defaultRenderGlobals.imageFormat",
+                     store)  # take it back
+        return file_path
+
+    @staticmethod
+    def _resolve_folder_path(folder_path, category):
+        if isinstance(folder_path, str):
+            folder_path = Path(folder_path)
+        if category:
+            folder_path = folder_path / category
+        folder_path.mkdir(parents=True, exist_ok=True)
+        return folder_path

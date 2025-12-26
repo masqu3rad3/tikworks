@@ -8,7 +8,9 @@ from .types.locator import Locator
 from .types.mesh import Mesh
 from .types.nurbs import Nurbs
 from .types.transform import Transform
-from .roles.controller import Controller
+from .types.camera import Camera
+from . import roles
+from . import constructs
 from .core import scene
 
 __all__ = [
@@ -21,7 +23,7 @@ __all__ = [
     "Nurbs",
     "Locator",
     "Light",
-    "Controller",
+    "Camera",
     "resolve",
     "scene",
 ]

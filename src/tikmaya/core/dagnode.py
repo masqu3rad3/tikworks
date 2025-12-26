@@ -77,3 +77,7 @@ class DagNode(Node):
             child_path = OpenMaya.MDagPath.getAPathTo(child_obj)
             children_list.append(resolve(child_path.fullPathName()))
         return children_list
+
+    def select(self):
+        """Select this node in the Maya scene."""
+        cmds.select(self.long_name, replace=True)

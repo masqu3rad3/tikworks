@@ -145,6 +145,11 @@ class Controller:
     def color(self, value):
         self.set_color(value)
 
+    @property
+    def transform(self) -> Transform:
+        """Pass-through to the underlying transform node."""
+        return self.node
+
     # --------------------------------------------------
     # tagging
     # --------------------------------------------------
@@ -305,10 +310,6 @@ class Controller:
     # --------------------------------------------------
     # ergonomic passthrough
     # --------------------------------------------------
-
-    @property
-    def transform(self) -> Transform:
-        return self.node
 
     def __getattr__(self, item):
         return getattr(self.node, item)

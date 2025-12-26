@@ -57,3 +57,7 @@ def resolve(name: str) -> Any:
         return name
     cls = resolve_node_class(name)
     return cls(name)
+
+def is_registered(node_type: str) -> bool:
+    """Check if a node type is registered in the registry."""
+    return node_type in _NODE_TYPES
