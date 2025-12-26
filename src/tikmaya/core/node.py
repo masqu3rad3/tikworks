@@ -299,7 +299,7 @@ class Plug:
             if sources:
                 cmds.disconnectAttr(sources[0], self.path)
 
-    def list_input(self, plugs=False):
+    def get_input(self, plug=False):
         """List incoming connections to this plug.
 
         Returns:
@@ -312,10 +312,10 @@ class Plug:
         # input_plugs = raw_inputs[::2] if raw_inputs else []
         splits = input_plug.split(".")
         node = resolve(splits[0])
-        if not plugs:
+        if not plug:
             return node
-        plugs = splits[1:]
-        return Plug(node, ".".join(plugs))
+        plug = splits[1:]
+        return Plug(node, ".".join(plug))
 
         # return [Plug(self._node, src.split('.', 1)[1]) for src in sources]
 
@@ -354,7 +354,7 @@ class Plug:
         Args:
             attr (str): The child attribute name.
         """
-        return Plug(self, f"{self.attr}.{attr}")
+        return Plug(self._node, f"{self.attr}.{attr}")
 
     def __rshift__(self, other: "Plug") -> "Plug":
         """Connect self to other using `>>` operator and return the
