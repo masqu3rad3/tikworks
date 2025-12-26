@@ -50,3 +50,12 @@ class Curve(ShapeNode):
 
         mfn_object = OpenMaya.MFnNurbsCurve(sel_obj)
         return mfn_object.cvPositions(_space_map[space])
+
+    @property
+    def line_width(self):
+        """Get or set the line width of the curve for display purposes."""
+        return self["lineWidth"].get()
+
+    @line_width.setter
+    def line_width(self, value):
+        self["lineWidth"].set(value)

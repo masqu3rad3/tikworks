@@ -163,12 +163,13 @@ class Controller:
     # shape management
     # --------------------------------------------------
 
+    @property
     def shapes(self) -> list:
         return self.node.shapes
 
     def clear_shapes(self):
         """Delete all shapes under the controller transform."""
-        for shape in self.shapes():
+        for shape in self.shapes:
             shape.delete()
 
     def add_shape(self, curve_data: dict, size=1.0):
@@ -253,21 +254,7 @@ class Controller:
 
     def get_color(self):
         """Get the display color of the controller shapes."""
-        shapes = self.shapes()
-        if not shapes:
-            return None
-
-        shape = shapes[0]
-        if not shape.has_attr("overrideEnabled"):
-            return None
-
-        if not shape["overrideEnabled"].value:
-            return None
-
-        if shape["overrideRGBColors"].value:
-            return shape["overrideColorRGB"].value
-        else:
-            return shape["overrideColor"].value
+        return self.node.get_color()
 
     def set_color(self, color):
         """
@@ -278,25 +265,7 @@ class Controller:
                 - int: Maya index color (0-31)
                 - tuple/list: RGB values (0.0 - 1.0)
         """
-        shapes = self.shapes()
-        if not shapes:
-            return
-
-        is_rgb = isinstance(color, (list, tuple))
-
-        for shape in shapes:
-            # Ensure attributes exist (usually do on shapes)
-            if not shape.has_attr("overrideEnabled"):
-                continue
-
-            shape["overrideEnabled"].value = True
-
-            if is_rgb:
-                shape["overrideRGBColors"].value = True
-                shape["overrideColorRGB"].value = color
-            else:
-                shape["overrideRGBColors"].value = False
-                shape["overrideColor"].value = int(color)
+        self.node.set_color(color)
 
     # --------------------------------------------------
     # defaults & cleanup

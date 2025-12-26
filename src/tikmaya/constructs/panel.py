@@ -9,7 +9,6 @@ from tikmaya.core.registry import resolve
 from tikmaya.core import scene
 from tikmaya.core.decorators import keepselection
 
-
 class Panel:
     """Construct for managing a torn-off model panel and associated camera settings.
 
@@ -180,6 +179,11 @@ class Panel:
             self.image_plane = True
 
         self._isolate = PanelIsolate(self._panel)
+
+    @property
+    def name(self) -> Optional[str]:
+        """Return the model panel name."""
+        return self._panel
 
     def _resolve_camera(self, camera: Union[str, Camera, Transform]) -> Camera:
         """Resolve the input into a Camera wrapper."""
@@ -391,106 +395,138 @@ class Panel:
 
     # === Panel Properties ===
 
-    def _set_editor_var(self, flag: str, value: Any):
+    def set_editor_var(self, flag: str, value: Any):
         if self._panel:
             cmds.modelEditor(self._panel, edit=True, **{flag: value})
 
-    def _get_editor_var(self, flag: str) -> Any:
+    def get_editor_var(self, flag: str) -> Any:
         if self._panel:
             return cmds.modelEditor(self._panel, query=True, **{flag: True})
         return None
 
     @property
     def all_objects(self) -> bool:
-        return self._get_editor_var("allObjects")
+        return self.get_editor_var("allObjects")
 
     @all_objects.setter
     def all_objects(self, value: bool):
-        self._set_editor_var("allObjects", value)
+        self.set_editor_var("allObjects", value)
 
     @property
     def display_appearance(self) -> str:
-        return self._get_editor_var("displayAppearance")
+        return self.get_editor_var("displayAppearance")
 
     @display_appearance.setter
     def display_appearance(self, value: str):
-        self._set_editor_var("displayAppearance", value)
+        self.set_editor_var("displayAppearance", value)
 
     @property
     def display_textures(self) -> bool:
-        return self._get_editor_var("displayTextures")
+        return self.get_editor_var("displayTextures")
 
     @display_textures.setter
     def display_textures(self, value: bool):
-        self._set_editor_var("displayTextures", value)
+        self.set_editor_var("displayTextures", value)
 
     @property
     def grid(self) -> bool:
-        return self._get_editor_var("grid")
+        return self.get_editor_var("grid")
 
     @grid.setter
     def grid(self, value: bool):
-        self._set_editor_var("grid", value)
+        self.set_editor_var("grid", value)
 
     @property
     def use_default_material(self) -> bool:
-        return self._get_editor_var("useDefaultMaterial")
+        return self.get_editor_var("useDefaultMaterial")
 
     @use_default_material.setter
     def use_default_material(self, value: bool):
-        self._set_editor_var("useDefaultMaterial", value)
+        self.set_editor_var("useDefaultMaterial", value)
 
     @property
     def polymeshes(self) -> bool:
-        return self._get_editor_var("polymeshes")
+        return self.get_editor_var("polymeshes")
 
     @polymeshes.setter
     def polymeshes(self, value: bool):
-        self._set_editor_var("polymeshes", value)
+        self.set_editor_var("polymeshes", value)
 
     @property
     def nurbs_curves(self) -> bool:
-        return self._get_editor_var("nurbsCurves")
+        return self.get_editor_var("nurbsCurves")
 
     @nurbs_curves.setter
     def nurbs_curves(self, value: bool):
-        self._set_editor_var("nurbsCurves", value)
+        self.set_editor_var("nurbsCurves", value)
 
     @property
     def nurbs_surfaces(self) -> bool:
-        return self._get_editor_var("nurbsSurfaces")
+        return self.get_editor_var("nurbsSurfaces")
 
     @nurbs_surfaces.setter
     def nurbs_surfaces(self, value: bool):
-        self._set_editor_var("nurbsSurfaces", value)
+        self.set_editor_var("nurbsSurfaces", value)
+
+    @property
+    def joints(self) -> bool:
+        return self.get_editor_var("joints")
+
+    @joints.setter
+    def joints(self, value: bool):
+        self.set_editor_var("joints", value)
+
+    @property
+    def locators(self) -> bool:
+        return self.get_editor_var("locators")
+
+    @locators.setter
+    def locators(self, value: bool):
+        self.set_editor_var("locators", value)
+
+    @property
+    def pivots(self) -> bool:
+        return self.get_editor_var("pivots")
+
+    @pivots.setter
+    def pivots(self, value: bool):
+        self.set_editor_var("pivots", value)
 
     @property
     def image_plane(self) -> bool:
-        return self._get_editor_var("imagePlane")
+        return self.get_editor_var("imagePlane")
 
     @image_plane.setter
     def image_plane(self, value: bool):
-        self._set_editor_var("imagePlane", value)
+        self.set_editor_var("imagePlane", value)
 
     @property
     def hud(self) -> bool:
-        return self._get_editor_var("headsUpDisplay")
+        return self.get_editor_var("headsUpDisplay")
 
     @hud.setter
     def hud(self, value: bool):
-        self._set_editor_var("headsUpDisplay", value)
+        self.set_editor_var("headsUpDisplay", value)
 
     @property
     def selection_highlighting(self) -> bool:
-        return self._get_editor_var("selectionHiliteDisplay")
+        return self.get_editor_var("selectionHiliteDisplay")
 
     @selection_highlighting.setter
     def selection_highlighting(self, value: bool):
-        self._set_editor_var("selectionHiliteDisplay", value)
+        self.set_editor_var("selectionHiliteDisplay", value)
 
     @property
     def camera(self):
         return self._camera
+
+    @property
+    def color_management_enabled(self) -> bool:
+        return self.get_editor_var("cmEnabled")
+
+    @color_management_enabled.setter
+    def color_management_enabled(self, value: bool):
+        self.set_editor_var("cmEnabled", value)
 
     # @property
     # def fill_fit(self):
@@ -534,11 +570,11 @@ class Panel:
 
     @property
     def manipulators(self) -> bool:
-        return self._get_editor_var("manipulators")
+        return self.get_editor_var("manipulators")
 
     @manipulators.setter
     def manipulators(self, value: bool):
-        self._set_editor_var("manipulators", value)
+        self.set_editor_var("manipulators", value)
 
     @property
     def isolate(self):

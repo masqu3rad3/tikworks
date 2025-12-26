@@ -8,6 +8,7 @@ from .registry import register, resolve
 @add_aliases(
     {
         "visibility": "v",
+        "bounding_box": "bb",
     }
 )
 @register("dagNode")
@@ -78,6 +79,62 @@ class DagNode(Node):
             children_list.append(resolve(child_path.fullPathName()))
         return children_list
 
+    @property
+    def bounding_box(self):
+        """Return the world axis-aligned bounding box of this node."""
+        mfn = OpenMaya.MFnDagNode(self._dag_path())
+        return mfn.boundingBox
+
+    @property
+    def color(self):
+        self.get_color()
+
+    @color.setter
+    def color(self, value):
+        self.set_color(value)
+
     def select(self):
         """Select this node in the Maya scene."""
         cmds.select(self.long_name, replace=True)
+
+    def get_color(self):
+        """Get the display color of the controller shapes."""
+
+        if not self.has_attr("overrideEnabled"):
+            return None
+
+        if not self["overrideEnabled"].value:
+            return None
+
+        if self["overrideRGBColors"].value:
+            return self["overrideColorRGB"].value
+        else:
+            return self["overrideColor"].value
+
+    def set_color(self, color):
+        """
+        Set the display color of the controller shapes.
+
+        Args:
+            color (int | tuple | list):
+                - int: Maya index color (0-31)
+                - tuple/list: RGB values (0.0 - 1.0)
+                - None: Disable color override
+        """
+
+        is_rgb = isinstance(color, (list, tuple))
+
+        # Ensure attributes exist (usually do on shapes)
+        if not self.has_attr("overrideEnabled"):
+            return
+        if not color:
+            self["overrideEnabled"].value = False
+            return
+        self["overrideEnabled"].value = True
+
+        if is_rgb:
+            self["overrideRGBColors"].value = True
+            self["overrideColorRGB"].value = color
+        else:
+            self["overrideRGBColors"].value = False
+            self["overrideColor"].value = int(color)

@@ -24,4 +24,7 @@ for category in categories:
     category_node = tm.resolve(category)
     shapes = category_node.collect_shape_transforms()
     for shape in shapes:
-        cs_handler.capture_to_disk(shape, name=shape.name, category=category)
+        control_shapes.capture_to_disk(shape, name=shape.name, category=category)
+        
+        
+control_shapes.capture_to_disk("FootPrint", name="FootPrint", category="anatomy")

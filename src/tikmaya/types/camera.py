@@ -59,12 +59,38 @@ class Camera(ShapeNode):
         self["filmFit"].value = self.film_fit_modes[mode]
 
     @property
+    def lens(self):
+        """Get or set the lens (focal length) of the camera."""
+        return self["focalLength"].get()
+
+    @lens.setter
+    def lens(self, value):
+        self["focalLength"].set(value)
+
+    @property
     def aim(self):
         """Get the aim locator of the camera."""
         cam_parent = self.transform.parent
         if not cam_parent: # not an aim camera
             return None
-        if not cam_parent.type != "lookAt": # not an aim camera
+        if cam_parent.type != "lookAt": # not an aim camera
             return None
 
+        return cam_parent["target[0]"]["targetTranslateX"].get_input()
 
+    @property
+    def up(self):
+        """Get the up locator of the camera."""
+        cam_parent = self.transform.parent
+        if not cam_parent: # not an aim up camera
+            return None
+        if cam_parent.type != "lookAt": # not an aim up camera
+            return None
+        return cam_parent["worldUpMatrix"].get_input()
+
+    def delete(self):
+        """Override the deleted method to also delete potential parent aim/up locators."""
+        cam_parent = self.transform.parent
+        super().delete()
+        if cam_parent and cam_parent.type == "lookAt":
+            cam_parent.delete()

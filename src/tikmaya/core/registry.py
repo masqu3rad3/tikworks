@@ -51,8 +51,13 @@ def resolve_node_class(name: str):
     )
 
 
-def resolve(name: str) -> Any:
+def resolve(name: str, class_name=None) -> Any:
     """Return an instance of the correct Node subclass based on Maya node type."""
+    if class_name:
+        cls = _NODE_TYPES.get(class_name)
+        if not cls:
+            raise LookupError(f"No wrapper registered for class name '{class_name}'.")
+        return cls(name)
     if isinstance(name, tuple(_NODE_TYPES.values())):
         return name
     cls = resolve_node_class(name)

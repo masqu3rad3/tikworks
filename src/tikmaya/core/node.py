@@ -62,6 +62,15 @@ class Node:
         """The type of the node."""
         return cmds.nodeType(self.long_name)
 
+    def duplicate(self, **kwargs):
+        """Duplicate the node in the scene.
+
+        Returns:
+            Node: A new Node instance representing the duplicated node.
+        """
+        result = cmds.duplicate(self.long_name, **kwargs)[0]
+        return resolve(result, class_name=self.type)
+
     def delete(self):
         """Delete the node from the scene."""
         cmds.delete(self.long_name)
