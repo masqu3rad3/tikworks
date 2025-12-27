@@ -87,7 +87,7 @@ class DagNode(Node):
 
     @property
     def color(self):
-        self.get_color()
+        return self.get_color()
 
     @color.setter
     def color(self, value):
@@ -107,7 +107,7 @@ class DagNode(Node):
             return None
 
         if self["overrideRGBColors"].value:
-            return self["overrideColorRGB"].value
+            return self["overrideColorRGB"].value[0]
         else:
             return self["overrideColor"].value
 

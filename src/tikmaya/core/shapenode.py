@@ -21,13 +21,27 @@ class ShapeNode(DagNode):
                 raise ValueError(f"Transform '{node_name}' has no shape.")
             node_name = shapes[0]
         super().__init__(node_name)
+
+        # Cache the specific DAG path to support instances correctly
+        # (Node/DagNode default behavior collapses instances via UUID)
+        sel = OpenMaya.MSelectionList()
+        sel.add(node_name)
+        self._cached_dag_path = sel.getDagPath(0)
+
         self._transform = None
+
+    @property
+    def long_name(self):
+        """Return the full DAG path, respecting the specific instance path if possible."""
+        if self._cached_dag_path and self._cached_dag_path.isValid():
+            return self._cached_dag_path.fullPathName()
+        return super().long_name
 
     @property
     def transform(self):
         """Return the parent transform as a DagNode."""
         if not self._transform or not cmds.objExists(self._transform.name):
-            parent = cmds.listRelatives(self.name, parent=True, fullPath=True)
+            parent = cmds.listRelatives(self.long_name, parent=True, fullPath=True)
             if parent:
                 self._transform = Transform(parent[0])
         return self._transform
@@ -40,13 +54,12 @@ class ShapeNode(DagNode):
     @property
     def parent(self):
         """Return the parent as a wrapped node (or None if no parent)."""
-        mfn = OpenMaya.MFnDagNode(self._dag_path())
-        parent_obj = mfn.parent(0)
-        parent_path = OpenMaya.MDagPath.getAPathTo(parent_obj)
-        full_path_name = parent_path.fullPathName()
+        path = OpenMaya.MDagPath(self._dag_path())
+        path.pop()
+        full_path_name = path.fullPathName()
         if not full_path_name:
             return None
-        return resolve(parent_path.fullPathName())
+        return resolve(full_path_name)
 
     @parent.setter
     def parent(self, new_parent):

@@ -226,3 +226,78 @@ def test_getting_and_setting_scale():
     t.scale_z = 4.0
     scale = t.scale
     assert (scale.x, scale.y, scale.z) == pytest.approx((2.0, 3.0, 4.0), abs=1e-6)
+
+def test_collect_children_recursive():
+    # Setup hierarchy:
+    # root
+    #   |- child1
+    #   |    |- grandChild1
+    #   |- child2
+    root = Transform.create(name="root")
+    child1 = Transform.create(name="child1", parent=root.name)
+    grandChild1 = Transform.create(name="grandChild1", parent=child1.name)
+    child2 = Transform.create(name="child2", parent=root.name)
+
+    collected = root.collect_hierarchy()
+    names = {n.name for n in collected}
+    assert names == {"child1", "grandChild1", "child2"}
+
+
+def test_collect_children_with_depth_limit():
+    root = Transform.create(name="rootD")
+    child1 = Transform.create(name="child1D", parent=root.name)
+    grandChild1 = Transform.create(name="grandChild1D", parent=child1.name)
+
+    collected = root.collect_hierarchy(max_depth=1)
+    names = {n.name for n in collected}
+    assert "child1D" in names
+    assert "grandChild1D" not in names
+
+
+def test_collect_children_include_self():
+    root = Transform.create(name="rootS")
+    collected = root.collect_hierarchy(include_self=True)
+    assert len(collected) == 1
+    assert collected[0].name == "rootS"
+
+
+def test_collect_children_filter_type():
+    root = Transform.create(name="rootT")
+    child1 = Transform.create(name="child1T", parent=root.name)
+    # Add a shape
+    shape = cmds.createNode("mesh", parent=root.name, name="meshShape")
+
+    # Filter for transforms only
+    collected = root.collect_hierarchy(node_types=["transform"])
+    names = {n.name for n in collected}
+    assert "child1T" in names
+    assert "meshShape" not in names
+
+    # Filter for meshes only
+    collected_mesh = root.collect_hierarchy(node_types=["mesh"])
+    names_mesh = {n.name for n in collected_mesh}
+    assert "meshShape" in names_mesh
+    assert "child1T" not in names_mesh
+
+
+def test_collect_shape_transforms():
+    root = Transform.create(name="rootST")
+    child1 = Transform.create(name="child1ST", parent=root.name)
+
+    # Add shapes
+    s1 = cmds.createNode("mesh", parent=root.name, name="s1")
+    s2 = cmds.createNode("nurbsCurve", parent=child1.name, name="s2")
+
+    transforms = root.collect_shape_transforms()
+    names = {t.name for t in transforms}
+
+    assert "rootST" in names
+    assert "child1ST" in names
+
+def test_collect_hierarchy_with_string_node_type():
+    root = Transform.create(name="rootStr")
+    child1 = Transform.create(name="child1Str", parent=root.name)
+
+    collected = root.collect_hierarchy(node_types="transform")
+    names = {n.name for n in collected}
+    assert "child1Str" in names

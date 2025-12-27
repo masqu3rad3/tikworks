@@ -46,21 +46,15 @@ def alias(alias_name):
     return decorator
 
 def undo(func):
-    """Puts the wrapped `func` into a single Maya Undo action, then
-    undoes it when the function enters the finally: block"""
+    """Puts the wrapped `func` into a single Maya Undo action."""
 
     @wraps(func)
     def _undofunc(*args, **kwargs):
         cmds.undoInfo(openChunk=True)
         try:
-            result = func(*args, **kwargs)
-        except Exception as exc:
-            cmds.undoInfo(closeChunk=True)
-            raise exc
+            return func(*args, **kwargs)
         finally:
-            # after calling the func, end the undo chunk and undo
             cmds.undoInfo(closeChunk=True)
-            return result
     return _undofunc
 
 def keepselection(func):
@@ -72,10 +66,7 @@ def keepselection(func):
         original_selection = cmds.ls(selection=True)
         try:
             return func(*args, **kwargs)
-        except Exception as exc:
-            raise exc
         finally:
-            # after calling the func, end the undo chunk and undo
             cmds.select(original_selection)
 
     return _keepfunc

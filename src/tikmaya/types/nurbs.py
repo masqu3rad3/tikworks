@@ -13,10 +13,10 @@ class Nurbs(ShapeNode):
 
     valid_primitives = {
         "nurbsPlane",
-        "nurbsSphere",
-        "nurbsCylinder",
-        "nurbsCone",
-        "nurbsTorus",
+        "sphere",
+        "cylinder",
+        "cone",
+        "torus",
     }
     valid_commands = {"nurbsSurface"}
 
@@ -65,5 +65,5 @@ class Nurbs(ShapeNode):
         selection_ls.add(self.name)
         sel_obj = selection_ls.getDagPath(0)
 
-        mfn_object = OpenMaya.MFnNurbsCurve(sel_obj)
+        mfn_object = OpenMaya.MFnNurbsSurface(sel_obj)
         return mfn_object.cvPositions(_space_map[space])

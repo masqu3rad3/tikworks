@@ -28,8 +28,14 @@ CAMERA_POSITIONS = {
 def get_home_dir():
     """Get the user home directory."""
     if CURRENT_PLATFORM == "Windows":
-        return os.path.normpath(os.getenv("USERPROFILE"))
-    return os.path.normpath(os.getenv("HOME"))
+        home = os.getenv("USERPROFILE")
+    else:
+        home = os.getenv("HOME")
+
+    if not home:
+        home = os.path.expanduser("~")
+
+    return os.path.normpath(home)
 
 
 class ControlShapeLibrary:
@@ -361,7 +367,7 @@ def _guess_camera_view(node_name):
     if node.bounding_box.height < flat_threshold:
         return "top"
     # if its the bb is almost cube shaped, use oneThird view
-    if (node.bb.width + node.bb.height + node.bb.width) / 3 - min(
+    if (node.bb.width + node.bb.height + node.bb.depth) / 3 - min(
         node.bb.width, node.bb.height, node.bb.depth
     ) < flat_threshold:
         return "oneThird"

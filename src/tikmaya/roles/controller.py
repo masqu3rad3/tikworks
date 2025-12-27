@@ -64,8 +64,8 @@ def replace_curve(orig_curve, new_curve, snap=True, transfer_color=True):
     # For each shape, transfer from original to new.
     for new_shape, orig_shape in zip(new_shapes, orig_shapes):
         if color:
-            cmds.setAttr(f"{new_shape}.overrideEnabled", 1)
-            cmds.setAttr(f"{new_shape}.overrideColor", color)
+            cmds.setAttr(f"{orig_shape}.overrideEnabled", 1)
+            cmds.setAttr(f"{orig_shape}.overrideColor", color)
         cmds.connectAttr(
             f"{new_shape}.worldSpace",
             f"{orig_shape}.create"
@@ -131,7 +131,7 @@ class Controller:
     @classmethod
     def is_controller(cls, node) -> bool:
         node = resolve(node)
-        return node.has_attr(cls.ROLE_ATTR) and node.get_attr(cls.ROLE_ATTR)
+        return node.has_attr(cls.ROLE_ATTR) and node[cls.ROLE_ATTR].value
 
     # --------------------------------------------------
     # properties
@@ -139,7 +139,7 @@ class Controller:
 
     @property
     def color(self):
-        self.get_color()
+        return self.get_color()
 
     @color.setter
     def color(self, value):
@@ -181,13 +181,15 @@ class Controller:
         if size != 1.0:
             points = [(point[0] * size, point[1] * size, point[2] * size) for point in points]
 
-        curve_trans = cmds.curve(
-            # name=self.node.name,
-            point=points,
-            knot=curve_data.get('knot'),
-            degree=curve_data.get('degree', 3),
-            periodic=curve_data.get('periodic', False)
-        )
+        kwargs = {
+            "point": points,
+            "degree": curve_data.get('degree', 3),
+            "periodic": curve_data.get('periodic', False)
+        }
+        if curve_data.get('knot'):
+            kwargs["knot"] = curve_data.get('knot')
+
+        curve_trans = cmds.curve(**kwargs)
         curve_shape = cmds.listRelatives(curve_trans, shapes=True, fullPath=True)[0]
         curve_shape = cmds.rename(curve_shape, f"{self.node.name}Shape#")  # Ensure unique name
 
