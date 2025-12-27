@@ -315,16 +315,20 @@ class Plug:
             list of Plug: A list of Plug instances representing the incoming
                 connections.
         """
-        input_plug = cmds.listConnections(
+        connections = cmds.listConnections(
             self.path, plugs=True, source=True, destination=False
-        )[0]
+        )
+        if not connections:
+            return None
+
+        input_plug = connections[0]
         # input_plugs = raw_inputs[::2] if raw_inputs else []
         splits = input_plug.split(".")
         node = resolve(splits[0])
         if not plug:
             return node
-        plug = splits[1:]
-        return Plug(node, ".".join(plug))
+        plug_parts = splits[1:]
+        return Plug(node, ".".join(plug_parts))
 
         # return [Plug(self._node, src.split('.', 1)[1]) for src in sources]
 
@@ -339,14 +343,17 @@ class Plug:
             self.path, plugs=True, source=False, destination=True
         )
         outputs = []
+        if not output_plugs:
+            return outputs
+
         for plug in output_plugs:
             splits = plug.split(".")
             node = resolve(splits[0])
             if not plugs:
                 outputs.append(node)
             else:
-                plugs = splits[1:]
-                outputs.append(Plug(node, ".".join(plugs)))
+                plug_parts = splits[1:]
+                outputs.append(Plug(node, ".".join(plug_parts)))
         return outputs
 
     def lock(self):
