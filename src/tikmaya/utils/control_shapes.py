@@ -41,27 +41,48 @@ class ControlShapeLibrary:
 
     def __init__(self):
         self._cache = {}
-        self.search_paths = []
+        self._custom_paths = []
 
-        # 1. Add Core Path
+        # 1. Core Path
         current_dir = Path(__file__).absolute().parent
         root_dir = current_dir.parent
-        core_path = root_dir / "data" / "control_shapes"
-        self.register_path(core_path)
+        self._core_path = root_dir / "data" / "control_shapes"
 
-        # 2. Add User Path
-        self.user_path = self.resolve_user_path()
-        self.register_path(self.user_path)
+        # 2. User Path (Always defined)
+        _user_root = get_home_dir()
+        self._user_path = Path(_user_root, "TikWorks", "user_control_shapes")
+        self._user_path.mkdir(parents=True, exist_ok=True)
 
-    def resolve_user_path(self):
-        user_path = os.environ.get("TIKMAYA_SHAPES_PATH")
-        if user_path:
-            return Path(user_path).absolute()
-        else:
-            _user_root = get_home_dir()
-            _user_dir = Path(_user_root, "TikWorks", "user_control_shapes")
-            _user_dir.mkdir(parents=True, exist_ok=True)
-            return _user_dir
+    @property
+    def user_path(self):
+        return self._user_path
+
+    @property
+    def search_paths(self):
+        """
+        Returns the list of paths in resolution order:
+        Core < User < Environment < Custom (API)
+        """
+        paths = [self._core_path, self._user_path]
+
+        # Environment Paths
+        env_paths_str = os.environ.get("TIKMAYA_SHAPES_PATH", "")
+        if env_paths_str:
+            for env_path_str in env_paths_str.split(os.pathsep):
+                if not env_path_str:
+                    continue
+                path_obj = Path(env_path_str).expanduser().absolute()
+                # Avoid duplicates while maintaining order
+                if path_obj not in paths:
+                    paths.append(path_obj)
+
+        # Custom API Paths
+        for custom_path in self._custom_paths:
+            if custom_path not in paths:
+                paths.append(custom_path)
+
+        # Return only existing directories
+        return [path for path in paths if path.exists()]
 
     @classmethod
     def get_instance(cls):
@@ -69,16 +90,28 @@ class ControlShapeLibrary:
             cls._INSTANCE = cls()
         return cls._INSTANCE
 
-    def register_path(self, path):
+    def add_path(self, path):
+        """Add a custom search path (highest priority)."""
         if not path:
             return
         path_obj = Path(path).expanduser().absolute()
-        if path_obj.exists() and path_obj not in self.search_paths:
-            self.search_paths.append(path_obj)
+        if path_obj not in self._custom_paths:
+            self._custom_paths.append(path_obj)
+            self._cache = {}  # Invalidate cache
+
+    def remove_path(self, path):
+        """Remove a custom search path."""
+        if not path:
+            return
+        path_obj = Path(path).expanduser().absolute()
+        if path_obj in self._custom_paths:
+            self._custom_paths.remove(path_obj)
+            self._cache = {}  # Invalidate cache
 
     def refresh(self):
         """Scans all paths and populates the cache."""
         self._cache = {}
+        # Iterating in order means later paths overwrite earlier ones (desired behavior)
         for path in self.search_paths:
             if not path.is_dir():
                 continue
@@ -117,10 +150,10 @@ class ControlShapeLibrary:
             return None
 
         try:
-            with path.open("r") as f:
-                return json.load(f)
-        except Exception as e:
-            LOG.error(f"Failed to load shape '{name}': {e}")
+            with path.open("r") as json_file:
+                return json.load(json_file)
+        except Exception as error:
+            LOG.error(f"Failed to load shape '{name}': {error}")
             return None
 
 
@@ -172,7 +205,7 @@ def capture(node_name, name=None, normalize=True):
 
             # Get Points in Object Space
             points_array = fn_curve.cvPositions(om.MSpace.kObject)
-            points = [(p.x, p.y, p.z) for p in points_array]
+            points = [(point.x, point.y, point.z) for point in points_array]
             all_points.extend(points)
 
             shapes_data.append(
@@ -202,8 +235,8 @@ def save_to_disk(data, name, folder_path, category=None):
     filename = f"{name}.json"
     full_path = folder_path / filename
 
-    with full_path.open("w") as f:
-        json.dump(data, f, indent=4)
+    with full_path.open("w") as json_file:
+        json.dump(data, json_file, indent=4)
 
     return str(full_path)
 

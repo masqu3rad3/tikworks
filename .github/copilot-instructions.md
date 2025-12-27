@@ -22,6 +22,7 @@
 - Follow PEP 8.
 - Enforce `black` formatting and `flake8` linting.
 - Write clear type hints and docstrings complying with PEP257 rules.
+- Never use single-letter variable names even in small scopes (e.g., loops, comprehensions).
 
 ### Testing
 - Use `pytest` for all tests.
