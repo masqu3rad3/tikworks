@@ -1,25 +1,25 @@
-Tikmaya Overview
+TikMaya Overview
 ================
 
-Tikmaya is a modern Python wrapper for ``maya.cmds`` that brings object-oriented
+TikMaya is a modern Python wrapper for ``maya.cmds`` that brings object-oriented
 design, type safety, and robust node tracking to Maya scripting.
 
 .. note::
-   Tikmaya is under active development. The API may evolve as features land.
+   TikMaya is under active development. The API may evolve as features land.
 
-What is Tikmaya?
-----------------
+What is TikMaya?
+-------------------
 
-Tikmaya wraps Maya nodes in lightweight Python classes. Instead of passing strings
+TikMaya wraps Maya nodes in lightweight Python classes. Instead of passing strings
 to ``cmds`` functions, you work with typed objects that understand Maya's DAG and
 dependency graph.
 
 .. code-block:: python
 
-   import tikmaya
+   import tik.maya as tm
 
    # Wrap an existing node - registry returns the correct class
-   cube = tikmaya.resolve("pCube1")  # Returns Transform
+   cube = tm.resolve("pCube1")  # Returns Transform
 
    # Attribute access is object-oriented
    cube["translateX"].value = 5.0
@@ -36,7 +36,7 @@ Key Benefits
 ------------
 
 **UUID-Based Node Tracking**
-   Tikmaya tracks nodes by their internal UUID, not string names. Your references
+   TikMaya tracks nodes by their internal UUID, not string names. Your references
    stay valid even when nodes are renamed, re-parented, or namespaced.
 
 **Less Code, More Clarity**
@@ -56,15 +56,15 @@ For a detailed comparison with ``maya.cmds``, see :doc:`why_tikmaya`.
 Core Components
 ---------------
 
-**Node** (:class:`~tikmaya.Node`)
+**Node** (:class:`~tik.maya.Node`)
    Base wrapper for all Maya nodes. Handles existence validation, UUID tracking,
    name caching, and attribute access via ``[]``.
 
-**Plug** (:class:`~tikmaya.core.node.Plug`)
+**Plug** (:class:`~tik.maya.core.node.Plug`)
    Represents an attribute on a node. Properties for ``value``, ``locked``,
    ``keyable``, ``visible``. Supports ``>>`` operator for connections.
 
-**Transform** (:class:`~tikmaya.Transform`)
+**Transform** (:class:`~tik.maya.Transform`)
    DAG transform wrapper with ``translate``, ``rotate``, ``scale`` properties,
    plus ``freeze()``, ``snap_to()``, and matrix access.
 
@@ -82,8 +82,8 @@ Quick Example
 
 .. code-block:: python
 
-   import tikmaya
-   from tikmaya.roles.controller import Controller
+   import tik.maya as tm
+   from tik.maya.roles.controller import Controller
 
    # Create a controller with a circle shape
    ctrl = Controller.create(name="arm_ctrl", shape="circle", size=2.0)
@@ -97,7 +97,7 @@ Quick Example
        ctrl.node[axis].visible = False
 
    # Create a joint and connect
-   jnt = tikmaya.Joint.create(name="arm_jnt")
+   jnt = tm.Joint.create(name="arm_jnt")
    ctrl.node["translate"] >> jnt["translate"]
 
 See :doc:`quickstart` for more examples.
@@ -105,13 +105,13 @@ See :doc:`quickstart` for more examples.
 The TikWorks Ecosystem
 ----------------------
 
-Tikmaya is the foundation layer of TikWorks. Future tools build on top of it:
+TikMaya is the foundation layer of TikWorks. Future tools build on top of it:
 
-- **Tikmaya** - Core wrapper library (you are here)
+- **TikMaya** - Core wrapper library (you are here)
+- **tik.shared** - Cross-cutting utilities supporting all Tik packages
 - **Trigger** - Rigging framework (coming soon)
-- Additional tools for animation, pipeline integration, etc.
 
-By building on Tikmaya, all TikWorks tools share:
+By building on TikMaya, all TikWorks tools share:
 
 - Consistent API patterns
 - Robust node tracking

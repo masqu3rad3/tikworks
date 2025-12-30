@@ -1,12 +1,13 @@
 Core Concepts
 =============
 
-Tikmaya is organized around three distinct architectural concepts.
+TikMaya is organized around three distinct architectural concepts.
 Understanding them is key to using — and extending — the library effectively.
 
 .. note::
-   This architecture ensures that Tikmaya stays clean, extensible, and aligned
-   with Maya's own design. Don't conflate these concepts.
+   This architecture keeps TikMaya clean, extensible, and aligned
+   with Maya's design. ``tik.shared`` provides cross-cutting utilities
+   that support these layers without changing their responsibilities.
 
 The Three Pillars
 -----------------
@@ -32,16 +33,16 @@ Types
 
 **Types describe what a node *is*.**
 
-Location: ``tikmaya/types/``
+Location: ``tik/maya/types/``
 
 A Type is a thin wrapper around a Maya node type. It maps 1:1 to Maya's node classification.
 
 **Examples:**
 
-- :class:`~tikmaya.Transform` wraps ``transform`` nodes
-- :class:`~tikmaya.Mesh` wraps ``mesh`` shape nodes
-- :class:`~tikmaya.Joint` wraps ``joint`` nodes
-- :class:`~tikmaya.Curve` wraps ``nurbsCurve`` shape nodes
+- :class:`~tik.maya.Transform` wraps ``transform`` nodes
+- :class:`~tik.maya.Mesh` wraps ``mesh`` shape nodes
+- :class:`~tik.maya.Joint` wraps ``joint`` nodes
+- :class:`~tik.maya.Curve` wraps ``nurbsCurve`` shape nodes
 
 **Rules for Types:**
 
@@ -64,7 +65,7 @@ A Type is a thin wrapper around a Maya node type. It maps 1:1 to Maya's node cla
 
 .. code-block:: python
 
-   from tikmaya import Transform, Joint, Mesh
+   from tik.maya import Transform, Joint, Mesh
 
    # Types tell you WHAT something is
    cube = Transform.create(name="cube")
@@ -81,7 +82,7 @@ Roles
 
 **Roles describe what a node *means*.**
 
-Location: ``tikmaya/roles/``
+Location: ``tik/maya/roles/``
 
 A Role is a semantic overlay on top of an existing Type. It adds meaning and
 behavior without creating new Maya node types.
@@ -107,7 +108,7 @@ behavior without creating new Maya node types.
 
 .. code-block:: python
 
-   from tikmaya.roles.controller import Controller
+   from tik.maya.roles.controller import Controller
 
    # A Controller is a Role that wraps a Transform
    ctrl = Controller.create(name="arm_ctrl", shape="circle")
@@ -135,7 +136,7 @@ Constructs
 
 **Constructs orchestrate multiple nodes and roles.**
 
-Location: ``tikmaya/constructs/``
+Location: ``tik/maya/constructs/``
 
 A Construct coordinates several nodes and roles to represent a pattern or setup.
 It's the "assembly" layer.
@@ -154,17 +155,17 @@ It's the "assembly" layer.
 - Constructs provide high-level operations on the whole system
 
 .. note::
-   The Constructs system is under development. As Tikmaya matures, this will
+   The Constructs system is under development. As TikMaya matures, this will
    become the primary way to build complex rig systems.
 
 Registry System
 ---------------
 
-Tikmaya uses a registry to map Maya node types to Python classes:
+TikMaya uses a registry to map Maya node types to Python classes:
 
 .. code-block:: python
 
-   from tikmaya.core.registry import register, resolve
+   from tik.maya.core.registry import register, resolve
 
    @register("myCustomNode")
    class MyCustomNode(Node):
@@ -175,6 +176,8 @@ Tikmaya uses a registry to map Maya node types to Python classes:
 
 The registry also handles inheritance. If no exact match exists, it walks the
 Maya inheritance hierarchy to find the closest registered wrapper.
+``resolve`` is re-exported in ``tik.maya.__init__`` so :func:`tik.maya.resolve`
+and ``tm.resolve()`` (after ``import tik.maya as tm``) are equivalent.
 
 Base Classes
 ------------
@@ -216,7 +219,7 @@ Design Principles
 
 **Scene as Source of Truth**
 
-Tikmaya never caches state that could become stale. It queries Maya when needed
+TikMaya never caches state that could become stale. It queries Maya when needed
 and uses UUIDs to maintain stable references.
 
 **Explicit Over Implicit**
