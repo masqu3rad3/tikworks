@@ -1,16 +1,16 @@
-tik.maya Overview
-=================
+TikMaya Overview
+================
 
-tik.maya is a modern Python wrapper for ``maya.cmds`` that brings object-oriented
+TikMaya is a modern Python wrapper for ``maya.cmds`` that brings object-oriented
 design, type safety, and robust node tracking to Maya scripting.
 
 .. note::
-   tik.maya is under active development. The API may evolve as features land.
+   TikMaya is under active development. The API may evolve as features land.
 
-What is tik.maya?
------------------
+What is TikMaya?
+----------------
 
-tik.maya wraps Maya nodes in lightweight Python classes. Instead of passing strings
+TikMaya wraps Maya nodes in lightweight Python classes. Instead of passing strings
 to ``cmds`` functions, you work with typed objects that understand Maya's DAG and
 dependency graph.
 
@@ -36,7 +36,7 @@ Key Benefits
 ------------
 
 **UUID-Based Node Tracking**
-   tik.maya tracks nodes by their internal UUID, not string names. Your references
+   TikMaya tracks nodes by their internal UUID, not string names. Your references
    stay valid even when nodes are renamed, re-parented, or namespaced.
 
 **Less Code, More Clarity**
@@ -105,13 +105,13 @@ See :doc:`quickstart` for more examples.
 The TikWorks Ecosystem
 ----------------------
 
-tik.maya is the foundation layer of TikWorks. Future tools build on top of it:
+TikMaya is the foundation layer of TikWorks. Future tools build on top of it:
 
-- **tik.maya** - Core wrapper library (you are here)
+- **TikMaya** - Core wrapper library (you are here)
 - **tik.shared** - Cross-cutting utilities supporting all Tik packages
 - **Trigger** - Rigging framework (coming soon)
 
-By building on tik.maya, all TikWorks tools share:
+By building on TikMaya, all TikWorks tools share:
 
 - Consistent API patterns
 - Robust node tracking

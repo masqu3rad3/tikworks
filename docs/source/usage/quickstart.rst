@@ -1,12 +1,12 @@
 Quickstart
 ==========
 
-This guide gets you working with tik.maya in five minutes.
+This guide gets you working with TikMaya in five minutes.
 
 Installation
 ------------
 
-tik.maya is part of the TikWorks repository. Add the ``src`` directory to your Maya Python path:
+TikMaya is part of the TikWorks repository. Add the ``src`` directory to your Maya Python path:
 
 .. code-block:: python
 
@@ -30,7 +30,7 @@ Use :func:`tik.maya.resolve` to wrap any existing Maya node:
    # The returned object is typed — Transform, Mesh, Joint, etc.
    print(type(cube))  # <class 'tik.maya.types.transform.Transform'>
 
-tik.maya automatically returns the correct wrapper class based on the Maya node type.
+TikMaya automatically returns the correct wrapper class based on the Maya node type.
 
 Working with Attributes
 -----------------------
@@ -193,7 +193,7 @@ Adding Custom Attributes
 Working with Shapes
 -------------------
 
-tik.maya provides shape-specific functionality:
+TikMaya provides shape-specific functionality:
 
 .. code-block:: python
 

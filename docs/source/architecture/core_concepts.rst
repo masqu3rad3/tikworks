@@ -1,11 +1,11 @@
 Core Concepts
 =============
 
-tik.maya is organized around three distinct architectural concepts.
+TikMaya is organized around three distinct architectural concepts.
 Understanding them is key to using — and extending — the library effectively.
 
 .. note::
-   This architecture keeps tik.maya clean, extensible, and aligned
+   This architecture keeps TikMaya clean, extensible, and aligned
    with Maya's design. ``tik.shared`` provides cross-cutting utilities
    that support these layers without changing their responsibilities.
 
@@ -155,13 +155,13 @@ It's the "assembly" layer.
 - Constructs provide high-level operations on the whole system
 
 .. note::
-   The Constructs system is under development. As tik.maya matures, this will
+   The Constructs system is under development. As TikMaya matures, this will
    become the primary way to build complex rig systems.
 
 Registry System
 ---------------
 
-tik.maya uses a registry to map Maya node types to Python classes:
+TikMaya uses a registry to map Maya node types to Python classes:
 
 .. code-block:: python
 
@@ -219,7 +219,7 @@ Design Principles
 
 **Scene as Source of Truth**
 
-tik.maya never caches state that could become stale. It queries Maya when needed
+TikMaya never caches state that could become stale. It queries Maya when needed
 and uses UUIDs to maintain stable references.
 
 **Explicit Over Implicit**

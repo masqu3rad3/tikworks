@@ -1,7 +1,7 @@
 The Zen of Tik
 
 Maya decides what a node is.
-Tikmaya decides how to touch it.
+TikMaya decides how to touch it.
 Trigger decides why it matters.
 
 Do not argue with the host.

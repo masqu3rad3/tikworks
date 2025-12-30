@@ -6,7 +6,7 @@ A modern Python toolkit for Autodesk Maya.
 
 ## Overview
 
-TikWorks is a suite of Python tools for Maya, built around **tik.maya** — a namespaced, Pythonic wrapper for `maya.cmds` that brings:
+TikWorks is a suite of Python tools for Maya, built around **TikMaya** (`tik.maya`) — a namespaced, Pythonic wrapper for `maya.cmds` that brings:
 
 - **UUID-based node tracking** — References stay valid after renames
 - **Object-oriented API** — Work with typed objects, not strings
@@ -42,7 +42,7 @@ cube.translate_x = 10  # Still works
 
 Full documentation is available at [Read the Docs](https://tikworks.readthedocs.io/).
 
-- [Why tik.maya?](https://tikworks.readthedocs.io/en/latest/usage/why_tikmaya.html) — Benefits over raw `cmds`
+- [Why TikMaya?](https://tikworks.readthedocs.io/en/latest/usage/why_tikmaya.html) — Benefits over raw `cmds`
 - [Quickstart](https://tikworks.readthedocs.io/en/latest/usage/quickstart.html) — Get started in 5 minutes
 - [API Reference](https://tikworks.readthedocs.io/en/latest/autoapi/index.html) — Full class and method docs
 
@@ -53,7 +53,7 @@ Full documentation is available at [Read the Docs](https://tikworks.readthedocs.
 │                  Future Tools                       │
 │      (Trigger, Animation, Pipeline, etc.)           │
 ├─────────────────────────────────────────────────────┤
-│                      tik.maya                       │
+│                      TikMaya                        │
 │        Core Maya wrapper (builds on cmds/API)       │
 ├─────────────────────────────────────────────────────┤
 │                    tik.shared                       │
@@ -63,7 +63,7 @@ Full documentation is available at [Read the Docs](https://tikworks.readthedocs.
 └─────────────────────────────────────────────────────┘
 ```
 
-- **tik.maya** — Core wrapper library (active)
+- **TikMaya** — Core wrapper library (active)
 - **tik.shared** — Shared utilities for all Tik packages
 - **Trigger** — Rigging framework (coming soon)
 
