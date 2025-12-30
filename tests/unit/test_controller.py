@@ -1,8 +1,8 @@
 import pytest
 from maya import cmds
-from tikmaya.roles.controller import Controller, replace_curve
-from tikmaya.types.transform import Transform
-from tikmaya.utils.control_shapes import ControlShapeLibrary
+from tik.maya.roles.controller import Controller, replace_curve
+from tik.maya.types.transform import Transform
+from tik.maya.utils.control_shapes import ControlShapeLibrary
 
 class TestController:
 

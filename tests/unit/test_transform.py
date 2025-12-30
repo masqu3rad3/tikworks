@@ -2,7 +2,7 @@ import pytest
 from maya import cmds
 from maya.api import OpenMaya
 
-from tikmaya.types.transform import Transform
+from tik.maya.types.transform import Transform
 
 
 def test_create_with_and_without_name():

@@ -3,8 +3,8 @@ import pytest
 from unittest.mock import patch
 from maya import cmds
 
-from tikmaya.core.shapenode import ShapeNode
-from tikmaya.types.transform import Transform
+from tik.maya.core.shapenode import ShapeNode
+from tik.maya.types.transform import Transform
 
 
 def test_init_with_transform_without_shape_raises():
@@ -251,7 +251,7 @@ def test_parent_property_returns_none_when_fullpath_empty():
     sn = ShapeNode(s_long)
 
     # Patch OpenMaya.MDagPath in the module where it is used
-    with patch("tikmaya.core.shapenode.OpenMaya.MDagPath") as MockMDagPath:
+    with patch("tik.maya.core.shapenode.OpenMaya.MDagPath") as MockMDagPath:
         # Configure the mock instance returned by the constructor
         mock_instance = MockMDagPath.return_value
         # When fullPathName() is called, return empty string

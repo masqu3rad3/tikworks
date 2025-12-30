@@ -1,7 +1,7 @@
 import pytest
 from maya import cmds
 from maya.api import OpenMaya
-from tikmaya.types.nurbs import Nurbs
+from tik.maya.types.nurbs import Nurbs
 
 class TestNurbsCreate:
     def test_create_primitive_plane(self):

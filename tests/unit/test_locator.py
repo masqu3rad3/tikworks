@@ -1,7 +1,7 @@
 import pytest
 from maya import cmds
-from tikmaya.types.locator import Locator
-from tikmaya.types.transform import Transform
+from tik.maya.types.locator import Locator
+from tik.maya.types.transform import Transform
 
 class TestLocator:
     def test_create_locator(self):

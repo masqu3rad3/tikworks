@@ -3,11 +3,11 @@
 from typing import Optional, Tuple, Union, Any, Dict
 from maya import cmds
 
-from tikmaya.types.camera import Camera
-from tikmaya.types.transform import Transform
-from tikmaya.core.registry import resolve
-from tikmaya.core import scene
-from tikmaya.core.decorators import keepselection
+from ..types.camera import Camera
+from ..types.transform import Transform
+from ..core.registry import resolve
+from ..core import scene
+from ..core.decorators import keepselection
 
 class Panel:
     """Construct for managing a torn-off model panel and associated camera settings.

@@ -11,11 +11,10 @@ A Controller is a semantic wrapper around a Transform node that:
 from maya import cmds
 import logging
 
-from tikmaya.core.decorators import keepselection
-from tikmaya.core.registry import resolve
-from tikmaya.types.transform import Transform
-# from tikmaya.types.curve import Curve
-from tikmaya.utils.control_shapes import ControlShapeLibrary  # Import the manager
+from ..core.decorators import keepselection
+from ..core.registry import resolve
+from ..types.transform import Transform
+from ..utils.control_shapes import ControlShapeLibrary  # Import the manager
 
 LOG = logging.getLogger(__name__)
 

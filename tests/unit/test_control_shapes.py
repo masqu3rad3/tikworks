@@ -6,8 +6,8 @@ from pathlib import Path
 from maya import cmds
 import maya.api.OpenMaya as om
 
-from tikmaya.utils import control_shapes
-from tikmaya.utils.control_shapes import (
+from tik.maya.utils import control_shapes
+from tik.maya.utils.control_shapes import (
     ControlShapeLibrary,
     get_home_dir,
     capture,
@@ -18,8 +18,8 @@ from tikmaya.utils.control_shapes import (
     capture_thumbnail,
     _resolve_folder_path
 )
-from tikmaya.types.transform import Transform
-from tikmaya.types.nurbs import Nurbs
+from tik.maya.types.transform import Transform
+from tik.maya.types.nurbs import Nurbs
 
 @pytest.fixture
 def clean_library():
@@ -226,7 +226,7 @@ class TestControlShapeLibrary:
     def test_load_missing_shape_logs_warning(self, clean_library):
         lib = ControlShapeLibrary.get_instance()
 
-        with patch("tikmaya.utils.control_shapes.LOG") as mock_log:
+        with patch("tik.maya.utils.control_shapes.LOG") as mock_log:
             result = lib.load("missing_shape")
             assert result is None
             mock_log.warning.assert_called()
@@ -270,7 +270,7 @@ def test_capture_to_disk(tmp_path, clean_library):
     circle = cmds.circle(name="diskCircle")[0]
 
     # Mock capture_thumbnail to avoid playblast issues
-    with patch("tikmaya.utils.control_shapes.capture_thumbnail") as mock_thumb:
+    with patch("tik.maya.utils.control_shapes.capture_thumbnail") as mock_thumb:
         path = capture_to_disk("diskCircle", folder_path=tmp_path, thumbnail=True)
 
     assert path
@@ -278,8 +278,8 @@ def test_capture_to_disk(tmp_path, clean_library):
     assert mock_thumb.called
 
     # Test capture failure
-    with patch("tikmaya.utils.control_shapes.capture", return_value=None):
-        with patch("tikmaya.utils.control_shapes.LOG") as mock_log:
+    with patch("tik.maya.utils.control_shapes.capture", return_value=None):
+        with patch("tik.maya.utils.control_shapes.LOG") as mock_log:
             result = capture_to_disk("some_node", folder_path=tmp_path)
             assert result is None
             mock_log.error.assert_called()
@@ -317,12 +317,12 @@ def test_capture_thumbnail(tmp_path):
     # Mock playblast to avoid headless issues and verify it's called
     with patch("maya.cmds.playblast") as mock_playblast:
         # Mock Panel to avoid modelPanel creation issues in headless
-        with patch("tikmaya.utils.control_shapes.Panel") as MockPanel:
+        with patch("tik.maya.utils.control_shapes.Panel") as MockPanel:
             mock_panel_instance = MockPanel.return_value
             mock_panel_instance.name = "mockPanel"
 
             # Mock Camera creation to avoid side effects
-            with patch("tikmaya.utils.control_shapes.Camera") as MockCamera:
+            with patch("tik.maya.utils.control_shapes.Camera") as MockCamera:
                 mock_cam_instance = MockCamera.create.return_value
                 mock_cam_instance.transform = MagicMock()
                 mock_cam_instance.aim = MagicMock()

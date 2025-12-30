@@ -1,7 +1,7 @@
 import pytest
 from maya import cmds
-from tikmaya.core.scene import list_scene_nodes, select_nodes
-from tikmaya.types.transform import Transform
+from tik.maya.core.scene import list_scene_nodes, select_nodes
+from tik.maya.types.transform import Transform
 
 def test_list_scene_nodes_returns_wrappers():
     # Setup

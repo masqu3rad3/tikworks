@@ -4,9 +4,9 @@ import pytest
 from unittest.mock import patch
 from maya import cmds
 
-from tikmaya.constructs.panel import Panel
-from tikmaya.types.camera import Camera
-from tikmaya.types.transform import Transform
+from tik.maya.constructs.panel import Panel
+from tik.maya.types.camera import Camera
+from tik.maya.types.transform import Transform
 
 
 @pytest.fixture
@@ -387,7 +387,7 @@ def test_panel_isolate_add(mock_ui_cmds):
     cube = cmds.polyCube()[0]
 
     with patch('maya.cmds.isolateSelect') as m_isolateSelect, \
-         patch('tikmaya.core.scene.select_nodes') as m_select_nodes:
+         patch('tik.maya.core.scene.select_nodes') as m_select_nodes:
 
         panel.isolate.add(cube)
 
@@ -403,7 +403,7 @@ def test_panel_isolate_remove(mock_ui_cmds):
     cube = cmds.polyCube()[0]
 
     with patch('maya.cmds.isolateSelect') as m_isolateSelect, \
-         patch('tikmaya.core.scene.select_nodes') as m_select_nodes:
+         patch('tik.maya.core.scene.select_nodes') as m_select_nodes:
 
         panel.isolate.remove(cube)
 
@@ -434,7 +434,7 @@ def test_panel_isolate_call(mock_ui_cmds):
     cube = cmds.polyCube()[0]
 
     with patch('maya.cmds.isolateSelect') as m_isolateSelect, \
-         patch('tikmaya.core.scene.select_nodes') as m_select_nodes, \
+         patch('tik.maya.core.scene.select_nodes') as m_select_nodes, \
          patch('maya.cmds.select') as m_select:
 
         panel.isolate(cube)
@@ -577,7 +577,7 @@ def test_panel_isolate_normalize_list(mock_ui_cmds):
     cubes = [cmds.polyCube()[0], cmds.polyCube()[0]]
 
     with patch('maya.cmds.isolateSelect') as m_isolateSelect, \
-         patch('tikmaya.core.scene.select_nodes') as m_select_nodes:
+         patch('tik.maya.core.scene.select_nodes') as m_select_nodes:
 
         panel.isolate.add(cubes)
 

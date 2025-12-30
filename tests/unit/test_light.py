@@ -1,7 +1,7 @@
 import pytest
 from maya import cmds
-from tikmaya.types.light import Light
-from tikmaya.core.shapenode import ShapeNode
+from tik.maya.types.light import Light
+from tik.maya.core.shapenode import ShapeNode
 
 def test_create_default_light():
     """Test creating a default light (pointLight)."""

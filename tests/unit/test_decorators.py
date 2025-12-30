@@ -1,7 +1,7 @@
 import sys
 import pytest
 from maya import cmds
-from tikmaya.core.decorators import add_aliases, alias, undo, keepselection
+from tik.maya.core.decorators import add_aliases, alias, undo, keepselection
 
 # Helper for alias test at module level
 @alias("module_level_alias")

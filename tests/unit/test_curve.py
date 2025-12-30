@@ -1,7 +1,7 @@
 import pytest
 from maya import cmds
 from maya.api import OpenMaya
-from tikmaya.types.curve import Curve
+from tik.maya.types.curve import Curve
 
 class TestCurveCreate:
     def test_create_curve_basic(self):

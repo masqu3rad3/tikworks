@@ -1,6 +1,6 @@
 import pytest
 
-import tikmaya
+import tik.maya
 
 try:
     from maya import cmds
@@ -8,8 +8,8 @@ except ImportError:
     pytest.skip('Maya is not installed.', allow_module_level=True)
 
 import pytest
-from tikmaya.core.node import Node
-from tikmaya.core.registry import resolve, set_default_factory, register
+from tik.maya.core.node import Node
+from tik.maya.core.registry import resolve, set_default_factory, register
 
 class TestRegistry:
     def test_register_and_get_node(self):
@@ -72,7 +72,7 @@ class TestRegistry:
         """Test get_node with inherited types."""
 
         # Patch the _NODE_TYPES to clear any previous registrations for this test
-        monkeypatch.setattr('tikmaya.core.registry._NODE_TYPES', {})
+        monkeypatch.setattr('tik.maya.core.registry._NODE_TYPES', {})
 
         @register("dagNode")
         class CustomDagNode(Node):
@@ -145,7 +145,7 @@ class TestRegistry:
 
     def test_is_registered(self):
         """Test is_registered function."""
-        from tikmaya.core.registry import is_registered
+        from tik.maya.core.registry import is_registered
 
         @register("registeredType")
         class RegisteredType(Node):

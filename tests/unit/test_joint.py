@@ -1,6 +1,6 @@
 import pytest
 from maya import cmds
-from tikmaya.types.joint import Joint
+from tik.maya.types.joint import Joint
 
 def test_create_joint():
     j = Joint.create(name='testJoint')

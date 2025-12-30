@@ -2,7 +2,7 @@ import pytest
 from maya import cmds
 from maya.api import OpenMaya
 
-from tikmaya.types.mesh import Mesh
+from tik.maya.types.mesh import Mesh
 
 
 def test_create_with_valid_primitive_returns_mesh_wrapper():

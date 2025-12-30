@@ -6,9 +6,9 @@ import platform
 import maya.api.OpenMaya as om
 from maya import cmds
 
-from tikmaya.core.registry import resolve
-from tikmaya.types.camera import Camera
-from tikmaya.constructs import Panel
+from ..core.registry import resolve
+from ..types.camera import Camera
+from ..constructs import Panel
 
 LOG = logging.getLogger(__name__)
 

@@ -2,8 +2,8 @@
 import pytest
 from maya import cmds
 
-from tikmaya.core.registry import resolve
-from tikmaya.core.dagnode import DagNode
+from tik.maya.core.registry import resolve
+from tik.maya.core.dagnode import DagNode
 
 
 def test_parent_none_for_world_transform():

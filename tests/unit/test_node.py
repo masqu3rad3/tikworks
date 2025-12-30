@@ -4,8 +4,8 @@
 import pytest
 from maya import cmds
 
-from tikmaya.core.node import Node, Plug
-from tikmaya.core.dagnode import DagNode
+from tik.maya.core.node import Node, Plug
+from tik.maya.core.dagnode import DagNode
 
 
 def test_node_init_raises_for_missing():

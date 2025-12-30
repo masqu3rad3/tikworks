@@ -12,8 +12,8 @@ tikmaya_path = "D:/dev/tikworks/src"
 if tikmaya_path not in sys.path:
     sys.path.append(tikmaya_path)
 
-import tikmaya as tm
-from tikmaya.utils import control_shapes
+import tik.maya as tm
+from tik.maya.utils import control_shapes
 
 categories = ["arrows", "basics", "panels", "letters", "numbers", "pins",
               "symbols", "anatomy"]
