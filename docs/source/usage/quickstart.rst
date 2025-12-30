@@ -1,36 +1,36 @@
 Quickstart
 ==========
 
-This guide gets you working with Tikmaya in five minutes.
+This guide gets you working with tik.maya in five minutes.
 
 Installation
 ------------
 
-Tikmaya is part of the TikWorks repository. Add the ``src`` directory to your Maya Python path:
+tik.maya is part of the TikWorks repository. Add the ``src`` directory to your Maya Python path:
 
 .. code-block:: python
 
    import sys
    sys.path.append("/path/to/tikworks/src")
 
-   import tikmaya
+   import tik.maya as tm
 
 Wrapping Existing Nodes
 -----------------------
 
-Use :func:`~tikmaya.resolve` to wrap any existing Maya node:
+Use :func:`tik.maya.resolve` to wrap any existing Maya node:
 
 .. code-block:: python
 
-   import tikmaya
+   import tik.maya as tm
 
    # Wrap a node by name
-   cube = tikmaya.resolve("pCube1")
+   cube = tm.resolve("pCube1")
 
    # The returned object is typed — Transform, Mesh, Joint, etc.
-   print(type(cube))  # <class 'tikmaya.types.transform.Transform'>
+   print(type(cube))  # <class 'tik.maya.types.transform.Transform'>
 
-Tikmaya automatically returns the correct wrapper class based on the Maya node type.
+tik.maya automatically returns the correct wrapper class based on the Maya node type.
 
 Working with Attributes
 -----------------------
@@ -70,8 +70,8 @@ Use the ``>>`` operator for connections:
 
 .. code-block:: python
 
-   locator = tikmaya.resolve("locator1")
-   cube = tikmaya.resolve("pCube1")
+   locator = tm.resolve("locator1")
+   cube = tm.resolve("pCube1")
 
    # Connect translate
    locator["translate"] >> cube["translate"]
@@ -93,18 +93,18 @@ Use the ``create()`` class method on type classes:
 .. code-block:: python
 
    # Create a transform
-   grp = tikmaya.Transform.create(name="myGroup")
+   grp = tm.Transform.create(name="myGroup")
 
    # Create a joint
-   jnt = tikmaya.Joint.create(name="arm_jnt")
+   jnt = tm.Joint.create(name="arm_jnt")
 
    # Create a locator (returns the shape node)
-   loc = tikmaya.Locator.create(name="myLocator")
+   loc = tm.Locator.create(name="myLocator")
    loc.transform.translate = (1, 2, 3)  # Access parent transform
 
    # Create geometry (pass the Maya command as first argument)
-   sphere = tikmaya.Mesh.create("polySphere", name="mySphere")
-   plane = tikmaya.Nurbs.create("nurbsPlane", name="myPlane")
+   sphere = tm.Mesh.create("polySphere", name="mySphere")
+   plane = tm.Nurbs.create("nurbsPlane", name="myPlane")
 
 .. note::
    Shape types like ``Locator``, ``Mesh``, and ``Curve`` return shape node wrappers.
@@ -117,13 +117,13 @@ Navigate the scene hierarchy:
 
 .. code-block:: python
 
-   transform = tikmaya.resolve("pCube1")
+   transform = tm.resolve("pCube1")
 
    # Get parent
    parent = transform.parent
 
    # Set parent
-   transform.parent = tikmaya.resolve("group1")
+   transform.parent = tm.resolve("group1")
 
    # Get children
    for child in transform.children:
@@ -193,18 +193,18 @@ Adding Custom Attributes
 Working with Shapes
 -------------------
 
-Tikmaya provides shape-specific functionality:
+tik.maya provides shape-specific functionality:
 
 .. code-block:: python
 
    # Mesh operations
-   mesh = tikmaya.resolve("pCubeShape1")
+   mesh = tm.resolve("pCubeShape1")
    vertices = mesh.vertices(space="world")
    nearby = mesh.vertices_in_radius((0, 0, 0), radius=1.0)
    mesh.unlock_normals(soften=True)
 
    # Curve operations
-   curve = tikmaya.resolve("curveShape1")
+   curve = tm.resolve("curveShape1")
    cvs = curve.cvs(space="world")
 
 Next Steps

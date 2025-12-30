@@ -25,7 +25,7 @@ extensions = [
     'autoapi.extension',
 ]
 
-autoapi_dirs = ['../../src/tikmaya/']
+autoapi_dirs = ['../../src/tik/maya/', '../../src/tik/shared/']
 autoapi_type = 'python'
 autoapi_ignore = ['*setup*', '*shiboken*', '*PySide2*', '*PySide6*', '*PyQt5*', '*PyQt6*', '*external/**/*']
 autoapi_file_patterns = ['*.py']

@@ -6,7 +6,7 @@ A modern Python toolkit for Autodesk Maya.
 
 ## Overview
 
-TikWorks is a suite of Python tools for Maya, built around **Tikmaya** — a Pythonic wrapper for `maya.cmds` that brings:
+TikWorks is a suite of Python tools for Maya, built around **tik.maya** — a namespaced, Pythonic wrapper for `maya.cmds` that brings:
 
 - **UUID-based node tracking** — References stay valid after renames
 - **Object-oriented API** — Work with typed objects, not strings
@@ -16,10 +16,10 @@ TikWorks is a suite of Python tools for Maya, built around **Tikmaya** — a Pyt
 ## Quick Example
 
 ```python
-import tikmaya
+import tik.maya as tm
 
 # Wrap existing nodes with automatic type resolution
-cube = tikmaya.resolve("pCube1")  # Returns Transform
+cube = tm.resolve("pCube1")  # Returns Transform
 
 # Properties for state
 cube.translate = (1, 2, 3)
@@ -27,6 +27,8 @@ cube["visibility"].value = False
 
 # Methods for actions
 cube.freeze(translate=True, rotate=True)
+
+locator = tm.Locator.create(name="locator1")
 
 # Attribute connections with operators
 locator["translate"] >> cube["translate"]
@@ -40,25 +42,29 @@ cube.translate_x = 10  # Still works
 
 Full documentation is available at [Read the Docs](https://tikworks.readthedocs.io/).
 
-- [Why Tikmaya?](https://tikworks.readthedocs.io/en/latest/usage/why_tikmaya.html) — Benefits over raw `cmds`
+- [Why tik.maya?](https://tikworks.readthedocs.io/en/latest/usage/why_tikmaya.html) — Benefits over raw `cmds`
 - [Quickstart](https://tikworks.readthedocs.io/en/latest/usage/quickstart.html) — Get started in 5 minutes
 - [API Reference](https://tikworks.readthedocs.io/en/latest/autoapi/index.html) — Full class and method docs
 
 ## The TikWorks Ecosystem
 
 ```
-┌──────────────────────────────────────────┐
-│           Future Tools                   │
-│    (Trigger, Animation Tools, etc.)      │
-├──────────────────────────────────────────┤
-│                Tikmaya                   │
-│     (The Core Wrapper Library)           │
-├──────────────────────────────────────────┤
-│           maya.cmds / OpenMaya           │
-└──────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────┐
+│                  Future Tools                       │
+│      (Trigger, Animation, Pipeline, etc.)           │
+├─────────────────────────────────────────────────────┤
+│                      tik.maya                       │
+│        Core Maya wrapper (builds on cmds/API)       │
+├─────────────────────────────────────────────────────┤
+│                    tik.shared                       │
+│    Cross-cutting utilities used across packages     │
+├─────────────────────────────────────────────────────┤
+│                 maya.cmds / OpenMaya                │
+└─────────────────────────────────────────────────────┘
 ```
 
-- **Tikmaya** — Core wrapper library (active)
+- **tik.maya** — Core wrapper library (active)
+- **tik.shared** — Shared utilities for all Tik packages
 - **Trigger** — Rigging framework (coming soon)
 
 ## Requirements
