@@ -8,7 +8,7 @@ design, type safety, and robust node tracking to Maya scripting.
    TikMaya is under active development. The API may evolve as features land.
 
 What is TikMaya?
-----------------
+-------------------
 
 TikMaya wraps Maya nodes in lightweight Python classes. Instead of passing strings
 to ``cmds`` functions, you work with typed objects that understand Maya's DAG and

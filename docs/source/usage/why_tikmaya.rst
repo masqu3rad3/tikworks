@@ -55,7 +55,7 @@ You only discover typos at runtime:
    cmds.setAttr("pCube1.tranlsateX", 5)  # Misspelled!
 
 How TikMaya Solves These Problems
----------------------------------
+------------------------------------
 
 1. UUID-Based Tracking
 ~~~~~~~~~~~~~~~~~~~~~~
