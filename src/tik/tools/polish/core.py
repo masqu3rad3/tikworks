@@ -1,10 +1,15 @@
+"""Core utilities for Tik Maya Polish tools."""
+
 from tik.maya.utils import control_shapes
+from .config import settings
 
 
 class PolishCore:
     """Core utilities for Tik Maya Polish tools."""
     def __init__(self):
         self.library = control_shapes.ControlShapeLibrary()
+        for additional_path in settings.get("additional_library_paths", []):
+            self.library.add_path(additional_path)
 
     @staticmethod
     def capture_control_shape(shape_transform, name=None, category="custom"):
