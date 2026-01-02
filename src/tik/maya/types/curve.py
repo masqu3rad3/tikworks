@@ -59,3 +59,45 @@ class Curve(ShapeNode):
     @line_width.setter
     def line_width(self, value):
         self["lineWidth"].set(value)
+
+    def scale_points(self, scale_factor, pivot_mode="object", pivot_point=None):
+        """Scale the control points of the curve.
+
+        Args:
+            scale_factor : float
+                Uniform scale factor to apply to all CVs.
+            pivot_mode : str, optional
+                Pivot mode for scaling. Accepted values are "object" or "custom".
+                Default is "object".
+            pivot_point : tuple of float, optional
+                Custom pivot point (x, y, z) if pivot_mode is "custom".
+        """
+        cvs = self.cvs(space="object")
+
+        if pivot_mode == "custom":
+            if pivot_point is None:
+                raise ValueError("pivot_point must be provided when pivot_mode is 'custom'.")
+            pivot = OpenMaya.MPoint(*pivot_point)
+        elif pivot_mode == "object":
+            pivot = OpenMaya.MPoint(0, 0, 0)
+        else:
+            raise ValueError("Invalid pivot_mode. Must be 'object' or 'custom'.")
+
+        scaled_cvs = OpenMaya.MPointArray()
+        for i in range(cvs.length()):
+            cv = cvs[i]
+            # Translate CV to origin based on pivot
+            cv -= pivot
+            # Scale
+            cv *= scale_factor
+            # Translate back
+            cv += pivot
+            scaled_cvs.append(cv)
+
+        # Update the CV positions
+        selection_ls = OpenMaya.MSelectionList()
+        selection_ls.add(self.name)
+        sel_obj = selection_ls.getDagPath(0)
+
+        mfn_object = OpenMaya.MFnNurbsCurve(sel_obj)
+        mfn_object.setCVPositions(scaled_cvs)
