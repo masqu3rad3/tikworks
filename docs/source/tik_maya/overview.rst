@@ -1,16 +1,16 @@
-TikMaya Overview
-================
+tik.maya Overview
+=================
 
-TikMaya is a modern Python wrapper for ``maya.cmds`` that brings object-oriented
+tik.maya is a modern Python wrapper for ``maya.cmds`` that brings object-oriented
 design, type safety, and robust node tracking to Maya scripting.
 
 .. note::
-   TikMaya is under active development. The API may evolve as features land.
+   tik.maya is under active development. The API may evolve as features land.
 
-What is TikMaya?
--------------------
+What is tik.maya?
+-----------------
 
-TikMaya wraps Maya nodes in lightweight Python classes. Instead of passing strings
+tik.maya wraps Maya nodes in lightweight Python classes. Instead of passing strings
 to ``cmds`` functions, you work with typed objects that understand Maya's DAG and
 dependency graph.
 
@@ -36,7 +36,7 @@ Key Benefits
 ------------
 
 **UUID-Based Node Tracking**
-   TikMaya tracks nodes by their internal UUID, not string names. Your references
+   tik.maya tracks nodes by their internal UUID, not string names. Your references
    stay valid even when nodes are renamed, re-parented, or namespaced.
 
 **Less Code, More Clarity**
@@ -51,7 +51,7 @@ Key Benefits
    Properties for state, methods for actions. Iteration, comprehensions, and
    operators work naturally.
 
-For a detailed comparison with ``maya.cmds``, see :doc:`why_tikmaya`.
+For a detailed comparison with ``maya.cmds``, see :doc:`why_tik_maya`.
 
 Core Components
 ---------------
@@ -101,17 +101,3 @@ Quick Example
    ctrl.node["translate"] >> jnt["translate"]
 
 See :doc:`quickstart` for more examples.
-
-The TikWorks Ecosystem
-----------------------
-
-TikWorks packages stack in a single direction:
-
-- **tik.core** - Semantic primitives and value objects with no Maya or Qt
-- **tik.maya** - Disciplined Maya wrapper (this library), depending only on ``tik.core``
-- **tik.shared** - Reusable infrastructure and UX helpers shared by tools
-- **tik.trigger** - Rigging framework and intent layer (planned)
-- **tik.tools** - User-facing tools and workflows
-
-This layering keeps dependencies predictable while letting higher layers build on
-TikMaya's node tracking, type-safe operations, and Pythonic design.

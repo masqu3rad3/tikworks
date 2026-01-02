@@ -167,13 +167,13 @@ A Construct coordinates several nodes and roles to represent a pattern or setup.
 - Constructs provide high-level operations on the whole system
 
 .. note::
-   The Constructs system is under development. As TikMaya matures, this will
+   The Constructs system is under development. As tik.maya matures, this will
    become the primary way to build complex rig systems.
 
 Registry system
 ---------------
 
-TikMaya uses a registry to map Maya node types to Python classes:
+tik.maya uses a registry to map Maya node types to Python classes:
 
 .. code-block:: python
 
@@ -230,7 +230,7 @@ Design principles
 -----------------
 
 **Scene as Source of Truth**
-   TikMaya never caches state that could become stale. It queries Maya when needed
+   tik.maya never caches state that could become stale. It queries Maya when needed
    and uses UUIDs to maintain stable references.
 
 **Explicit Over Implicit**
