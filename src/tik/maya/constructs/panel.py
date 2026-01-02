@@ -528,46 +528,6 @@ class Panel:
     def color_management_enabled(self, value: bool):
         self.set_editor_var("cmEnabled", value)
 
-    # @property
-    # def fill_fit(self):
-    #     """Set Camera Film Fit to fill."""
-    #     return self._camera["filmFit"].value == 0
-    #
-    # @fill_fit.setter
-    # def fill_fit(self, value: bool):
-    #     if value:
-    #         self._camera["filmFit"].value = 0
-    #
-    # @property
-    # def horizontal_fit(self):
-    #     """Set Camera Film Fit to horizontal."""
-    #     return self._camera["filmFit"].value == 1
-    #
-    # @horizontal_fit.setter
-    # def horizontal_fit(self, value: bool):
-    #     if value:
-    #         self._camera["filmFit"].value = 1
-    #
-    # @property
-    # def vertical_fit(self):
-    #     """Set Camera Film Fit to vertical."""
-    #     return self._camera["filmFit"].value == 2
-    #
-    # @vertical_fit.setter
-    # def vertical_fit(self, value: bool):
-    #     if value:
-    #         self._camera["filmFit"].value = 2
-    #
-    # @property
-    # def overscan_fit(self):
-    #     """Set Camera Film Fit to overscan."""
-    #     return self._camera["filmFit"].value == 3
-    #
-    # @overscan_fit.setter
-    # def overscan_fit(self, value: bool):
-    #     if value:
-    #         self._camera["filmFit"].value = 3
-
     @property
     def manipulators(self) -> bool:
         return self.get_editor_var("manipulators")

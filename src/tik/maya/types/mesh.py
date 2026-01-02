@@ -3,6 +3,8 @@
 from maya import cmds
 from maya.api import OpenMaya
 
+from tik.core.color import Color
+
 from ..core.shapenode import ShapeNode
 from ..core.registry import register
 
@@ -158,9 +160,13 @@ class Mesh(ShapeNode):
         """Set vertex color for vertices.
 
         Args:
-            color (tuple): RGB color values as a tuple of three floats (0.0 to 1.0).
+            color (tuple or color.Color): RGB color values as a tuple of three floats (0.0 to 1.0)
+                or color.Color object.
             indices (list[int], optional): List of vertex indices to set color for.
         """
+        if isinstance(color, Color):
+            color = color.rgb
+
         if not color:
             self["displayColors"].set(False)
             return

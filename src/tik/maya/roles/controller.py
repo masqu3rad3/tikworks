@@ -253,18 +253,23 @@ class Controller:
         )
         temp_ctrl.node.delete()
 
-    def get_color(self):
-        """Get the display color of the controller shapes."""
-        return self.node.get_color()
+    def get_color(self, as_color=False):
+        """Get the display color of the controller shapes.
+
+        Args:
+            as_color (bool): If True, return as Color object; else return raw value.
+        """
+        return self.node.get_color(as_color=as_color)
 
     def set_color(self, color):
         """
         Set the display color of the controller shapes.
 
         Args:
-            color (int | tuple | list):
+            color (int | tuple | list | color.Color):
                 - int: Maya index color (0-31)
                 - tuple/list: RGB values (0.0 - 1.0)
+                - color.Color: Color object
         """
         self.node.set_color(color)
 

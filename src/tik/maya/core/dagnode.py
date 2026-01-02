@@ -1,6 +1,7 @@
 from maya import cmds
 from maya.api import OpenMaya
 
+from tik.core.color import Color
 from .decorators import add_aliases
 from .node import Node
 from .registry import register, resolve
@@ -97,8 +98,13 @@ class DagNode(Node):
         """Select this node in the Maya scene."""
         cmds.select(self.long_name, replace=True)
 
-    def get_color(self):
-        """Get the display color of the controller shapes."""
+    def get_color(self, as_color=False):
+        """Get the display color of the controller shapes.
+
+        Args:
+            as_color (bool, optional): If True, and if its RGB colors,
+                 return a tik.core.color.Color obj.
+        """
 
         if not self.has_attr("overrideEnabled"):
             return None
@@ -107,7 +113,10 @@ class DagNode(Node):
             return None
 
         if self["overrideRGBColors"].value:
-            return self["overrideColorRGB"].value[0]
+            if not as_color:
+                return self["overrideColorRGB"].value[0]
+            else:
+                return Color(self["overrideColorRGB"].value[0])
         else:
             return self["overrideColor"].value
 
@@ -116,11 +125,14 @@ class DagNode(Node):
         Set the display color of the controller shapes.
 
         Args:
-            color (int | tuple | list):
+            color (int | tuple | list | Color):
                 - int: Maya index color (0-31)
                 - tuple/list: RGB values (0.0 - 1.0)
+                - tik.core.Color: Color object
                 - None: Disable color override
         """
+        if isinstance(color, Color):
+            color = color.rgb
 
         is_rgb = isinstance(color, (list, tuple))
 
