@@ -1,6 +1,6 @@
 import pytest
 
-import tikmaya
+import tik.maya
 
 try:
     from maya import cmds
@@ -8,8 +8,8 @@ except ImportError:
     pytest.skip('Maya is not installed.', allow_module_level=True)
 
 import pytest
-from tikmaya.core.node import Node
-from tikmaya.core.registry import resolve, set_default_factory, register
+from tik.maya.core.node import Node
+from tik.maya.core.registry import resolve, set_default_factory, register
 
 class TestRegistry:
     def test_register_and_get_node(self):
@@ -72,7 +72,7 @@ class TestRegistry:
         """Test get_node with inherited types."""
 
         # Patch the _NODE_TYPES to clear any previous registrations for this test
-        monkeypatch.setattr('tikmaya.core.registry._NODE_TYPES', {})
+        monkeypatch.setattr('tik.maya.core.registry._NODE_TYPES', {})
 
         @register("dagNode")
         class CustomDagNode(Node):
@@ -101,3 +101,55 @@ class TestRegistry:
         with pytest.raises(LookupError,
                            match="No wrapper registered for 'multiplyDivide' and no default factory set."):
             resolve(node_name)
+
+    def test_resolve_with_class_name_success(self):
+        """Test resolve with explicit class_name."""
+        @register("mySpecialNode")
+        class MySpecialNode(Node):
+            pass
+
+        node_name = cmds.createNode("transform", name="special")
+        # Even though it's a transform, we force it to be wrapped as MySpecialNode (if compatible or just forced)
+        # The resolve function just instantiates cls(name). Node.__init__ checks existence.
+
+        # We need to register it by name so we can look it up by class_name string?
+        # Wait, _NODE_TYPES keys are node types (strings).
+        # resolve(name, class_name="...") looks up _NODE_TYPES.get(class_name).
+        # But _NODE_TYPES keys are usually maya node types like "transform", "joint".
+        # If I register with @register("mySpecialNode"), then class_name should be "mySpecialNode".
+
+        node = resolve(node_name, class_name="mySpecialNode")
+        assert isinstance(node, MySpecialNode)
+        assert node.name == "special"
+
+    def test_resolve_with_class_name_failure(self):
+        """Test resolve raises LookupError for unknown class_name."""
+        node_name = cmds.createNode("transform", name="unknown")
+        with pytest.raises(LookupError, match="No wrapper registered for class name 'UnknownType'"):
+            resolve(node_name, class_name="UnknownType")
+
+    def test_resolve_returns_instance_if_already_wrapper(self):
+        """Test resolve returns the object itself if it is already a registered wrapper instance."""
+        @register("knownType")
+        class KnownType(Node):
+            pass
+
+        # We need an instance of KnownType.
+        # Since Node.__init__ checks for existence, we need a real node.
+        real_node = cmds.createNode("transform", name="known")
+        wrapper = KnownType(real_node)
+
+        # Now pass the wrapper to resolve
+        result = resolve(wrapper)
+        assert result is wrapper
+
+    def test_is_registered(self):
+        """Test is_registered function."""
+        from tik.maya.core.registry import is_registered
+
+        @register("registeredType")
+        class RegisteredType(Node):
+            pass
+
+        assert is_registered("registeredType")
+        assert not is_registered("unregisteredType")

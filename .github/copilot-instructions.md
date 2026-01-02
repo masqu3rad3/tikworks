@@ -22,12 +22,15 @@
 - Follow PEP 8.
 - Enforce `black` formatting and `flake8` linting.
 - Write clear type hints and docstrings complying with PEP257 rules.
+- Never use single-letter variable names even in small scopes (e.g., loops, comprehensions).
 
 ### Testing
 - Use `pytest` for all tests.
 - All tests must run in a headless Maya standalone session initialized via `tests/conftest.py`.
 - Follow `pytest` naming conventions: `test_*.py`, `Test*`, `test_*`.
 - Prefer exercising real Maya behavior; mocking is a last resort.
+- Following template should be used for running tests: $env:PYTHONPATH="src"; mayapy -m pytest tests/unit/<testfile> --cov=<module for coverage> --cov-report=term-missing
+- If mayapy is not recognized as a command, that probably means its not defined in user PATH. Warn the user to set up their environment correctly in that case.
 
 ---
 

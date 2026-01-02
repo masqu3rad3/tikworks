@@ -2,8 +2,8 @@
 import pytest
 from maya import cmds
 
-from tikmaya.core.registry import resolve
-from tikmaya.core.dagnode import DagNode
+from tik.maya.core.registry import resolve
+from tik.maya.core.dagnode import DagNode
 
 
 def test_parent_none_for_world_transform():
@@ -104,6 +104,7 @@ def test_duplicate_child_names_resolve_correct_parent_via_long_name():
     assert xA_node.parent.name == "pA"
     assert xB_node.parent.name == "pB"
 
+
 def test_getting_and_setting_visibility():
     node = cmds.createNode("transform", name="visNode")
     node_wrapper = resolve(cmds.ls(node, long=True)[0])
@@ -120,3 +121,130 @@ def test_getting_and_setting_visibility():
     node_wrapper.visibility = True
     assert node_wrapper.visibility is True
     assert cmds.getAttr(f"{node}.visibility") is True
+
+
+def test_dag_path_property_returns_mdagpath():
+    """Test that dag_path property returns a valid MDagPath."""
+    from maya.api import OpenMaya
+
+    node = cmds.createNode("transform", name="dagPathNode")
+    node_wrapper = resolve(cmds.ls(node, long=True)[0])
+
+    dag_path = node_wrapper.dag_path
+    assert isinstance(dag_path, OpenMaya.MDagPath)
+    assert dag_path.isValid()
+    assert dag_path.fullPathName() == node_wrapper.long_name
+
+
+def test_bounding_box_property_returns_mboundingbox():
+    """Test that bounding_box property returns a valid MBoundingBox."""
+    from maya.api import OpenMaya
+
+    node = cmds.createNode("transform", name="bbNode")
+    node_wrapper = resolve(cmds.ls(node, long=True)[0])
+
+    bb = node_wrapper.bounding_box
+    assert isinstance(bb, OpenMaya.MBoundingBox)
+    # Default transform has empty bounding box at origin
+    assert bb.min.x == 0.0 and bb.min.y == 0.0 and bb.min.z == 0.0
+    assert bb.max.x == 0.0 and bb.max.y == 0.0 and bb.max.z == 0.0
+
+
+def test_select_method_selects_node():
+    """Test that select() method selects the node in the scene."""
+    node = cmds.createNode("transform", name="selectNode")
+    node_wrapper = resolve(cmds.ls(node, long=True)[0])
+
+    cmds.select(clear=True)
+    assert not cmds.ls(selection=True)
+
+    node_wrapper.select()
+    assert cmds.ls(selection=True) == [node_wrapper.name]
+
+
+def test_color_property_none_when_no_override():
+    """Test color property returns None when override is not enabled."""
+    node = cmds.createNode("transform", name="colorNodeNoOverride")
+    node_wrapper = resolve(cmds.ls(node, long=True)[0])
+
+    # By default overrideEnabled is false
+    assert node_wrapper.color is None
+
+
+def test_color_property_none_when_override_disabled():
+    """Test color property returns None when overrideEnabled is False."""
+    node = cmds.createNode("transform", name="colorNodeDisabled")
+    node_wrapper = resolve(cmds.ls(node, long=True)[0])
+
+    cmds.setAttr(f"{node}.overrideEnabled", True)
+    cmds.setAttr(f"{node}.overrideEnabled", False)
+
+    assert node_wrapper.color is None
+
+
+def test_set_and_get_index_color():
+    """Test setting and getting index color."""
+    node = cmds.createNode("transform", name="colorNodeIndex")
+    node_wrapper = resolve(cmds.ls(node, long=True)[0])
+
+    # Set index color 17 (yellowish)
+    node_wrapper.color = 17
+
+    assert cmds.getAttr(f"{node}.overrideEnabled") is True
+    assert cmds.getAttr(f"{node}.overrideRGBColors") is False
+    assert cmds.getAttr(f"{node}.overrideColor") == 17
+    assert node_wrapper.color == 17
+
+
+def test_set_and_get_rgb_color():
+    """Test setting and getting RGB color."""
+    node = cmds.createNode("transform", name="colorNodeRGB")
+    node_wrapper = resolve(cmds.ls(node, long=True)[0])
+
+    rgb = (1.0, 0.0, 0.5)
+    node_wrapper.color = rgb
+
+    assert cmds.getAttr(f"{node}.overrideEnabled") is True
+    assert cmds.getAttr(f"{node}.overrideRGBColors") is True
+    # Maya stores RGB as float, so use approx
+    stored_rgb = cmds.getAttr(f"{node}.overrideColorRGB")[0]
+    assert pytest.approx(stored_rgb, rel=1e-5) == rgb
+
+    retrieved_rgb = node_wrapper.color
+    assert pytest.approx(retrieved_rgb, rel=1e-5) == rgb
+
+
+def test_set_color_none_disables_override():
+    """Test setting color to None disables override."""
+    node = cmds.createNode("transform", name="colorNodeNone")
+    node_wrapper = resolve(cmds.ls(node, long=True)[0])
+
+    node_wrapper.color = 17
+    assert cmds.getAttr(f"{node}.overrideEnabled") is True
+
+    node_wrapper.color = None
+    assert cmds.getAttr(f"{node}.overrideEnabled") is False
+    assert node_wrapper.color is None
+
+
+def test_color_methods_handle_missing_attributes():
+    """Test get_color and set_color handle missing attributes gracefully."""
+    node = cmds.createNode("transform", name="noAttrNode")
+    node_wrapper = resolve(cmds.ls(node, long=True)[0])
+
+    # Mock has_attr to return False for overrideEnabled
+    # We do this because overrideEnabled is a built-in attribute on DAG nodes
+    # and cannot be deleted, but we want to test the safety check.
+    original_has_attr = node_wrapper.has_attr
+    node_wrapper.has_attr = lambda attr: False if attr == "overrideEnabled" else original_has_attr(attr)
+
+    try:
+        # Test get_color
+        assert node_wrapper.color is None
+
+        # Test set_color (should not raise error)
+        node_wrapper.color = 17
+    finally:
+        # Restore just in case
+        del node_wrapper.has_attr
+

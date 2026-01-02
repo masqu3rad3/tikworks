@@ -2,10 +2,10 @@ TikWorks Documentation
 ======================
 
 **TikWorks** is a suite of Python tools for Autodesk Maya.
-At its core is **Tikmaya** — a modern, Pythonic wrapper for ``maya.cmds`` that serves as the foundation for all TikWorks tools.
+At its core is **TikMaya** (`tik.maya`) — a modern, namespaced Pythonic wrapper for ``maya.cmds`` that serves as the foundation for all TikWorks tools.
 
 .. warning::
-   Tikmaya is actively being built. The API and documentation may change as features land.
+   TikMaya is actively being built. The API and documentation may change as features land.
 
 .. tip::
    **Why TikWorks?** Maya scripting is powerful but verbose. TikWorks brings modern Python patterns to Maya — type safety, object-oriented design, and cleaner syntax — while keeping Maya's flexibility intact.
@@ -13,23 +13,25 @@ At its core is **Tikmaya** — a modern, Pythonic wrapper for ``maya.cmds`` that
 The TikWorks Ecosystem
 ----------------------
 
-TikWorks is designed as a layered ecosystem:
+TikWorks follows a strict top-to-bottom dependency flow:
 
 .. code-block:: text
 
-      ┌──────────────────────────────────────────┐
-      │           Future Tools                   │
-      │    (Trigger, Animation Tools, etc.)      │
-      ├──────────────────────────────────────────┤
-      │                Tikmaya                   │
-      │     (The Core Wrapper Library)           │
-      ├──────────────────────────────────────────┤
-      │           maya.cmds / OpenMaya           │
-      └──────────────────────────────────────────┘
+   tik.core        # semantic primitives
+   ↑
+   tik.maya        # disciplined Maya wrapper
+   ↑
+   tik.shared      # reusable infrastructure and UX
+   ↑
+   tik.trigger     # rigging language and framework
+   ↑
+   tik.tools       # user-facing tools and workflows
 
-- **Tikmaya** is the spine — a robust wrapper that all other tools build upon
-- **Future tools** (like Trigger for rigging) consume Tikmaya's API
-- This layered approach ensures consistency across all TikWorks tools
+- **tik.core** defines pure, domain-agnostic value objects.
+- **tik.maya** wraps Maya mechanics while depending only on ``tik.core``.
+- **tik.shared** hosts cross-tool helpers and shared UI utilities.
+- **tik.trigger** (rigging framework) builds on the lower layers without leaking back down.
+- **tik.tools** are concrete user experiences; nothing below should import them.
 
 Getting Started
 ---------------
