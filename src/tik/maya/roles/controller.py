@@ -103,7 +103,7 @@ class Controller:
                 f"Controller must wrap a Transform, got {type(self.node)}")
 
     @classmethod
-    def create(cls, name, shape="circle", size=1.0, color=None, **kwargs):
+    def create(cls, name, shape="Circle", size=1.0, color=None, **kwargs):
         """
         Create a new controller transform and apply controller semantics.
         """

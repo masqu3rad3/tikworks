@@ -121,3 +121,64 @@ class Mesh(ShapeNode):
             mfn_mesh.setEdgeSmoothings(edge_ids, smooths)
             mfn_mesh.cleanupEdgeSmoothing()
             mfn_mesh.updateSurface()
+
+    def get_vertex_colors(self, indices=None):
+        """Get vertex colors.
+
+        Args:
+            indices (list[int], optional): List of vertex indices to retrieve colors for.
+
+        Returns:
+            OpenMaya.MColorArray or None: Vertex colors if they exist, else None.
+        """
+        # if displayColors is off, return None
+        if not self["displayColors"].get():
+            return None
+
+        selection_list = OpenMaya.MSelectionList()
+        selection_list.add(self.long_name)
+        mfn_mesh = OpenMaya.MFnMesh(selection_list.getDagPath(0))
+
+        # API 2.0 returns the array directly
+        colors = mfn_mesh.getVertexColors()
+
+        if len(colors) == 0:
+            return None
+
+        if indices is not None:
+            filtered_colors = OpenMaya.MColorArray()
+            for i in indices:
+                if 0 <= i < len(colors):
+                    filtered_colors.append(colors[i])
+            return filtered_colors
+
+        return colors
+
+    def set_vertex_colors(self, color, indices=None):
+        """Set vertex color for vertices.
+
+        Args:
+            color (tuple): RGB color values as a tuple of three floats (0.0 to 1.0).
+            indices (list[int], optional): List of vertex indices to set color for.
+        """
+        if not color:
+            self["displayColors"].set(False)
+            return
+
+        selection_list = OpenMaya.MSelectionList()
+        selection_list.add(self.long_name)
+        mfn_mesh = OpenMaya.MFnMesh(selection_list.getDagPath(0))
+
+        if indices is None:
+            indices = range(mfn_mesh.numVertices)
+
+        colors = OpenMaya.MColorArray()
+        m_color = OpenMaya.MColor(color)
+        for _ in indices:
+            colors.append(m_color)
+
+        vertex_indices = OpenMaya.MIntArray(indices)
+        mfn_mesh.setVertexColors(colors, vertex_indices)
+
+        # make sure the display of vertex colors is enabled
+        self["displayColors"].set(True)

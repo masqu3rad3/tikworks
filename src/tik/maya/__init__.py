@@ -11,7 +11,7 @@ from .types.transform import Transform
 from .types.camera import Camera
 from . import roles
 from . import constructs
-from .core import scene
+from .core.scene import *
 
 __all__ = [
     "Node",
@@ -24,6 +24,5 @@ __all__ = [
     "Locator",
     "Light",
     "Camera",
-    "resolve",
-    "scene",
+    "resolve"
 ]

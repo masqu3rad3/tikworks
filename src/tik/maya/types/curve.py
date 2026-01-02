@@ -60,32 +60,36 @@ class Curve(ShapeNode):
     def line_width(self, value):
         self["lineWidth"].set(value)
 
-    def scale_points(self, scale_factor, pivot_mode="object", pivot_point=None):
+    def scale_points(self, scale_factor, pivot="object", pivot_point=None):
         """Scale the control points of the curve.
 
         Args:
             scale_factor : float
                 Uniform scale factor to apply to all CVs.
-            pivot_mode : str, optional
-                Pivot mode for scaling. Accepted values are "object" or "custom".
+            pivot : str, optional
+                Pivot mode for scaling. Accepted values are "object", "center" or "custom".
                 Default is "object".
             pivot_point : tuple of float, optional
                 Custom pivot point (x, y, z) if pivot_mode is "custom".
         """
         cvs = self.cvs(space="object")
 
-        if pivot_mode == "custom":
+        if pivot == "custom":
             if pivot_point is None:
                 raise ValueError("pivot_point must be provided when pivot_mode is 'custom'.")
             pivot = OpenMaya.MPoint(*pivot_point)
-        elif pivot_mode == "object":
+        elif pivot == "object":
             pivot = OpenMaya.MPoint(0, 0, 0)
+        elif pivot == "center":
+            bbox = OpenMaya.MBoundingBox()
+            for cv in cvs:
+                bbox.expand(cv)
+            pivot = bbox.center
         else:
-            raise ValueError("Invalid pivot_mode. Must be 'object' or 'custom'.")
+            raise ValueError("Invalid pivot_mode. Must be 'object', 'center' or 'custom'.")
 
         scaled_cvs = OpenMaya.MPointArray()
-        for i in range(cvs.length()):
-            cv = cvs[i]
+        for cv in cvs:
             # Translate CV to origin based on pivot
             cv -= pivot
             # Scale
