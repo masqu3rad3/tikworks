@@ -1,8 +1,8 @@
-Why TikMaya?
-============
+Why tik.maya?
+=============
 
 Maya scripting with ``maya.cmds`` works, but it has pain points that compound in larger projects.
-TikMaya addresses these directly.
+tik.maya addresses these directly.
 
 The Problem with ``maya.cmds``
 ------------------------------
@@ -54,13 +54,13 @@ You only discover typos at runtime:
    # This typo won't be caught until the script runs
    cmds.setAttr("pCube1.tranlsateX", 5)  # Misspelled!
 
-How TikMaya Solves These Problems
-------------------------------------
+How tik.maya Solves These Problems
+----------------------------------
 
 1. UUID-Based Tracking
 ~~~~~~~~~~~~~~~~~~~~~~
 
-**TikMaya tracks nodes by UUID, not names.**
+**tik.maya tracks nodes by UUID, not names.**
 
 .. code-block:: python
 
@@ -73,9 +73,9 @@ How TikMaya Solves These Problems
    cube.rename("renamedCube")
 
    # Your reference still works!
-   cube.translate_x = 10  # No error - TikMaya tracks by UUID
+   cube.translate_x = 10  # No error - tik.maya tracks by UUID
 
-Under the hood, TikMaya stores the node's UUID when you wrap it. When you access
+Under the hood, tik.maya stores the node's UUID when you wrap it. When you access
 properties, it resolves the current name from the UUID. Renames, re-parenting,
 namespace changes — none of them break your reference.
 
@@ -86,7 +86,7 @@ The same operations become concise and clear:
 
 .. code-block:: python
 
-   # Lock and hide an attribute (TikMaya)
+   # Lock and hide an attribute (tik.maya)
    cube["scaleX"].locked = True
    cube["scaleX"].visible = False
 
@@ -101,7 +101,7 @@ The same operations become concise and clear:
 3. Pythonic and Object-Oriented
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-TikMaya uses Python conventions:
+tik.maya uses Python conventions:
 
 .. code-block:: python
 
@@ -119,7 +119,7 @@ TikMaya uses Python conventions:
 4. Type Support and IDE Completion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Because TikMaya uses classes with defined properties and methods:
+Because tik.maya uses classes with defined properties and methods:
 
 - Your IDE provides autocomplete suggestions
 - Type hints catch errors before runtime
@@ -135,7 +135,7 @@ Assuming ``import tik.maya as tm``:
 5. Automatic Type Resolution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-TikMaya's registry system automatically wraps nodes with the correct class:
+tik.maya's registry system automatically wraps nodes with the correct class:
 
 .. code-block:: python
 
@@ -163,7 +163,7 @@ Assuming ``import tik.maya as tm``:
 .. code-block:: python
 
    import tik.maya as tm
-   # TikMaya (loc is the shape, .transform is its parent)
+   # tik.maya (loc is the shape, .transform is its parent)
    loc = tm.Locator.create(name="myLocator")
    loc.transform.translate = (1, 2, 3)
    loc.transform.visibility = False
@@ -177,7 +177,7 @@ Assuming ``import tik.maya as tm``:
    cmds.connectAttr("driver.translateY", "driven.translateY", force=True)
    cmds.connectAttr("driver.translateZ", "driven.translateZ", force=True)
 
-   # TikMaya
+   # tik.maya
    driver["translate"] >> driven["translate"]
 
 **Working with transforms after renaming:**
@@ -191,14 +191,14 @@ Assuming ``import tik.maya as tm``:
 .. code-block:: python
 
    import tik.maya as tm
-   # TikMaya - robust
+   # tik.maya - robust
    cube = tm.resolve(cmds.polyCube()[0])
    # ... 100 lines later, cube still works even if renamed ...
 
-When to Use TikMaya
--------------------
+When to Use tik.maya
+--------------------
 
-**Use TikMaya (``import tik.maya as tm``) when:**
+**Use tik.maya (``import tik.maya as tm``) when:**
 
 - Building tools that manipulate existing scene objects
 - Writing rigging scripts that need reliable node references
@@ -209,17 +209,17 @@ When to Use TikMaya
 
 - Performance-critical inner loops with thousands of iterations
 - One-off scripts where readability doesn't matter
-- Operations that TikMaya doesn't wrap yet
+- Operations that tik.maya doesn't wrap yet
 
 .. note::
-   TikMaya and ``cmds`` can coexist. Use ``node.name`` or ``node.long_name`` to pass
-   TikMaya objects to ``cmds`` functions when needed.
+   tik.maya and ``cmds`` can coexist. Use ``node.name`` or ``node.long_name`` to pass
+   tik.maya objects to ``cmds`` functions when needed.
 
 Summary
 -------
 
 +---------------------------+----------------------------------+-----------------------------------+
-| Pain Point                | ``maya.cmds``                    | **TikMaya**                      |
+| Pain Point                | ``maya.cmds``                    | **tik.maya**                      |
 +===========================+==================================+===================================+
 | Node references           | Strings — break on rename        | UUID-backed — survives renames    |
 +---------------------------+----------------------------------+-----------------------------------+
@@ -232,4 +232,4 @@ Summary
 | Debugging                 | String matching errors           | Object inspection, clear errors   |
 +---------------------------+----------------------------------+-----------------------------------+
 
-TikMaya lets you write less code, catch errors earlier, and stop worrying about node names.
+tik.maya lets you write less code, catch errors earlier, and stop worrying about node names.

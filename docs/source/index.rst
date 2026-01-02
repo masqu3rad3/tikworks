@@ -1,19 +1,19 @@
 TikWorks Documentation
 ======================
 
-**TikWorks** is a suite of Python tools for Autodesk Maya.
-At its core is **TikMaya** (`tik.maya`) — a modern, namespaced Pythonic wrapper for ``maya.cmds`` that serves as the foundation for all TikWorks tools.
+**TikWorks** is an ecosystem of Python tools and frameworks for Autodesk Maya.
+It is designed to grow with your needs — from a modern Maya wrapper to a complete
+rigging infrastructure.
 
 .. warning::
-   TikMaya is actively being built. The API and documentation may change as features land.
-
-.. tip::
-   **Why TikWorks?** Maya scripting is powerful but verbose. TikWorks brings modern Python patterns to Maya — type safety, object-oriented design, and cleaner syntax — while keeping Maya's flexibility intact.
+   TikWorks is actively being built. The API and documentation may change as features land.
 
 The TikWorks Ecosystem
 ----------------------
 
-TikWorks follows a strict top-to-bottom dependency flow:
+TikWorks is not a single library. It is a layered ecosystem where each package builds
+on the foundations below it. This strict dependency flow keeps the system maintainable
+and predictable:
 
 .. code-block:: text
 
@@ -30,19 +30,34 @@ TikWorks follows a strict top-to-bottom dependency flow:
 - **tik.core** defines pure, domain-agnostic value objects.
 - **tik.maya** wraps Maya mechanics while depending only on ``tik.core``.
 - **tik.shared** hosts cross-tool helpers and shared UI utilities.
-- **tik.trigger** (rigging framework) builds on the lower layers without leaking back down.
-- **tik.tools** are concrete user experiences; nothing below should import them.
+- **tik.trigger** is the rigging framework, building on the lower layers.
+- **tik.tools** are concrete user-facing tools and workflows.
 
-Getting Started
----------------
+Each pillar has its own dedicated documentation section. Start with the one that
+matches your needs.
+
+.. tip::
+   **Why TikWorks?** Maya scripting is powerful but verbose. TikWorks brings modern
+   Python patterns to Maya — type safety, object-oriented design, and cleaner syntax
+   — while keeping Maya's flexibility intact.
 
 .. toctree::
    :maxdepth: 2
-   :caption: User Guide
+   :caption: tik.maya
 
-   usage/why_tikmaya
-   usage/tikmaya_overview
-   usage/quickstart
+   tik_maya/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: tik.trigger
+
+   tik_trigger/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: tik.tools
+
+   tik_tools/index
 
 .. toctree::
    :maxdepth: 2
