@@ -1,13 +1,13 @@
 Developer Style Guide
 =====================
 
-This guide defines coding conventions for contributing to TikMaya.
+This guide defines coding conventions for contributing to tik.maya and TikWorks.
 Following these patterns keeps the codebase consistent, predictable, and Pythonic.
 
 Philosophy
 ----------
 
-TikMaya's API should *feel like Python* but *behave like Maya*.
+tik.maya's API should *feel like Python* but *behave like Maya*.
 
 - APIs read naturally in Python
 - Scene state remains the source of truth
