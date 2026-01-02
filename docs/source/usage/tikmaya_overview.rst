@@ -105,15 +105,13 @@ See :doc:`quickstart` for more examples.
 The TikWorks Ecosystem
 ----------------------
 
-TikMaya is the foundation layer of TikWorks. Future tools build on top of it:
+TikWorks packages stack in a single direction:
 
-- **TikMaya** - Core wrapper library (you are here)
-- **tik.shared** - Cross-cutting utilities supporting all Tik packages
-- **Trigger** - Rigging framework (coming soon)
+- **tik.core** - Semantic primitives and value objects with no Maya or Qt
+- **tik.maya** - Disciplined Maya wrapper (this library), depending only on ``tik.core``
+- **tik.shared** - Reusable infrastructure and UX helpers shared by tools
+- **tik.trigger** - Rigging framework and intent layer (planned)
+- **tik.tools** - User-facing tools and workflows
 
-By building on TikMaya, all TikWorks tools share:
-
-- Consistent API patterns
-- Robust node tracking
-- Type-safe operations
-- Pythonic design
+This layering keeps dependencies predictable while letting higher layers build on
+TikMaya's node tracking, type-safe operations, and Pythonic design.
