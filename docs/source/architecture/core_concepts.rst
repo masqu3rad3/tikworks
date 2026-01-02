@@ -5,6 +5,15 @@ This document defines the purpose, scope, and separation rules for the main
 TikWorks packages. These boundaries keep dependencies flowing in one direction,
 responsibilities clear, and the system maintainable as it grows.
 
+.. toctree::
+   :maxdepth: 1
+
+   tik_core
+   tik_maya
+   tik_shared
+   tik_trigger
+   tik_tools
+
 tik.core
 --------
 
