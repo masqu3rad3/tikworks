@@ -9,6 +9,7 @@ from .types.mesh import Mesh
 from .types.nurbs import Nurbs
 from .types.transform import Transform
 from .types.camera import Camera
+from .types.blendshape import BlendShape
 from . import roles
 from . import constructs
 from .core.scene import *
@@ -24,5 +25,6 @@ __all__ = [
     "Locator",
     "Light",
     "Camera",
+    "BlendShape",
     "resolve"
 ]
