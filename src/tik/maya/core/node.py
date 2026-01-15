@@ -1,5 +1,6 @@
 # node.py — base Node and Plug wrappers
 import maya.cmds as cmds
+from maya.api import OpenMaya
 
 from .registry import resolve, resolve_node_class, set_default_factory
 
@@ -273,6 +274,12 @@ class Plug:
             cmds.setAttr(self.path, value, type=_type, **kwargs)
         else:
             raise TypeError(f"Unsupported type for setting attribute: {type(value)}")
+
+    def as_api_plug(self):
+        """Get the attribute as an OpenMaya MPlug."""
+        selection_list = OpenMaya.MSelectionList()
+        selection_list.add(self.path)
+        return selection_list.getPlug(0)
 
     def rename(self, new_attr_name):
         """Rename the attribute.
