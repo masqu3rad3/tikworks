@@ -215,7 +215,7 @@ class BlendShape(Node):
 
         default_kwargs = {
             "defaultValue": -1.0,  # export all weights explicitly
-            "vertexConnections": False,
+            "vertexConnections": vertex_connections,
             "attribute": ["origin", "supportNegativeWeights", "envelope"],
         }
         # update the default kwargs with any user-provided kwargs
