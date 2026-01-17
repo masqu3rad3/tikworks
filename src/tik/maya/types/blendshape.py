@@ -1,10 +1,10 @@
 """Blendshape type for Maya integration."""
+from pathlib import Path
 
 from maya import cmds
 from maya.api import OpenMaya
 
 from ..core.node import Node
-# from .mesh import Mesh
 from ..core.registry import register, resolve
 
 @register("blendShape")
@@ -31,143 +31,227 @@ class BlendShape(Node):
         shapes = cmds.blendShape(self.name, query=True, geometry=True)
         if not shapes:
             return []
-        shape_type = cmds.objectType(shapes[0]) # assuming all shapes are of the same type
+        shape_type = cmds.objectType(shapes[0])
         return [resolve(shape, class_name=shape_type) for shape in shapes]
 
-    def get_target_weights(self, target_id, geometry=None):
+    @property
+    def weight_count(self):
+        """Return the number of weight targets."""
+        return cmds.blendShape(self.name, query=True, weightCount=True)
+
+    # --------------------------------------------------------------------------
+    # Private Helpers
+    # --------------------------------------------------------------------------
+
+    def _get_geometry_info(self, geometry=None):
         """
-        Returns the weights of a given target index from a blendShape node.
-        Generic support for Meshes, Nurbs Curves, Nurbs Surfaces, and Lattices.
-
-        Args:
-            self (str): Name of the blendShape node.
-            target_id (int): The index of the target shape (weight index).
-            geometry (str, optional): The specific geometry to query.
-                                      If None, defaults to the first connected geometry.
-
-        Returns:
-            list: Flat list of float weights.
+        Resolves the geometry index and vertex count.
         """
+        connected_geos = cmds.blendShape(self.name, query=True, geometry=True) or []
 
-        # Get all geometries connected to this blendshape
-        # The order of this list corresponds to the inputTarget index
-        connected_geos = cmds.blendShape(self.name, query=True,
-                                         geometry=True) or []
+        if not connected_geos:
+            raise RuntimeError(f"No geometry connected to {self.name}")
 
-        if not self.base_shapes:
-            cmds.warning(f"No geometry connected to {self}")
-            return []
-
-        target_geo = None
         geom_index = 0
+        target_geo_long = ""
 
         if geometry:
-            geometry = resolve(geometry) # ensure we have the correct wrapped object
-            long_geo_input = geometry.long_name  # ensure we have the long name
+            geometry_obj = resolve(geometry)
+            target_geo_long = geometry_obj.long_name
             long_connected = cmds.ls(connected_geos, long=True)
 
             try:
-                geom_index = long_connected.index(long_geo_input)
-                target_geo = geometry
+                geom_index = long_connected.index(target_geo_long)
             except ValueError:
                 raise ValueError(
-                    f"Geometry '{geometry}' is not connected to blendShape '{self}'")
+                    f"Geometry '{geometry}' is not connected to blendShape '{self.name}'")
         else:
-            # Default to the first one (standard behavior for single-shape setups)
-            target_geo = connected_geos[0]
+            target_geo_long = cmds.ls(connected_geos[0], long=True)[0]
             geom_index = 0
 
-        # Generic component count (works for mesh, curve, surface, lattice)
-        vert_count = cmds.getAttr(f"{target_geo}.controlPoints", size=True)
+        # Generic component count
+        vert_count = cmds.getAttr(f"{target_geo_long}.controlPoints", size=True)
 
+        return geom_index, vert_count, target_geo_long
+
+    def _get_weight_plug(self, geom_index, target_id=None):
+        """
+        Returns the MPlug for weights.
+        """
         try:
-            plug = self[f"inputTarget[{geom_index}]"][f"inputTargetGroup[{target_id}]"]["targetWeights"].as_api_plug()
+            if target_id is None:
+                # --- FIX: Use weightList for Deformer (Global) Weights ---
+                # path: weightList[geom_index].weights
+                # This corresponds to the top-level node weight in Paint Tool
+                return self[f"weightList[{geom_index}]"]["weights"].as_api_plug()
+            else:
+                # --- Target Weights ---
+                # path: inputTarget[geom_index].inputTargetGroup[target_id].targetWeights
+                return self[f"inputTarget[{geom_index}]"][f"inputTargetGroup[{target_id}]"]["targetWeights"].as_api_plug()
+        except Exception:
+            return None
 
-
-        except RuntimeError:
-            # If the plug path is invalid (e.g. target doesn't exist), return defaults
+    def _read_weights(self, plug, vert_count):
+        """Reads sparse weights from plug, filling defaults with 1.0."""
+        if plug is None:
             return [1.0] * vert_count
 
-        # API 2.0: Returns an MIntArray of logical indices directly
-        # Note: If no weights are painted (all 1.0), this might be empty.
         indices = plug.getExistingArrayAttributeIndices()
-
-        # Initialize full weight list with default 1.0
         weights = [1.0] * vert_count
 
-        # API 2.0 MIntArray is iterable.
-        # 'p_idx' is the physical index (0, 1, 2...)
-        # 'logical_idx' is the actual vertex ID (3, 10, 50...)
         for p_idx, logical_idx in enumerate(indices):
-
             if logical_idx < vert_count:
-                # elementByPhysicalIndex is faster for iteration than logical lookup
                 weights[logical_idx] = plug.elementByPhysicalIndex(p_idx).asFloat()
 
         return weights
 
-    def set_target_weights(self, target_id, weights, geometry=None):
+    def _write_weights(self, plug, weights):
+        """Writes dense weights list to plug via API (Fast, No Undo)."""
+        if plug is None:
+            raise RuntimeError("Cannot access weight plug for writing.")
+
+        for i, weight_val in enumerate(weights):
+            element_plug = plug.elementByLogicalIndex(i)
+            element_plug.setFloat(weight_val)
+
+    # --------------------------------------------------------------------------
+    # Public API
+    # --------------------------------------------------------------------------
+
+    def get_target_weights(self, target, geometry=None):
         """
-        Sets the weights for a given target index on a blendShape node.
-        Generic support for Meshes, Nurbs Curves, Nurbs Surfaces, and Lattices.
+        Get weights for a specific target shape (e.g. 'pCube2').
+        Args:
+            target: The index or name of the target.
+        """
+        if isinstance(target, str):
+            target_id = self.index_by_name(target)
+        elif isinstance(target, int):
+            target_id = target
+        else:
+            raise TypeError("Target must be an integer index or string name.")
+        idx, count, _ = self._get_geometry_info(geometry)
+        plug = self._get_weight_plug(idx, target_id=target_id)
+        return self._read_weights(plug, count)
+
+    def set_target_weights(self, target, weights, geometry=None):
+        """Set weights for a specific target shape.
+        Args:
+            target: The index or name of the target.
+        """
+        if isinstance(target, str):
+            target_id = self.index_by_name(target)
+        elif isinstance(target, int):
+            target_id = target
+        else:
+            raise TypeError("Target must be an integer index or string name.")
+        
+        idx, count, geo_name = self._get_geometry_info(geometry)
+
+        if len(weights) != count:
+            raise ValueError(f"Weight length {len(weights)} != {geo_name} count {count}")
+
+        plug = self._get_weight_plug(idx, target_id=target_id)
+        self._write_weights(plug, weights)
+
+    def get_weights(self, geometry=None):
+        """
+        Get the global deformer weights.
+        (This corresponds to the BlendShape node entry in the Paint Weights tool).
+        """
+        idx, count, _ = self._get_geometry_info(geometry)
+        plug = self._get_weight_plug(idx, target_id=None) # target_id None implies Base/Deformer
+        return self._read_weights(plug, count)
+
+    def set_weights(self, weights, geometry=None):
+        """
+        Set the global deformer weights.
+        """
+        idx, count, geo_name = self._get_geometry_info(geometry)
+
+        if len(weights) != count:
+            raise ValueError(f"Weight length {len(weights)} != {geo_name} count {count}")
+
+        plug = self._get_weight_plug(idx, target_id=None) # target_id None implies Base/Deformer
+        self._write_weights(plug, weights)
+
+    def index_by_name(self, target_name):
+        """Get the index of a target by its name."""
+        for index in range(self.weight_count):
+            if cmds.aliasAttr(self[f"w[{index}]"].path, query=True) == target_name:
+                return index
+        raise ValueError(f"Target name '{target_name}' not found in blendShape '{self.name}'")
+
+    def name_by_index(self, target_index):
+        """Get the name of a target by its index."""
+        target_name = cmds.aliasAttr(self[f"w[{target_index}]"].path, query=True)
+        if target_name is None:
+            raise ValueError(f"Target index '{target_index}' not found in blendShape '{self.name}'")
+        return target_name
+
+    def __split_path(self, file_path, validate=False):
+        """Validate and split a file path into directory and filename."""
+        file_path = Path(file_path)
+        if validate:
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_name = file_path.name
+        file_dir = file_path.parent.as_posix()
+        return file_dir, file_name
+
+    def save_weights(self, file_path, **kwargs):
+        """Export blendshape weights to a file.
 
         Args:
-            target_id (int): The index of the target shape (weight index).
-            weights (list): Flat list of float weights. Must match component count.
-            geometry (str/Node, optional): The specific geometry to apply to.
-                                           If None, defaults to the first connected geometry.
+            file_path (str or Path Object): The file path to export weights to.
         """
-        # 1. Resolve Geometry and Indices
-        connected_geos = cmds.blendShape(self.name, query=True,
-                                         geometry=True) or []
+        file_dir, file_name = self.__split_path(file_path, validate=True)
 
-        if not connected_geos:
-            cmds.warning(f"No geometry connected to {self}")
-            return
-
-        target_geo = None
-        geom_index = 0
-
-        if geometry:
-            # Ensure we are working with the wrapped object to get .long_name
-            geometry_obj = resolve(geometry)
-            long_geo_input = geometry_obj.long_name
-            long_connected = cmds.ls(connected_geos, long=True)
-
-            try:
-                geom_index = long_connected.index(long_geo_input)
-                # We need the string name for cmds.getAttr later
-                target_geo = geometry_obj.name
-            except ValueError:
-                raise ValueError(
-                    f"Geometry '{geometry}' is not connected to blendShape '{self}'")
+        # the default vertex connections are only True if the base mesh is a mesh.
+        base_shapes = self.base_shapes
+        if not base_shapes or base_shapes[0].type != "mesh":
+            vertex_connections = False
         else:
-            target_geo = connected_geos[0]
-            geom_index = 0
+            vertex_connections = True
 
-        # Validate Component Count
-        # Using controlPoints allows this to work for meshes, curves, and lattices generically
-        vert_count = cmds.getAttr(f"{target_geo}.controlPoints", size=True)
+        default_kwargs = {
+            "defaultValue": -1.0,  # export all weights explicitly
+            "vertexConnections": False,
+            "attribute": ["origin", "supportNegativeWeights", "envelope"],
+        }
+        # update the default kwargs with any user-provided kwargs
+        default_kwargs.update(kwargs)
 
-        if len(weights) != vert_count:
-            raise ValueError(
-                f"Weight list length ({len(weights)}) does not match "
-                f"component count of {target_geo} ({vert_count})"
-            )
+        print(file_path, file_dir, file_name, self.name)
+        cmds.deformerWeights(
+            file_name,
+            export=True,
+            deformer=self.name,
+            path=file_dir,
+            # **default_kwargs
+        )
 
-        # Get the Plug via API 2.0
-        # Accessing: inputTarget[geom_index].inputTargetGroup[target_id].targetWeights
-        try:
-            plug = self[f"inputTarget[{geom_index}]"][
-                f"inputTargetGroup[{target_id}]"][
-                "targetWeights"].as_api_plug()
-        except Exception as e:
-            raise RuntimeError(
-                f"Could not access plug for target {target_id}: {e}")
 
-        # We iterate the input list (logical indices) and set the values on the MPlug.
-        for idx, weight_val in enumerate(weights):
-            # We use elementByLogicalIndex because we are writing to specific vertex IDs (0, 1, 2...)
-            # If the element doesn't exist yet, Maya creates it here.
-            element_plug = plug.elementByLogicalIndex(idx)
-            element_plug.setFloat(weight_val)
+    def load_weights(self, file_path, method="index", **kwargs):
+        """Import blendshape weights from a file.
+
+        Args:
+            file_path (str or Path Object): The file path to import weights from.
+            method (str): The method to use for importing weights.
+                Valid values are: "index", "nearest", "barycentric", "bilinear" and "over"
+        """
+        file_dir, file_name = self.__split_path(file_path, validate=False)
+
+        default_kwargs = {
+            "ignoreName": True,
+        }
+        # update the default kwargs with any user-provided kwargs
+        default_kwargs.update(kwargs)
+
+        cmds.deformerWeights(
+            file_name,
+            path=file_dir,
+            im=True,
+            deformer=self.name,
+            method=method,
+            **default_kwargs
+        )
