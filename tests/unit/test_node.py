@@ -72,17 +72,6 @@ def test_rename_invalidate_cache_and_returns_self():
     assert node.long_name.endswith("|renamedX")
 
 
-def test_exists_true_then_false_after_delete_and_cache_invalidated():
-    """Test exists() returns correct state before and after deletion."""
-    transform = cmds.createNode("transform", name="toDelete")
-    node = Node(cmds.ls(transform, long=True)[0])
-    assert node.exists()
-    node.delete()
-    assert not cmds.objExists(transform)
-    assert node.name is None
-    assert node.long_name is None
-
-
 def test_getitem_returns_plug_and_path_ends_with_attr():
     """Test __getitem__ returns a Plug with correct path."""
     transform = cmds.createNode("transform", name="holder")

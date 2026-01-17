@@ -13,7 +13,8 @@ from tik.maya.utils.control_shapes import (
     capture,
     capture_to_disk,
     save_to_disk,
-    _normalize_data,
+    _normalize_ratio,
+    _scale_data,
     _guess_camera_view,
     capture_thumbnail,
     _resolve_folder_path
@@ -349,7 +350,8 @@ def test_normalize_data_small_dim():
     data = {"curves": [{"point": [(0,0,0), (0.00001, 0, 0)]}]}
     all_points = [(0,0,0), (0.00001, 0, 0)]
 
-    normalized = _normalize_data(data, all_points)
+    n_ratio = _normalize_ratio(all_points)
+    normalized = _scale_data(data, n_ratio)
     # Should be unchanged because max_dim < 0.0001
     assert normalized == data
 

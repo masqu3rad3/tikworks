@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from maya import cmds
-from maya.api import OpenMaya
+from maya import mel
 
 from ..core.node import Node
 from ..core.registry import register, resolve
@@ -39,6 +39,10 @@ class BlendShape(Node):
         """Return the number of weight targets."""
         return cmds.blendShape(self.name, query=True, weightCount=True)
 
+    @property
+    def next_target(self) -> int:
+        """Returns the next free index from a multi index attribute"""
+        return cmds.blendShape(self.name, query=True, weightCount=True)
     # --------------------------------------------------------------------------
     # Private Helpers
     # --------------------------------------------------------------------------
@@ -117,6 +121,64 @@ class BlendShape(Node):
     # --------------------------------------------------------------------------
     # Public API
     # --------------------------------------------------------------------------
+
+    def add_target(self, target_geometry, name=None, weight=1.0, **kwargs):
+        """Add a new target shape to the blendshape.
+
+        Args:
+            geometry: The geometry to add as a target.
+            name: Optional name for the target.
+            weight: Initial weight value for the target.
+        Returns:
+            int: The index of the newly added target.
+        """
+        base_shapes = self.base_shapes
+        if not base_shapes:
+            raise RuntimeError(f"No base shapes connected to blendShape '{self.name}'")
+        connected_mesh = base_shapes[0].long_name
+        idx = self.next_target
+        cmds.blendShape(
+            self.name,
+            edit=True,
+            target=(connected_mesh, idx, target_geometry, 1.0),
+            weight=[idx, weight],
+            inBetween=False,
+            **kwargs
+        )
+
+        if name:
+            cmds.aliasAttr(f"{name}", f"{self.name}.w[{idx}]")
+
+        return idx
+
+    def add_inbetween(self, target, target_geometry, weight=0.5, **kwargs):
+        """Add an in-between target shape to an existing target.
+
+        Args:
+            target: The index or name of the target to add the in-between to.
+            target_geometry: The geometry to add as the in-between target.
+            weight: The weight value at which the in-between is active.
+        """
+        if isinstance(target, str):
+            target_id = self.index_by_name(target)
+        elif isinstance(target, int):
+            target_id = target
+        else:
+            raise TypeError("Target must be an integer index or string name.")
+
+        base_shapes = self.base_shapes
+        if not base_shapes:
+            raise RuntimeError(f"No base shapes connected to blendShape '{self.name}'")
+        connected_mesh = base_shapes[0].long_name
+
+        cmds.blendShape(
+            self.name,
+            edit=True,
+            target=(connected_mesh, target_id, target_geometry, weight),
+            inBetween=True,
+            **kwargs
+        )
+
 
     def get_target_weights(self, target, geometry=None):
         """
@@ -216,7 +278,7 @@ class BlendShape(Node):
         default_kwargs = {
             "defaultValue": -1.0,  # export all weights explicitly
             "vertexConnections": vertex_connections,
-            "attribute": ["origin", "supportNegativeWeights", "envelope"],
+            "attribute": ["origin", "envelope"],
         }
         # update the default kwargs with any user-provided kwargs
         default_kwargs.update(kwargs)
@@ -226,7 +288,7 @@ class BlendShape(Node):
             export=True,
             deformer=self.name,
             path=file_dir,
-            # **default_kwargs
+            **default_kwargs
         )
 
 
@@ -242,6 +304,7 @@ class BlendShape(Node):
 
         default_kwargs = {
             "ignoreName": True,
+            "attribute": ["origin", "envelope"]
         }
         # update the default kwargs with any user-provided kwargs
         default_kwargs.update(kwargs)

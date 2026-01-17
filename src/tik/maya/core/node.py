@@ -24,25 +24,22 @@ class Node:
         """Initialize the Node wrapper."""
         if not cmds.objExists(long_name):
             raise ValueError(f"Node '{long_name}' does not exist.")
-        self._uuid = cmds.ls(long_name, uuid=True)[0]
-        self._cached_long_name = None
-        self._cached_short_name = None
+        sel = OpenMaya.MSelectionList()
+        sel.add(long_name)
+        self._m_obj = sel.getDependNode(0)
+        fn_dep = OpenMaya.MFnDependencyNode(self._m_obj)
+        self._uuid = fn_dep.uuid().asString()
+        self._m_obj_handle = None # lazy init
 
     @property
     def long_name(self):
         """The full DAG path of the node."""
-        if not self._cached_long_name or not cmds.objExists(self._cached_long_name):
-            result = cmds.ls(self.uuid, long=True)
-            self._cached_long_name = result[0] if result else None
-        return self._cached_long_name
+        return self._resolve_long_name()
 
     @property
     def name(self):
         """The name of the node."""
-        if not self._cached_short_name or not cmds.objExists(self._cached_short_name):
-            result = cmds.ls(self.uuid, long=False)
-            self._cached_short_name = result[0] if result else None
-        return self._cached_short_name
+        return self._resolve_short_name()
 
     @property
     def uuid(self):
@@ -63,6 +60,19 @@ class Node:
         """The type of the node."""
         return cmds.nodeType(self.long_name)
 
+    def _resolve_long_name(self):
+        """Resolve long name from stored MObject or UUID."""
+        if self._m_obj.hasFn(OpenMaya.MFn.kDagNode):
+            dag_path = OpenMaya.MDagPath.getAPathTo(self._m_obj)
+            return dag_path.fullPathName()
+        fn_dep = OpenMaya.MFnDependencyNode(self._m_obj)
+        return fn_dep.name()
+
+    def _resolve_short_name(self):
+        """Resolve short name from stored MObject."""
+        fn_dep = OpenMaya.MFnDependencyNode(self._m_obj)
+        return fn_dep.name()
+
     def duplicate(self, **kwargs):
         """Duplicate the node in the scene.
 
@@ -75,17 +85,19 @@ class Node:
     def delete(self):
         """Delete the node from the scene."""
         cmds.delete(self.long_name)
-        self.invalidate_cache()
 
     def rename(self, new_name):
         """Rename the node."""
         cmds.rename(self.name, new_name)
-        self.invalidate_cache()
         return self
 
     def exists(self):
         """Check if the node still exists in the scene."""
-        return cmds.objExists(self.long_name)
+        # return cmds.objExists(self.long_name)
+        # return not self._m_obj.isNull()
+        if not self._m_obj_handle:
+            self._m_obj_handle = OpenMaya.MObjectHandle(self._m_obj)
+        return self._m_obj_handle.isValid()
 
     def add_attr(self, attr_name, **kwargs):
         """Add a new attribute to the node.
@@ -117,11 +129,6 @@ class Node:
             bool: True if the attribute exists, False otherwise.
         """
         return cmds.attributeQuery(attr_name, node=self.long_name, exists=True)
-
-    def invalidate_cache(self):
-        """Clear cached names after changes."""
-        self._cached_long_name = None
-        self._cached_short_name = None
 
     def __getitem__(self, attr):
         """Get a Plug for the given attribute name."""

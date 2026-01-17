@@ -150,3 +150,31 @@ class DagNode(Node):
         else:
             self["overrideRGBColors"].value = False
             self["overrideColor"].value = int(color)
+
+
+    def is_deformable(self):
+        try:
+            # Get the MObject
+            sel_list = OpenMaya.MSelectionList()
+            sel_list.add(self.name)
+            m_obj = sel_list.getDependNode(0)
+
+            # Define the types that are considered "deformable"
+            # In API 2.0, we list them explicitly as there is no collective kGeometryShape
+            deformable_types = (
+                OpenMaya.MFn.kMesh,
+                OpenMaya.MFn.kNurbsCurve,
+                OpenMaya.MFn.kNurbsSurface,
+                OpenMaya.MFn.kLattice
+            )
+
+            # Check if the node matches any of these types
+            for d_type in deformable_types:
+                if m_obj.hasFn(d_type):
+                    return True
+
+            return False
+
+        except RuntimeError:
+            # Object doesn't exist
+            return False
