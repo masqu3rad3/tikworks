@@ -221,7 +221,6 @@ class BlendShape(Node):
         # update the default kwargs with any user-provided kwargs
         default_kwargs.update(kwargs)
 
-        print(file_path, file_dir, file_name, self.name)
         cmds.deformerWeights(
             file_name,
             export=True,
