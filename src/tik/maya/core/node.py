@@ -31,6 +31,14 @@ class Node:
         self._uuid = None # lazy init
         self._m_obj_handle = None # lazy init
 
+    @classmethod
+    def create(cls, cmd, name=None, parent=None):
+        """Create a node using a maya.cmds command name.
+
+        Example: 'joint', 'polySphere'.
+        """
+        return create_node(cmd, name=name, parent=parent)
+
     @property
     def long_name(self):
         """The full DAG path of the node."""
@@ -45,16 +53,6 @@ class Node:
     def uuid(self):
         """The UUID of the node."""
         return self._uuid or self._fn_dep.uuid().asString()
-
-    @classmethod
-    def create(cls, cmd, name=None, parent=None):
-        """Create a node using a maya.cmds command name.
-
-        Example: 'joint', 'polySphere'.
-        """
-        return create_node(cmd, name=name, parent=parent)
-        # result = cmds.createNode(cmd, **kwargs)
-        # return resolve(result)
 
     @property
     def type(self):

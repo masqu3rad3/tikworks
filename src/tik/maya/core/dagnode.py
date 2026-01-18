@@ -25,6 +25,15 @@ class DagNode(Node):
         super().__init__(*args, **kwargs)
         self._cached_dag_path = self._sel.getDagPath(0)
 
+    @classmethod
+    def create(cls, cmd, name=None, parent=None):
+        """Create a node using a maya.cmds command name.
+
+        Example: 'joint', 'polySphere'.
+        """
+        full_name = _create_node_with_dag_modifier(cmd, parent=parent, name=name)
+        return resolve(full_name)
+
     @property
     def visibility(self):
         """Get or set the visibility of this transform node."""
@@ -57,39 +66,43 @@ class DagNode(Node):
             return None
         return resolve(parent_path.fullPathName())
 
-    @parent.setter
-    def parent(self, new_parent):
-        """Set a new parent for this node. Pass None to unparent to world."""
-        if new_parent is None:
-            cmds.parent(self.long_name, world=True)
-        else:
-            new_parent_name = (
-                new_parent.name if isinstance(new_parent, Node) else str(new_parent)
-            )
-            cmds.parent(self.long_name, new_parent_name)
-        # Invalidate cached path since parenting can change the full path.
-        self._cached_dag_path = None
-
-    # TODO: Revisit the parent.setter with OpenMaya -Needs Undo support-
     # @parent.setter
     # def parent(self, new_parent):
     #     """Set a new parent for this node. Pass None to unparent to world."""
-    #     dag_mod = OpenMaya.MDagModifier()
     #     if new_parent is None:
-    #         # Reparent to world
-    #         dag_mod.reparentNode(self._m_obj)
+    #         cmds.parent(self.long_name, world=True)
     #     else:
-    #         parent_obj = new_parent._m_obj if isinstance(new_parent,
-    #                                                      Node) else None
-    #         if parent_obj is None:
-    #             # Resolve by name if string was passed
-    #             sel = OpenMaya.MSelectionList()
-    #             sel.add(str(new_parent))
-    #             parent_obj = sel.getDependNode(0)
-    #         dag_mod.reparentNode(self._m_obj, parent_obj)
-    #     dag_mod.doIt()
+    #         new_parent_name = (
+    #             new_parent.name if isinstance(new_parent, Node) else str(new_parent)
+    #         )
+    #         cmds.parent(self.long_name, new_parent_name)
     #     # Invalidate cached path since parenting can change the full path.
     #     self._cached_dag_path = None
+
+    # TODO: Revisit the parent.setter with OpenMaya -Needs Undo support-
+    @parent.setter
+    def parent(self, new_parent):
+        """Set a new parent for this node. Pass None to unparent to world."""
+        mod = OpenMaya.MDagModifier()
+        if new_parent is None:
+            # Reparent to world
+            mod.reparentNode(self._m_obj)
+        else:
+            parent_obj = new_parent._m_obj if isinstance(new_parent,
+                                                         Node) else None
+            if parent_obj is None:
+                # Resolve by name if string was passed
+                sel = OpenMaya.MSelectionList()
+                sel.add(str(new_parent))
+                parent_obj = sel.getDependNode(0)
+            mod.reparentNode(self._m_obj, parent_obj)
+        mod.doIt()
+        apiundo.commit(
+            undo=mod.undoIt,
+            redo=mod.doIt
+        )
+        # Invalidate cached path since parenting can change the full path.
+        self._cached_dag_path = None
 
     @property
     def children(self):
@@ -115,25 +128,6 @@ class DagNode(Node):
     @color.setter
     def color(self, value):
         self.set_color(value)
-
-    @classmethod
-    def create(cls, cmd, name=None, parent=None):
-        """Create a node using a maya.cmds command name.
-
-        Example: 'joint', 'polySphere'.
-        """
-        # DagNode is strict. Explicitly create a dagNode type.
-        # mod = OpenMaya.MDagModifier()
-        # node_obj = mod.createNode(cmd)
-        # mod.doIt()
-        # apiundo.commit(
-        #     undo=mod.undoIt,
-        #     redo=mod.doIt
-        # )
-        # dag_path = OpenMaya.MDagPath.getAPathTo(node_obj)
-        # full_name = dag_path.fullPathName()
-        full_name = _create_node_with_dag_modifier(cmd, parent=parent, name=name)
-        return resolve(full_name)
 
     def select(self):
         """Select this node in the Maya scene."""
