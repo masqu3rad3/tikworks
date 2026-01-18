@@ -198,3 +198,17 @@ class DagNode(Node):
             OpenMaya.MFn.kLattice,
         )
         return any(self._m_obj.hasFn(d_type) for d_type in deformable_types)
+
+    def rename(self, new_name):
+        """Rename the node."""
+        if self.exists():
+            mod = OpenMaya.MDagModifier()
+            mod.renameNode(self._m_obj, new_name)
+            mod.doIt()
+            apiundo.commit(
+                undo=mod.undoIt,
+                redo=mod.doIt
+            )
+        else:
+            raise ValueError(f"Node '{self.name}' does not exist.")
+        return self

@@ -88,7 +88,7 @@ class Node:
     def rename(self, new_name):
         """Rename the node."""
         if self.exists():
-            mod = OpenMaya.MDagModifier()
+            mod = OpenMaya.MDGModifier()
             mod.renameNode(self._m_obj, new_name)
             mod.doIt()
             apiundo.commit(
