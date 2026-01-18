@@ -5,6 +5,7 @@ from tik.core.color import Color
 from .decorators import add_aliases
 from .node import Node
 from .registry import register, resolve
+from .scene import _create_node_with_dag_modifier
 from ...vendor.apiundo import apiundo
 
 
@@ -116,21 +117,22 @@ class DagNode(Node):
         self.set_color(value)
 
     @classmethod
-    def create(cls, cmd, **kwargs):
+    def create(cls, cmd, name=None, parent=None):
         """Create a node using a maya.cmds command name.
 
         Example: 'joint', 'polySphere'.
         """
         # DagNode is strict. Explicitly create a dagNode type.
-        mod = OpenMaya.MDagModifier()
-        node_obj = mod.createNode(cmd)
-        mod.doIt()
-        apiundo.commit(
-            undo=mod.undoIt,
-            redo=mod.doIt
-        )
-        dag_path = OpenMaya.MDagPath.getAPathTo(node_obj)
-        full_name = dag_path.fullPathName()
+        # mod = OpenMaya.MDagModifier()
+        # node_obj = mod.createNode(cmd)
+        # mod.doIt()
+        # apiundo.commit(
+        #     undo=mod.undoIt,
+        #     redo=mod.doIt
+        # )
+        # dag_path = OpenMaya.MDagPath.getAPathTo(node_obj)
+        # full_name = dag_path.fullPathName()
+        full_name = _create_node_with_dag_modifier(cmd, parent=parent, name=name)
         return resolve(full_name)
 
     def select(self):
