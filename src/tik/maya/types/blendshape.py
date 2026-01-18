@@ -5,7 +5,7 @@ from maya import cmds
 from maya import OpenMaya
 
 from ..core.node import Node
-from ..core.registry import register, resolve
+from ..core.registry import register, resolve, undocommit
 
 @register("blendShape")
 class BlendShape(Node):
@@ -17,6 +17,7 @@ class BlendShape(Node):
         mod = OpenMaya.MDGModifier()
         node_obj = mod.createNode("blendShape", **kwargs)
         mod.doIt()
+        undocommit(undo=mod.undoIt, redo=mod.doIt)
         blendshape = OpenMaya.MFnDependencyNode(node_obj).name()
         return cls(blendshape)
 

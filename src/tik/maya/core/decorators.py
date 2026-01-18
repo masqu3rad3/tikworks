@@ -1,6 +1,9 @@
 """Decorator functions for Tikmaya core functionalities."""
+from __future__ import annotations
+
 import sys
 from functools import wraps
+from typing import Callable, Any
 
 from maya import cmds
 
@@ -70,3 +73,19 @@ def keepselection(func):
             cmds.select(original_selection)
 
     return _keepfunc
+
+
+def protected(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Decorator that skips execution if the node no longer exists.
+
+    Assumes the first argument (self) has an `exists()` method.
+    """
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        node = args[0]
+        if not node.exists():
+            raise RuntimeError("Node no longer exists in the scene.")
+        return func(*args, **kwargs)
+
+    return wrapper

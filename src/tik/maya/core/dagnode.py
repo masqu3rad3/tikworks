@@ -2,11 +2,11 @@ from maya import cmds
 from maya.api import OpenMaya
 
 from tik.core.color import Color
-from .decorators import add_aliases
+from .decorators import add_aliases, protected
 from .node import Node
-from .registry import register, resolve
-from .scene import _create_node_with_dag_modifier
-from ...vendor.apiundo import apiundo
+from .registry import register, resolve, undocommit
+from .scene import create_node_with_dag_modifier
+
 
 
 @add_aliases(
@@ -31,7 +31,7 @@ class DagNode(Node):
 
         Example: 'joint', 'polySphere'.
         """
-        full_name = _create_node_with_dag_modifier(cmd, parent=parent, name=name)
+        full_name = create_node_with_dag_modifier(cmd, parent=parent, name=name)
         return resolve(full_name)
 
     @property
@@ -58,6 +58,15 @@ class DagNode(Node):
     @property
     def parent(self):
         """Return the parent as a wrapped node (or None if no parent)."""
+        return self.get_parent()
+
+    @parent.setter
+    def parent(self, new_parent):
+        """Set a new parent for this node. Pass None to unparent to world."""
+        self.set_parent(new_parent)
+
+    def get_parent(self):
+        """Return the parent as a wrapped node (or None if no parent)."""
         mfn = OpenMaya.MFnDagNode(self._dag_path())
         parent_obj = mfn.parent(0)
         parent_path = OpenMaya.MDagPath.getAPathTo(parent_obj)
@@ -66,41 +75,26 @@ class DagNode(Node):
             return None
         return resolve(parent_path.fullPathName())
 
-    # @parent.setter
-    # def parent(self, new_parent):
-    #     """Set a new parent for this node. Pass None to unparent to world."""
-    #     if new_parent is None:
-    #         cmds.parent(self.long_name, world=True)
-    #     else:
-    #         new_parent_name = (
-    #             new_parent.name if isinstance(new_parent, Node) else str(new_parent)
-    #         )
-    #         cmds.parent(self.long_name, new_parent_name)
-    #     # Invalidate cached path since parenting can change the full path.
-    #     self._cached_dag_path = None
-
-    # TODO: Revisit the parent.setter with OpenMaya -Needs Undo support-
-    @parent.setter
-    def parent(self, new_parent):
+    @protected
+    def set_parent(self, new_parent):
         """Set a new parent for this node. Pass None to unparent to world."""
         mod = OpenMaya.MDagModifier()
         if new_parent is None:
             # Reparent to world
             mod.reparentNode(self._m_obj)
         else:
-            parent_obj = new_parent._m_obj if isinstance(new_parent,
-                                                         Node) else None
-            if parent_obj is None:
-                # Resolve by name if string was passed
-                sel = OpenMaya.MSelectionList()
-                sel.add(str(new_parent))
-                parent_obj = sel.getDependNode(0)
-            mod.reparentNode(self._m_obj, parent_obj)
+            new_parent = resolve(new_parent)  # ensure it's a wrapped node
+            if not new_parent.exists():
+                raise ValueError(
+                    f"New parent node '{new_parent.uuid}' does not exist.")
+            mod.reparentNode(self._m_obj, new_parent._m_obj)
+            # protected.append(new_parent._m_obj)
         mod.doIt()
-        apiundo.commit(
+        undocommit(
             undo=mod.undoIt,
             redo=mod.doIt
         )
+        # commit_safe(apiundo, undo=mod.undoIt, redo=mod.doIt, targets=protected)
         # Invalidate cached path since parenting can change the full path.
         self._cached_dag_path = None
 
@@ -195,16 +189,17 @@ class DagNode(Node):
         )
         return any(self._m_obj.hasFn(d_type) for d_type in deformable_types)
 
+    @protected
     def rename(self, new_name):
         """Rename the node."""
-        if self.exists():
-            mod = OpenMaya.MDagModifier()
-            mod.renameNode(self._m_obj, new_name)
-            mod.doIt()
-            apiundo.commit(
-                undo=mod.undoIt,
-                redo=mod.doIt
-            )
-        else:
-            raise ValueError(f"Node '{self.name}' does not exist.")
+        # if self.exists():
+        mod = OpenMaya.MDagModifier()
+        mod.renameNode(self._m_obj, new_name)
+        mod.doIt()
+        undocommit(
+            undo=mod.undoIt,
+            redo=mod.doIt
+        )
+        # else:
+        #     raise ValueError(f"Node '{self.name}' does not exist.")
         return self

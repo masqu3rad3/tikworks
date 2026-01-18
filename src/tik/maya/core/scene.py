@@ -2,9 +2,8 @@
 
 from maya import cmds
 from maya.api import OpenMaya
-from .registry import resolve, is_registered
+from .registry import resolve, is_registered, undocommit
 from .decorators import alias
-from ...vendor.apiundo import apiundo
 
 @alias("ls")
 def list_scene_nodes(*args, **kwargs):
@@ -24,38 +23,39 @@ def _normalize_mobject(parent):
         parent = sel.getDependNode(0)
     return parent
 
-
-def _create_node_with_dag_modifier(node_type: str, parent=None, name=None) -> str:
+def create_node_with_dag_modifier(node_type: str, parent=None, name=None) -> str:
     # if there is a parent, make sure that it is an MObject
 
     mod = OpenMaya.MDagModifier()
     if parent:
         parent = _normalize_mobject(parent)
-    node_object = mod.createNode(node_type, parent=parent)
+        node_object = mod.createNode(node_type, parent=parent)
+    else:
+        node_object = mod.createNode(node_type)
     if name:
         mod.renameNode(node_object, name)
     mod.doIt()
-    apiundo.commit(undo=mod.undoIt, redo=mod.doIt)
+    undocommit(undo=mod.undoIt, redo=mod.doIt)
     dag_path = OpenMaya.MDagPath.getAPathTo(node_object)
     return dag_path.fullPathName()
 
-def _create_node_with_dg_modifier(node_type: str, name=None) -> str:
+def create_node_with_dg_modifier(node_type: str, name=None) -> str:
     mod = OpenMaya.MDGModifier()
     node_object = mod.createNode(node_type)
     if name:
         mod.renameNode(node_object, name)
     mod.doIt()
-    apiundo.commit(undo=mod.undoIt, redo=mod.doIt)
+    undocommit(undo=mod.undoIt, redo=mod.doIt)
     return OpenMaya.MFnDependencyNode(node_object).name()
 
 @alias("createNode")
 def create_node(node_type: str, name=None, parent=None):
     """Create a new node of the specified type and return its wrapper."""
     try:
-        full_name = _create_node_with_dag_modifier(node_type, name=name, parent=parent)
+        full_name = create_node_with_dag_modifier(node_type, name=name, parent=parent)
     except TypeError:
         try:
-            full_name = _create_node_with_dg_modifier(node_type, name=name)
+            full_name = create_node_with_dg_modifier(node_type, name=name)
         except (TypeError, RuntimeError):
             # we will only pass the name argument if it is not None
             kwargs = {}

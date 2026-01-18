@@ -1,10 +1,14 @@
 # node.py — base Node and Plug wrappers
+import logging
 import maya.cmds as cmds
 from maya.api import OpenMaya
 
-from .registry import resolve, resolve_node_class, set_default_factory
+from .decorators import protected
+from .registry import resolve, resolve_node_class, set_default_factory, undocommit
 from .scene import create_node
-from ...vendor.apiundo import apiundo
+
+LOG = logging.getLogger(__name__)
+
 class Node:
     """Base wrapper around a Maya dependency node or DAG node."""
     is_dag = False
@@ -28,7 +32,8 @@ class Node:
         self._sel.add(long_name)
         self._m_obj = self._sel.getDependNode(0)
         self._fn_dep = OpenMaya.MFnDependencyNode(self._m_obj)
-        self._uuid = None # lazy init
+        # self._uuid = None # lazy init
+        self._uuid = self._fn_dep.uuid().asString()
         self._m_obj_handle = None # lazy init
 
     @classmethod
@@ -38,6 +43,34 @@ class Node:
         Example: 'joint', 'polySphere'.
         """
         return create_node(cmd, name=name, parent=parent)
+
+    @property
+    def m_obj(self):
+        """Return valid MObject, re-resolving from UUID if stale."""
+        return self._get_valid_mobject()
+
+    # @_m_obj.setter
+    # def m_obj(self, value):
+    #     self._m_obj = value
+
+    def _get_valid_mobject(self) -> OpenMaya.MObject:
+        """Re-resolve MObject from UUID if current reference is stale."""
+        handle = OpenMaya.MObjectHandle(self._m_obj)
+        if handle.isValid() and handle.isAlive():
+            # Verify it's still the same logical object
+            current_uuid = OpenMaya.MFnDependencyNode(self._m_obj).uuid().asString()
+            if current_uuid == self._uuid:
+                return self._m_obj
+
+        # Re-resolve from UUID
+        selection_list = OpenMaya.MSelectionList()
+        try:
+            selection_list.add(self._uuid)
+            self._m_obj = selection_list.getDependNode(0)
+            return self._m_obj
+        except RuntimeError:
+            # Node no longer exists
+            return OpenMaya.MObject.kNullObj
 
     @property
     def long_name(self):
@@ -52,22 +85,33 @@ class Node:
     @property
     def uuid(self):
         """The UUID of the node."""
-        return self._uuid or self._fn_dep.uuid().asString()
+        # return self._uuid or self._fn_dep.uuid().asString()
+        return self._uuid
 
     @property
     def type(self):
         """The type of the node."""
         return self._fn_dep.typeName
 
+    # @protected
     def _resolve_long_name(self):
         """Resolve long name from stored MObject or UUID."""
-        if self._m_obj.hasFn(OpenMaya.MFn.kDagNode):
-            dag_path = OpenMaya.MDagPath.getAPathTo(self._m_obj)
+        if not self.exists():
+            # LOG.warning(f"Node '{self._uuid}' does not exist.")
+            # return None
+            raise ValueError(f"Node '{self._uuid}' does not exist.")
+        if self.m_obj.hasFn(OpenMaya.MFn.kDagNode):
+            dag_path = OpenMaya.MDagPath.getAPathTo(self.m_obj)
             return dag_path.fullPathName()
         return self._fn_dep.name()
 
+    # @protected
     def _resolve_short_name(self):
         """Resolve short name from stored MObject."""
+        if not self.exists():
+            # LOG.warning(f"Node '{self._uuid}' does not exist.")
+            # return None
+            raise ValueError(f"Node '{self._uuid}' does not exist.")
         return self._fn_dep.name()
 
     def duplicate(self, **kwargs):
@@ -83,25 +127,31 @@ class Node:
         """Delete the node from the scene."""
         cmds.delete(self.long_name)
 
+    @protected
     def rename(self, new_name):
         """Rename the node."""
-        if self.exists():
-            mod = OpenMaya.MDGModifier()
-            mod.renameNode(self._m_obj, new_name)
-            mod.doIt()
-            apiundo.commit(
-                undo=mod.undoIt,
-                redo=mod.doIt
-            )
-        else:
-            raise ValueError(f"Node '{self.name}' does not exist.")
+        # if self.exists():
+        mod = OpenMaya.MDGModifier()
+        mod.renameNode(self.m_obj, new_name)
+        mod.doIt()
+        undocommit(
+            undo=mod.undoIt,
+            redo=mod.doIt
+        )
+        # else:
+        #     raise ValueError(f"Node '{self.name}' does not exist.")
         return self
 
-    def exists(self):
-        """Check if the node still exists in the scene."""
-        if not self._m_obj_handle:
-            self._m_obj_handle = OpenMaya.MObjectHandle(self._m_obj)
-        return self._m_obj_handle.isValid()
+    def exists(self) -> bool:
+        """Return True if the wrapped node still exists in the scene."""
+        m_obj = self._get_valid_mobject()
+        return not m_obj.isNull()
+
+    # def exists(self):
+    #     """Check if the node still exists in the scene."""
+    #     if not self._m_obj_handle:
+    #         self._m_obj_handle = OpenMaya.MObjectHandle(self._m_obj)
+    #     return self._m_obj_handle.isValid()
 
     def add_attr(self, attr_name, **kwargs):
         """Add a new attribute to the node.

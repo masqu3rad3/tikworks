@@ -2,12 +2,16 @@
 from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
 import maya.cmds as cmds
+from . import apicommon as api
+from ...vendor.apiundo import apiundo
 
 T = TypeVar("T")
 
 _NODE_TYPES: Dict[str, Type[Any]] = {}
 _DEFAULT_FACTORY: Optional[Type[Any]] = None  # set by set_default_factory(Node)
 
+# pass through commit function from apiundo
+undocommit = apiundo.commit
 
 def register(node_type: str) -> Callable[[Type[T]], Type[T]]:
     """Decorator for registering Maya node wrappers."""
@@ -16,9 +20,7 @@ def register(node_type: str) -> Callable[[Type[T]], Type[T]]:
         """Register the class for the given node type."""
         _NODE_TYPES[node_type] = cls
         return cls
-
     return inner
-
 
 def set_default_factory(factory: Type[T]) -> None:
     """Set the fallback factory (e.g., Node) without importing it here."""
@@ -29,10 +31,12 @@ def set_default_factory(factory: Type[T]) -> None:
 def resolve_node_class(name: str):
     """Return the most specific registered class for a given Maya node."""
     # if the name is already a class, defined in _NODE_TYPES, return it directly
-    if not cmds.objExists(name):
+    # if not cmds.objExists(name):
+    if not api.obj_exists(name):
         raise ValueError(f"Node '{name}' does not exist.")
 
-    node_type = cmds.nodeType(name)
+    # node_type = cmds.nodeType(name)
+    node_type = api.node_type(name)
     cls = _NODE_TYPES.get(node_type)
     if cls:
         return cls
@@ -49,7 +53,6 @@ def resolve_node_class(name: str):
     raise LookupError(
         f"No wrapper registered for '{node_type}' and no default factory set."
     )
-
 
 def resolve(name: str, class_name=None) -> Any:
     """Return an instance of the correct Node subclass based on Maya node type."""
