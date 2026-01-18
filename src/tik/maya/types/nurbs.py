@@ -61,9 +61,5 @@ class Nurbs(ShapeNode):
                 f"{', '.join(_space_map.keys())}"
             )
 
-        selection_ls = OpenMaya.MSelectionList()
-        selection_ls.add(self.name)
-        sel_obj = selection_ls.getDagPath(0)
-
-        mfn_object = OpenMaya.MFnNurbsSurface(sel_obj)
+        mfn_object = OpenMaya.MFnNurbsSurface(self.dag_path)
         return mfn_object.cvPositions(_space_map[space])

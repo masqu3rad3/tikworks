@@ -5,6 +5,8 @@ from tik.core.color import Color
 from .decorators import add_aliases
 from .node import Node
 from .registry import register, resolve
+from ...vendor.apiundo import apiundo
+
 
 @add_aliases(
     {
@@ -20,7 +22,7 @@ class DagNode(Node):
     def __init__(self, *args, **kwargs):
         """Initialize the DagNode wrapper."""
         super().__init__(*args, **kwargs)
-        self._cached_dag_path = None
+        self._cached_dag_path = self._sel.getDagPath(0)
 
     @property
     def visibility(self):
@@ -40,9 +42,7 @@ class DagNode(Node):
         """Resolve and cache this node's MDagPath using the long name for
         disambiguation."""
         if not self._cached_dag_path or not self._cached_dag_path.isValid():
-            sel = OpenMaya.MSelectionList()
-            sel.add(self.long_name)
-            self._cached_dag_path = sel.getDagPath(0)
+            self._cached_dag_path = self._sel.getDagPath(0)
         return self._cached_dag_path
 
     @property
@@ -69,6 +69,27 @@ class DagNode(Node):
         # Invalidate cached path since parenting can change the full path.
         self._cached_dag_path = None
 
+    # TODO: Revisit the parent.setter with OpenMaya -Needs Undo support-
+    # @parent.setter
+    # def parent(self, new_parent):
+    #     """Set a new parent for this node. Pass None to unparent to world."""
+    #     dag_mod = OpenMaya.MDagModifier()
+    #     if new_parent is None:
+    #         # Reparent to world
+    #         dag_mod.reparentNode(self._m_obj)
+    #     else:
+    #         parent_obj = new_parent._m_obj if isinstance(new_parent,
+    #                                                      Node) else None
+    #         if parent_obj is None:
+    #             # Resolve by name if string was passed
+    #             sel = OpenMaya.MSelectionList()
+    #             sel.add(str(new_parent))
+    #             parent_obj = sel.getDependNode(0)
+    #         dag_mod.reparentNode(self._m_obj, parent_obj)
+    #     dag_mod.doIt()
+    #     # Invalidate cached path since parenting can change the full path.
+    #     self._cached_dag_path = None
+
     @property
     def children(self):
         """Return children as wrapped nodes."""
@@ -94,6 +115,24 @@ class DagNode(Node):
     def color(self, value):
         self.set_color(value)
 
+    @classmethod
+    def create(cls, cmd, **kwargs):
+        """Create a node using a maya.cmds command name.
+
+        Example: 'joint', 'polySphere'.
+        """
+        # DagNode is strict. Explicitly create a dagNode type.
+        mod = OpenMaya.MDagModifier()
+        node_obj = mod.createNode(cmd)
+        mod.doIt()
+        apiundo.commit(
+            undo=mod.undoIt,
+            redo=mod.doIt
+        )
+        dag_path = OpenMaya.MDagPath.getAPathTo(node_obj)
+        full_name = dag_path.fullPathName()
+        return resolve(full_name)
+
     def select(self):
         """Select this node in the Maya scene."""
         cmds.select(self.long_name, replace=True)
@@ -115,8 +154,7 @@ class DagNode(Node):
         if self["overrideRGBColors"].value:
             if not as_color:
                 return self["overrideColorRGB"].value[0]
-            else:
-                return Color(self["overrideColorRGB"].value[0])
+            return Color(self["overrideColorRGB"].value[0])
         else:
             return self["overrideColor"].value
 
@@ -151,30 +189,12 @@ class DagNode(Node):
             self["overrideRGBColors"].value = False
             self["overrideColor"].value = int(color)
 
-
     def is_deformable(self):
-        try:
-            # Get the MObject
-            sel_list = OpenMaya.MSelectionList()
-            sel_list.add(self.name)
-            m_obj = sel_list.getDependNode(0)
-
-            # Define the types that are considered "deformable"
-            # In API 2.0, we list them explicitly as there is no collective kGeometryShape
-            deformable_types = (
-                OpenMaya.MFn.kMesh,
-                OpenMaya.MFn.kNurbsCurve,
-                OpenMaya.MFn.kNurbsSurface,
-                OpenMaya.MFn.kLattice
-            )
-
-            # Check if the node matches any of these types
-            for d_type in deformable_types:
-                if m_obj.hasFn(d_type):
-                    return True
-
-            return False
-
-        except RuntimeError:
-            # Object doesn't exist
-            return False
+        """Check if this node is a deformable geometry type."""
+        deformable_types = (
+            OpenMaya.MFn.kMesh,
+            OpenMaya.MFn.kNurbsCurve,
+            OpenMaya.MFn.kNurbsSurface,
+            OpenMaya.MFn.kLattice,
+        )
+        return any(self._m_obj.hasFn(d_type) for d_type in deformable_types)

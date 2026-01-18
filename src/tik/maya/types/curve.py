@@ -44,11 +44,7 @@ class Curve(ShapeNode):
                 f"{', '.join(_space_map.keys())}"
             )
 
-        selection_ls = OpenMaya.MSelectionList()
-        selection_ls.add(self.name)
-        sel_obj = selection_ls.getDagPath(0)
-
-        mfn_object = OpenMaya.MFnNurbsCurve(sel_obj)
+        mfn_object = OpenMaya.MFnNurbsCurve(self.dag_path)
         return mfn_object.cvPositions(_space_map[space])
 
     @property
@@ -99,9 +95,5 @@ class Curve(ShapeNode):
             scaled_cvs.append(cv)
 
         # Update the CV positions
-        selection_ls = OpenMaya.MSelectionList()
-        selection_ls.add(self.name)
-        sel_obj = selection_ls.getDagPath(0)
-
-        mfn_object = OpenMaya.MFnNurbsCurve(sel_obj)
+        mfn_object = OpenMaya.MFnNurbsCurve(self.dag_path)
         mfn_object.setCVPositions(scaled_cvs)

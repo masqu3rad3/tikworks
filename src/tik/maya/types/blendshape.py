@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from maya import cmds
-from maya import mel
+from maya import OpenMaya
 
 from ..core.node import Node
 from ..core.registry import register, resolve
@@ -14,7 +14,10 @@ class BlendShape(Node):
     @classmethod
     def create(cls, **kwargs):
         """Create Blendshape node type for Maya."""
-        blendshape = cmds.createNode("blendShape", **kwargs)
+        mod = OpenMaya.MDGModifier()
+        node_obj = mod.createNode("blendShape", **kwargs)
+        mod.doIt()
+        blendshape = OpenMaya.MFnDependencyNode(node_obj).name()
         return cls(blendshape)
 
     @property
@@ -114,8 +117,8 @@ class BlendShape(Node):
         if plug is None:
             raise RuntimeError("Cannot access weight plug for writing.")
 
-        for i, weight_val in enumerate(weights):
-            element_plug = plug.elementByLogicalIndex(i)
+        for idx, weight_val in enumerate(weights):
+            element_plug = plug.elementByLogicalIndex(idx)
             element_plug.setFloat(weight_val)
 
     # --------------------------------------------------------------------------

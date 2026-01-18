@@ -3,8 +3,8 @@ import maya.cmds as cmds
 from maya.api import OpenMaya
 
 from .registry import resolve, resolve_node_class, set_default_factory
-
-
+from .scene import create_node
+from ...vendor.apiundo import apiundo
 class Node:
     """Base wrapper around a Maya dependency node or DAG node."""
     is_dag = False
@@ -24,11 +24,11 @@ class Node:
         """Initialize the Node wrapper."""
         if not cmds.objExists(long_name):
             raise ValueError(f"Node '{long_name}' does not exist.")
-        sel = OpenMaya.MSelectionList()
-        sel.add(long_name)
-        self._m_obj = sel.getDependNode(0)
-        fn_dep = OpenMaya.MFnDependencyNode(self._m_obj)
-        self._uuid = fn_dep.uuid().asString()
+        self._sel = OpenMaya.MSelectionList()
+        self._sel.add(long_name)
+        self._m_obj = self._sel.getDependNode(0)
+        self._fn_dep = OpenMaya.MFnDependencyNode(self._m_obj)
+        self._uuid = None # lazy init
         self._m_obj_handle = None # lazy init
 
     @property
@@ -44,34 +44,33 @@ class Node:
     @property
     def uuid(self):
         """The UUID of the node."""
-        return self._uuid
+        return self._uuid or self._fn_dep.uuid().asString()
 
     @classmethod
-    def create(cls, cmd, **kwargs):
+    def create(cls, cmd):
         """Create a node using a maya.cmds command name.
 
         Example: 'joint', 'polySphere'.
         """
-        result = cmds.createNode(cmd, **kwargs)
-        return resolve(result)
+        return create_node(cmd)
+        # result = cmds.createNode(cmd, **kwargs)
+        # return resolve(result)
 
     @property
     def type(self):
         """The type of the node."""
-        return cmds.nodeType(self.long_name)
+        return self._fn_dep.typeName
 
     def _resolve_long_name(self):
         """Resolve long name from stored MObject or UUID."""
         if self._m_obj.hasFn(OpenMaya.MFn.kDagNode):
             dag_path = OpenMaya.MDagPath.getAPathTo(self._m_obj)
             return dag_path.fullPathName()
-        fn_dep = OpenMaya.MFnDependencyNode(self._m_obj)
-        return fn_dep.name()
+        return self._fn_dep.name()
 
     def _resolve_short_name(self):
         """Resolve short name from stored MObject."""
-        fn_dep = OpenMaya.MFnDependencyNode(self._m_obj)
-        return fn_dep.name()
+        return self._fn_dep.name()
 
     def duplicate(self, **kwargs):
         """Duplicate the node in the scene.
@@ -88,13 +87,20 @@ class Node:
 
     def rename(self, new_name):
         """Rename the node."""
-        cmds.rename(self.name, new_name)
+        if self.exists():
+            mod = OpenMaya.MDagModifier()
+            mod.renameNode(self._m_obj, new_name)
+            mod.doIt()
+            apiundo.commit(
+                undo=mod.undoIt,
+                redo=mod.doIt
+            )
+        else:
+            raise ValueError(f"Node '{self.name}' does not exist.")
         return self
 
     def exists(self):
         """Check if the node still exists in the scene."""
-        # return cmds.objExists(self.long_name)
-        # return not self._m_obj.isNull()
         if not self._m_obj_handle:
             self._m_obj_handle = OpenMaya.MObjectHandle(self._m_obj)
         return self._m_obj_handle.isValid()
@@ -128,7 +134,7 @@ class Node:
         Returns:
             bool: True if the attribute exists, False otherwise.
         """
-        return cmds.attributeQuery(attr_name, node=self.long_name, exists=True)
+        return self._fn_dep.hasAttribute(attr_name)
 
     def __getitem__(self, attr):
         """Get a Plug for the given attribute name."""
@@ -196,7 +202,7 @@ class Plug:
     @property
     def keyable(self) -> bool:
         """Check if the attribute is keyable."""
-        return cmds.getAttr(self.path, keyable=True)
+        return self.as_api_plug().isKeyable
 
     @keyable.setter
     def keyable(self, state: bool) -> None:
@@ -216,7 +222,7 @@ class Plug:
     @property
     def locked(self) -> bool:
         """Check if the attribute is locked."""
-        return cmds.getAttr(self.path, lock=True)
+        return self.as_api_plug().isLocked
 
     @locked.setter
     def locked(self, state: bool) -> None:

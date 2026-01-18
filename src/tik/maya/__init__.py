@@ -1,5 +1,6 @@
 from .core.node import Node
 from .core.registry import resolve
+from .core.dagnode import DagNode
 from .core.shapenode import ShapeNode
 from .types.curve import Curve
 from .types.joint import Joint
@@ -16,6 +17,7 @@ from .core.scene import *
 
 __all__ = [
     "Node",
+    "DagNode",
     "ShapeNode",
     "Joint",
     "Transform",
