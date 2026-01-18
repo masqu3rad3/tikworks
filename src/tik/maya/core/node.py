@@ -62,15 +62,26 @@ class Node:
             if current_uuid == self._uuid:
                 return self._m_obj
 
-        # Re-resolve from UUID
-        selection_list = OpenMaya.MSelectionList()
-        try:
-            selection_list.add(self._uuid)
-            self._m_obj = selection_list.getDependNode(0)
-            return self._m_obj
-        except RuntimeError:
+        # # Re-resolve from UUID
+        # selection_list = OpenMaya.MSelectionList()
+        # try:
+        #     selection_list.add(self._uuid)
+        #     self._m_obj = selection_list.getDependNode(0)
+        #     return self._m_obj
+        # except RuntimeError:
+        #     # Node no longer exists
+        #     return OpenMaya.MObject.kNullObj
+
+        # Re-resolve from UUID using cmds.ls (MSelectionList doesn't accept UUIDs)
+        nodes = cmds.ls(self._uuid, long=True)
+        if not nodes:
             # Node no longer exists
             return OpenMaya.MObject.kNullObj
+
+        selection_list = OpenMaya.MSelectionList()
+        selection_list.add(nodes[0])
+        self._m_obj = selection_list.getDependNode(0)
+        return self._m_obj
 
     @property
     def long_name(self):
@@ -97,9 +108,9 @@ class Node:
     def _resolve_long_name(self):
         """Resolve long name from stored MObject or UUID."""
         if not self.exists():
-            # LOG.warning(f"Node '{self._uuid}' does not exist.")
-            # return None
-            raise ValueError(f"Node '{self._uuid}' does not exist.")
+            LOG.warning(f"Node '{self._uuid}' does not exist.")
+            return None
+            # raise ValueError(f"Node '{self._uuid}' does not exist.")
         if self.m_obj.hasFn(OpenMaya.MFn.kDagNode):
             dag_path = OpenMaya.MDagPath.getAPathTo(self.m_obj)
             return dag_path.fullPathName()
@@ -109,9 +120,9 @@ class Node:
     def _resolve_short_name(self):
         """Resolve short name from stored MObject."""
         if not self.exists():
-            # LOG.warning(f"Node '{self._uuid}' does not exist.")
-            # return None
-            raise ValueError(f"Node '{self._uuid}' does not exist.")
+            LOG.warning(f"Node '{self._uuid}' does not exist.")
+            return None
+            # raise ValueError(f"Node '{self._uuid}' does not exist.")
         return self._fn_dep.name()
 
     def duplicate(self, **kwargs):

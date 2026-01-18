@@ -84,3 +84,46 @@ def test_select_nodes_handles_mixed_input():
     assert len(selection) == 2
     assert set(selection) == {"nodeA", "nodeB"}
 
+
+def test_create_node_dag():
+    from tik.maya.core.scene import create_node
+    # Test creating a DAG node (transform)
+    node = create_node("transform", name="myDag")
+    assert node.exists()
+    assert node.type == "transform"
+    assert node.name == "myDag"
+
+
+def test_create_node_dg():
+    # make sure the factory default is set
+    import tik.maya as tm
+    # from tik.maya.core.scene import create_node
+    # Test creating a DG node (multiplyDivide)
+    # create_node_with_dag_modifier should fail (invalid node type for DAG mod?)
+    # multiplyDivide is DG. MDagModifier.createNode MAY fail or create?
+    # MDagModifier.createNode("multiplyDivide") raises TypeError: invalid node type
+    # So it should fall back to create_node_with_dg_modifier.
+    node = tm.create_node("multiplyDivide", name="myDG")
+    assert node.exists()
+    assert node.type == "multiplyDivide"
+    assert node.name == "myDG"
+
+
+def test_create_node_with_parent():
+    from tik.maya.core.scene import create_node
+    parent = create_node("transform", name="parentGrp")
+    child = create_node("transform", name="childNode", parent=parent)
+
+    assert child.parent.uuid == parent.uuid
+
+
+def test_create_node_fallback_to_unknown_with_name():
+    import tik.maya as tm
+    # "invalidType_XYZ" fails DAG and DG modifiers, falls back to cmds.createNode.
+    # We provide a name to test that kwargs are passed correctly in fallback.
+    node = tm.create_node("invalidType_XYZ", name="unknownNode")
+    assert node.exists()
+    assert node.type == "unknown"
+    assert node.name == "unknownNode"
+
+
