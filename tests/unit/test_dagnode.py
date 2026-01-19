@@ -379,3 +379,31 @@ def test_set_color_with_color_object():
     stored_rgb = cmds.getAttr(f"{node.name}.overrideColorRGB")[0]
     assert pytest.approx(stored_rgb, rel=1e-5) == color_obj.rgb
 
+def test_dagnode_get_color_returns_none_when_override_disabled() -> None:
+    cmds.file(new=True, force=True)
+    transform_name = cmds.createNode("transform", name="colorTest")
+    node = DagNode(transform_name)
+
+    # Default is no override.
+    assert node.get_color() is None
+
+
+def test_dagnode_get_color_rgb_and_index_paths() -> None:
+    cmds.file(new=True, force=True)
+    transform_name = cmds.createNode("transform", name="colorTestRGB")
+    node = DagNode(transform_name)
+
+    # RGB override path
+    node["overrideEnabled"].value = True
+    node["overrideRGBColors"].value = True
+    node["overrideColorRGB"].value = (0.25, 0.5, 0.75)
+
+    rgb = node.get_color(as_color=False)
+    assert rgb == (0.25, 0.5, 0.75)
+
+    # Index override path
+    node["overrideRGBColors"].value = False
+    node["overrideColor"].value = 17
+
+    color_index = node.get_color(as_color=False)
+    assert color_index == 17

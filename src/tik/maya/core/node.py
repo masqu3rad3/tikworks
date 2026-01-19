@@ -298,7 +298,7 @@ class Plug:
         children = cmds.listAttr(self.path, multi=True)
         if not children:
             return []
-        return [Plug(self._node, f"{child}") for child in children[:]]
+        return [Plug(self._node, f"{child}") for child in children if child != self.attr]
 
     def exists(self):
         """Check if the attribute exists."""

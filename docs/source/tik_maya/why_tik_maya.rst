@@ -223,11 +223,11 @@ When to Use tik.maya
 - Creating pipelines where nodes may be renamed or re-parented
 - You want cleaner, more maintainable code
 
-**Consider raw ``cmds`` when:**
+**Consider raw ``cmds`` or `OpenMaya`` when:**
 
-- Performance-critical inner loops with thousands of iterations
+- Performance-critical inner loops with thousands of iterations. tik.maya is still faster than cmds in most cases, but raw API calls can be quicker.
 - One-off scripts where readability doesn't matter
-- Operations that tik.maya doesn't wrap yet
+- Operations that tik.maya doesn't wrap yet. Flag them for future support!
 
 .. note::
    tik.maya and ``cmds`` can coexist. Use ``node.name`` or ``node.long_name`` to pass
@@ -236,18 +236,23 @@ When to Use tik.maya
 Summary
 -------
 
-+---------------------------+----------------------------------+-----------------------------------+
-| Pain Point                | ``maya.cmds``                    | **tik.maya**                      |
-+===========================+==================================+===================================+
-| Node references           | Strings — break on rename        | UUID-backed — survives renames    |
-+---------------------------+----------------------------------+-----------------------------------+
-| Code verbosity            | Multiple calls per operation     | Concise properties and methods    |
-+---------------------------+----------------------------------+-----------------------------------+
-| Type safety               | None — errors at runtime         | IDE completion, type hints        |
-+---------------------------+----------------------------------+-----------------------------------+
-| API style                 | Procedural, flag-heavy           | Pythonic, object-oriented         |
-+---------------------------+----------------------------------+-----------------------------------+
-| Debugging                 | String matching errors           | Object inspection, clear errors   |
-+---------------------------+----------------------------------+-----------------------------------+
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| Pain Point                | ``maya.cmds``                    | ``maya.api.OpenMaya``               | **tik.maya**                              |
++===========================+==================================+=====================================+===========================================+
+| Node references           | Strings — break on rename        | MObject/MDagPath handles — robust   | MObj/UUID-backed — survives renames       |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| Code verbosity            | Multiple calls per operation     | Verbose boilerplate (fn sets, plugs)| Concise properties and methods            |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| Performance               | Moderate                         | Fastest (No Undo / Not crash safe   | Fast (With Undo support and more stable   |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| Type safety               | None — errors at runtime         | Stronger typing via API classes     | IDE completion, type hints                |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| API style                 | Procedural, flag-heavy           | Low-level, explicit, handle-based   | Pythonic, object-oriented                 |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| Debugging                 | String matching errors           | Object inspection via function sets | Object inspection, clear errors           |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
 
-tik.maya lets you write less code, catch errors earlier, and stop worrying about node names.
+Tik.maya aims to bring the best parts of both ``maya.cmds`` (simple, quick workflows) and
+``maya.api.OpenMaya`` (speed, robust handles) into one Pythonic API.
+
+Tik.maya lets you write less code, catch errors earlier, and stop worrying about node names.

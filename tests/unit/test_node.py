@@ -524,3 +524,21 @@ def test_get_valid_mobject_re_resolves_from_uuid_when_handle_stale():
     fn_dep = om.MFnDependencyNode(resolved_obj)
     assert fn_dep.uuid().asString() == original_uuid
 
+def test_node_m_obj_re_resolves_when_stale() -> None:
+    """Cover the UUID fallback path in Node._get_valid_mobject.
+
+    We simulate a stale handle by nulling out the private _m_obj.
+    The wrapper should re-resolve from its UUID and return a valid MObject.
+    """
+    cmds.file(new=True, force=True)
+    node_name = cmds.createNode("transform", name="staleNode")
+
+    node = Node(node_name)
+
+    # Simulate a broken/stale MObject reference.
+    node._m_obj = node._m_obj.__class__()  # pylint: disable=protected-access
+
+    m_object = node.m_obj
+    assert not m_object.isNull()
+    assert node.exists()
+    assert node.name == "staleNode"
