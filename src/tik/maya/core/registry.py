@@ -3,7 +3,7 @@ from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
 import maya.cmds as cmds
 from . import apicommon as api
-from ...vendor.apiundo import apiundo
+from tik.vendor.apiundo import apiundo
 
 T = TypeVar("T")
 
