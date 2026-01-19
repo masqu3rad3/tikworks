@@ -70,11 +70,7 @@ class Mesh(ShapeNode):
                 f"{', '.join(_space_map.keys())}"
             )
 
-        selection_ls = OpenMaya.MSelectionList()
-        selection_ls.add(self.name)
-        dag_path = selection_ls.getDagPath(0)
-
-        mfn_mesh = OpenMaya.MFnMesh(dag_path)
+        mfn_mesh = OpenMaya.MFnMesh(self.dag_path)
         return mfn_mesh.getPoints(_space_map[space])
 
     def vertices_in_radius(self, point_coordinates, radius=0.2):
@@ -86,7 +82,6 @@ class Mesh(ShapeNode):
         Returns:
             list: List of vertex indices within the radius.
         """
-        # point_node = self.resolve_node(point_name_or_node)
         compare_point = OpenMaya.MPoint(point_coordinates)
 
         vertex_ids = []
@@ -104,10 +99,7 @@ class Mesh(ShapeNode):
             soften (bool, optional): If true, Defaults to False.
         """
 
-        # Retrieve the MFnMesh api object.
-        selection_list = OpenMaya.MSelectionList()
-        selection_list.add(self.long_name)
-        mfn_mesh = OpenMaya.MFnMesh(selection_list.getDagPath(0))
+        mfn_mesh = OpenMaya.MFnMesh(self.dag_path)
         # if its already unlocked, do not process again.
         lock_state = any(
             mfn_mesh.isNormalLocked(normal_index)
@@ -137,9 +129,7 @@ class Mesh(ShapeNode):
         if not self["displayColors"].get():
             return None
 
-        selection_list = OpenMaya.MSelectionList()
-        selection_list.add(self.long_name)
-        mfn_mesh = OpenMaya.MFnMesh(selection_list.getDagPath(0))
+        mfn_mesh = OpenMaya.MFnMesh(self.dag_path)
 
         # API 2.0 returns the array directly
         colors = mfn_mesh.getVertexColors()
@@ -171,9 +161,7 @@ class Mesh(ShapeNode):
             self["displayColors"].set(False)
             return
 
-        selection_list = OpenMaya.MSelectionList()
-        selection_list.add(self.long_name)
-        mfn_mesh = OpenMaya.MFnMesh(selection_list.getDagPath(0))
+        mfn_mesh = OpenMaya.MFnMesh(self.dag_path)
 
         if indices is None:
             indices = range(mfn_mesh.numVertices)

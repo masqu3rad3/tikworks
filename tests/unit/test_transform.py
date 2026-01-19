@@ -37,14 +37,6 @@ def test_shapes_returns_resolved_wrappers():
     assert shapes[0].name == shape_name
 
 
-def test_mdag_path_is_valid():
-    t = Transform.create(name="tm_dag")
-    dag = t.mdag_path
-
-    assert isinstance(dag, OpenMaya.MDagPath)
-    assert t.name in dag.fullPathName()
-
-
 def test_world_translation_matches_channel():
     t = Transform.create(name="tm_world_trans")
     cmds.setAttr(f"{t.name}.translate", 1.0, 2.0, 3.0, type="double3")

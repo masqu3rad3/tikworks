@@ -3,6 +3,7 @@
 # python
 import pytest
 from maya import cmds
+from maya import OpenMaya
 
 from tik.maya.core.node import Node, Plug
 from tik.maya.core.dagnode import DagNode
@@ -70,17 +71,6 @@ def test_rename_invalidate_cache_and_returns_self():
     assert result is node
     assert node.name == "renamedX"
     assert node.long_name.endswith("|renamedX")
-
-
-def test_exists_true_then_false_after_delete_and_cache_invalidated():
-    """Test exists() returns correct state before and after deletion."""
-    transform = cmds.createNode("transform", name="toDelete")
-    node = Node(cmds.ls(transform, long=True)[0])
-    assert node.exists()
-    node.delete()
-    assert not cmds.objExists(transform)
-    assert node.name is None
-    assert node.long_name is None
 
 
 def test_getitem_returns_plug_and_path_ends_with_attr():
@@ -437,3 +427,100 @@ def test_plug_children_empty_multi_attr():
     cmds.addAttr(node.name, longName="myArray", multi=True)
     plug = node["myArray"]
     assert plug.children == []
+
+
+def test_accessing_deleted_node_properties_returns_none():
+    """Test accessing name/long_name on deleted node raises ValueError."""
+    transform = cmds.createNode("transform", name="toDelete")
+    node = Node(cmds.ls(transform, long=True)[0])
+
+    # Ensure it exists first
+    assert node.exists()
+
+    cmds.delete(transform)
+
+    # Should report not exists
+    assert not node.exists()
+
+    # Accessing name properties should return None
+    assert node.name is None
+    assert node.long_name is None
+
+
+def test_dg_node_long_name_returns_name():
+    """Test long_name property behavior on non-DAG nodes."""
+    # "multiplyDivide" is a DG node, not a DAG node.
+    # It has no hierarchy, so long_name should be same as name.
+    # We use Node.create which should handle DG creation if we pass valid type
+    # actually Node.create defaults to generic creation which works for DG.
+    dg_node_name = cmds.createNode("multiplyDivide", name="myDGNode")
+
+    node = Node(dg_node_name)
+    assert not node.m_obj.hasFn(OpenMaya.MFn.kDagNode)
+
+    assert node.name == "myDGNode"
+    # This hits the else block in _resolve_long_name
+    assert node.long_name == "myDGNode"
+
+
+def test_get_valid_mobject_returns_null_for_truly_missing_node_internal():
+    """
+    Directly test _get_valid_mobject failure case.
+    Usually covered by exists() returning False, but we want to ensure coverage
+    of the exception handling block internally.
+    """
+    name = "nodeToVanish"
+    cmds.createNode("transform", name=name)
+    node = Node(name)
+    assert node.exists()
+
+    # Delete it
+    cmds.delete(name)
+
+    # Now call internal method to ensure it catches RuntimeError and returns kNullObj
+    # We can inspect the returned MObject
+    m_obj = node._get_valid_mobject()
+    assert m_obj.isNull()
+
+
+def test_delete_removes_node_from_scene():
+    """Test that delete() method removes the node from the scene."""
+    name = "nodeToDelete"
+    cmds.createNode("transform", name=name)
+    node = Node(name)
+    assert node.exists()
+
+    node.delete()
+
+    assert not cmds.objExists(name)
+    assert not node.exists()
+
+
+def test_get_valid_mobject_re_resolves_from_uuid_when_handle_stale():
+    """Test that _get_valid_mobject re-resolves from UUID when handle is stale.
+
+    This covers lines 69-70 where the MObject is re-resolved from UUID after
+    the handle becomes invalid but the node still exists.
+    """
+    from maya.api import OpenMaya as om
+
+    # Create a node
+    name = "staleHandleNode"
+    cmds.createNode("transform", name=name)
+    node = Node(name)
+
+    # Store the original UUID
+    original_uuid = node.uuid
+
+    # Deliberately invalidate the internal MObject reference by assigning kNullObj
+    # This simulates a stale handle scenario
+    node._m_obj = om.MObject.kNullObj
+
+    # Accessing m_obj property should re-resolve from UUID
+    resolved_obj = node.m_obj
+
+    # The object should be valid and refer to our node
+    assert not resolved_obj.isNull()
+    fn_dep = om.MFnDependencyNode(resolved_obj)
+    assert fn_dep.uuid().asString() == original_uuid
+

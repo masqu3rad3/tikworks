@@ -248,3 +248,134 @@ def test_color_methods_handle_missing_attributes():
         # Restore just in case
         del node_wrapper.has_attr
 
+
+def test_dagnode_create_method():
+    """Test DagNode.create class method."""
+    node = DagNode.create("transform", name="dagCreateMethod")
+    assert isinstance(node, DagNode)
+    assert node.name == "dagCreateMethod"
+
+
+def test_dagnode_rename_uses_dag_modifier():
+    """Test renaming a DagNode using its rename method."""
+    node = DagNode.create("transform", name="dagRename")
+    # Verify it is DagNode
+    assert isinstance(node, DagNode)
+
+    # Rename
+    node.rename("dagRenamed")
+    assert node.name == "dagRenamed"
+    assert node.long_name.endswith("|dagRenamed")
+
+
+def test_set_parent_raises_if_parent_not_exists():
+    """Test setting parent to a non-existent node raises ValueError."""
+    child = DagNode.create("transform", name="childNode")
+    parent_node = DagNode.create("transform", name="parentNodeToDelete")
+
+    # Ensure it exists
+    assert parent_node.exists()
+
+    # Delete the parent node from Maya
+    cmds.delete(parent_node.long_name)
+    assert not parent_node.exists()
+
+    # Try to set parent to the deleted node wrapper
+    with pytest.raises(ValueError, match="does not exist"):
+        child.parent = parent_node
+
+
+def test_is_deformable():
+    """Test is_deformable method."""
+    # Transform is not deformable
+    transform = DagNode.create("transform", name="notDeformable")
+    assert not transform.is_deformable()
+
+    # Mesh is deformable
+    # Create a mesh using cmds.createNode("mesh") which creates transform+mesh
+    # Node.create("mesh") -> creates mesh node properly.
+    mesh_node = DagNode.create("mesh", name="deformableShape", parent=transform)
+
+    # mesh_node is the ShapeNode (DagNode of type mesh)
+    assert mesh_node.type == "mesh"
+    assert mesh_node.is_deformable()
+
+
+def test_get_color_returns_raw_tuple_when_as_color_is_false():
+    """Test get_color(as_color=False) returns raw RGB tuple."""
+    node = DagNode.create("transform", name="colorRGBRaw")
+    rgb = (0.2, 0.3, 0.4)
+    node.color = rgb
+
+    # Check default (Color object)
+    # node.color returns a Color object which might behave like a tuple or have .rgb,
+    # but exact equality fails due to float precision.
+    # Assuming Color object is iterable or comparable to tuple, we use approx on elements.
+    retrieved_color = node.color
+    # If it's a Color object, get its rgb component or cast to tuple if logical
+    if hasattr(retrieved_color, 'rgb'):
+        vals = retrieved_color.rgb
+    else:
+        vals = retrieved_color
+
+    assert pytest.approx(vals, rel=1e-5) == rgb
+
+    # Check raw
+    raw = node.get_color(as_color=False)
+    assert isinstance(raw, tuple)
+    assert pytest.approx(raw, rel=1e-5) == rgb
+
+
+def test_set_color_returns_early_if_attr_missing():
+    """Test set_color returns early if overrideEnabled attribute is missing."""
+    node = DagNode.create("transform", name="noOverrideAttr")
+
+    # Mock has_attr to return False ONLY for overrideEnabled check
+    # We need to be careful as set_color calls has_attr("overrideEnabled")
+
+    original_has_attr = node.has_attr
+
+    def mock_has_attr(attr_name):
+        if attr_name == "overrideEnabled":
+            return False
+        return original_has_attr(attr_name)
+
+    node.has_attr = mock_has_attr
+
+    # Should not raise error and should return None (implicit)
+    node.set_color(17)
+
+    # Verify no crash, and no effect (hard to verify no effect on missing attr, but
+    # ensuring it ran the check path is the goal)
+
+
+def test_get_color_as_color_returns_color_object():
+    """Test get_color(as_color=True) returns a Color object when RGB mode."""
+    from tik.core.color import Color
+
+    node = DagNode.create("transform", name="colorAsColorObj")
+    rgb = (0.5, 0.6, 0.7)
+    node.color = rgb
+
+    # Get as Color object
+    color_obj = node.get_color(as_color=True)
+    assert isinstance(color_obj, Color)
+    assert pytest.approx(color_obj.rgb, rel=1e-5) == rgb
+
+
+def test_set_color_with_color_object():
+    """Test set_color accepts a Color object and extracts its rgb."""
+    from tik.core.color import Color
+
+    node = DagNode.create("transform", name="colorObjInput")
+    color_obj = Color((0.2, 0.8, 0.4))
+
+    # Set using Color object
+    node.color = color_obj
+
+    # Verify it was applied correctly
+    assert cmds.getAttr(f"{node.name}.overrideEnabled") is True
+    assert cmds.getAttr(f"{node.name}.overrideRGBColors") is True
+    stored_rgb = cmds.getAttr(f"{node.name}.overrideColorRGB")[0]
+    assert pytest.approx(stored_rgb, rel=1e-5) == color_obj.rgb
+

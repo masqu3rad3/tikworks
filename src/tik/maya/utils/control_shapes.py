@@ -229,7 +229,8 @@ def capture(node_name, name=None, normalize=True):
     final_data = {"name": name or node.name, "curves": shapes_data}
 
     if normalize and all_points:
-        final_data = _normalize_data(final_data, all_points)
+        ratio = _normalize_ratio(all_points)
+        final_data = _scale_data(final_data, ratio)
 
     return final_data
 
@@ -317,9 +318,8 @@ def capture_thumbnail(node_name, name, folder_path, category=None, camera_positi
     render_globals["multiSampleCount"].value = _original_sample_count
     return file_path
 
-
-def _normalize_data(data, all_points):
-    """Fits the shape into a 1x1x1 unit cube centered at local 0,0,0."""
+def _normalize_ratio(all_points):
+    """Calculate the normalization ratio for fitting into a unit cube."""
     xs = [point[0] for point in all_points]
     ys = [point[1] for point in all_points]
     zs = [point[2] for point in all_points]
@@ -334,10 +334,12 @@ def _normalize_data(data, all_points):
     max_dim = max(width, height, depth)
 
     if max_dim < 0.0001:
-        return data
+        return 1.0
 
-    scale = 1.0 / max_dim
+    return 1.0 / max_dim
 
+def _scale_data(data, scale):
+    """Scales the shape data by the given uniform scale factor."""
     for curve in data["curves"]:
         new_points = []
         for point in curve["point"]:
@@ -346,7 +348,6 @@ def _normalize_data(data, all_points):
         curve["point"] = new_points
 
     return data
-
 
 def _resolve_folder_path(folder_path, category):
     if isinstance(folder_path, str):

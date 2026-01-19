@@ -2,9 +2,12 @@ from maya import cmds
 from maya.api import OpenMaya
 
 from tik.core.color import Color
-from .decorators import add_aliases
+from .decorators import add_aliases, protected
 from .node import Node
-from .registry import register, resolve
+from .registry import register, resolve, undocommit
+from .scene import create_node_with_dag_modifier
+
+
 
 @add_aliases(
     {
@@ -20,7 +23,16 @@ class DagNode(Node):
     def __init__(self, *args, **kwargs):
         """Initialize the DagNode wrapper."""
         super().__init__(*args, **kwargs)
-        self._cached_dag_path = None
+        self._cached_dag_path = self._sel.getDagPath(0)
+
+    @classmethod
+    def create(cls, cmd, name=None, parent=None):
+        """Create a node using a maya.cmds command name.
+
+        Example: 'joint', 'polySphere'.
+        """
+        full_name = create_node_with_dag_modifier(cmd, parent=parent, name=name)
+        return resolve(full_name)
 
     @property
     def visibility(self):
@@ -40,13 +52,20 @@ class DagNode(Node):
         """Resolve and cache this node's MDagPath using the long name for
         disambiguation."""
         if not self._cached_dag_path or not self._cached_dag_path.isValid():
-            sel = OpenMaya.MSelectionList()
-            sel.add(self.long_name)
-            self._cached_dag_path = sel.getDagPath(0)
+            self._cached_dag_path = self._sel.getDagPath(0)
         return self._cached_dag_path
 
     @property
     def parent(self):
+        """Return the parent as a wrapped node (or None if no parent)."""
+        return self.get_parent()
+
+    @parent.setter
+    def parent(self, new_parent):
+        """Set a new parent for this node. Pass None to unparent to world."""
+        self.set_parent(new_parent)
+
+    def get_parent(self):
         """Return the parent as a wrapped node (or None if no parent)."""
         mfn = OpenMaya.MFnDagNode(self._dag_path())
         parent_obj = mfn.parent(0)
@@ -56,16 +75,26 @@ class DagNode(Node):
             return None
         return resolve(parent_path.fullPathName())
 
-    @parent.setter
-    def parent(self, new_parent):
+    @protected
+    def set_parent(self, new_parent):
         """Set a new parent for this node. Pass None to unparent to world."""
+        mod = OpenMaya.MDagModifier()
         if new_parent is None:
-            cmds.parent(self.long_name, world=True)
+            # Reparent to world
+            mod.reparentNode(self._m_obj)
         else:
-            new_parent_name = (
-                new_parent.name if isinstance(new_parent, Node) else str(new_parent)
-            )
-            cmds.parent(self.long_name, new_parent_name)
+            new_parent = resolve(new_parent)  # ensure it's a wrapped node
+            if not new_parent.exists():
+                raise ValueError(
+                    f"New parent node '{new_parent.uuid}' does not exist.")
+            mod.reparentNode(self._m_obj, new_parent._m_obj)
+            # protected.append(new_parent._m_obj)
+        mod.doIt()
+        undocommit(
+            undo=mod.undoIt,
+            redo=mod.doIt
+        )
+        # commit_safe(apiundo, undo=mod.undoIt, redo=mod.doIt, targets=protected)
         # Invalidate cached path since parenting can change the full path.
         self._cached_dag_path = None
 
@@ -115,8 +144,7 @@ class DagNode(Node):
         if self["overrideRGBColors"].value:
             if not as_color:
                 return self["overrideColorRGB"].value[0]
-            else:
-                return Color(self["overrideColorRGB"].value[0])
+            return Color(self["overrideColorRGB"].value[0])
         else:
             return self["overrideColor"].value
 
@@ -150,3 +178,28 @@ class DagNode(Node):
         else:
             self["overrideRGBColors"].value = False
             self["overrideColor"].value = int(color)
+
+    def is_deformable(self):
+        """Check if this node is a deformable geometry type."""
+        deformable_types = (
+            OpenMaya.MFn.kMesh,
+            OpenMaya.MFn.kNurbsCurve,
+            OpenMaya.MFn.kNurbsSurface,
+            OpenMaya.MFn.kLattice,
+        )
+        return any(self._m_obj.hasFn(d_type) for d_type in deformable_types)
+
+    @protected
+    def rename(self, new_name):
+        """Rename the node."""
+        # if self.exists():
+        mod = OpenMaya.MDagModifier()
+        mod.renameNode(self._m_obj, new_name)
+        mod.doIt()
+        undocommit(
+            undo=mod.undoIt,
+            redo=mod.doIt
+        )
+        # else:
+        #     raise ValueError(f"Node '{self.name}' does not exist.")
+        return self

@@ -192,8 +192,6 @@ class Controller:
         curve_shape = cmds.listRelatives(curve_trans, shapes=True, fullPath=True)[0]
         curve_shape = cmds.rename(curve_shape, f"{self.node.name}Shape#")  # Ensure unique name
 
-        self.node.invalidate_cache()
-
         cmds.parent(curve_shape, self.node.name, relative=True, shape=True)
         cmds.delete(curve_trans)
 

@@ -94,13 +94,17 @@ class TestRegistry:
         # Clear default factory
         set_default_factory(None)
 
-        # Create a transform node
-        node_name = cmds.createNode("multiplyDivide", name="test_transform")
+        try:
+            # Create a transform node
+            node_name = cmds.createNode("multiplyDivide", name="test_transform")
 
-        # Expect a LookupError when no default factory is set
-        with pytest.raises(LookupError,
-                           match="No wrapper registered for 'multiplyDivide' and no default factory set."):
-            resolve(node_name)
+            # Expect a LookupError when no default factory is set
+            with pytest.raises(LookupError,
+                               match="No wrapper registered for 'multiplyDivide' and no default factory set."):
+                resolve(node_name)
+        finally:
+            # Restore the default factory for other tests
+            set_default_factory(Node)
 
     def test_resolve_with_class_name_success(self):
         """Test resolve with explicit class_name."""

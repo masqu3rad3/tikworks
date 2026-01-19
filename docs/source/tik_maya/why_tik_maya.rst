@@ -79,6 +79,24 @@ Under the hood, tik.maya stores the node's UUID when you wrap it. When you acces
 properties, it resolves the current name from the UUID. Renames, re-parenting,
 namespace changes — none of them break your reference.
 
+tik.maya now keeps the :class:`maya.api.OpenMaya.MObject` as its primary handle
+for speed. Each access verifies that the handle still points at the same UUID.
+If it does not, tik.maya reconstructs the handle from the stored UUID, giving
+you a fast path with a safe fallback.
+
+.. code-block:: python
+
+   import tik.maya as tm
+   from maya.api import OpenMaya
+
+   cube = tm.resolve("pCube1")
+   m_object = cube.m_obj  # Validated MObject handle
+   print(OpenMaya.MFnDependencyNode(m_object).typeName)
+
+   # If the handle becomes stale, tik.maya re-resolves from UUID.
+   if cube.exists():
+       print(cube.long_name)
+
 2. Less Code, More Readable
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

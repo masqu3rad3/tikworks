@@ -158,6 +158,7 @@ A Construct coordinates several nodes and roles to represent a pattern or setup.
 - IK Chain — Multiple joints + IK handle + pole vector
 - Space Switch System — Transform + parent constraints + blend attributes
 - Ribbon Setup — Surface + follicles + joints
+- Panel — Model panel + camera display control
 
 **Rules for Constructs**
 
@@ -198,6 +199,7 @@ Base classes
    Base wrapper for all Maya dependency nodes. Provides:
 
    - UUID-based identity tracking
+   - MObject handle caching with UUID verification and reconstruction
    - Name caching and resolution
    - Attribute access via ``[]``
    - Lifecycle methods (``rename``, ``delete``, ``exists``)
@@ -230,8 +232,9 @@ Design principles
 -----------------
 
 **Scene as Source of Truth**
-   tik.maya never caches state that could become stale. It queries Maya when needed
-   and uses UUIDs to maintain stable references.
+   tik.maya never caches state that could become stale. It validates cached
+   :class:`maya.api.OpenMaya.MObject` handles by comparing UUIDs and re-resolves
+   from the scene when handles become stale, keeping references both fast and safe.
 
 **Explicit Over Implicit**
    Methods that modify scene state are clearly named as actions. Properties return

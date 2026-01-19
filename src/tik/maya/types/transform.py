@@ -31,6 +31,7 @@ class Transform(DagNode):
     def __init__(self, *args, **kwargs):
         """Initialize the Transform wrapper."""
         super().__init__(*args, **kwargs)
+        self._fn_transform = OpenMaya.MFnTransform(self._m_obj)
 
     @classmethod
     def create(cls, **kwargs):
@@ -40,15 +41,15 @@ class Transform(DagNode):
 
     @property
     def shapes(self) -> "list[ShapeNode]":
-        names = cmds.listRelatives(self.name, shapes=True, fullPath=True) or []
-        return [resolve(s) for s in names]
-
-    @property
-    def mdag_path(self):
-        """Return the MDagPath for this transform node."""
-        selection_ls = OpenMaya.MSelectionList()
-        selection_ls.add(self.name)
-        return selection_ls.getDagPath(0)
+        """Return shape nodes under this transform."""
+        dag_node = OpenMaya.MFnDagNode(self._m_obj)
+        shapes = []
+        for idx in range(dag_node.childCount()):
+            child = dag_node.child(idx)
+            if child.hasFn(OpenMaya.MFn.kShape):
+                fn_dag = OpenMaya.MFnDagNode(child)
+                shapes.append(resolve(fn_dag.fullPathName()))
+        return shapes
 
     @property
     def world_translation(self):
@@ -57,7 +58,7 @@ class Transform(DagNode):
         Returns:
             OpenMaya.MVector: World translation of the rotate pivot.
         """
-        target_m_transform = OpenMaya.MFnTransform(self.mdag_path)
+        target_m_transform = OpenMaya.MFnTransform(self.dag_path)
         target_rotate_pivot = OpenMaya.MVector(
             target_m_transform.rotatePivot(OpenMaya.MSpace.kWorld)
         )
@@ -201,13 +202,13 @@ class Transform(DagNode):
     def snap_to(self, target, position=True, rotation=True, scale=False):
         """Snap this transform to another transform's position,
         rotation, and/or scale."""
-        node_m_transform = OpenMaya.MFnTransform(self.mdag_path)
+        node_m_transform = OpenMaya.MFnTransform(self.dag_path)
         if isinstance(target, str):
             target = resolve(target)
         # if its not a transform, raise error
         if not isinstance(target, Transform):
             raise TypeError(f"Target '{target.name}' is not a Transform node.")
-        target_m_transform = OpenMaya.MFnTransform(target.mdag_path)
+        target_m_transform = OpenMaya.MFnTransform(target.dag_path)
         if position:
             target_rotate_pivot = OpenMaya.MVector(
                 target_m_transform.rotatePivot(OpenMaya.MSpace.kWorld)
@@ -216,8 +217,7 @@ class Transform(DagNode):
                                             OpenMaya.MSpace.kWorld)
         if rotation:
             target_mt_matrix = OpenMaya.MTransformationMatrix(
-                OpenMaya.MMatrix(cmds.xform(target.name, matrix=True, ws=1, q=True))
-            )
+                target.world_matrix)
             node_m_transform.setRotation(
                 target_mt_matrix.rotation(True), OpenMaya.MSpace.kWorld
             )
@@ -270,19 +270,26 @@ class Transform(DagNode):
         return collected
 
     def collect_shape_transforms(self, shape_types=None):
-        """Get transform of shapes under hierarchy of given node.
-
-        Args:
-            shape_type (str or list): Shape type to look for.
-            full_path (bool): Whether to return nodes with their full dag path.
-
-        Returns:
-            list: list of matching transform nodes under given node.
-        """
+        """Get transforms of shapes under hierarchy of given node."""
         shape_types = shape_types or ["mesh", "nurbsCurve", "nurbsSurface"]
-        shapes = cmds.listRelatives(self.name, type=shape_types, fullPath=True, allDescendents=True) or []
-        nodes = list(
-            set(cmds.listRelatives(shapes, parent=True, fullPath=True))
-        )
+        type_map = {
+            "mesh": OpenMaya.MFn.kMesh,
+            "nurbsCurve": OpenMaya.MFn.kNurbsCurve,
+            "nurbsSurface": OpenMaya.MFn.kNurbsSurface,
+        }
+        target_fns = [type_map[st] for st in shape_types if st in type_map]
 
-        return [Transform(node) for node in nodes]
+        transforms = set()
+
+        def _traverse(dag_path):
+            fn_dag = OpenMaya.MFnDagNode(dag_path)
+            for idx in range(fn_dag.childCount()):
+                child = fn_dag.child(idx)
+                if any(child.hasFn(fn) for fn in target_fns):
+                    transforms.add(dag_path.fullPathName())
+                if child.hasFn(OpenMaya.MFn.kTransform):
+                    child_path = OpenMaya.MDagPath.getAPathTo(child)
+                    _traverse(child_path)
+
+        _traverse(self._dag_path())
+        return [Transform(node) for node in transforms]

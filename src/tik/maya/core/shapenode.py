@@ -22,12 +22,6 @@ class ShapeNode(DagNode):
             node_name = shapes[0]
         super().__init__(node_name)
 
-        # Cache the specific DAG path to support instances correctly
-        # (Node/DagNode default behavior collapses instances via UUID)
-        sel = OpenMaya.MSelectionList()
-        sel.add(node_name)
-        self._cached_dag_path = sel.getDagPath(0)
-
         self._transform = None
 
     @property
@@ -40,10 +34,14 @@ class ShapeNode(DagNode):
     @property
     def transform(self):
         """Return the parent transform as a DagNode."""
-        if not self._transform or not cmds.objExists(self._transform.name):
-            parent = cmds.listRelatives(self.long_name, parent=True, fullPath=True)
-            if parent:
-                self._transform = Transform(parent[0])
+        if self._transform and self._transform.exists():
+            return self._transform
+
+        path = OpenMaya.MDagPath(self._dag_path())
+        path.pop()
+        full_path = path.fullPathName()
+        if full_path:
+            self._transform = Transform(full_path)
         return self._transform
 
     @property

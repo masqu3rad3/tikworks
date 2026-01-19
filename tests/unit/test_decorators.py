@@ -1,7 +1,7 @@
 import sys
 import pytest
 from maya import cmds
-from tik.maya.core.decorators import add_aliases, alias, undo, keepselection
+from tik.maya.core.decorators import add_aliases, alias, undo, keepselection, protected
 
 # Helper for alias test at module level
 @alias("module_level_alias")
@@ -122,3 +122,24 @@ class TestKeepSelection:
 
         assert cmds.ls(selection=True)[0] == "c1"
 
+class TestProtected:
+    def test_protected_method_raises_when_node_missing(self):
+        class MockNode:
+            def __init__(self, exists):
+                self._exists = exists
+
+            def exists(self):
+                return self._exists
+
+            @protected
+            def operation(self):
+                return "success"
+
+        # Case 1: Node exists
+        node_alive = MockNode(exists=True)
+        assert node_alive.operation() == "success"
+
+        # Case 2: Node does not exist
+        node_dead = MockNode(exists=False)
+        with pytest.raises(RuntimeError, match="Node no longer exists"):
+            node_dead.operation()
