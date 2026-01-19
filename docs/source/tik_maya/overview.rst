@@ -39,6 +39,12 @@ Key Benefits
    tik.maya tracks nodes by their internal UUID, not string names. Your references
    stay valid even when nodes are renamed, re-parented, or namespaced.
 
+**MObject-First Performance**
+   tik.maya keeps an :class:`maya.api.OpenMaya.MObject` handle as the primary
+   reference for fast API operations. If the handle becomes stale, it re-resolves
+   it from the UUID, keeping wrappers safe across undo, delete, and rename
+   operations.
+
 **Less Code, More Clarity**
    Common operations that take multiple ``cmds`` calls become single property
    assignments or method calls.
