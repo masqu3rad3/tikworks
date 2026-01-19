@@ -298,7 +298,7 @@ class Plug:
         children = cmds.listAttr(self.path, multi=True)
         if not children:
             return []
-        return [Plug(self._node, f"{child}") for child in children[1:]]
+        return [Plug(self._node, f"{child}") for child in children[:]]
 
     def exists(self):
         """Check if the attribute exists."""
@@ -410,6 +410,30 @@ class Plug:
         return Plug(node, ".".join(plug_parts))
 
         # return [Plug(self._node, src.split('.', 1)[1]) for src in sources]
+
+    def list_inputs(self, plugs=False):
+        """List incoming connections to this plug.
+
+        Returns:
+            list of Plug: A list of Plug instances representing the incoming
+                connections.
+        """
+        input_plugs = cmds.listConnections(
+            self.path, plugs=True, source=True, destination=False
+        )
+        inputs = []
+        if not input_plugs:
+            return inputs
+
+        for plug in input_plugs:
+            splits = plug.split(".")
+            node = resolve(splits[0])
+            if not plugs:
+                inputs.append(node)
+            else:
+                plug_parts = splits[1:]
+                inputs.append(Plug(node, ".".join(plug_parts)))
+        return inputs
 
     def list_outputs(self, plugs=False):
         """List outgoing connections from this plug.
