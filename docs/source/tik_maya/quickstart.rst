@@ -207,6 +207,57 @@ tik.maya provides shape-specific functionality:
    curve = tm.resolve("curveShape1")
    cvs = curve.cvs(space="world")
 
+Advanced Example: Controllers and Panels
+----------------------------------------
+
+This example combines a controller role, the control shape library, hierarchy
+utilities, and a panel construct to build a small rig preview setup. The shape
+library returns a list of available shape names that you can pass into
+``Controller.create``. The panel accepts a camera name, camera shape, or wrapper
+(``"persp"`` refers to Maya's default perspective camera) along with a window
+resolution in pixels.
+
+.. code-block:: python
+
+   import tik.maya as tm
+   from tik.maya.roles.controller import Controller
+   from tik.maya.utils.control_shapes import ControlShapeLibrary
+   from tik.maya.constructs import Panel
+
+   # Build a simple joint chain
+   root_joint = tm.Joint.create(name="spine_root")
+   mid_joint = tm.Joint.create(name="spine_mid", parent=root_joint)
+   end_joint = tm.Joint.create(name="spine_end", parent=mid_joint)
+
+   # Browse available shapes in the library
+   shape_library = ControlShapeLibrary.get_instance()
+   available_shapes = shape_library.list_shapes()
+   print(available_shapes)  # ["Circle", "Square", "CubePin", ...]
+
+   # Create a controller with a library shape
+   if not available_shapes:
+       raise RuntimeError("No control shapes found in the library.")
+   shape_name = available_shapes[0]
+   ctrl = Controller.create(name="spine_ctrl", shape=shape_name, size=2.0)
+   ctrl.color = (0.9, 0.2, 0.2)
+
+   # Align and connect to the joint chain
+   ctrl.transform.snap_to(root_joint, position=True, rotation=True)
+   ctrl.transform["translate"] >> root_joint["translate"]
+   ctrl.transform["rotate"] >> root_joint["rotate"]
+
+   # Lock scale attributes to prevent unintended joint scaling
+   # collect_hierarchy returns wrapped DAG nodes under the root.
+   for joint in root_joint.collect_hierarchy(node_types=["joint"], include_self=True):
+       for axis in ["scaleX", "scaleY", "scaleZ"]:
+           joint[axis].locked = True
+           joint[axis].visible = False
+
+   # Spawn a dedicated preview panel
+   panel = Panel(camera="persp", resolution=(1280, 720), title="Rig Preview")
+   panel.display_textures = True
+   panel.grid = False
+
 Next Steps
 ----------
 
