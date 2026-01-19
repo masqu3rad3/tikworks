@@ -60,8 +60,8 @@ class BlendShape(Node):
         if not connected_geos:
             raise RuntimeError(f"No geometry connected to {self.name}")
 
-        geom_index = 0
-        target_geo_long = ""
+        # geom_index = 0
+        # target_geo_long = ""
 
         if geometry:
             geometry_obj = resolve(geometry)
@@ -88,12 +88,9 @@ class BlendShape(Node):
         """
         try:
             if target_id is None:
-                # --- FIX: Use weightList for Deformer (Global) Weights ---
-                # path: weightList[geom_index].weights
                 # This corresponds to the top-level node weight in Paint Tool
                 return self[f"weightList[{geom_index}]"]["weights"].as_api_plug()
             else:
-                # --- Target Weights ---
                 # path: inputTarget[geom_index].inputTargetGroup[target_id].targetWeights
                 return self[f"inputTarget[{geom_index}]"][f"inputTargetGroup[{target_id}]"]["targetWeights"].as_api_plug()
         except Exception:
