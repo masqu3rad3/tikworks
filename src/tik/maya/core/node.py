@@ -487,6 +487,597 @@ class Plug:
         self.connect(other, force=True)
         return other
 
+    def __lshift__(self, other: "Plug") -> "Plug":
+        """Connect other to self using `<<` operator (reverse of `>>`).
+
+        Args:
+            other (Plug): The plug to connect from.
+
+        Returns:
+            Plug: Returns self for chaining.
+        """
+        if not isinstance(other, Plug):
+            raise TypeError(f"Right operand must be a Plug, got {type(other)}")
+        other.connect(self, force=True)
+        return self
+
+    def __floordiv__(self, other: "Plug") -> None:
+        """Disconnect self from other using `//` operator.
+
+        Args:
+            other (Plug): The plug to disconnect from.
+
+        Returns:
+            None: No value is returned.
+        """
+        if not isinstance(other, Plug):
+            raise TypeError(f"Right operand must be a Plug, got {type(other)}")
+        self.disconnect(other)
+        return None
+
+    # === Mathematical Operators ===
+
+    def _is_compound_numeric(self) -> bool:
+        """Check if this plug is a compound attribute with numeric children.
+
+        Returns:
+            bool: True if compound with 2-3 numeric children (e.g., double3, float3).
+        """
+        attr_type = cmds.getAttr(self.path, type=True)
+        return attr_type in ("double3", "float3", "double2", "float2")
+
+    def _get_compound_child_count(self) -> int:
+        """Get the number of children for a compound attribute.
+
+        Returns:
+            int: Number of children (2 or 3), or 0 if not compound.
+        """
+        attr_type = cmds.getAttr(self.path, type=True)
+        if attr_type in ("double3", "float3"):
+            return 3
+        elif attr_type in ("double2", "float2"):
+            return 2
+        return 0
+
+    def _create_plug(self, node_name: str, attr_name: str) -> "Plug":
+        """Create a Plug instance for the given node and attribute.
+
+        Args:
+            node_name (str): The name of the node.
+            attr_name (str): The attribute name.
+
+        Returns:
+            Plug: A new Plug instance.
+        """
+        from .registry import resolve
+        node_wrapper = resolve(node_name)
+        return Plug(node_wrapper, attr_name)
+
+    # --- Single Value Math Nodes ---
+
+    def _create_add_node_single(self, other) -> "Plug":
+        """Create an addDL node for single-value addition.
+
+        Args:
+            other: The right-hand operand (Plug or numeric value).
+
+        Returns:
+            Plug: The output plug of the addDL node.
+        """
+        node = cmds.createNode("addDL", name="addDL#")
+
+        # Connect input1 (left operand - self)
+        cmds.connectAttr(self.path, f"{node}.input1", force=True)
+
+        # Connect or set input2 (right operand - other)
+        if isinstance(other, Plug):
+            cmds.connectAttr(other.path, f"{node}.input2", force=True)
+        elif isinstance(other, (int, float)):
+            cmds.setAttr(f"{node}.input2", float(other))
+        else:
+            raise TypeError(
+                f"Right operand must be a Plug or numeric value, got {type(other)}"
+            )
+
+        return self._create_plug(node, "output")
+
+    def _create_subtract_node_single(self, other) -> "Plug":
+        """Create a subtract node for single-value subtraction.
+
+        Args:
+            other: The right-hand operand (Plug or numeric value).
+
+        Returns:
+            Plug: The output plug of the subtract node.
+        """
+        node = cmds.createNode("subtract", name="subtract#")
+
+        # Connect input1 (left operand - self)
+        cmds.connectAttr(self.path, f"{node}.input1", force=True)
+
+        # Connect or set input2 (right operand - other)
+        if isinstance(other, Plug):
+            cmds.connectAttr(other.path, f"{node}.input2", force=True)
+        elif isinstance(other, (int, float)):
+            cmds.setAttr(f"{node}.input2", float(other))
+        else:
+            raise TypeError(
+                f"Right operand must be a Plug or numeric value, got {type(other)}"
+            )
+
+        return self._create_plug(node, "output")
+
+    def _create_multiply_node_single(self, other) -> "Plug":
+        """Create a multDL node for single-value multiplication.
+
+        Args:
+            other: The right-hand operand (Plug or numeric value).
+
+        Returns:
+            Plug: The output plug of the multDL node.
+        """
+        node = cmds.createNode("multDL", name="multDL#")
+
+        # Connect input1 (left operand - self)
+        cmds.connectAttr(self.path, f"{node}.input1", force=True)
+
+        # Connect or set input2 (right operand - other)
+        if isinstance(other, Plug):
+            cmds.connectAttr(other.path, f"{node}.input2", force=True)
+        elif isinstance(other, (int, float)):
+            cmds.setAttr(f"{node}.input2", float(other))
+        else:
+            raise TypeError(
+                f"Right operand must be a Plug or numeric value, got {type(other)}"
+            )
+
+        return self._create_plug(node, "output")
+
+    def _create_divide_node_single(self, other) -> "Plug":
+        """Create a divide node for single-value division.
+
+        Args:
+            other: The right-hand operand (Plug or numeric value).
+
+        Returns:
+            Plug: The output plug of the divide node.
+        """
+        node = cmds.createNode("divide", name="divide#")
+
+        # Connect input1 (left operand - self / dividend)
+        cmds.connectAttr(self.path, f"{node}.input1", force=True)
+
+        # Connect or set input2 (right operand - other / divisor)
+        if isinstance(other, Plug):
+            cmds.connectAttr(other.path, f"{node}.input2", force=True)
+        elif isinstance(other, (int, float)):
+            cmds.setAttr(f"{node}.input2", float(other))
+        else:
+            raise TypeError(
+                f"Right operand must be a Plug or numeric value, got {type(other)}"
+            )
+
+        return self._create_plug(node, "output")
+
+    def _create_power_node_single(self, other) -> "Plug":
+        """Create a power node for single-value power operation.
+
+        Args:
+            other: The right-hand operand (Plug or numeric value) for the exponent.
+
+        Returns:
+            Plug: The output plug of the power node.
+        """
+        node = cmds.createNode("power", name="power#")
+
+        # Connect input (left operand - self / base)
+        cmds.connectAttr(self.path, f"{node}.input", force=True)
+
+        # Connect or set exponent (right operand - other)
+        if isinstance(other, Plug):
+            cmds.connectAttr(other.path, f"{node}.exponent", force=True)
+        elif isinstance(other, (int, float)):
+            cmds.setAttr(f"{node}.exponent", float(other))
+        else:
+            raise TypeError(
+                f"Right operand must be a Plug or numeric value, got {type(other)}"
+            )
+
+        return self._create_plug(node, "output")
+
+    def _create_modulo_node_single(self, other) -> "Plug":
+        """Create a modulo node for single-value modulo operation.
+
+        Args:
+            other: The right-hand operand (Plug or numeric value) for the modulus.
+
+        Returns:
+            Plug: The output plug of the modulo node.
+        """
+        node = cmds.createNode("modulo", name="modulo#")
+
+        # Connect input (left operand - self / dividend)
+        cmds.connectAttr(self.path, f"{node}.input", force=True)
+
+        # Connect or set modulus (right operand - other)
+        if isinstance(other, Plug):
+            cmds.connectAttr(other.path, f"{node}.modulus", force=True)
+        elif isinstance(other, (int, float)):
+            cmds.setAttr(f"{node}.modulus", float(other))
+        else:
+            raise TypeError(
+                f"Right operand must be a Plug or numeric value, got {type(other)}"
+            )
+
+        return self._create_plug(node, "output")
+
+    # --- Compound Value Math Nodes ---
+
+    def _create_plus_minus_node_compound(
+        self, other, operation: int, operation_name: str
+    ) -> "Plug":
+        """Create a plusMinusAverage node for compound add/subtract operations.
+
+        Uses compound-to-compound connections for better performance.
+
+        Args:
+            other: The right-hand operand (Plug or numeric value).
+            operation (int): The operation enum value (1=sum, 2=subtract).
+            operation_name (str): The name of the operation for node naming.
+
+        Returns:
+            Plug: The output3D plug of the plusMinusAverage node.
+        """
+        node = cmds.createNode(
+            "plusMinusAverage", name=f"plusMinusAverage_{operation_name}#"
+        )
+        cmds.setAttr(f"{node}.operation", operation)
+
+        # Connect compound input3D[0] (left operand - self)
+        cmds.connectAttr(self.path, f"{node}.input3D[0]", force=True)
+
+        # Connect or set compound input3D[1] (right operand - other)
+        if isinstance(other, Plug):
+            cmds.connectAttr(other.path, f"{node}.input3D[1]", force=True)
+        elif isinstance(other, (int, float)):
+            # Set all three components to the same value
+            value = float(other)
+            cmds.setAttr(f"{node}.input3D[1]", value, value, value, type="double3")
+        elif isinstance(other, (list, tuple)) and len(other) == 3:
+            cmds.setAttr(
+                f"{node}.input3D[1]",
+                float(other[0]), float(other[1]), float(other[2]),
+                type="double3"
+            )
+        else:
+            raise TypeError(
+                f"Right operand must be a Plug or numeric value, got {type(other)}"
+            )
+
+        return self._create_plug(node, "output3D")
+
+    def _create_multiply_divide_node_compound(
+        self, other, operation: int, operation_name: str
+    ) -> "Plug":
+        """Create a multiplyDivide node for compound multiply/divide/power.
+
+        Uses compound-to-compound connections for better performance.
+
+        Args:
+            other: The right-hand operand (Plug or numeric value).
+            operation (int): The operation enum (1=multiply, 2=divide, 3=power).
+            operation_name (str): The name of the operation for node naming.
+
+        Returns:
+            Plug: The output plug of the multiplyDivide node.
+        """
+        node = cmds.createNode(
+            "multiplyDivide", name=f"multiplyDivide_{operation_name}#"
+        )
+        cmds.setAttr(f"{node}.operation", operation)
+
+        # Connect compound input1 (left operand - self)
+        cmds.connectAttr(self.path, f"{node}.input1", force=True)
+
+        # Connect or set compound input2 (right operand - other)
+        if isinstance(other, Plug):
+            cmds.connectAttr(other.path, f"{node}.input2", force=True)
+        elif isinstance(other, (int, float)):
+            # Set all three components to the same value
+            value = float(other)
+            cmds.setAttr(f"{node}.input2", value, value, value, type="double3")
+        elif isinstance(other, (list, tuple)) and len(other) == 3:
+            cmds.setAttr(
+                f"{node}.input2",
+                float(other[0]), float(other[1]), float(other[2]),
+                type="double3"
+            )
+        else:
+            raise TypeError(
+                f"Right operand must be a Plug or numeric value, got {type(other)}"
+            )
+
+        return self._create_plug(node, "output")
+
+    # --- Public Operator Methods ---
+
+    def __add__(self, other) -> "Plug":
+        """Add two plugs or a plug and a numeric value using `+` operator.
+
+        For single values, creates an addDL node.
+        For compound values (double3/float3), creates a plusMinusAverage node.
+
+        Args:
+            other: A Plug or numeric value to add.
+
+        Returns:
+            Plug: The output plug of the created node.
+        """
+        if self._is_compound_numeric():
+            return self._create_plus_minus_node_compound(
+                other, operation=1, operation_name="add"
+            )
+        return self._create_add_node_single(other)
+
+    def __radd__(self, other) -> "Plug":
+        """Handle reversed addition (numeric + plug).
+
+        Args:
+            other: A numeric value to add.
+
+        Returns:
+            Plug: The output plug of the created node.
+        """
+        # Addition is commutative, so we can just call __add__
+        return self.__add__(other)
+
+    def __sub__(self, other) -> "Plug":
+        """Subtract a plug or numeric value from this plug using `-` operator.
+
+        For single values, creates a subtract node.
+        For compound values (double3/float3), creates a plusMinusAverage node.
+
+        Args:
+            other: A Plug or numeric value to subtract.
+
+        Returns:
+            Plug: The output plug of the created node.
+        """
+        if self._is_compound_numeric():
+            return self._create_plus_minus_node_compound(
+                other, operation=2, operation_name="subtract"
+            )
+        return self._create_subtract_node_single(other)
+
+    def __rsub__(self, other) -> "Plug":
+        """Handle reversed subtraction (numeric - plug).
+
+        Args:
+            other: A numeric value to subtract from.
+
+        Returns:
+            Plug: The output plug of the created node.
+        """
+        if self._is_compound_numeric():
+            # For compound: create node with other as first input
+            node = cmds.createNode(
+                "plusMinusAverage", name="plusMinusAverage_subtract#"
+            )
+            cmds.setAttr(f"{node}.operation", 2)  # Subtract
+
+            if isinstance(other, (int, float)):
+                value = float(other)
+                cmds.setAttr(
+                    f"{node}.input3D[0]", value, value, value, type="double3"
+                )
+            elif isinstance(other, (list, tuple)) and len(other) == 3:
+                cmds.setAttr(
+                    f"{node}.input3D[0]",
+                    float(other[0]), float(other[1]), float(other[2]),
+                    type="double3"
+                )
+            else:
+                raise TypeError(
+                    f"Left operand must be a numeric value, got {type(other)}"
+                )
+            cmds.connectAttr(self.path, f"{node}.input3D[1]", force=True)
+            return self._create_plug(node, "output3D")
+
+        # Single value: create subtract node with other as first input
+        node = cmds.createNode("subtract", name="subtract#")
+        if isinstance(other, (int, float)):
+            cmds.setAttr(f"{node}.input1", float(other))
+        else:
+            raise TypeError(
+                f"Left operand must be a numeric value, got {type(other)}"
+            )
+        cmds.connectAttr(self.path, f"{node}.input2", force=True)
+        return self._create_plug(node, "output")
+
+    def __mul__(self, other) -> "Plug":
+        """Multiply two plugs or a plug and a numeric value using `*` operator.
+
+        For single values, creates a multDL node.
+        For compound values (double3/float3), creates a multiplyDivide node.
+
+        Args:
+            other: A Plug or numeric value to multiply.
+
+        Returns:
+            Plug: The output plug of the created node.
+        """
+        if self._is_compound_numeric():
+            return self._create_multiply_divide_node_compound(
+                other, operation=1, operation_name="multiply"
+            )
+        return self._create_multiply_node_single(other)
+
+    def __rmul__(self, other) -> "Plug":
+        """Handle reversed multiplication (numeric * plug).
+
+        Args:
+            other: A numeric value to multiply.
+
+        Returns:
+            Plug: The output plug of the created node.
+        """
+        # Multiplication is commutative, so we can just call __mul__
+        return self.__mul__(other)
+
+    def __truediv__(self, other) -> "Plug":
+        """Divide this plug by a plug or numeric value using `/` operator.
+
+        For single values, creates a divide node.
+        For compound values (double3/float3), creates a multiplyDivide node.
+
+        Args:
+            other: A Plug or numeric value to divide by.
+
+        Returns:
+            Plug: The output plug of the created node.
+        """
+        if self._is_compound_numeric():
+            return self._create_multiply_divide_node_compound(
+                other, operation=2, operation_name="divide"
+            )
+        return self._create_divide_node_single(other)
+
+    def __rtruediv__(self, other) -> "Plug":
+        """Handle reversed division (numeric / plug).
+
+        Args:
+            other: A numeric value to divide.
+
+        Returns:
+            Plug: The output plug of the created node.
+        """
+        if self._is_compound_numeric():
+            # For compound: create node with other as first input
+            node = cmds.createNode("multiplyDivide", name="multiplyDivide_divide#")
+            cmds.setAttr(f"{node}.operation", 2)  # Divide
+
+            if isinstance(other, (int, float)):
+                value = float(other)
+                cmds.setAttr(f"{node}.input1", value, value, value, type="double3")
+            elif isinstance(other, (list, tuple)) and len(other) == 3:
+                cmds.setAttr(
+                    f"{node}.input1",
+                    float(other[0]), float(other[1]), float(other[2]),
+                    type="double3"
+                )
+            else:
+                raise TypeError(
+                    f"Left operand must be a numeric value, got {type(other)}"
+                )
+            cmds.connectAttr(self.path, f"{node}.input2", force=True)
+            return self._create_plug(node, "output")
+
+        # Single value: create divide node with other as first input
+        node = cmds.createNode("divide", name="divide#")
+        if isinstance(other, (int, float)):
+            cmds.setAttr(f"{node}.input1", float(other))
+        else:
+            raise TypeError(
+                f"Left operand must be a numeric value, got {type(other)}"
+            )
+        cmds.connectAttr(self.path, f"{node}.input2", force=True)
+        return self._create_plug(node, "output")
+
+    def __pow__(self, other) -> "Plug":
+        """Raise plug to a power using `**` operator.
+
+        For single values, creates a power node.
+        For compound values (double3/float3), creates a multiplyDivide node.
+
+        Args:
+            other: A Plug or numeric value for the exponent.
+
+        Returns:
+            Plug: The output plug of the created node.
+        """
+        if self._is_compound_numeric():
+            return self._create_multiply_divide_node_compound(
+                other, operation=3, operation_name="power"
+            )
+        return self._create_power_node_single(other)
+
+    def __rpow__(self, other) -> "Plug":
+        """Handle reversed power (numeric ** plug).
+
+        Args:
+            other: A numeric value as the base.
+
+        Returns:
+            Plug: The output plug of the created node.
+        """
+        if self._is_compound_numeric():
+            # For compound: create node with other as base (input1)
+            node = cmds.createNode("multiplyDivide", name="multiplyDivide_power#")
+            cmds.setAttr(f"{node}.operation", 3)  # Power
+
+            if isinstance(other, (int, float)):
+                value = float(other)
+                cmds.setAttr(f"{node}.input1", value, value, value, type="double3")
+            elif isinstance(other, (list, tuple)) and len(other) == 3:
+                cmds.setAttr(
+                    f"{node}.input1",
+                    float(other[0]), float(other[1]), float(other[2]),
+                    type="double3"
+                )
+            else:
+                raise TypeError(
+                    f"Left operand must be a numeric value, got {type(other)}"
+                )
+            cmds.connectAttr(self.path, f"{node}.input2", force=True)
+            return self._create_plug(node, "output")
+
+        # Single value: create power node with other as base
+        node = cmds.createNode("power", name="power#")
+        if isinstance(other, (int, float)):
+            cmds.setAttr(f"{node}.input", float(other))
+        else:
+            raise TypeError(
+                f"Left operand must be a numeric value, got {type(other)}"
+            )
+        cmds.connectAttr(self.path, f"{node}.exponent", force=True)
+        return self._create_plug(node, "output")
+
+    def __mod__(self, other) -> "Plug":
+        """Compute modulo using `%` operator.
+
+        Creates a modulo node. Only supports single values.
+
+        Args:
+            other: A Plug or numeric value for the divisor (modulus).
+
+        Returns:
+            Plug: The output plug of the modulo node.
+        """
+        # Modulo only supports single values
+        return self._create_modulo_node_single(other)
+
+    def __rmod__(self, other) -> "Plug":
+        """Handle reversed modulo (numeric % plug).
+
+        Args:
+            other: A numeric value as the dividend.
+
+        Returns:
+            Plug: The output plug of the modulo node.
+        """
+        node = cmds.createNode("modulo", name="modulo#")
+
+        # For reversed: other % self, so other goes to input
+        if isinstance(other, (int, float)):
+            cmds.setAttr(f"{node}.input", float(other))
+        else:
+            raise TypeError(
+                f"Left operand must be a numeric value, got {type(other)}"
+            )
+        cmds.connectAttr(self.path, f"{node}.modulus", force=True)
+
+        return self._create_plug(node, "output")
+
     def __repr__(self):
         """Return a debug-friendly representation."""
         return f"<Plug '{self.path}'>"
