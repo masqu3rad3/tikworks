@@ -14,3 +14,4 @@ object-oriented design, and robust node tracking to Maya scripting.
    why_tik_maya
    overview
    quickstart
+   plug_arithmetic
