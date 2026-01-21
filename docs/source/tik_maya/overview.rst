@@ -63,12 +63,15 @@ Core Components
 ---------------
 
 **Node** (:class:`~tik.maya.Node`)
-   Base wrapper for all Maya nodes. Handles existence validation, UUID tracking,
-   name caching, and attribute access via ``[]``.
+   Base wrapper for all Maya nodes. Handles existence validation, MObject tracking
+   with UUID backup, name caching, and attribute access via ``[]``.
 
 **Plug** (:class:`~tik.maya.core.node.Plug`)
    Represents an attribute on a node. Properties for ``value``, ``locked``,
-   ``keyable``, ``visible``. Supports ``>>`` operator for connections.
+   ``keyable``, ``visible``. Supports connection operators (``>>``, ``<<``, ``//``)
+   and arithmetic operators (``+``, ``-``, ``*``, ``/``, ``**``, ``%``) that
+   automatically create Maya utility nodes. Build procedural dependency networks
+   using natural Python syntax.
 
 **Transform** (:class:`~tik.maya.Transform`)
    DAG transform wrapper with ``translate``, ``rotate``, ``scale`` properties,
@@ -83,27 +86,9 @@ Core Components
 
 For architecture details, see :doc:`/architecture/core_concepts`.
 
-Quick Example
--------------
+Next Steps
+----------
 
-.. code-block:: python
-
-   import tik.maya as tm
-   from tik.maya.roles.controller import Controller
-
-   # Create a controller with a circle shape
-   ctrl = Controller.create(name="arm_ctrl", shape="circle", size=2.0)
-
-   # Position it
-   ctrl.translate = (5, 10, 0)
-
-   # Lock scale attributes
-   for axis in ["scaleX", "scaleY", "scaleZ"]:
-       ctrl.node[axis].locked = True
-       ctrl.node[axis].visible = False
-
-   # Create a joint and connect
-   jnt = tm.Joint.create(name="arm_jnt")
-   ctrl.node["translate"] >> jnt["translate"]
-
-See :doc:`quickstart` for more examples.
+- **New to tik.maya?** Start with :doc:`quickstart` for hands-on examples
+- **Want deeper knowledge?** See :doc:`guides/working_with_nodes` and :doc:`guides/working_with_plugs`
+- **Need API details?** Browse the :doc:`/autoapi/index`
