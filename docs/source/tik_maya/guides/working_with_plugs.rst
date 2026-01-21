@@ -1,23 +1,35 @@
-Plug Arithmetic Operations
-==========================
+Working with Plugs and Attributes
+===================================
 
-The **Plug** class in tik.maya provides powerful mathematical operators that create
-dependency graph nodes to perform calculations on attribute values. This allows you to
-build procedural networks using natural Python syntax instead of manually creating and
-connecting utility nodes.
+In tik.maya, **Plugs** are the gateway to working with node attributes. This guide covers everything from basic attribute access to advanced mathematical operations.
 
-.. note::
-   All arithmetic operations create **dependency graph nodes** (e.g., ``addDL``,
-   ``multiplyDivide``, ``plusMinusAverage``). The connections are permanent until
-   manually removed. These operations do not evaluate to Python values but return
-   new Plug objects representing the output of the created node.
+What is a Plug?
+---------------
+
+A **Plug** is tik.maya's wrapper around a Maya attribute. It provides a clean, Pythonic interface for reading values, setting values, managing connections, and building dependency graph networks.
+
+.. code-block:: python
+
+   import tik.maya as tm
+
+   # Resolve a node
+   cube = tm.resolve("pCube1")
+
+   # Get a Plug for an attribute
+   tx_plug = cube["translateX"]
+
+   # The plug gives you access to the attribute's value and properties
+   print(tx_plug.value)        # Read the value
+   print(tx_plug.locked)       # Check if locked
+   print(tx_plug.keyable)      # Check if keyable
+   print(tx_plug.type)         # Get the attribute type
+
+Every Plug instance represents a specific attribute on a specific node, tracked by the node's UUID. The Plug object remains valid even if the node is renamed.
 
 Why Dictionary-Style Access?
 -----------------------------
 
-Before diving into arithmetic operations, it's important to understand **why tik.maya
-uses dictionary-style bracket notation** (``node["attr"]``) for accessing attributes
-instead of properties (``node.attr``).
+tik.maya uses **dictionary-style bracket notation** (``node["attr"]``) for accessing attributes instead of properties (``node.attr``). This design choice is intentional and provides significant advantages.
 
 **Dictionary-Style Access is Superior Because:**
 
@@ -54,15 +66,294 @@ instead of properties (``node.attr``).
    **recommended approach** for all attribute access to maintain consistency
    and flexibility.
 
+Accessing Attributes
+--------------------
+
+Basic Access
+~~~~~~~~~~~~
+
+Use bracket notation to get a Plug for any attribute:
+
+.. code-block:: python
+
+   import tik.maya as tm
+
+   cube = tm.resolve("pCube1")
+
+   # Single-value attributes
+   tx = cube["translateX"]
+   ry = cube["rotateY"]
+   sx = cube["scaleZ"]
+
+   # Compound attributes (vectors)
+   translate = cube["translate"]
+   rotate = cube["rotate"]
+   scale = cube["scale"]
+
+   # Custom attributes
+   my_attr = cube["customAttribute"]
+
+Child Attributes
+~~~~~~~~~~~~~~~~
+
+For compound attributes, you can access child components in two ways:
+
+.. code-block:: python
+
+   # Method 1: Direct child access
+   tx = cube["translateX"]
+   ty = cube["translateY"]
+   tz = cube["translateZ"]
+
+   # Method 2: Parent then child
+   translate = cube["translate"]
+   tx = translate["translateX"]
+   # Or use the shorter child name
+   tx = translate["X"]
+
+Nested compound attributes work the same way:
+
+.. code-block:: python
+
+   # Access nested attributes
+   world_matrix = cube["worldMatrix"]
+   first_element = world_matrix[0]  # For array attributes
+
+Reading and Writing Values
+---------------------------
+
+The ``value`` Property
+~~~~~~~~~~~~~~~~~~~~~~
+
+The simplest way to read and write attribute values is the ``value`` property:
+
+.. code-block:: python
+
+   import tik.maya as tm
+
+   cube = tm.resolve("pCube1")
+
+   # Read a value
+   current_x = cube["translateX"].value
+   print(current_x)  # 0.0
+
+   # Write a value
+   cube["translateX"].value = 10.0
+
+   # Works with compound attributes
+   cube["translate"].value = (5.0, 10.0, 15.0)
+
+   # Read compound values
+   pos = cube["translate"].value
+   print(pos)  # [(5.0, 10.0, 15.0)]
+
+Explicit Methods
+~~~~~~~~~~~~~~~~
+
+You can also use the ``get()`` and ``set()`` methods for more control:
+
+.. code-block:: python
+
+   # Get with additional arguments
+   value = cube["translateX"].get()
+
+   # Set with type specification
+   cube["myStringAttr"].set("Hello", type="string")
+
+   # Set matrix values
+   identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+   cube["offsetParentMatrix"].set(identity, type="matrix")
+
+Attribute Properties
+--------------------
+
+Plugs provide several properties for managing attribute behavior in the Maya UI:
+
+Locked State
+~~~~~~~~~~~~
+
+.. code-block:: python
+
+   # Check if locked
+   is_locked = cube["translateX"].locked
+
+   # Lock an attribute
+   cube["translateX"].locked = True
+   # Or use the method
+   cube["translateX"].lock()
+
+   # Unlock an attribute
+   cube["translateX"].locked = False
+   # Or use the method
+   cube["translateX"].unlock()
+
+Keyable State
+~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   # Check if keyable
+   is_keyable = cube["translateX"].keyable
+
+   # Make keyable
+   cube["translateX"].keyable = True
+
+   # Make non-keyable (but visible in channel box)
+   cube["translateX"].keyable = False
+
+Visibility
+~~~~~~~~~~
+
+.. code-block:: python
+
+   # Check visibility in channel box
+   is_visible = cube["translateX"].visible
+
+   # Hide from channel box
+   cube["translateX"].visible = False
+
+   # Show in channel box
+   cube["translateX"].visible = True
+
+Attribute Type
+~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   # Get the attribute type
+   attr_type = cube["translateX"].type
+   print(attr_type)  # 'kDoubleLinearAttribute'
+
+Attribute Path
+~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   # Get the full Maya path
+   path = cube["translateX"].path
+   print(path)  # 'pCube1.translateX'
+
+   # Get just the attribute name
+   name = cube["translateX"].attr
+   print(name)  # 'translateX'
+
+   # Get the node
+   node = cube["translateX"].node
+   print(node.name)  # 'pCube1'
+
+Connecting Attributes
+---------------------
+
+tik.maya provides three operators for managing attribute connections.
+
+The Connect Operator (>>)
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``>>`` operator creates a connection from one attribute to another:
+
+.. code-block:: python
+
+   import tik.maya as tm
+
+   locator = tm.Locator.create(name="driver")
+   cube = tm.Transform.create(name="driven")
+
+   # Connect locator position to cube position
+   locator.transform["translate"] >> cube["translate"]
+
+   # Connect individual components
+   locator.transform["translateX"] >> cube["translateX"]
+
+The ``>>`` operator returns the right-hand side, enabling chaining:
+
+.. code-block:: python
+
+   # Chain multiple connections
+   a["output"] >> b["input"] >> c["input"]
+
+   # This is equivalent to:
+   a["output"] >> b["input"]
+   b["input"] >> c["input"]
+
+The Reverse Connect Operator (<<)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``<<`` operator works in reverse—it connects the right side to the left:
+
+.. code-block:: python
+
+   # These are equivalent:
+   cube["tx"] << locator.transform["tx"]
+   locator.transform["tx"] >> cube["tx"]
+
+The Disconnect Operator (//)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``//`` operator disconnects two attributes:
+
+.. code-block:: python
+
+   # Create a connection
+   locator.transform["tx"] >> cube["tx"]
+
+   # Break the connection
+   locator.transform["tx"] // cube["tx"]
+
+Explicit Connection Methods
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can also use explicit methods:
+
+.. code-block:: python
+
+   # Connect
+   locator.transform["translate"].connect(cube["translate"], force=True)
+
+   # Disconnect from a specific plug
+   locator.transform["translate"].disconnect(cube["translate"])
+
+   # Disconnect from source (whatever is connected)
+   cube["translate"].disconnect()
+
+Querying Connections
+~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   # Get the input connection (source)
+   source = cube["translateX"].get_input(plug=True)
+   if source:
+       print(f"Connected from: {source.path}")
+
+   # List all input connections
+   inputs = cube["translate"].list_inputs(plugs=True)
+
+   # List all output connections
+   outputs = locator.transform["translate"].list_outputs(plugs=True)
+
+Mathematical Operations
+-----------------------
+
+The **Plug** class provides powerful mathematical operators that create
+dependency graph nodes to perform calculations on attribute values. This allows you to
+build procedural networks using natural Python syntax instead of manually creating and
+connecting utility nodes.
+
+.. note::
+   All arithmetic operations create **dependency graph nodes** (e.g., ``addDL``,
+   ``multiplyDivide``, ``plusMinusAverage``). The connections are permanent until
+   manually removed. These operations do not evaluate to Python values but return
+   new Plug objects representing the output of the created node.
+
 Basic Mathematical Operators
------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The Plug class supports all standard Python mathematical operators. These operators
 work with both **single-value attributes** (float, int, time, angle) and **compound
 attributes** (double3, float3, such as translate, rotate, scale).
 
 Addition (+)
-~~~~~~~~~~~~
+^^^^^^^^^^^^
 
 The addition operator creates dependency nodes to sum attribute values.
 
@@ -112,7 +403,7 @@ The addition operator creates dependency nodes to sum attribute values.
    print(result_plug.value)  # [(2.0, 4.0, 6.0)]
 
 Subtraction (-)
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 The subtraction operator creates nodes for subtracting attribute values.
 
@@ -147,7 +438,7 @@ The subtraction operator creates nodes for subtracting attribute values.
    print(result_plug.value)  # [(9.0, 18.0, 27.0)]
 
 Multiplication (*)
-~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^
 
 The multiplication operator creates nodes for multiplying attribute values.
 
@@ -186,7 +477,7 @@ The multiplication operator creates nodes for multiplying attribute values.
    print(result_plug.value)  # [(4.0, 6.0, 8.0)]
 
 Division (/)
-~~~~~~~~~~~~
+^^^^^^^^^^^^
 
 The division operator creates nodes for dividing attribute values.
 
@@ -221,7 +512,7 @@ The division operator creates nodes for dividing attribute values.
    print(result_plug.value)  # [(5.0, 5.0, 6.0)]
 
 Power (**)
-~~~~~~~~~~
+^^^^^^^^^^
 
 The power operator raises attribute values to an exponent.
 
@@ -255,7 +546,7 @@ The power operator raises attribute values to an exponent.
    print(result_plug.value)  # [(4.0, 9.0, 16.0)]
 
 Modulo (%)
-~~~~~~~~~~
+^^^^^^^^^^
 
 The modulo operator computes the remainder of division. **Only supports single values**.
 
@@ -275,7 +566,7 @@ The modulo operator computes the remainder of division. **Only supports single v
 
    # Reversed modulo
    result_plug = 10 % node_a["tx"]
-   print(result_plug.value)  # 2.0 (assuming tx is still 4.0)
+   print(result_plug.value)  # 2.0
 
 Chained Operations
 ------------------
@@ -385,13 +676,13 @@ Chained operations work with compound attributes too:
 
    print(target["translate"].value)  # [(5.0, 7.0, 9.0)]
 
-Advanced Chained Examples
---------------------------
+Advanced Examples
+-----------------
 
-Oscillation with Sine Wave
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Oscillation with Time
+~~~~~~~~~~~~~~~~~~~~~
 
-Combine arithmetic with Maya's expression-like behavior:
+Combine arithmetic with time-based animation:
 
 .. code-block:: python
 
@@ -403,11 +694,7 @@ Combine arithmetic with Maya's expression-like behavior:
    # Create targets
    oscillator = tm.Transform.create(name="oscillator")
 
-   # Connect time to drive motion
-   # Note: For actual sine waves, you'd typically use a Maya expression
-   # or animCurve, but arithmetic can handle linear relationships
-
-   # Example: Scale time and add offset
+   # Scale time and add offset
    # translateX = (time * 0.1) + 5
    time_node["outTime"] * 0.1 + 5 >> oscillator["tx"]
 
@@ -431,8 +718,6 @@ Create a procedural rig element that responds to another object's position:
    driver_xform["translate"].value = (0, 0, 0)
    follower_xform["translate"].value = (10, 0, 0)
 
-   # Calculate difference and normalize
-   # In production, you'd use a distanceBetween node, but for demonstration:
    # Scale follower X position by 0.5 and drive indicator
    follower_xform["tx"] * 0.5 >> indicator.transform["ty"]
 
@@ -543,11 +828,6 @@ Performance Considerations
    If you create temporary mathematical relationships for testing, remember to delete
    the generated nodes when no longer needed.
 
-**Prefer Compound Connections**
-   When working with vectors, the Plug arithmetic operators use compound-to-compound
-   connections (connecting ``translate`` rather than ``translateX``, ``translateY``,
-   ``translateZ`` separately), which is more efficient.
-
 Common Patterns
 ---------------
 
@@ -593,18 +873,21 @@ Offset Animation
 Summary
 -------
 
-The Plug arithmetic operators provide a powerful, Pythonic way to build dependency
-graph networks in Maya:
+The Plug class provides a comprehensive interface for working with Maya attributes:
 
-- **Natural Syntax**: Use standard Python operators (``+``, ``-``, ``*``, ``/``, ``**``, ``%``)
-- **Automatic Node Creation**: Operators create appropriate utility nodes automatically
+- **Pythonic Access**: Use dictionary-style notation (``node["attr"]``) for consistency
+- **Read/Write**: Simple ``value`` property for getting and setting values
+- **Properties**: Manage locked, keyable, visible, and type states
+- **Connections**: Use ``>>``, ``<<``, and ``//`` operators for clean connection syntax
+- **Child Access**: Navigate compound attributes naturally
+- **Mathematical Operations**: Build dependency networks with standard Python operators
 - **Chainable**: Combine multiple operations in a single expression
 - **Type-Aware**: Works with both single values and compound (vector) attributes
-- **Integrates with Connections**: Chain arithmetic with the ``>>`` operator
 
 For complete API details, see :class:`~tik.maya.core.plug.Plug`.
 
 .. seealso::
 
-   - :doc:`quickstart` - Basic attribute access and connections
-   - :doc:`overview` - Core tik.maya concepts
+   - :doc:`working_with_nodes` - Understanding node wrappers
+   - :doc:`../quickstart` - Basic tik.maya usage
+   - :doc:`../overview` - Core tik.maya concepts

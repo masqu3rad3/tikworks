@@ -57,6 +57,11 @@ Key Benefits
    Properties for state, methods for actions. Iteration, comprehensions, and
    operators work naturally.
 
+**Procedural Math with Plugs**
+   Build dependency networks using Python operators. Plugs support arithmetic
+   (``+``, ``-``, ``*``, ``/``, ``**``, ``%``) and connection operators (``>>``,
+   ``<<``, ``//``), automatically creating and wiring Maya utility nodes.
+
 For a detailed comparison with ``maya.cmds``, see :doc:`why_tik_maya`.
 
 Core Components
@@ -68,7 +73,9 @@ Core Components
 
 **Plug** (:class:`~tik.maya.core.node.Plug`)
    Represents an attribute on a node. Properties for ``value``, ``locked``,
-   ``keyable``, ``visible``. Supports ``>>`` operator for connections.
+   ``keyable``, ``visible``. Supports connection operators (``>>``, ``<<``, ``//``)
+   and arithmetic operators (``+``, ``-``, ``*``, ``/``, ``**``, ``%``) that
+   automatically create Maya utility nodes.
 
 **Transform** (:class:`~tik.maya.Transform`)
    DAG transform wrapper with ``translate``, ``rotate``, ``scale`` properties,
@@ -83,27 +90,9 @@ Core Components
 
 For architecture details, see :doc:`/architecture/core_concepts`.
 
-Quick Example
--------------
+Next Steps
+----------
 
-.. code-block:: python
-
-   import tik.maya as tm
-   from tik.maya.roles.controller import Controller
-
-   # Create a controller with a circle shape
-   ctrl = Controller.create(name="arm_ctrl", shape="circle", size=2.0)
-
-   # Position it
-   ctrl.translate = (5, 10, 0)
-
-   # Lock scale attributes
-   for axis in ["scaleX", "scaleY", "scaleZ"]:
-       ctrl.node[axis].locked = True
-       ctrl.node[axis].visible = False
-
-   # Create a joint and connect
-   jnt = tm.Joint.create(name="arm_jnt")
-   ctrl.node["translate"] >> jnt["translate"]
-
-See :doc:`quickstart` for more examples.
+- **New to tik.maya?** Start with :doc:`quickstart` for hands-on examples
+- **Want deeper knowledge?** See :doc:`guides/working_with_nodes` and :doc:`guides/working_with_plugs`
+- **Need API details?** Browse the :doc:`/autoapi/index`
