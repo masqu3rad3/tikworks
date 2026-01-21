@@ -89,10 +89,10 @@ class BlendShape(Node):
         try:
             if target_id is None:
                 # This corresponds to the top-level node weight in Paint Tool
-                return self[f"weightList[{geom_index}]"]["weights"].as_api_plug()
+                return self[f"weightList[{geom_index}]"]["weights"].mplug
             else:
                 # path: inputTarget[geom_index].inputTargetGroup[target_id].targetWeights
-                return self[f"inputTarget[{geom_index}]"][f"inputTargetGroup[{target_id}]"]["targetWeights"].as_api_plug()
+                return self[f"inputTarget[{geom_index}]"][f"inputTargetGroup[{target_id}]"]["targetWeights"].mplug
         except Exception:
             return None
 
