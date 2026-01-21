@@ -57,25 +57,21 @@ Key Benefits
    Properties for state, methods for actions. Iteration, comprehensions, and
    operators work naturally.
 
-**Procedural Math with Plugs**
-   Build dependency networks using Python operators. Plugs support arithmetic
-   (``+``, ``-``, ``*``, ``/``, ``**``, ``%``) and connection operators (``>>``,
-   ``<<``, ``//``), automatically creating and wiring Maya utility nodes.
-
 For a detailed comparison with ``maya.cmds``, see :doc:`why_tik_maya`.
 
 Core Components
 ---------------
 
 **Node** (:class:`~tik.maya.Node`)
-   Base wrapper for all Maya nodes. Handles existence validation, UUID tracking,
-   name caching, and attribute access via ``[]``.
+   Base wrapper for all Maya nodes. Handles existence validation, MObject tracking
+   with UUID backup, name caching, and attribute access via ``[]``.
 
 **Plug** (:class:`~tik.maya.core.node.Plug`)
    Represents an attribute on a node. Properties for ``value``, ``locked``,
    ``keyable``, ``visible``. Supports connection operators (``>>``, ``<<``, ``//``)
    and arithmetic operators (``+``, ``-``, ``*``, ``/``, ``**``, ``%``) that
-   automatically create Maya utility nodes.
+   automatically create Maya utility nodes. Build procedural dependency networks
+   using natural Python syntax.
 
 **Transform** (:class:`~tik.maya.Transform`)
    DAG transform wrapper with ``translate``, ``rotate``, ``scale`` properties,

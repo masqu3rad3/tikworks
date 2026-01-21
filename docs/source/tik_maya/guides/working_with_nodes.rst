@@ -73,7 +73,11 @@ Creating Nodes
 Creating New Nodes
 ~~~~~~~~~~~~~~~~~~
 
-Use the ``create()`` class method on any type class:
+tik.maya offers three ways to create nodes, each with different use cases:
+
+**Method 1: Type-Specific create() (Most Explicit)**
+
+Use the ``create()`` class method on any type class for the most explicit approach:
 
 .. code-block:: python
 
@@ -106,6 +110,44 @@ For geometry shapes, pass the Maya creation command as the first argument:
    # Create a curve
    curve = tm.Curve.create("circle", name="myCircle")
 
+**Method 2: createNode() or create_node() (cmds-like)**
+
+Use ``tm.createNode()`` or ``tm.create_node()`` for a familiar cmds-style interface:
+
+.. code-block:: python
+
+   import tik.maya as tm
+
+   # Create using createNode (camelCase alias)
+   transform = tm.createNode("transform", name="myTransform")
+
+   # Or using create_node (snake_case)
+   camera = tm.create_node("camera", name="myCamera")
+
+   # Works with any Maya node type
+   mult_node = tm.createNode("multiplyDivide", name="myMultiply")
+
+This method automatically resolves the created node to the correct wrapper type.
+
+**Method 3: Node.create() (Generic)**
+
+Use ``tm.Node.create()`` for a generic creation that still resolves to the correct type:
+
+.. code-block:: python
+
+   import tik.maya as tm
+
+   # Create a camera using Node.create()
+   camera = tm.Node.create("camera", name="myCamera")
+   print(type(camera))  # <class 'tik.maya.types.camera.Camera'>
+
+   # Create a transform
+   transform = tm.Node.create("transform", name="myTransform")
+   print(type(transform))  # <class 'tik.maya.types.transform.Transform'>
+
+Even though you're calling ``Node.create()``, tik.maya resolves the node type
+and returns the appropriate wrapper class (Camera, Transform, etc.).
+
 Wrapping Existing Nodes
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -124,6 +166,42 @@ Use :func:`tm.resolve` to wrap nodes that already exist in the scene:
    # Works with any valid Maya node name
    persp_cam = tm.resolve("persp")  # Camera transform
    persp_shape = tm.resolve("perspShape")  # Camera shape
+
+Node Type Resolution Order
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When resolving nodes (either with ``tm.resolve()`` or creating with ``tm.createNode()``/
+``tm.Node.create()``), tik.maya determines the wrapper class based on Maya's node
+inheritance hierarchy.
+
+Maya nodes inherit from multiple base types. For example, a camera node actually inherits
+these Maya classes in order:
+
+.. code-block:: text
+
+   ['containerBase', 'entity', 'dagNode', 'shape', 'camera']
+
+tik.maya resolves to the **most specific** (closest) available wrapper type in the
+inheritance chain:
+
+1. If a ``Camera`` wrapper exists, the node is wrapped as ``Camera``
+2. If not, but a ``ShapeNode`` wrapper exists, it's wrapped as ``ShapeNode``
+3. If not, but a ``DagNode`` wrapper exists, it's wrapped as ``DagNode``
+4. If none match, it falls back to the base ``Node`` wrapper
+
+.. code-block:: python
+
+   import tik.maya as tm
+
+   # Camera resolves to most specific type available
+   camera = tm.resolve("perspShape")
+   print(type(camera))  # <class 'tik.maya.types.camera.Camera'>
+
+   # If Camera type didn't exist, it would resolve to ShapeNode
+   # If ShapeNode didn't exist, it would resolve to DagNode
+   # As a last resort, it would resolve to Node
+
+This ensures you always get the most specific wrapper available for any node type.
 
 Node Lifecycle
 --------------
@@ -148,12 +226,15 @@ Nodes can be deleted, and references can become invalid. Always check existence 
    print(cube.exists())  # False
 
 .. tip::
-   tik.maya's UUID tracking means your Python reference stays valid even if the node is recreated with undo/redo.
+   tik.maya tracks nodes primarily using :class:`maya.api.OpenMaya.MObject` handles
+   for performance, with UUID as a backup for restoration when the MObject link breaks
+   (such as after undo/redo operations). This means your Python reference stays valid
+   even if the node is recreated.
 
 Renaming Nodes
 ~~~~~~~~~~~~~~
 
-Node wrappers survive renames because they track by UUID, not name:
+Node wrappers survive renames because they track by MObject (with UUID backup), not name:
 
 .. code-block:: python
 
@@ -215,6 +296,9 @@ Transforms are the most common node type. They support hierarchies and transform
 
 Joint Nodes
 ~~~~~~~~~~~
+
+.. warning::
+   **Work in Progress**: Joint-specific API is still being developed.
 
 Joints extend Transform with rigging-specific features:
 
@@ -321,35 +405,52 @@ Some nodes don't participate in the DAG hierarchy. They're pure dependency graph
 Node Selection and Queries
 ---------------------------
 
-Getting Selected Nodes
-~~~~~~~~~~~~~~~~~~~~~~
+Listing Scene Nodes
+~~~~~~~~~~~~~~~~~~~
+
+tik.maya provides ``tm.ls()`` (or ``tm.list_scene_nodes()``), a wrapper for ``cmds.ls()``
+that returns resolved tik.maya objects:
 
 .. code-block:: python
 
    import tik.maya as tm
 
-   # Get currently selected nodes
-   selected = tm.get_selection()
-   for node in selected:
-       print(f"{node.name} - {type(node)}")
+   # List all transforms in the scene (returns tik.maya objects)
+   transforms = tm.ls(type="transform")
+   for transform in transforms:
+       print(f"{transform.name} - {type(transform)}")
 
-Listing Nodes by Type
-~~~~~~~~~~~~~~~~~~~~~
+   # List all joints
+   joints = tm.ls(type="joint")
+
+   # You can use all cmds.ls arguments
+   selected = tm.ls(selection=True)
+   visible = tm.ls(visible=True)
+
+   # Using the snake_case alias
+   all_meshes = tm.list_scene_nodes(type="mesh")
+
+Selecting Nodes
+~~~~~~~~~~~~~~~
+
+Use ``tm.select()`` (or ``tm.select_nodes()``) to select nodes:
 
 .. code-block:: python
 
-   import maya.cmds as cmds
+   import tik.maya as tm
 
-   # Get all transforms in the scene
-   transform_names = cmds.ls(type="transform")
-   transforms = tm.resolve(transform_names)
+   # Create some nodes
+   cube = tm.Transform.create(name="myCube")
+   sphere = tm.Transform.create(name="mySphere")
 
-   # Get all joints
-   joint_names = cmds.ls(type="joint")
-   joints = tm.resolve(joint_names)
+   # Select nodes
+   tm.select([cube, sphere])
 
-   for joint in joints:
-       print(f"{joint.name}: {joint.translate}")
+   # Using the snake_case alias
+   tm.select_nodes([cube])
+
+   # Supports cmds.select kwargs
+   tm.select([cube], add=True)  # Add to selection
 
 Hierarchy Navigation
 --------------------
@@ -426,47 +527,13 @@ Node Comparison and Identity
 Common Patterns
 ---------------
 
-Creating a Joint Chain
-~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   import tik.maya as tm
-
-   joints = []
-   parent = None
-
-   for i in range(5):
-       jnt = tm.Joint.create(name=f"spine_{i:02d}", parent=parent)
-       if parent:
-           jnt.translate = (0, 2, 0)  # Offset from parent
-       joints.append(jnt)
-       parent = jnt
-
-Building a Control Hierarchy
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Create offset groups for a control
-   ctrl = tm.Transform.create(name="arm_ctrl")
-   offset = tm.Transform.create(name="arm_ctrl_offset")
-   auto = tm.Transform.create(name="arm_ctrl_auto")
-
-   # Build hierarchy: offset -> auto -> ctrl
-   ctrl.parent = auto
-   auto.parent = offset
-
-   # Position the top of the hierarchy
-   offset.translate = (5, 10, 0)
-
 Batch Operations on Nodes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
    # Get all selected transforms
-   nodes = tm.get_selection()
+   nodes = tm.ls(selection=True)
 
    # Lock all scale attributes
    for node in nodes:
@@ -478,12 +545,14 @@ Batch Operations on Nodes
 Summary
 -------
 
-- **Nodes** are Python wrappers around Maya scene nodes, tracked by UUID
+- **Nodes** are Python wrappers around Maya scene nodes, tracked by MObject (with UUID backup)
 - **Types** in tik.maya correspond to Maya node types (Transform, Joint, Mesh, etc.)
-- The **registry** automatically returns the correct wrapper class
-- Use ``create()`` to make new nodes, ``resolve()`` to wrap existing ones
+- The **registry** automatically returns the correct wrapper class based on inheritance order
+- Three creation methods: ``Type.create()``, ``tm.createNode()``, and ``tm.Node.create()``
+- Use ``tm.resolve()`` to wrap existing nodes
 - Node wrappers survive renames and namespace changes
 - Different node types have specialized properties and methods
 - Navigate hierarchies with ``parent``, ``children``, and ``collect_hierarchy()``
+- Use ``tm.ls()`` and ``tm.select()`` for scene queries and selection
 
 For detailed information on working with node attributes, see :doc:`working_with_plugs`.

@@ -42,10 +42,11 @@ The Problem with ``maya.cmds``
 How tik.maya Solves This
 -------------------------
 
-UUID-Based Tracking
-~~~~~~~~~~~~~~~~~~~
+MObject Tracking with UUID Backup
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-tik.maya tracks nodes by UUID, not names. References stay valid through renames,
+tik.maya tracks nodes using :class:`maya.api.OpenMaya.MObject` handles for performance,
+with UUID as a backup for restoration. References stay valid through renames,
 namespacing, and re-parenting.
 
 .. code-block:: python
@@ -59,8 +60,9 @@ namespacing, and re-parenting.
    cube.rename("renamedCube")
    cube.translate_x = 10  # Still works!
 
-Under the hood, tik.maya uses :class:`maya.api.OpenMaya.MObject` as the primary
-handle for performance, with UUID fallback for safety.
+Under the hood, tik.maya uses MObject as the primary handle for speed. If the MObject
+becomes stale (e.g., after undo/redo), tik.maya reconstructs it from the stored UUID,
+providing a fast path with a safe fallback.
 
 Concise, Readable Code
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -155,6 +157,22 @@ When to Use What
 
 Summary
 -------
+
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| Pain Point                | ``maya.cmds``                    | ``maya.api.OpenMaya``               | **tik.maya**                              |
++===========================+==================================+=====================================+===========================================+
+| Node references           | Strings — break on rename        | MObject/MDagPath handles — robust   | MObj/UUID-backed — survives renames       |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| Code verbosity            | Multiple calls per operation     | Verbose boilerplate (fn sets, plugs)| Concise properties and methods            |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| Performance               | Moderate                         | Fastest (No Undo / Not crash safe)  | Fast (With Undo support and more stable)  |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| Type safety               | None — errors at runtime         | Stronger typing via API classes     | IDE completion, type hints                |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| API style                 | Procedural, flag-heavy           | Low-level, explicit, handle-based   | Pythonic, object-oriented                 |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
+| Debugging                 | String matching errors           | Object inspection via function sets | Object inspection, clear errors           |
++---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
 
 tik.maya combines the simplicity of ``maya.cmds`` with the robustness of
 ``maya.api.OpenMaya``, wrapped in a Pythonic interface. Write less code,
