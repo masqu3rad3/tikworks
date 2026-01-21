@@ -7,11 +7,27 @@ from .registry import resolve
 
 class Plug:
     """Represents an attribute plug on a Maya node."""
+    _VECTOR_TYPES = frozenset({
+        OpenMaya.MFn.kAttribute3Double,  # double3
+        OpenMaya.MFn.kAttribute3Float,  # float3
+        OpenMaya.MFn.kAttribute2Double,  # double2
+        OpenMaya.MFn.kAttribute2Float,  # float2
+        OpenMaya.MFn.kAttribute3Short,  # short3
+        OpenMaya.MFn.kAttribute3Int,  # long3
+    })
+
+    _SCALAR_TYPES = frozenset({
+        OpenMaya.MFn.kNumericAttribute,  # Bool, Float, Int, Byte, Short
+        OpenMaya.MFn.kEnumAttribute,  # Enums
+        OpenMaya.MFn.kUnitAttribute,  # Time, Angle, Distance
+        OpenMaya.MFn.kDoubleLinearAttribute,  # Time, Angle, Distance
+    })
 
     def __init__(self, node, attr: str):
         """Initialize a Plug for the given node and attribute name."""
         self._node = node
         self._attr = attr
+        self._mplug = None # lazy init
 
     @property
     def attr(self):
@@ -22,6 +38,29 @@ class Plug:
     def path(self):
         """The full attribute path."""
         return f"{self._node.name}.{self._attr}"
+
+    @property
+    def node(self):
+        """The node this plug belongs to."""
+        return self._node
+
+    @property
+    def mplug(self):
+        """The MPlug representation of this attribute."""
+        if self._mplug is None:
+            self._mplug = self._find_plug()
+            if self._mplug is None:
+                raise RuntimeError(
+                    f"Attribute '{self._node.name}.{self._attr}' not found.")
+
+        if self._mplug.isNull:
+            # Attempt to re-fetch in case it was deleted and recreated (Undo/Redo scenarios)
+            self._mplug = self._find_plug()
+            if self._mplug is None or self._mplug.isNull:
+                raise RuntimeError(
+                    f"Attribute '{self._node.name}.{self._attr}' acts invalid/deleted.")
+
+        return self._mplug
 
     @property
     def value(self):
@@ -39,7 +78,7 @@ class Plug:
         # An attribute is considered visible if it is either keyable or in the channel
         # box.
         # _keyable = cmds.getAttr(self.path, keyable=True)
-        _keyable = self.as_api_plug().isKeyable
+        _keyable = self.mplug.isKeyable
         _channelbox = cmds.getAttr(self.path, channelBox=True)
         return _keyable or _channelbox
 
@@ -51,7 +90,7 @@ class Plug:
             state (bool): True to show the attribute, False to hide.
         """
         # _keyable = cmds.getAttr(self.path, keyable=True)
-        _keyable = self.as_api_plug().isKeyable
+        _keyable = self.mplug.isKeyable
         if not state:
             cmds.setAttr(self.path, edit=True, keyable=False, channelBox=False)
             return
@@ -60,7 +99,7 @@ class Plug:
     @property
     def keyable(self) -> bool:
         """Check if the attribute is keyable."""
-        return self.as_api_plug().isKeyable
+        return self.mplug.isKeyable
 
     @keyable.setter
     def keyable(self, state: bool) -> None:
@@ -80,7 +119,7 @@ class Plug:
     @property
     def locked(self) -> bool:
         """Check if the attribute is locked."""
-        return self.as_api_plug().isLocked
+        return self.mplug.isLocked
 
     @locked.setter
     def locked(self, state: bool) -> None:
@@ -98,6 +137,11 @@ class Plug:
         if not children:
             return []
         return [Plug(self._node, f"{child}") for child in children if child != self.attr]
+
+    @property
+    def type(self):
+        """The attribute type as a string."""
+        return self.mplug.attribute().apiTypeStr
 
     def exists(self):
         """Check if the attribute exists."""
@@ -146,11 +190,23 @@ class Plug:
         else:
             raise TypeError(f"Unsupported type for setting attribute: {type(value)}")
 
-    def as_api_plug(self):
+    # def as_api_plug(self):
+    #     """Get the attribute as an OpenMaya MPlug."""
+    #     selection_list = OpenMaya.MSelectionList()
+    #     try:
+    #         selection_list.add(self.path)
+    #         return selection_list.getPlug(0)
+    #     except RuntimeError:
+    #         return None
+
+    def _find_plug(self):
         """Get the attribute as an OpenMaya MPlug."""
         selection_list = OpenMaya.MSelectionList()
-        selection_list.add(self.path)
-        return selection_list.getPlug(0)
+        try:
+            selection_list.add(self.path)
+            return selection_list.getPlug(0)
+        except RuntimeError:
+            return None
 
     def rename(self, new_attr_name):
         """Rename the attribute.
@@ -322,21 +378,14 @@ class Plug:
         Returns:
             bool: True if compound with 2-3 numeric children (e.g., double3, float3).
         """
-        attr_type = cmds.getAttr(self.path, type=True)
-        return attr_type in ("double3", "float3", "double2", "float2")
+        return self.mplug.attribute().apiType() in self._VECTOR_TYPES
 
-    # def _get_compound_child_count(self) -> int:
-    #     """Get the number of children for a compound attribute.
-    #
-    #     Returns:
-    #         int: Number of children (2 or 3), or 0 if not compound.
-    #     """
-    #     attr_type = cmds.getAttr(self.path, type=True)
-    #     if attr_type in ("double3", "float3"):
-    #         return 3
-    #     elif attr_type in ("double2", "float2"):
-    #         return 2
-    #     return 0
+    def _is_scalar_numeric(self) -> bool:
+        """
+        True if attribute is a single math-able value (bool, enum, int, float, time).
+        Safe to get value directly.
+        """
+        return self.mplug.attribute().apiType() in self._SCALAR_TYPES
 
     def _create_plug(self, node_name: str, attr_name: str) -> "Plug":
         """Create a Plug instance for the given node and attribute.
@@ -615,7 +664,13 @@ class Plug:
             return self._create_plus_minus_node_compound(
                 other, operation=1, operation_name="add"
             )
-        return self._create_add_node_single(other)
+        elif self._is_scalar_numeric():
+            return self._create_add_node_single(other)
+        else:
+            raise TypeError(
+                f"Addition not supported for attribute type: "
+                f"{self.type}"
+            )
 
     def __radd__(self, other) -> "Plug":
         """Handle reversed addition (numeric + plug).
@@ -645,7 +700,13 @@ class Plug:
             return self._create_plus_minus_node_compound(
                 other, operation=2, operation_name="subtract"
             )
-        return self._create_subtract_node_single(other)
+        elif self._is_scalar_numeric():
+            return self._create_subtract_node_single(other)
+        else:
+            raise TypeError(
+                f"Subtraction not supported for attribute type: "
+                f"{self.type}"
+            )
 
     def __rsub__(self, other) -> "Plug":
         """Handle reversed subtraction (numeric - plug).
@@ -680,17 +741,22 @@ class Plug:
                 )
             cmds.connectAttr(self.path, f"{node}.input3D[1]", force=True)
             return self._create_plug(node, "output3D")
-
-        # Single value: create subtract node with other as first input
-        node = cmds.createNode("subtract", name="subtract#")
-        if isinstance(other, (int, float)):
-            cmds.setAttr(f"{node}.input1", float(other))
+        elif self._is_scalar_numeric():
+            # Single value: create subtract node with other as first input
+            node = cmds.createNode("subtract", name="subtract#")
+            if isinstance(other, (int, float)):
+                cmds.setAttr(f"{node}.input1", float(other))
+            else:
+                raise TypeError(
+                    f"Left operand must be a numeric value, got {type(other)}"
+                )
+            cmds.connectAttr(self.path, f"{node}.input2", force=True)
+            return self._create_plug(node, "output")
         else:
             raise TypeError(
-                f"Left operand must be a numeric value, got {type(other)}"
+                f"Subtraction not supported for attribute type: "
+                f"{self.type}"
             )
-        cmds.connectAttr(self.path, f"{node}.input2", force=True)
-        return self._create_plug(node, "output")
 
     def __mul__(self, other) -> "Plug":
         """Multiply two plugs or a plug and a numeric value using `*` operator.
@@ -708,7 +774,13 @@ class Plug:
             return self._create_multiply_divide_node_compound(
                 other, operation=1, operation_name="multiply"
             )
-        return self._create_multiply_node_single(other)
+        elif self._is_scalar_numeric():
+            return self._create_multiply_node_single(other)
+        else:
+            raise TypeError(
+                f"Multiplication not supported for attribute type: "
+                f"{self.type}"
+            )
 
     def __rmul__(self, other) -> "Plug":
         """Handle reversed multiplication (numeric * plug).
@@ -738,7 +810,13 @@ class Plug:
             return self._create_multiply_divide_node_compound(
                 other, operation=2, operation_name="divide"
             )
-        return self._create_divide_node_single(other)
+        elif self._is_scalar_numeric():
+            return self._create_divide_node_single(other)
+        else:
+            raise TypeError(
+                f"Division not supported for attribute type: "
+                f"{self.type}"
+            )
 
     def __rtruediv__(self, other) -> "Plug":
         """Handle reversed division (numeric / plug).
@@ -769,17 +847,22 @@ class Plug:
                 )
             cmds.connectAttr(self.path, f"{node}.input2", force=True)
             return self._create_plug(node, "output")
-
-        # Single value: create divide node with other as first input
-        node = cmds.createNode("divide", name="divide#")
-        if isinstance(other, (int, float)):
-            cmds.setAttr(f"{node}.input1", float(other))
+        elif self._is_scalar_numeric():
+            # Single value: create divide node with other as first input
+            node = cmds.createNode("divide", name="divide#")
+            if isinstance(other, (int, float)):
+                cmds.setAttr(f"{node}.input1", float(other))
+            else:
+                raise TypeError(
+                    f"Left operand must be a numeric value, got {type(other)}"
+                )
+            cmds.connectAttr(self.path, f"{node}.input2", force=True)
+            return self._create_plug(node, "output")
         else:
             raise TypeError(
-                f"Left operand must be a numeric value, got {type(other)}"
+                f"Division not supported for attribute type: "
+                f"{self.type}"
             )
-        cmds.connectAttr(self.path, f"{node}.input2", force=True)
-        return self._create_plug(node, "output")
 
     def __pow__(self, other) -> "Plug":
         """Raise plug to a power using `**` operator.
@@ -797,7 +880,13 @@ class Plug:
             return self._create_multiply_divide_node_compound(
                 other, operation=3, operation_name="power"
             )
-        return self._create_power_node_single(other)
+        elif self._is_scalar_numeric():
+            return self._create_power_node_single(other)
+        else:
+            raise TypeError(
+                f"Power operation not supported for attribute type: "
+                f"{self.type}"
+            )
 
     def __rpow__(self, other) -> "Plug":
         """Handle reversed power (numeric ** plug).
@@ -829,16 +918,22 @@ class Plug:
             cmds.connectAttr(self.path, f"{node}.input2", force=True)
             return self._create_plug(node, "output")
 
-        # Single value: create power node with other as base
-        node = cmds.createNode("power", name="power#")
-        if isinstance(other, (int, float)):
-            cmds.setAttr(f"{node}.input", float(other))
+        elif self._is_scalar_numeric():
+            # Single value: create power node with other as base
+            node = cmds.createNode("power", name="power#")
+            if isinstance(other, (int, float)):
+                cmds.setAttr(f"{node}.input", float(other))
+            else:
+                raise TypeError(
+                    f"Left operand must be a numeric value, got {type(other)}"
+                )
+            cmds.connectAttr(self.path, f"{node}.exponent", force=True)
+            return self._create_plug(node, "output")
         else:
             raise TypeError(
-                f"Left operand must be a numeric value, got {type(other)}"
+                f"Power operation not supported for attribute type: "
+                f"{self.type}"
             )
-        cmds.connectAttr(self.path, f"{node}.exponent", force=True)
-        return self._create_plug(node, "output")
 
     def __mod__(self, other) -> "Plug":
         """Compute modulo using `%` operator.
