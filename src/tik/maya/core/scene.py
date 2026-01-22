@@ -2,8 +2,61 @@
 
 from maya import cmds
 from maya.api import OpenMaya
-from .registry import resolve, is_registered, undocommit
+
+from . import apicommon
+from .registry import resolve, is_registered
 from .decorators import alias
+
+# --- DYNAMIC WRAPPER CONFIGURATION ---
+
+# Commands that return nodes and should be auto-converted to tik objects.
+_NODE_FACTORIES = {
+    "listRelatives", "listConnections", "listHistory",
+    "duplicate", "instance",
+    "polyCube", "polySphere", "polyPlane", "polyCylinder", "polyTorus",
+    "polyExtrudeFacet", "polyBevel",
+    "spaceLocator", "group", "circle", "curve",
+    "rename",
+    # We do NOT need "ls" or "createNode" here because
+    # these are handled internally in scene module.
+}
+
+def _clean_input(data):
+    """Recursively converts tik Objects to strings."""
+    if hasattr(data, "name"):
+        return str(data)
+    elif isinstance(data, (list, tuple)):
+        return [_clean_input(idx) for idx in data]
+    elif isinstance(data, dict):
+        return {_key: _clean_input(_val) for _key, _val in data.items()}
+    return data
+
+
+def _wrap_output(result):
+    """Recursively converts strings to tik Objects."""
+    if isinstance(result, list):
+        return [_wrap_output(item) for item in result]
+    if isinstance(result, str):
+        return resolve(result)
+    return result
+
+
+def _proxy_wrapper(func_name, *args, **kwargs):
+    """The function that executes when a user calls a dynamic command."""
+    original_func = getattr(cmds, func_name)
+
+    # Sanitize inputs (Object -> String)
+    clean_args = _clean_input(args)
+    clean_kwargs = _clean_input(kwargs)
+
+    # Run the real maya command
+    result = original_func(*clean_args, **clean_kwargs)
+
+    # Wrap output if it's a known factory (String -> Object)
+    if func_name in _NODE_FACTORIES and result is not None:
+        return _wrap_output(result)
+
+    return result
 
 @alias("ls")
 def list_scene_nodes(*args, **kwargs):
@@ -11,54 +64,52 @@ def list_scene_nodes(*args, **kwargs):
     return [resolve(node) for node in cmds.ls(*args, **kwargs)]
 
 @alias("select")
-def select_nodes(nodes, **kwargs):
+def select_nodes(*args, **kwargs):
     """Selects the given nodes in the Maya scene."""
-    if isinstance(nodes, (list, tuple)):
-        node_names = [str(node) for node in nodes] # make sure to convert to string names
-    else:
-        node_names = [str(nodes)]
-    cmds.select(node_names, **kwargs)
+    clean_args = _clean_input(args)
+    clean_kwargs = _clean_input(kwargs)
+    cmds.select(*clean_args, **clean_kwargs)
 
-def _normalize_mobject(parent):
-    if not isinstance(parent, OpenMaya.MObject):
-        sel = OpenMaya.MSelectionList()
-        sel.add(str(parent))
-        parent = sel.getDependNode(0)
-    return parent
+# def _normalize_mobject(parent):
+#     if not isinstance(parent, OpenMaya.MObject):
+#         sel = OpenMaya.MSelectionList()
+#         sel.add(str(parent))
+#         parent = sel.getDependNode(0)
+#     return parent
 
-def create_node_with_dag_modifier(node_type: str, parent=None, name=None) -> str:
-    # if there is a parent, make sure that it is an MObject
-
-    mod = OpenMaya.MDagModifier()
-    if parent:
-        parent = _normalize_mobject(parent)
-        node_object = mod.createNode(node_type, parent=parent)
-    else:
-        node_object = mod.createNode(node_type)
-    if name:
-        mod.renameNode(node_object, name)
-    mod.doIt()
-    undocommit(undo=mod.undoIt, redo=mod.doIt)
-    dag_path = OpenMaya.MDagPath.getAPathTo(node_object)
-    return dag_path.fullPathName()
-
-def create_node_with_dg_modifier(node_type: str, name=None) -> str:
-    mod = OpenMaya.MDGModifier()
-    node_object = mod.createNode(node_type)
-    if name:
-        mod.renameNode(node_object, name)
-    mod.doIt()
-    undocommit(undo=mod.undoIt, redo=mod.doIt)
-    return OpenMaya.MFnDependencyNode(node_object).name()
+# def create_node_with_dag_modifier(node_type: str, parent=None, name=None) -> str:
+#     # if there is a parent, make sure that it is an MObject
+#
+#     mod = OpenMaya.MDagModifier()
+#     if parent:
+#         # parent = _normalize_mobject(parent)
+#         node_object = mod.createNode(node_type, parent=parent)
+#     else:
+#         node_object = mod.createNode(node_type)
+#     if name:
+#         mod.renameNode(node_object, name)
+#     mod.doIt()
+#     apicommon.undocommit(undo=mod.undoIt, redo=mod.doIt)
+#     dag_path = OpenMaya.MDagPath.getAPathTo(node_object)
+#     return dag_path.fullPathName()
+#
+# def create_node_with_dg_modifier(node_type: str, name=None) -> str:
+#     mod = OpenMaya.MDGModifier()
+#     node_object = mod.createNode(node_type)
+#     if name:
+#         mod.renameNode(node_object, name)
+#     mod.doIt()
+#     apicommon.undocommit(undo=mod.undoIt, redo=mod.doIt)
+#     return OpenMaya.MFnDependencyNode(node_object).name()
 
 @alias("createNode")
 def create_node(node_type: str, name=None, parent=None):
     """Create a new node of the specified type and return its wrapper."""
     try:
-        full_name = create_node_with_dag_modifier(node_type, name=name, parent=parent)
+        full_name = apicommon.create_node_with_dag_modifier(node_type, name=name, parent=parent)
     except TypeError:
         try:
-            full_name = create_node_with_dg_modifier(node_type, name=name)
+            full_name = apicommon.create_node_with_dg_modifier(node_type, name=name)
         except (TypeError, RuntimeError):
             # we will only pass the name argument if it is not None
             kwargs = {}

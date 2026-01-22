@@ -4,8 +4,8 @@ from maya.api import OpenMaya
 from tik.core.color import Color
 from .decorators import add_aliases, protected
 from .node import Node
-from .registry import register, resolve, undocommit
-from .scene import create_node_with_dag_modifier
+from .registry import register, resolve
+from . apicommon import undocommit, create_node_with_dag_modifier
 
 
 
@@ -27,12 +27,15 @@ class DagNode(Node):
 
     @classmethod
     def create(cls, cmd, name=None, parent=None):
+    # def create(cls, cmd, **kwargs):
         """Create a node using a maya.cmds command name.
 
         Example: 'joint', 'polySphere'.
         """
         full_name = create_node_with_dag_modifier(cmd, parent=parent, name=name)
-        return resolve(full_name)
+        # full_name = create_node_with_dag_modifier(cmd, **kwargs)
+        # return resolve(full_name)
+        return cls(full_name)
 
     @property
     def visibility(self):

@@ -5,7 +5,8 @@ from maya.api import OpenMaya
 
 from .plug import Plug
 from .decorators import protected
-from .registry import resolve, resolve_node_class, set_default_factory, undocommit
+from .registry import resolve, set_default_factory
+from . apicommon import undocommit
 from .scene import create_node
 
 LOG = logging.getLogger(__name__)
