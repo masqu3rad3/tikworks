@@ -1,4 +1,7 @@
-# node.py — base Node and Plug wrappers
+"""Base Node wrapper around Maya dependency nodes.
+
+This module is also a fallback for all unregistered node types.
+"""
 import logging
 import maya.cmds as cmds
 from maya.api import OpenMaya
