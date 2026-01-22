@@ -35,59 +35,6 @@ __all__ = [
     "resolve"
 ]
 
-# # --- DYNAMIC WRAPPER CONFIGURATION ---
-#
-# # Commands that return nodes and should be auto-converted to tik objects.
-# _NODE_FACTORIES = {
-#     "listRelatives", "listConnections", "listHistory",
-#     "duplicate", "instance",
-#     "polyCube", "polySphere", "polyPlane", "polyCylinder", "polyTorus",
-#     "polyExtrudeFacet", "polyBevel",
-#     "spaceLocator", "group", "circle", "curve",
-#     "rename",
-#     # We do NOT need "ls" or "createNode" here because
-#     # these are handled internally in scene module.
-# }
-#
-
-# def _clean_input(data):
-#     """Recursively converts tik Objects to strings."""
-#     if hasattr(data, "name"):
-#         return str(data)
-#     elif isinstance(data, (list, tuple)):
-#         return [_clean_input(idx) for idx in data]
-#     elif isinstance(data, dict):
-#         return {_key: _clean_input(_val) for _key, _val in data.items()}
-#     return data
-#
-#
-# def _wrap_output(result):
-#     """Recursively converts strings to tik Objects."""
-#     if isinstance(result, list):
-#         return [_wrap_output(item) for item in result]
-#     if isinstance(result, str):
-#         return resolve(result)
-#     return result
-#
-#
-# def _proxy_wrapper(func_name, *args, **kwargs):
-#     """The function that executes when a user calls a dynamic command."""
-#     original_func = getattr(cmds, func_name)
-#
-#     # Sanitize inputs (Object -> String)
-#     clean_args = _clean_input(args)
-#     clean_kwargs = _clean_input(kwargs)
-#
-#     # Run the real maya command
-#     result = original_func(*clean_args, **clean_kwargs)
-#
-#     # Wrap output if it's a known factory (String -> Object)
-#     if func_name in _NODE_FACTORIES and result is not None:
-#         return _wrap_output(result)
-#
-#     return result
-
-
 # --- MODULE LEVEL GETATTR (PEP 562) ---
 
 def __getattr__(name):

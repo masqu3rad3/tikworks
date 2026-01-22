@@ -27,14 +27,11 @@ class DagNode(Node):
 
     @classmethod
     def create(cls, cmd, name=None, parent=None):
-    # def create(cls, cmd, **kwargs):
         """Create a node using a maya.cmds command name.
 
         Example: 'joint', 'polySphere'.
         """
         full_name = create_node_with_dag_modifier(cmd, parent=parent, name=name)
-        # full_name = create_node_with_dag_modifier(cmd, **kwargs)
-        # return resolve(full_name)
         return cls(full_name)
 
     @property
