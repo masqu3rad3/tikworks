@@ -63,6 +63,24 @@ Attribute plugs have useful properties:
    # Keyable state
    cube["translateX"].keyable = False
 
+Plugs also support mathematical operators to create dependency graph nodes:
+
+.. code-block:: python
+
+   # Arithmetic operations create Maya nodes automatically
+   driver = tm.Transform.create(name="driver")
+   follower = tm.Transform.create(name="follower")
+   
+   driver["tx"].value = 10.0
+   
+   # Create addDL and multDL nodes, then connect to follower
+   (driver["tx"] * 2.0 + 5) >> follower["ty"]
+   print(follower["ty"].value)  # 25.0
+
+.. tip::
+   For comprehensive coverage of plug operations including all mathematical operators,
+   connections, and advanced patterns, see :doc:`guides/working_with_plugs`.
+
 Connecting Attributes
 ---------------------
 

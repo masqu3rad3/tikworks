@@ -10,7 +10,15 @@ object-oriented design, and robust node tracking to Maya scripting.
 
 .. toctree::
    :maxdepth: 2
+   :caption: Getting Started
 
    why_tik_maya
    overview
    quickstart
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Guides
+
+   guides/working_with_nodes
+   guides/working_with_plugs
