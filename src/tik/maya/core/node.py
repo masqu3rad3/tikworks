@@ -14,21 +14,21 @@ class Node:
     """Base wrapper around a Maya dependency node or DAG node."""
     is_dag = False
 
-    def __new__(cls, name, resolve_type=False, **kwargs):
-        """Instantiate the correct node subclass if requested."""
-        if cls is not Node:
-            return super().__new__(cls)
-
-        # Resolve the node class dynamically if resolve_class is True
-        node_cls = resolve_node_class(name) if resolve_type else cls
-        instance = object.__new__(node_cls)
-        # Only pass the class type to object.__new__()
-        return instance
+    # def __new__(cls, name, resolve_type=False, **kwargs):
+    #     """Instantiate the correct node subclass if requested."""
+    #     if cls is not Node:
+    #         return super().__new__(cls)
+    #
+    #     # Resolve the node class dynamically if resolve_class is True
+    #     node_cls = resolve_node_class(name) if resolve_type else cls
+    #     instance = object.__new__(node_cls)
+    #     # Only pass the class type to object.__new__()
+    #     return instance
 
     def __init__(self, long_name, **kwargs):
         """Initialize the Node wrapper."""
-        if not cmds.objExists(long_name):
-            raise ValueError(f"Node '{long_name}' does not exist.")
+        # if not cmds.objExists(long_name):
+        #     raise ValueError(f"Node '{long_name}' does not exist.")
         self._sel = OpenMaya.MSelectionList()
         self._sel.add(long_name)
         self._m_obj = self._sel.getDependNode(0)

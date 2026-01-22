@@ -5,6 +5,7 @@ from maya.api import OpenMaya
 
 from ..core.decorators import add_aliases
 from ..core.dagnode import DagNode
+from ..core.scene import create_node_with_dag_modifier
 from ..core.registry import register, resolve
 
 
@@ -36,7 +37,7 @@ class Transform(DagNode):
     @classmethod
     def create(cls, **kwargs):
         """Create a transform node."""
-        result = cmds.createNode("transform", **kwargs)
+        result=create_node_with_dag_modifier("transform", **kwargs)
         return cls(result)
 
     @property

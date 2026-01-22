@@ -13,7 +13,10 @@ def list_scene_nodes(*args, **kwargs):
 @alias("select")
 def select_nodes(nodes, **kwargs):
     """Selects the given nodes in the Maya scene."""
-    node_names = [str(node) for node in nodes] # make sure to convert to string names
+    if isinstance(nodes, (list, tuple)):
+        node_names = [str(node) for node in nodes] # make sure to convert to string names
+    else:
+        node_names = [str(nodes)]
     cmds.select(node_names, **kwargs)
 
 def _normalize_mobject(parent):
