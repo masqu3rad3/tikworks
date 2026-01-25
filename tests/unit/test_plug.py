@@ -4,6 +4,7 @@ import pytest
 from maya import cmds
 from maya import OpenMaya
 from tik.maya.core.node import Node, Plug
+from tik.maya.core.constants import NodeNames
 
 def test_getitem_returns_plug_and_path_ends_with_attr():
     """Test __getitem__ returns a Plug with correct path."""
@@ -414,7 +415,7 @@ def test_math_add_single_value():
     assert res1.get() == 15.0
     # Check node type
     # Node type created by cmds.createNode("addDL") is "addDL"
-    assert cmds.nodeType(res1.node.name) == "addDL"
+    assert cmds.nodeType(res1.node.name) == NodeNames.ADD_DOUBLE_LINEAR
 
     # Plug + Plug
     res2 = node["val1"] + node["val2"]
@@ -452,7 +453,7 @@ def test_math_mul_single_value():
     # Plug * number
     res1 = node["val1"] * 2.0
     assert res1.get() == 6.0
-    assert cmds.nodeType(res1.node.name) == "multDL"
+    assert cmds.nodeType(res1.node.name) == NodeNames.MULT_DOUBLE_LINEAR
 
     # Plug * Plug
     res2 = node["val1"] * node["val2"]
