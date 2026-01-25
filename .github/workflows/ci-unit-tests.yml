@@ -31,11 +31,11 @@ jobs:
         uses: actions/checkout@v2
       - name: pip install
         run: |
-#          wget https://bootstrap.pypa.io/pip/get-pip.py
-#          mayapy get-pip.py --user
           mayapy -m pip install --user \
             coverage==5.5 \
             -r requirements-dev.txt \
+#          wget https://bootstrap.pypa.io/pip/get-pip.py
+#          mayapy get-pip.py --user
 #      - name: Environment
 #        run: |
 #          export XDG_RUNTIME_DIR=/var/tmp/runtime-root
