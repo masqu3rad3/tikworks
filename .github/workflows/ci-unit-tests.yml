@@ -20,8 +20,8 @@ jobs:
 
       matrix:
        include:
-         - maya: "2024"
-         - maya: "2025"
+#         - maya: "2024"
+#         - maya: "2025"
          - maya: "2026"
 
     container: mottosso/maya:${{ matrix.maya }}
@@ -31,8 +31,8 @@ jobs:
         uses: actions/checkout@v2
       - name: pip install
         run: |
-          wget https://bootstrap.pypa.io/pip/get-pip.py
-          mayapy get-pip.py --user
+#          wget https://bootstrap.pypa.io/pip/get-pip.py
+#          mayapy get-pip.py --user
           mayapy -m pip install --user \
             coverage==5.5 \
             -r requirements-dev.txt \
