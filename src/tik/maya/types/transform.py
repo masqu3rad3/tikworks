@@ -1,12 +1,19 @@
 """Transform node type wrapper."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from maya import cmds
 from maya.api import OpenMaya
 
-from ..core.decorators import add_aliases
-from ..core.dagnode import DagNode
 from ..core.apicommon import create_node_with_dag_modifier
+from ..core.dagnode import DagNode
+from ..core.decorators import add_aliases
 from ..core.registry import register, resolve
+
+if TYPE_CHECKING:
+    from ..core.shapenode import ShapeNode
 
 
 @register("transform")
@@ -37,7 +44,7 @@ class Transform(DagNode):
     @classmethod
     def create(cls, **kwargs):
         """Create a transform node."""
-        result=create_node_with_dag_modifier("transform", **kwargs)
+        result = create_node_with_dag_modifier("transform", **kwargs)
         return cls(result)
 
     @property
@@ -214,11 +221,9 @@ class Transform(DagNode):
             target_rotate_pivot = OpenMaya.MVector(
                 target_m_transform.rotatePivot(OpenMaya.MSpace.kWorld)
             )
-            node_m_transform.setTranslation(target_rotate_pivot,
-                                            OpenMaya.MSpace.kWorld)
+            node_m_transform.setTranslation(target_rotate_pivot, OpenMaya.MSpace.kWorld)
         if rotation:
-            target_mt_matrix = OpenMaya.MTransformationMatrix(
-                target.world_matrix)
+            target_mt_matrix = OpenMaya.MTransformationMatrix(target.world_matrix)
             node_m_transform.setRotation(
                 target_mt_matrix.rotation(True), OpenMaya.MSpace.kWorld
             )

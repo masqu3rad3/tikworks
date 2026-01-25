@@ -1,7 +1,8 @@
 """Maya specific UI/QT related functions"""
 
 from maya import OpenMayaUI
-from tik.shared.ui.Qt import QtWidgets, QtCompat
+
+from tik.shared.ui.Qt import QtCompat, QtWidgets
 
 
 def get_main_window():

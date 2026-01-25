@@ -1,26 +1,17 @@
 """Camera node types wrapper."""
 
-from maya import cmds
-from maya import mel
+from maya import cmds, mel
 
-from ..core.shapenode import ShapeNode
 from ..core.registry import register
+from ..core.shapenode import ShapeNode
 
 
 @register("camera")
 class Camera(ShapeNode):
     """Wrapper for camera nodes."""
-    film_fit_modes = {
-        "fill": 0,
-        "horizontal": 1,
-        "vertical": 2,
-        "overscan": 3
-    }
-    control_modes = {
-        "camera": 1,
-        "cameraAndAim": 2,
-        "cameraAimAndUp": 3
-    }
+
+    film_fit_modes = {"fill": 0, "horizontal": 1, "vertical": 2, "overscan": 3}
+    control_modes = {"camera": 1, "cameraAndAim": 2, "cameraAimAndUp": 3}
 
     @classmethod
     def create(cls, **kwargs):
@@ -71,9 +62,9 @@ class Camera(ShapeNode):
     def aim(self):
         """Get the aim locator of the camera."""
         cam_parent = self.transform.parent
-        if not cam_parent: # not an aim camera
+        if not cam_parent:  # not an aim camera
             return None
-        if cam_parent.type != "lookAt": # not an aim camera
+        if cam_parent.type != "lookAt":  # not an aim camera
             return None
 
         return cam_parent["target[0]"]["targetTranslateX"].get_input()
@@ -82,9 +73,9 @@ class Camera(ShapeNode):
     def up(self):
         """Get the up locator of the camera."""
         cam_parent = self.transform.parent
-        if not cam_parent: # not an aim up camera
+        if not cam_parent:  # not an aim up camera
             return None
-        if cam_parent.type != "lookAt": # not an aim up camera
+        if cam_parent.type != "lookAt":  # not an aim up camera
             return None
         return cam_parent["worldUpMatrix"].get_input()
 

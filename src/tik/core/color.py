@@ -5,12 +5,18 @@ A lightweight, object-oriented color manipulation library.
 Internal storage is strictly RGB Float (0.0 - 1.0).
 """
 
-import random
 import colorsys
 import math
+import random
 
 
 class Color:
+    """Lightweight, object-oriented color manipulation library.
+
+    Internal storage uses RGB Float values (0.0 - 1.0).
+    Supports creation from color names, hex codes, and RGB tuples.
+    """
+
     # --- Human-readable color names ---
     NAMES = {
         "black": (0, 0, 0),
@@ -111,9 +117,8 @@ class Color:
 
         r, g, b = seq[:3]
 
-        is_int_format = (
-            any(v > 1.0 for v in (r, g, b))
-            or all(isinstance(v, int) for v in (r, g, b))
+        is_int_format = any(v > 1.0 for v in (r, g, b)) or all(
+            isinstance(v, int) for v in (r, g, b)
         )
 
         if is_int_format:
@@ -131,10 +136,12 @@ class Color:
 
     @property
     def rgb(self):
+        """Return color as RGB float tuple (0.0-1.0)."""
         return (self._r, self._g, self._b)
 
     @property
     def rgb255(self):
+        """Return color as RGB integer tuple (0-255)."""
         return (
             int(self._r * 255),
             int(self._g * 255),
@@ -143,10 +150,12 @@ class Color:
 
     @property
     def hex(self):
+        """Return color as hexadecimal string (e.g., '#FF00AA')."""
         return "#{:02X}{:02X}{:02X}".format(*self.rgb255)
 
     @property
     def hsv(self):
+        """Return color as HSV tuple (hue, saturation, value)."""
         return colorsys.rgb_to_hsv(self._r, self._g, self._b)
 
     # ------------------------------------------------------------------
@@ -155,6 +164,15 @@ class Color:
 
     @classmethod
     def random(cls, mode=RANDOM_ANY, seed=None):
+        """Generate a random color with optional mode and seed.
+
+        Args:
+            mode: One of RANDOM_ANY, RANDOM_PASTEL, RANDOM_NEON, RANDOM_METALLIC, RANDOM_DARK
+            seed: Optional random seed for reproducibility
+
+        Returns:
+            Color: A new randomly generated Color instance
+        """
         if seed is not None:
             random.seed(seed)
 
@@ -197,6 +215,16 @@ class Color:
     # ------------------------------------------------------------------
 
     def set_hsv(self, h=None, s=None, v=None):
+        """Modify color using HSV values.
+
+        Args:
+            h: Hue value (0.0-1.0), None to keep current
+            s: Saturation value (0.0-1.0), None to keep current
+            v: Value/brightness (0.0-1.0), None to keep current
+
+        Returns:
+            self: For method chaining
+        """
         curr_h, curr_s, curr_v = self.hsv
         self._r, self._g, self._b = colorsys.hsv_to_rgb(
             h if h is not None else curr_h,
@@ -224,21 +252,25 @@ class Color:
 
     def __add__(self, other):
         other = Color(other)
-        return Color((
-            self._clamp(self._r + other._r),
-            self._clamp(self._g + other._g),
-            self._clamp(self._b + other._b),
-        ))
+        return Color(
+            (
+                self._clamp(self._r + other._r),
+                self._clamp(self._g + other._g),
+                self._clamp(self._b + other._b),
+            )
+        )
 
     def __mul__(self, factor):
         if not isinstance(factor, (int, float)):
             raise TypeError("Can only multiply color by a scalar")
 
-        return Color((
-            self._clamp(self._r * factor),
-            self._clamp(self._g * factor),
-            self._clamp(self._b * factor),
-        ))
+        return Color(
+            (
+                self._clamp(self._r * factor),
+                self._clamp(self._g * factor),
+                self._clamp(self._b * factor),
+            )
+        )
 
     # ------------------------------------------------------------------
     # Utilities

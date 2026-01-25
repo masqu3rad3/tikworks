@@ -1,3 +1,9 @@
+"""Configuration settings for the Tik Polish tool.
+
+This module defines factory defaults and creates a settings manager
+for the Polish tool, including library paths and mirror mappings.
+"""
+
 from tik.shared.user_settings import SettingsManager
 
 FACTORY_DEFAULTS = {

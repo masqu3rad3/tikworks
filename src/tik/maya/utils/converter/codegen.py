@@ -52,7 +52,9 @@ class CodeBuilder:
         """
         return self.add_line(f"# {comment}")
 
-    def add_import(self, module: str, items: Optional[List[str]] = None) -> "CodeBuilder":
+    def add_import(
+        self, module: str, items: Optional[List[str]] = None
+    ) -> "CodeBuilder":
         """Add an import statement.
 
         Args:
@@ -248,4 +250,3 @@ def format_connectattr_call(
         f"cmds.connectAttr('{src_node}.{src_attr}', "
         f"'{dst_node}.{dst_attr}', force={force_str})"
     )
-

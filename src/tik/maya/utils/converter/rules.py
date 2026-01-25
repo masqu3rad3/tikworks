@@ -13,7 +13,7 @@ Rule categories:
 import ast
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 
 
 @dataclass
@@ -599,7 +599,9 @@ class PlugConnectRule(ConversionRule):
             if keyword.arg == "force":
                 force = ast.unparse(keyword.value)
 
-        converted = f"cmds.connectAttr(f'{{{src_node}}}.{src_attr}', {dst_expr}, force={force})"
+        converted = (
+            f"cmds.connectAttr(f'{{{src_node}}}.{src_attr}', {dst_expr}, force={force})"
+        )
 
         return RuleMatch(
             rule_name=self.name,
@@ -644,7 +646,9 @@ class PlugRshiftRule(ConversionRule):
         else:
             dst_expr = f"{ast.unparse(dst)}.path"
 
-        converted = f"cmds.connectAttr(f'{{{src_node}}}.{src_attr}', {dst_expr}, force=True)"
+        converted = (
+            f"cmds.connectAttr(f'{{{src_node}}}.{src_attr}', {dst_expr}, force=True)"
+        )
 
         return RuleMatch(
             rule_name=self.name,
@@ -1115,4 +1119,3 @@ def get_default_rules() -> List[ConversionRule]:
         # Utilities
         ResolveRule(),
     ]
-

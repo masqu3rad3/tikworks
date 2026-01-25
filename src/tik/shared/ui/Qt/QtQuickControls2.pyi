@@ -45,27 +45,33 @@ PySide2.QtQuickControls2, except for defaults which are replaced by "...".
 
 # Module PySide2.QtQuickControls2
 import PySide2
+
 try:
     import typing
 except ImportError:
     from PySide2.support.signature import typing
-from PySide2.support.signature.mapping import (
-    Virtual, Missing, Invalid, Default, Instance)
 
-class Object(object): pass
+from PySide2.support.signature.mapping import (
+    Default,
+    Instance,
+    Invalid,
+    Missing,
+    Virtual,
+)
+
+class Object(object):
+    pass
 
 import shiboken2 as Shiboken
+
 Shiboken.Object = Object
 
 import PySide2.QtQuickControls2
 
-
 class QQuickStyle(Shiboken.Object):
-
     def __init__(self): ...
-
     @staticmethod
-    def addStylePath(path:str): ...
+    def addStylePath(path: str): ...
     @staticmethod
     def availableStyles() -> typing.List: ...
     @staticmethod
@@ -73,9 +79,9 @@ class QQuickStyle(Shiboken.Object):
     @staticmethod
     def path() -> str: ...
     @staticmethod
-    def setFallbackStyle(style:str): ...
+    def setFallbackStyle(style: str): ...
     @staticmethod
-    def setStyle(style:str): ...
+    def setStyle(style: str): ...
     @staticmethod
     def stylePathList() -> typing.List: ...
 

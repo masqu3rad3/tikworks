@@ -8,7 +8,7 @@ on tik.maya internals.
 
 import ast
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Any, Dict
+from typing import Any, Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -72,7 +72,9 @@ class TikMayaASTVisitor(ast.NodeVisitor):
         self.source_lines = source_lines
         self.found_expressions: List[ParsedExpression] = []
         self.tik_imports: Dict[str, str] = {}  # Maps alias -> full module path
-        self.tik_names: Dict[str, str] = {}  # Maps name -> type (e.g., "node1" -> "Transform")
+        self.tik_names: Dict[str, str] = (
+            {}
+        )  # Maps name -> type (e.g., "node1" -> "Transform")
 
     def get_source_segment(
         self,
@@ -109,7 +111,9 @@ class TikMayaASTVisitor(ast.NodeVisitor):
     def visit_Import(self, node: ast.Import) -> Any:
         """Track import statements for tik modules."""
         for alias in node.names:
-            if any(alias.name.startswith(pattern) for pattern in self.TIK_IMPORT_PATTERNS):
+            if any(
+                alias.name.startswith(pattern) for pattern in self.TIK_IMPORT_PATTERNS
+            ):
                 name = alias.asname if alias.asname else alias.name
                 self.tik_imports[name] = alias.name
         self.generic_visit(node)
@@ -228,4 +232,3 @@ def unparse_node(node: ast.AST) -> str:
         Python source code string.
     """
     return ast.unparse(node)
-

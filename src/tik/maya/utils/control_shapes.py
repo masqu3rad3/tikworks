@@ -1,14 +1,15 @@
-import os
 import json
 import logging
-from pathlib import Path
+import os
 import platform
+from pathlib import Path
+
 import maya.api.OpenMaya as om
 from maya import cmds
 
+from ..constructs import Panel
 from ..core.registry import resolve
 from ..types.camera import Camera
-from ..constructs import Panel
 
 LOG = logging.getLogger(__name__)
 
@@ -25,8 +26,13 @@ CAMERA_POSITIONS = {
     "oneThird": (10, 5, 5),
 }
 
+
 def get_home_dir():
-    """Get the user home directory."""
+    """Get the user home directory.
+
+    Returns:
+        str: Normalized path to the user's home directory.
+    """
     if CURRENT_PLATFORM == "Windows":
         home = os.getenv("USERPROFILE")
     else:
@@ -39,13 +45,21 @@ def get_home_dir():
 
 
 class ControlShapeLibrary:
-    """
-    Singleton-like manager for accessing and loading controller shape data.
+    """Singleton manager for accessing and loading controller shape data.
+
+    The library searches for shape definitions in multiple locations:
+    1. Core path: Built-in shapes shipped with TikMaya
+    2. User path: User-specific shapes in ~/TikWorks/user_control_shapes
+    3. Environment paths: Additional paths from TIKMAYA_SHAPES_PATH env variable
+    4. Custom paths: Paths added via API
+
+    Later paths override earlier ones for shapes with the same name.
     """
 
     _INSTANCE = None
 
     def __init__(self):
+        """Initialize the shape library with default search paths."""
         self._cache = {}
         self._custom_paths = []
 
@@ -61,13 +75,25 @@ class ControlShapeLibrary:
 
     @property
     def user_path(self):
+        """Get the user-specific shape library path.
+
+        Returns:
+            Path: Path to the user's shape library directory.
+        """
         return self._user_path
 
     @property
     def search_paths(self):
-        """
-        Returns the list of paths in resolution order:
-        Core < User < Environment < Custom (API)
+        """Get the list of paths searched for shapes, in resolution order.
+
+        Resolution order (lowest to highest priority):
+        1. Core path
+        2. User path
+        3. Environment paths (from TIKMAYA_SHAPES_PATH)
+        4. Custom paths (added via API)
+
+        Returns:
+            list: List of Path objects that exist on disk.
         """
         paths = [self._core_path, self._user_path]
 
@@ -92,12 +118,24 @@ class ControlShapeLibrary:
 
     @classmethod
     def get_instance(cls):
+        """Get or create the singleton instance of the library.
+
+        Returns:
+            ControlShapeLibrary: The singleton instance.
+        """
         if not cls._INSTANCE:
             cls._INSTANCE = cls()
         return cls._INSTANCE
 
     def add_path(self, path):
-        """Add a custom search path (highest priority)."""
+        """Add a custom search path with highest priority.
+
+        Args:
+            path: Path to add to the search paths.
+
+        Note:
+            Invalidates the cache, forcing a refresh on next access.
+        """
         if not path:
             return
         path_obj = Path(path).expanduser().absolute()
@@ -106,7 +144,14 @@ class ControlShapeLibrary:
             self._cache = {}  # Invalidate cache
 
     def remove_path(self, path):
-        """Remove a custom search path."""
+        """Remove a custom search path.
+
+        Args:
+            path: Path to remove from the search paths.
+
+        Note:
+            Invalidates the cache, forcing a refresh on next access.
+        """
         if not path:
             return
         path_obj = Path(path).expanduser().absolute()
@@ -115,7 +160,10 @@ class ControlShapeLibrary:
             self._cache = {}  # Invalidate cache
 
     def refresh(self):
-        """Scans all paths and populates the cache."""
+        """Scan all search paths and populate the shape cache.
+
+        Shapes in later paths override those in earlier paths.
+        """
         self._cache = {}
         # Iterating in order means later paths overwrite earlier ones (desired behavior)
         for path in self.search_paths:
@@ -124,8 +172,7 @@ class ControlShapeLibrary:
 
             for json_path in path.rglob("*.json"):
                 rel_path = json_path.relative_to(path)
-                category = rel_path.parts[0] if len(
-                    rel_path.parts) > 1 else None
+                category = rel_path.parts[0] if len(rel_path.parts) > 1 else None
 
                 self._cache[json_path.stem] = {
                     "path": json_path,
@@ -133,23 +180,48 @@ class ControlShapeLibrary:
                 }
 
     def list_shapes(self):
+        """Get a list of all available shape names.
+
+        Returns:
+            list: List of shape names (str).
+        """
         if not self._cache:
             self.refresh()
         return list(self._cache.keys())
 
     def get_shape_data(self):
+        """Get cached shape metadata for all shapes.
+
+        Returns:
+            dict: Dictionary mapping shape names to metadata dicts with 'path' and 'category' keys.
+        """
         if not self._cache:
             self.refresh()
         return self._cache
 
     def get_path(self, name):
+        """Get the file path for a shape by name.
+
+        Args:
+            name: Name of the shape.
+
+        Returns:
+            Path or None: Path to the shape's JSON file, or None if not found.
+        """
         if not self._cache:
             self.refresh()
         data = self._cache.get(name)
         return data["path"] if data else None
 
     def load(self, name):
-        """Returns the dictionary data for the shape."""
+        """Load and return the curve data dictionary for a shape.
+
+        Args:
+            name: Name of the shape to load.
+
+        Returns:
+            dict or None: The shape data dictionary, or None if not found or error occurs.
+        """
         path = self.get_path(name)
         if not path:
             LOG.warning(f"Shape '{name}' not found in library.")
@@ -169,14 +241,26 @@ class ControlShapeLibrary:
 
 
 def capture_to_disk(
-        node_name,
-        name=None,
-        folder_path=None,
-        category=None,
-        normalize=True,
-        thumbnail=True,
+    node_name,
+    name=None,
+    folder_path=None,
+    category=None,
+    normalize=True,
+    thumbnail=True,
 ):
-    """Capture shape data from a node and save it to disk as JSON."""
+    """Capture shape data from a Maya node and save it to disk as JSON.
+
+    Args:
+        node_name: Name of the Maya transform node to capture.
+        name: Optional name for the saved shape (defaults to node name).
+        folder_path: Destination folder (defaults to user library path).
+        category: Optional subfolder category for organization.
+        normalize: Whether to normalize the shape to unit scale (default: True).
+        thumbnail: Whether to capture a thumbnail image (default: True).
+
+    Returns:
+        Path or None: Path to the saved JSON file, or None on error.
+    """
     data = capture(node_name, name=name, normalize=normalize)
     if not data:
         LOG.error(f"No curve data found on node '{node_name}'.")
@@ -247,7 +331,10 @@ def save_to_disk(data, name, folder_path, category=None):
 
     return str(full_path)
 
-def capture_thumbnail(node_name, name, folder_path, category=None, camera_position=None):
+
+def capture_thumbnail(
+    node_name, name, folder_path, category=None, camera_position=None
+):
     """Snapshot the thumbnail of the current viewport for the shape."""
     # Note: Camera creation is kept for potential future setup,
     # though playblast currently grabs active view.
@@ -318,6 +405,7 @@ def capture_thumbnail(node_name, name, folder_path, category=None, camera_positi
     render_globals["multiSampleCount"].value = _original_sample_count
     return file_path
 
+
 def _normalize_ratio(all_points):
     """Calculate the normalization ratio for fitting into a unit cube."""
     xs = [point[0] for point in all_points]
@@ -338,16 +426,17 @@ def _normalize_ratio(all_points):
 
     return 1.0 / max_dim
 
+
 def _scale_data(data, scale):
     """Scales the shape data by the given uniform scale factor."""
     for curve in data["curves"]:
         new_points = []
         for point in curve["point"]:
-            new_points.append(
-                (point[0] * scale, point[1] * scale, point[2] * scale))
+            new_points.append((point[0] * scale, point[1] * scale, point[2] * scale))
         curve["point"] = new_points
 
     return data
+
 
 def _resolve_folder_path(folder_path, category):
     if isinstance(folder_path, str):
@@ -356,6 +445,7 @@ def _resolve_folder_path(folder_path, category):
         folder_path = folder_path / category
     folder_path.mkdir(parents=True, exist_ok=True)
     return folder_path
+
 
 def _guess_camera_view(node_name):
     """Depending on the bounding box of the node, select the best camera view.

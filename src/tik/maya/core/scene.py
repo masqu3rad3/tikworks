@@ -1,25 +1,36 @@
 """Module for tikmaya which handles scene-related functions."""
 
 from maya import cmds
-from maya.api import OpenMaya
 
 from . import apicommon
-from .registry import resolve, is_registered
 from .decorators import alias
+from .registry import is_registered, resolve
 
 # --- DYNAMIC WRAPPER CONFIGURATION ---
 
 # Commands that return nodes and should be auto-converted to tik objects.
 _NODE_FACTORIES = {
-    "listRelatives", "listConnections", "listHistory",
-    "duplicate", "instance",
-    "polyCube", "polySphere", "polyPlane", "polyCylinder", "polyTorus",
-    "polyExtrudeFacet", "polyBevel",
-    "spaceLocator", "group", "circle", "curve",
+    "listRelatives",
+    "listConnections",
+    "listHistory",
+    "duplicate",
+    "instance",
+    "polyCube",
+    "polySphere",
+    "polyPlane",
+    "polyCylinder",
+    "polyTorus",
+    "polyExtrudeFacet",
+    "polyBevel",
+    "spaceLocator",
+    "group",
+    "circle",
+    "curve",
     "rename",
     # We do NOT need "ls" or "createNode" here because
     # these are handled internally in scene module.
 }
+
 
 def _clean_input(data):
     """Recursively converts tik Objects to strings."""
@@ -58,10 +69,12 @@ def _proxy_wrapper(func_name, *args, **kwargs):
 
     return result
 
+
 @alias("ls")
 def list_scene_nodes(*args, **kwargs):
     """Wrapper for cmds.ls to list scene nodes of a specific type."""
     return [resolve(node) for node in cmds.ls(*args, **kwargs)]
+
 
 @alias("select")
 def select_nodes(*args, **kwargs):
@@ -70,43 +83,14 @@ def select_nodes(*args, **kwargs):
     clean_kwargs = _clean_input(kwargs)
     cmds.select(*clean_args, **clean_kwargs)
 
-# def _normalize_mobject(parent):
-#     if not isinstance(parent, OpenMaya.MObject):
-#         sel = OpenMaya.MSelectionList()
-#         sel.add(str(parent))
-#         parent = sel.getDependNode(0)
-#     return parent
-
-# def create_node_with_dag_modifier(node_type: str, parent=None, name=None) -> str:
-#     # if there is a parent, make sure that it is an MObject
-#
-#     mod = OpenMaya.MDagModifier()
-#     if parent:
-#         # parent = _normalize_mobject(parent)
-#         node_object = mod.createNode(node_type, parent=parent)
-#     else:
-#         node_object = mod.createNode(node_type)
-#     if name:
-#         mod.renameNode(node_object, name)
-#     mod.doIt()
-#     apicommon.undocommit(undo=mod.undoIt, redo=mod.doIt)
-#     dag_path = OpenMaya.MDagPath.getAPathTo(node_object)
-#     return dag_path.fullPathName()
-#
-# def create_node_with_dg_modifier(node_type: str, name=None) -> str:
-#     mod = OpenMaya.MDGModifier()
-#     node_object = mod.createNode(node_type)
-#     if name:
-#         mod.renameNode(node_object, name)
-#     mod.doIt()
-#     apicommon.undocommit(undo=mod.undoIt, redo=mod.doIt)
-#     return OpenMaya.MFnDependencyNode(node_object).name()
 
 @alias("createNode")
 def create_node(node_type: str, name=None, parent=None):
     """Create a new node of the specified type and return its wrapper."""
     try:
-        full_name = apicommon.create_node_with_dag_modifier(node_type, name=name, parent=parent)
+        full_name = apicommon.create_node_with_dag_modifier(
+            node_type, name=name, parent=parent
+        )
     except TypeError:
         try:
             full_name = apicommon.create_node_with_dg_modifier(node_type, name=name)

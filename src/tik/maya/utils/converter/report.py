@@ -77,7 +77,9 @@ class ConversionReport:
     @property
     def warnings(self) -> List[ConversionEntry]:
         """Return all warning entries."""
-        return [entry for entry in self.entries if entry.entry_type == EntryType.WARNING]
+        return [
+            entry for entry in self.entries if entry.entry_type == EntryType.WARNING
+        ]
 
     @property
     def success_count(self) -> int:
@@ -125,4 +127,3 @@ class ConversionReport:
 
         lines.append("=" * 60)
         return "\n".join(lines)
-

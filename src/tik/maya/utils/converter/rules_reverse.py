@@ -10,10 +10,9 @@ in the reverse direction: compressing cmds into tik.maya.
 """
 
 import ast
-import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -219,8 +218,12 @@ def extract_attr_path_from_arg(arg: ast.AST) -> Tuple[Optional[str], Optional[st
 
         # Pattern: f'{node}.{attr}'
         if len(parts) == 3:
-            if (parts[0][0] == "expr" and parts[1][0] == "str" and
-                    parts[1][1] == "." and parts[2][0] == "expr"):
+            if (
+                parts[0][0] == "expr"
+                and parts[1][0] == "str"
+                and parts[1][1] == "."
+                and parts[2][0] == "expr"
+            ):
                 return parts[0][1], parts[2][1]
 
     return None, None
@@ -254,7 +257,11 @@ class CreateNodeToTransformRule(ReverseConversionRule):
             if kw.arg is not None:
                 kwargs_parts.append(f"{kw.arg}={ast.unparse(kw.value)}")
 
-        converted = f"Transform.create({', '.join(kwargs_parts)})" if kwargs_parts else "Transform.create()"
+        converted = (
+            f"Transform.create({', '.join(kwargs_parts)})"
+            if kwargs_parts
+            else "Transform.create()"
+        )
 
         return ReverseRuleMatch(
             rule_name=self.name,
@@ -283,7 +290,11 @@ class JointToJointCreateRule(ReverseConversionRule):
             if kw.arg is not None:
                 kwargs_parts.append(f"{kw.arg}={ast.unparse(kw.value)}")
 
-        converted = f"Joint.create({', '.join(kwargs_parts)})" if kwargs_parts else "Joint.create()"
+        converted = (
+            f"Joint.create({', '.join(kwargs_parts)})"
+            if kwargs_parts
+            else "Joint.create()"
+        )
 
         return ReverseRuleMatch(
             rule_name=self.name,
@@ -312,7 +323,11 @@ class PolySphereToMeshCreateRule(ReverseConversionRule):
             if kw.arg is not None:
                 kwargs_parts.append(f"{kw.arg}={ast.unparse(kw.value)}")
 
-        converted = f"Mesh.create('polySphere', {', '.join(kwargs_parts)})" if kwargs_parts else "Mesh.create('polySphere')"
+        converted = (
+            f"Mesh.create('polySphere', {', '.join(kwargs_parts)})"
+            if kwargs_parts
+            else "Mesh.create('polySphere')"
+        )
 
         return ReverseRuleMatch(
             rule_name=self.name,
@@ -341,7 +356,11 @@ class PolyCubeToMeshCreateRule(ReverseConversionRule):
             if kw.arg is not None:
                 kwargs_parts.append(f"{kw.arg}={ast.unparse(kw.value)}")
 
-        converted = f"Mesh.create('polyCube', {', '.join(kwargs_parts)})" if kwargs_parts else "Mesh.create('polyCube')"
+        converted = (
+            f"Mesh.create('polyCube', {', '.join(kwargs_parts)})"
+            if kwargs_parts
+            else "Mesh.create('polyCube')"
+        )
 
         return ReverseRuleMatch(
             rule_name=self.name,
@@ -370,7 +389,11 @@ class PolyPlaneToMeshCreateRule(ReverseConversionRule):
             if kw.arg is not None:
                 kwargs_parts.append(f"{kw.arg}={ast.unparse(kw.value)}")
 
-        converted = f"Mesh.create('polyPlane', {', '.join(kwargs_parts)})" if kwargs_parts else "Mesh.create('polyPlane')"
+        converted = (
+            f"Mesh.create('polyPlane', {', '.join(kwargs_parts)})"
+            if kwargs_parts
+            else "Mesh.create('polyPlane')"
+        )
 
         return ReverseRuleMatch(
             rule_name=self.name,
@@ -399,7 +422,11 @@ class PolyCylinderToMeshCreateRule(ReverseConversionRule):
             if kw.arg is not None:
                 kwargs_parts.append(f"{kw.arg}={ast.unparse(kw.value)}")
 
-        converted = f"Mesh.create('polyCylinder', {', '.join(kwargs_parts)})" if kwargs_parts else "Mesh.create('polyCylinder')"
+        converted = (
+            f"Mesh.create('polyCylinder', {', '.join(kwargs_parts)})"
+            if kwargs_parts
+            else "Mesh.create('polyCylinder')"
+        )
 
         return ReverseRuleMatch(
             rule_name=self.name,
@@ -463,7 +490,11 @@ class SpaceLocatorToLocatorCreateRule(ReverseConversionRule):
             if kw.arg is not None:
                 kwargs_parts.append(f"{kw.arg}={ast.unparse(kw.value)}")
 
-        converted = f"Locator.create({', '.join(kwargs_parts)})" if kwargs_parts else "Locator.create()"
+        converted = (
+            f"Locator.create({', '.join(kwargs_parts)})"
+            if kwargs_parts
+            else "Locator.create()"
+        )
 
         return ReverseRuleMatch(
             rule_name=self.name,

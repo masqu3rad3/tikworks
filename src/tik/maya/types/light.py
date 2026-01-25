@@ -2,8 +2,8 @@
 
 from maya import cmds
 
-from ..core.shapenode import ShapeNode
 from ..core.registry import register
+from ..core.shapenode import ShapeNode
 
 
 @register("light")
