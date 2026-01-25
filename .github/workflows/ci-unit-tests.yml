@@ -33,15 +33,11 @@ jobs:
         run: |
           wget https://bootstrap.pypa.io/pip/get-pip.py
           mayapy get-pip.py --user --no-cache-dir \
-            --index-url http://pypi.org/simple/ \
-            --trusted-host pypi.org \
-            --trusted-host pypi.python.org \
-            --trusted-host files.pythonhosted.org
+            --index-url http://mirrors.aliyun.com/pypi/simple/ \
+            --trusted-host mirrors.aliyun.com
           mayapy -m pip install --user --no-cache-dir \
-            --index-url http://pypi.org/simple/ \
-            --trusted-host pypi.org \
-            --trusted-host pypi.python.org \
-            --trusted-host files.pythonhosted.org \
+            --index-url http://mirrors.aliyun.com/pypi/simple/ \
+            --trusted-host mirrors.aliyun.com \
             coverage==5.5 \
             -r requirements-dev.txt
 #          wget https://bootstrap.pypa.io/pip/get-pip.py
