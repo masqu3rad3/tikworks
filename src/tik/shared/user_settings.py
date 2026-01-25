@@ -16,7 +16,6 @@ from .io import IO
 LOG = logging.getLogger(__name__)
 
 
-
 class UserSettings:
     """Generic Settings class to hold, read, and compare dictionary data."""
 
@@ -410,5 +409,3 @@ class SettingsManager:
     def __repr__(self) -> str:
         """Return the current settings representation."""
         return repr(self.get_all_settings())
-
-

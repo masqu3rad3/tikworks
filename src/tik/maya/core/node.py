@@ -2,20 +2,24 @@
 
 This module is also a fallback for all unregistered node types.
 """
+
 import logging
+
 import maya.cmds as cmds
 from maya.api import OpenMaya
 
-from .plug import Plug
+from .apicommon import undocommit
 from .decorators import protected
+from .plug import Plug
 from .registry import resolve, set_default_factory
-from . apicommon import undocommit
 from .scene import create_node
 
 LOG = logging.getLogger(__name__)
 
+
 class Node:
     """Base wrapper around a Maya dependency node or DAG node."""
+
     is_dag = False
 
     def __init__(self, long_name, **kwargs):
@@ -25,7 +29,7 @@ class Node:
         self._m_obj = self._sel.getDependNode(0)
         self._fn_dep = OpenMaya.MFnDependencyNode(self._m_obj)
         self._uuid = self._fn_dep.uuid().asString()
-        self._m_obj_handle = None # lazy init
+        self._m_obj_handle = None  # lazy init
 
     @classmethod
     def create(cls, cmd, name=None, parent=None):
@@ -73,7 +77,6 @@ class Node:
     @property
     def uuid(self):
         """The UUID of the node."""
-        # return self._uuid or self._fn_dep.uuid().asString()
         return self._uuid
 
     @property
@@ -116,14 +119,10 @@ class Node:
     @protected
     def rename(self, new_name):
         """Rename the node."""
-        # if self.exists():
         mod = OpenMaya.MDGModifier()
         mod.renameNode(self.m_obj, new_name)
         mod.doIt()
-        undocommit(
-            undo=mod.undoIt,
-            redo=mod.doIt
-        )
+        undocommit(undo=mod.undoIt, redo=mod.doIt)
         return self
 
     def exists(self) -> bool:
@@ -173,5 +172,6 @@ class Node:
     def __repr__(self):
         """Return a debug-friendly representation."""
         return f"<{self.__class__.__name__} '{self.name}'>"
+
 
 set_default_factory(Node)

@@ -1,11 +1,13 @@
 """Decorator functions for Tikmaya core functionalities."""
+
 from __future__ import annotations
 
 import sys
 from functools import wraps
-from typing import Callable, Any
+from typing import Any, Callable
 
 from maya import cmds
+
 
 def add_aliases(aliases):
     """Attach alias properties to a class.
@@ -28,6 +30,7 @@ def add_aliases(aliases):
         for original, alias in aliases.items():
             setattr(cls, alias, getattr(cls, original))
         return cls
+
     return decorator
 
 
@@ -48,6 +51,7 @@ def alias(alias_name):
 
     return decorator
 
+
 def undo(func):
     """Puts the wrapped `func` into a single Maya Undo action."""
 
@@ -58,7 +62,9 @@ def undo(func):
             return func(*args, **kwargs)
         finally:
             cmds.undoInfo(closeChunk=True)
+
     return _undofunc
+
 
 def keepselection(func):
     """Decorator method to keep the current selection. Useful where

@@ -7,9 +7,9 @@ A Controller is a semantic wrapper around a Transform node that:
 - exposes a controller-centric API
 """
 
+import logging
 
 from maya import cmds
-import logging
 
 from ..core.decorators import keepselection
 from ..core.registry import resolve
@@ -18,24 +18,23 @@ from ..utils.control_shapes import ControlShapeLibrary  # Import the manager
 
 LOG = logging.getLogger(__name__)
 
+
 def replace_curve(orig_curve, new_curve, snap=True, transfer_color=True):
-    """Replace orig_curve with new_curve.
+    """Replace curve shapes on a controller.
 
     Args:
-        orig_curve (str): nurbsCurve to replace.
-        new_curve (str): nurbsCurve to replace with.
-        maintain_offset (bool, optional): Match position. Defaults to True.
+        orig_curve: Name of the original nurbsCurve transform to replace.
+        new_curve: Name of the new nurbsCurve transform to replace with.
+        snap: Whether to match the position of the new curve to the original (default: True).
+        transfer_color: Whether to transfer the color override from new to original (default: True).
     """
     if snap:
         new_curve = cmds.duplicate(new_curve, rc=1)[0]
         cmds.parentConstraint(orig_curve, new_curve)
 
-    orig_shapes = cmds.listRelatives(orig_curve, shapes=True,
-                                         type="nurbsCurve")
+    orig_shapes = cmds.listRelatives(orig_curve, shapes=True, type="nurbsCurve")
 
-    new_shapes = cmds.listRelatives(new_curve, shapes=True,
-                                    type="nurbsCurve")
-
+    new_shapes = cmds.listRelatives(new_curve, shapes=True, type="nurbsCurve")
 
     color = None
     if transfer_color:
@@ -65,24 +64,16 @@ def replace_curve(orig_curve, new_curve, snap=True, transfer_color=True):
         if color:
             cmds.setAttr(f"{orig_shape}.overrideEnabled", 1)
             cmds.setAttr(f"{orig_shape}.overrideColor", color)
-        cmds.connectAttr(
-            f"{new_shape}.worldSpace",
-            f"{orig_shape}.create"
-        )
+        cmds.connectAttr(f"{new_shape}.worldSpace", f"{orig_shape}.create")
 
         cmds.dgeval(f"{orig_shape}.worldSpace")
-        cmds.disconnectAttr(
-            f"{new_shape}.worldSpace",
-            f"{orig_shape}.create"
-        )
+        cmds.disconnectAttr(f"{new_shape}.worldSpace", f"{orig_shape}.create")
 
         spans = cmds.getAttr(f"{orig_shape}.degree")
         degree = cmds.getAttr(f"{orig_shape}.spans")
         for idx in range(0, spans + degree):
             cmds.xform(
                 f"{orig_shape}.cv[{idx}]",
-                # orig_shape + ".cv[" + str(idx) + "]",
-                # t=cmds.pointPosition(new_shape + ".cv[" + str(idx) + "]"),
                 translation=cmds.pointPosition(f"{new_shape}.cv[{idx}]"),
                 worldSpace=True,
             )
@@ -92,20 +83,43 @@ def replace_curve(orig_curve, new_curve, snap=True, transfer_color=True):
 
 
 class Controller:
+    """Semantic wrapper for controller transforms in Maya.
+
+    A Controller is a Transform node that:
+    - Is tagged as a controller
+    - Manages NURBS curve shapes for visual representation
+    - Provides a controller-centric API for shape and color management
+    """
+
     ROLE_ATTR = "isController"
-    # REQUIRED_TYPE = "transform"
 
     def __init__(self, node):
+        """Initialize a Controller wrapper.
+
+        Args:
+            node: Node name, path, or Transform wrapper to wrap as a controller.
+
+        Raises:
+            TypeError: If the node is not a Transform.
+        """
         self.node = resolve(node)
         # Validation
         if not isinstance(self.node, Transform):
-            raise TypeError(
-                f"Controller must wrap a Transform, got {type(self.node)}")
+            raise TypeError(f"Controller must wrap a Transform, got {type(self.node)}")
 
     @classmethod
     def create(cls, name, shape="Circle", size=1.0, color=None, **kwargs):
-        """
-        Create a new controller transform and apply controller semantics.
+        """Create a new controller transform with specified shape and properties.
+
+        Args:
+            name: Name for the new controller.
+            shape: Shape name from library or curve data dict (default: "Circle").
+            size: Scale multiplier for the shape (default: 1.0).
+            color: Color to apply (int, tuple, or Color object).
+            **kwargs: Additional arguments passed to Transform.create().
+
+        Returns:
+            Controller: The newly created controller instance.
         """
         node = Transform.create(name=name, **kwargs)
         ctrl = cls(node.long_name)
@@ -122,6 +136,17 @@ class Controller:
 
     @classmethod
     def from_node(cls, node):
+        """Create a Controller wrapper from an existing controller node.
+
+        Args:
+            node: Node name or wrapper that is tagged as a controller.
+
+        Returns:
+            Controller: Controller instance wrapping the node.
+
+        Raises:
+            RuntimeError: If the node is not tagged as a controller.
+        """
         node = resolve(node)
         if not cls.is_controller(node):
             raise RuntimeError(f"Node '{node.name}' is not a Controller")
@@ -129,6 +154,14 @@ class Controller:
 
     @classmethod
     def is_controller(cls, node) -> bool:
+        """Check if a node is tagged as a controller.
+
+        Args:
+            node: Node name or wrapper to check.
+
+        Returns:
+            bool: True if the node is tagged as a controller, False otherwise.
+        """
         node = resolve(node)
         return node.has_attr(cls.ROLE_ATTR) and node[cls.ROLE_ATTR].value
 
@@ -138,6 +171,13 @@ class Controller:
 
     @property
     def color(self):
+        """Get or set the display color of the controller shapes.
+
+        Can be set to:
+            - int: Maya index color (0-31)
+            - tuple/list: RGB values (0.0-1.0)
+            - Color: tik.core.Color object
+        """
         return self.get_color()
 
     @color.setter
@@ -146,7 +186,11 @@ class Controller:
 
     @property
     def transform(self) -> Transform:
-        """Pass-through to the underlying transform node."""
+        """Pass-through to the underlying transform node.
+
+        Returns:
+            Transform: The wrapped transform node.
+        """
         return self.node
 
     # --------------------------------------------------
@@ -154,6 +198,7 @@ class Controller:
     # --------------------------------------------------
 
     def _tag_as_controller(self):
+        """Tag the transform as a controller by adding or setting the role attribute."""
         if not self.node[self.ROLE_ATTR].exists():
             self.node.add_attr(self.ROLE_ATTR, attributeType="bool", defaultValue=True)
         self.node[self.ROLE_ATTR].value = True
@@ -164,6 +209,11 @@ class Controller:
 
     @property
     def shapes(self) -> list:
+        """Return all shape nodes under the controller transform.
+
+        Returns:
+            list: List of shape node wrappers.
+        """
         return self.node.shapes
 
     def clear_shapes(self):
@@ -172,36 +222,48 @@ class Controller:
             shape.delete()
 
     def add_shape(self, curve_data: dict, size=1.0):
+        """Add a curve shape under the controller transform.
+
+        Args:
+            curve_data: Dictionary containing curve definition with keys:
+                - 'point': List of (x, y, z) tuples for CV positions
+                - 'degree': Curve degree (default: 3)
+                - 'periodic': Whether curve is periodic (default: False)
+                - 'knot': Optional knot vector
+            size: Scale multiplier applied to all points (default: 1.0).
         """
-        Add a curve shape under the controller transform.
-        Applies size scaling to the incoming points.
-        """
-        points = curve_data['point']
+        points = curve_data["point"]
         if size != 1.0:
-            points = [(point[0] * size, point[1] * size, point[2] * size) for point in points]
+            points = [
+                (point[0] * size, point[1] * size, point[2] * size) for point in points
+            ]
 
         kwargs = {
             "point": points,
-            "degree": curve_data.get('degree', 3),
-            "periodic": curve_data.get('periodic', False)
+            "degree": curve_data.get("degree", 3),
+            "periodic": curve_data.get("periodic", False),
         }
-        if curve_data.get('knot'):
-            kwargs["knot"] = curve_data.get('knot')
+        if curve_data.get("knot"):
+            kwargs["knot"] = curve_data.get("knot")
 
         curve_trans = cmds.curve(**kwargs)
         curve_shape = cmds.listRelatives(curve_trans, shapes=True, fullPath=True)[0]
-        curve_shape = cmds.rename(curve_shape, f"{self.node.name}Shape#")  # Ensure unique name
+        curve_shape = cmds.rename(
+            curve_shape, f"{self.node.name}Shape#"
+        )  # Ensure unique name
 
         cmds.parent(curve_shape, self.node.name, relative=True, shape=True)
         cmds.delete(curve_trans)
 
     def set_shape(self, shape, size=1.0):
-        """
-        Replace controller shapes.
+        """Replace controller shapes with a new shape.
 
         Args:
-            shape (str | dict): Name of shape in library OR raw dict data
-            size (float): Scale multiplier (shapes are normalized to 1.0)
+            shape: Shape name from library (str) or raw curve data (dict).
+            size: Scale multiplier, shapes are normalized to 1.0 (default: 1.0).
+
+        Note:
+            This clears all existing shapes before adding the new one.
         """
         self.clear_shapes()
 
@@ -220,34 +282,29 @@ class Controller:
             raise TypeError("Shape must be a string name or curve data dict")
 
         # Iterate through all curves in the shape definition
-        for curve_def in shape_data.get('curves', []):
+        for curve_def in shape_data.get("curves", []):
             self.add_shape(curve_def, size=size)
 
     @keepselection
     def replace_shape(self, shape, size=1.0, snap=True, transfer_color=True):
-        """
-        Replace existing controller shapes with new shape.
+        """Replace existing controller shapes while preserving transformations.
 
         Args:
-            shape (str | dict): Name of shape in library OR raw dict data
-            size (float): Scale multiplier (shapes are normalized to 1.0)
-            snap (bool): Whether to snap new shape to old shape position
-            transfer_color (bool): Whether to transfer color from old shape
+            shape: Shape name from library (str) or raw curve data (dict).
+            size: Scale multiplier (default: 1.0).
+            snap: Whether to match the position of the new shape (default: True).
+            transfer_color: Whether to transfer color from the old shape (default: True).
         """
-
 
         # Create new temporary shapes and replace
         temp_ctrl = Controller.create(
-            name=f"{self.node.name}_tempShape",
-            shape=shape,
-            size=size,
-            color=None
+            name=f"{self.node.name}_tempShape", shape=shape, size=size, color=None
         )
         replace_curve(
             orig_curve=self.node.name,
             new_curve=temp_ctrl.node.name,
             snap=snap,
-            transfer_color=transfer_color
+            transfer_color=transfer_color,
         )
         temp_ctrl.node.delete()
 
@@ -255,19 +312,23 @@ class Controller:
         """Get the display color of the controller shapes.
 
         Args:
-            as_color (bool): If True, return as Color object; else return raw value.
+            as_color: If True, return as Color object when using RGB;
+                     otherwise return raw value (default: False).
+
+        Returns:
+            int, tuple, Color, or None: The color value or None if no override is set.
         """
         return self.node.get_color(as_color=as_color)
 
     def set_color(self, color):
-        """
-        Set the display color of the controller shapes.
+        """Set the display color of the controller shapes.
 
         Args:
-            color (int | tuple | list | color.Color):
+            color: Color specification:
                 - int: Maya index color (0-31)
-                - tuple/list: RGB values (0.0 - 1.0)
-                - color.Color: Color object
+                - tuple/list: RGB values (0.0-1.0)
+                - Color: tik.core.Color object
+                - None: Disable color override
         """
         self.node.set_color(color)
 
@@ -276,6 +337,7 @@ class Controller:
     # --------------------------------------------------
 
     def _post_create_cleanup(self):
+        """Clean up after controller creation by hiding history attributes."""
         # hide history in channel box
         if self.node["isHistoricallyInteresting"].exists():
             self.node["isHistoricallyInteresting"].value = 0
@@ -285,4 +347,12 @@ class Controller:
     # --------------------------------------------------
 
     def __getattr__(self, item):
+        """Pass through attribute access to the underlying transform node.
+
+        Args:
+            item: Attribute name to access.
+
+        Returns:
+            The attribute value from the transform node.
+        """
         return getattr(self.node, item)

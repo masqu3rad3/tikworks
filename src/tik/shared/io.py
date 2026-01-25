@@ -63,9 +63,7 @@ class IO:
             return self._load_json(path)
         return False
 
-    def write(
-        self, data: Any, file_path: Optional[Union[str, Path]] = None
-    ) -> Path:
+    def write(self, data: Any, file_path: Optional[Union[str, Path]] = None) -> Path:
         """Write data to the given or class-defined file_path.
 
         Args:

@@ -1,11 +1,12 @@
 """Blendshape type for Maya integration."""
+
 from pathlib import Path
 
-from maya import cmds
-from maya import OpenMaya
+from maya import OpenMaya, cmds
 
 from ..core.node import Node
 from ..core.registry import register, resolve, undocommit
+
 
 @register("blendShape")
 class BlendShape(Node):
@@ -47,6 +48,7 @@ class BlendShape(Node):
     def next_target(self) -> int:
         """Returns the next free index from a multi index attribute"""
         return cmds.blendShape(self.name, query=True, weightCount=True)
+
     # --------------------------------------------------------------------------
     # Private Helpers
     # --------------------------------------------------------------------------
@@ -60,9 +62,6 @@ class BlendShape(Node):
         if not connected_geos:
             raise RuntimeError(f"No geometry connected to {self.name}")
 
-        # geom_index = 0
-        # target_geo_long = ""
-
         if geometry:
             geometry_obj = resolve(geometry)
             target_geo_long = geometry_obj.long_name
@@ -72,7 +71,8 @@ class BlendShape(Node):
                 geom_index = long_connected.index(target_geo_long)
             except ValueError:
                 raise ValueError(
-                    f"Geometry '{geometry}' is not connected to blendShape '{self.name}'")
+                    f"Geometry '{geometry}' is not connected to blendShape '{self.name}'"
+                )
         else:
             target_geo_long = cmds.ls(connected_geos[0], long=True)[0]
             geom_index = 0
@@ -92,7 +92,9 @@ class BlendShape(Node):
                 return self[f"weightList[{geom_index}]"]["weights"].mplug
             else:
                 # path: inputTarget[geom_index].inputTargetGroup[target_id].targetWeights
-                return self[f"inputTarget[{geom_index}]"][f"inputTargetGroup[{target_id}]"]["targetWeights"].mplug
+                return self[f"inputTarget[{geom_index}]"][
+                    f"inputTargetGroup[{target_id}]"
+                ]["targetWeights"].mplug
         except Exception:
             return None
 
@@ -144,7 +146,7 @@ class BlendShape(Node):
             target=(connected_mesh, idx, target_geometry, 1.0),
             weight=[idx, weight],
             inBetween=False,
-            **kwargs
+            **kwargs,
         )
 
         if name:
@@ -177,9 +179,8 @@ class BlendShape(Node):
             edit=True,
             target=(connected_mesh, target_id, target_geometry, weight),
             inBetween=True,
-            **kwargs
+            **kwargs,
         )
-
 
     def get_target_weights(self, target, geometry=None):
         """
@@ -208,11 +209,13 @@ class BlendShape(Node):
             target_id = target
         else:
             raise TypeError("Target must be an integer index or string name.")
-        
+
         idx, count, geo_name = self._get_geometry_info(geometry)
 
         if len(weights) != count:
-            raise ValueError(f"Weight length {len(weights)} != {geo_name} count {count}")
+            raise ValueError(
+                f"Weight length {len(weights)} != {geo_name} count {count}"
+            )
 
         plug = self._get_weight_plug(idx, target_id=target_id)
         self._write_weights(plug, weights)
@@ -223,7 +226,9 @@ class BlendShape(Node):
         (This corresponds to the BlendShape node entry in the Paint Weights tool).
         """
         idx, count, _ = self._get_geometry_info(geometry)
-        plug = self._get_weight_plug(idx, target_id=None) # target_id None implies Base/Deformer
+        plug = self._get_weight_plug(
+            idx, target_id=None
+        )  # target_id None implies Base/Deformer
         return self._read_weights(plug, count)
 
     def set_weights(self, weights, geometry=None):
@@ -233,9 +238,13 @@ class BlendShape(Node):
         idx, count, geo_name = self._get_geometry_info(geometry)
 
         if len(weights) != count:
-            raise ValueError(f"Weight length {len(weights)} != {geo_name} count {count}")
+            raise ValueError(
+                f"Weight length {len(weights)} != {geo_name} count {count}"
+            )
 
-        plug = self._get_weight_plug(idx, target_id=None) # target_id None implies Base/Deformer
+        plug = self._get_weight_plug(
+            idx, target_id=None
+        )  # target_id None implies Base/Deformer
         self._write_weights(plug, weights)
 
     def index_by_name(self, target_name):
@@ -243,13 +252,17 @@ class BlendShape(Node):
         for index in range(self.weight_count):
             if cmds.aliasAttr(self[f"w[{index}]"].path, query=True) == target_name:
                 return index
-        raise ValueError(f"Target name '{target_name}' not found in blendShape '{self.name}'")
+        raise ValueError(
+            f"Target name '{target_name}' not found in blendShape '{self.name}'"
+        )
 
     def name_by_index(self, target_index):
         """Get the name of a target by its index."""
         target_name = cmds.aliasAttr(self[f"w[{target_index}]"].path, query=True)
         if target_name is None:
-            raise ValueError(f"Target index '{target_index}' not found in blendShape '{self.name}'")
+            raise ValueError(
+                f"Target index '{target_index}' not found in blendShape '{self.name}'"
+            )
         return target_name
 
     def __split_path(self, file_path, validate=False):
@@ -285,13 +298,8 @@ class BlendShape(Node):
         default_kwargs.update(kwargs)
 
         cmds.deformerWeights(
-            file_name,
-            export=True,
-            deformer=self.name,
-            path=file_dir,
-            **default_kwargs
+            file_name, export=True, deformer=self.name, path=file_dir, **default_kwargs
         )
-
 
     def load_weights(self, file_path, method="index", **kwargs):
         """Import blendshape weights from a file.
@@ -303,10 +311,7 @@ class BlendShape(Node):
         """
         file_dir, file_name = self.__split_path(file_path, validate=False)
 
-        default_kwargs = {
-            "ignoreName": True,
-            "attribute": ["origin", "envelope"]
-        }
+        default_kwargs = {"ignoreName": True, "attribute": ["origin", "envelope"]}
         # update the default kwargs with any user-provided kwargs
         default_kwargs.update(kwargs)
 
@@ -316,5 +321,5 @@ class BlendShape(Node):
             im=True,
             deformer=self.name,
             method=method,
-            **default_kwargs
+            **default_kwargs,
         )

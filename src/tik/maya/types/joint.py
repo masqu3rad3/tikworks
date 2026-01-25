@@ -1,7 +1,8 @@
 import maya.cmds as cmds
-from .transform import Transform
-from ..core.registry import register
+
 from ..core.apicommon import create_node_with_dag_modifier
+from ..core.registry import register
+from .transform import Transform
 
 
 @register("joint")

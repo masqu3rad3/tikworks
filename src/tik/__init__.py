@@ -1,9 +1,7 @@
-
-from tik.shared.ui.Qt import QtWidgets, QtCore, QtGui
-
-import sys
+"""Controller shape library UI widget for TikWorks Maya tools."""
 
 from tik.maya.utils import control_shapes
+from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 
 cs_handler = control_shapes.ControlShapeLibrary()
 MOCK_DATA = cs_handler.get_shape_data()
@@ -13,10 +11,12 @@ MOCK_DATA = cs_handler.get_shape_data()
 # THE MODELS
 # ==============================================================================
 
+
 class ShapeLibraryModel(QtGui.QStandardItemModel):
     """
     Standard Item Model organized as a Tree: Root -> Category -> Shape
     """
+
     RolePath = QtCore.Qt.UserRole + 1
     RoleCategory = QtCore.Qt.UserRole + 2
     RoleThumbnail = QtCore.Qt.UserRole + 3
@@ -32,7 +32,7 @@ class ShapeLibraryModel(QtGui.QStandardItemModel):
 
         # Sort data to ensure consistent order
         for name, info in data.items():
-            cat = info.get('category', 'Uncategorized')
+            cat = info.get("category", "Uncategorized")
             if cat not in categories:
                 categories[cat] = []
             categories[cat].append((name, info))
@@ -47,17 +47,18 @@ class ShapeLibraryModel(QtGui.QStandardItemModel):
                 shape_item = QtGui.QStandardItem(shape_name)
                 shape_item.setEditable(False)
 
-                json_path = info['path']
+                json_path = info["path"]
                 shape_item.setData(str(json_path), self.RolePath)
                 shape_item.setData(cat_name, self.RoleCategory)
 
                 # Thumbnail Logic
-                thumb_path = json_path.with_suffix('.png')
+                thumb_path = json_path.with_suffix(".png")
                 if thumb_path.exists():
                     pixmap = QtGui.QPixmap(str(thumb_path))
                 else:
-                    pixmap = self._get_std_icon(
-                        QtWidgets.QStyle.SP_FileIcon).pixmap(64, 64)
+                    pixmap = self._get_std_icon(QtWidgets.QStyle.SP_FileIcon).pixmap(
+                        64, 64
+                    )
 
                 shape_item.setData(pixmap, self.RoleThumbnail)
                 shape_item.setIcon(QtGui.QIcon(pixmap))
@@ -151,6 +152,7 @@ class FlatLeafProxyModel(QtCore.QAbstractProxyModel):
 # HOVER OVERLAY
 # ==============================================================================
 
+
 class HoverOverlay(QtWidgets.QWidget):
     """Floating thumbnail widget."""
 
@@ -164,9 +166,9 @@ class HoverOverlay(QtWidgets.QWidget):
         self.label = QtWidgets.QLabel()
         self.label.setStyleSheet("""
             QLabel {
-                border: 2px solid #555; 
-                background: #2b2b2b; 
-                padding: 4px; 
+                border: 2px solid #555;
+                background: #2b2b2b;
+                padding: 4px;
                 border-radius: 4px;
             }
         """)
@@ -181,7 +183,9 @@ class HoverOverlay(QtWidgets.QWidget):
 # MAIN WIDGET
 # ==============================================================================
 
+
 class ShapeLibraryWidget(QtWidgets.QWidget):
+    """Main widget for browsing and selecting controller shapes."""
 
     def __init__(self, shape_data, parent=None):
         super().__init__(parent)
@@ -199,8 +203,7 @@ class ShapeLibraryWidget(QtWidgets.QWidget):
         # 1. Hierarchical Proxy (Standard filtering, preserves tree)
         self.proxy_hierarchical = QtCore.QSortFilterProxyModel()
         self.proxy_hierarchical.setSourceModel(self.source_model)
-        self.proxy_hierarchical.setFilterCaseSensitivity(
-            QtCore.Qt.CaseInsensitive)
+        self.proxy_hierarchical.setFilterCaseSensitivity(QtCore.Qt.CaseInsensitive)
         self.proxy_hierarchical.setRecursiveFilteringEnabled(True)
 
         # 2. Flat Proxy (Flattens tree to list)
@@ -210,8 +213,7 @@ class ShapeLibraryWidget(QtWidgets.QWidget):
         # 3. Flat Search Proxy (Filters the Flat list)
         self.proxy_flat_search = QtCore.QSortFilterProxyModel()
         self.proxy_flat_search.setSourceModel(self.proxy_flat_internal)
-        self.proxy_flat_search.setFilterCaseSensitivity(
-            QtCore.Qt.CaseInsensitive)
+        self.proxy_flat_search.setFilterCaseSensitivity(QtCore.Qt.CaseInsensitive)
 
         # -- UI Layout --
         self.main_layout = QtWidgets.QVBoxLayout(self)
@@ -222,8 +224,7 @@ class ShapeLibraryWidget(QtWidgets.QWidget):
 
         # Back Button (Hidden by default, used for diving into folders)
         self.btn_back = QtWidgets.QToolButton()
-        self.btn_back.setIcon(
-            self.style().standardIcon(QtWidgets.QStyle.SP_ArrowBack))
+        self.btn_back.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_ArrowBack))
         self.btn_back.setToolTip("Back to Categories")
         self.btn_back.clicked.connect(self.go_up_level)
         self.btn_back.setVisible(False)
@@ -312,8 +313,9 @@ class ShapeLibraryWidget(QtWidgets.QWidget):
 
     def on_search_changed(self, text):
         # Apply filter to both proxy chains
-        regex = QtCore.QRegularExpression(text,
-                                          QtCore.QRegularExpression.CaseInsensitiveOption)
+        regex = QtCore.QRegularExpression(
+            text, QtCore.QRegularExpression.CaseInsensitiveOption
+        )
         self.proxy_hierarchical.setFilterRegularExpression(regex)
         self.proxy_flat_search.setFilterRegularExpression(regex)
 
@@ -351,11 +353,13 @@ class ShapeLibraryWidget(QtWidgets.QWidget):
             return
 
         # Determine which model is active to map properly
-        active_proxy = self.tree_view.model()  # Both views share the same model reference at any time
+        active_proxy = (
+            self.tree_view.model()
+        )  # Both views share the same model reference at any time
 
         # Map recursively to source
         source_index = index
-        while hasattr(active_proxy, 'mapToSource'):
+        while hasattr(active_proxy, "mapToSource"):
             source_index = active_proxy.mapToSource(source_index)
             active_proxy = active_proxy.sourceModel()
 

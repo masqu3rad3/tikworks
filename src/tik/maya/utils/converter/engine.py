@@ -11,18 +11,17 @@ This module orchestrates the conversion process:
 """
 
 import ast
-from typing import Dict, List, Optional, Set, Tuple, Any
+from typing import Dict, List, Optional, Set
 
 from .codegen import CodeBuilder, generate_cmds_import, generate_header_comment
 from .helpers import (
     HelperRegistry,
     get_default_registry,
     get_unsupported_reason,
-    check_method_support,
 )
-from .parsing import parse_source, get_node_source, TikMayaASTVisitor
-from .report import ConversionReport, ConversionEntry, EntryType
-from .rules import ConversionRule, RuleContext, RuleMatch, get_default_rules
+from .parsing import get_node_source, parse_source
+from .report import ConversionEntry, ConversionReport, EntryType
+from .rules import ConversionRule, RuleContext, get_default_rules
 
 
 class ConversionState:
@@ -96,21 +95,23 @@ class Converter:
     """
 
     # Known tik.maya type names
-    TIK_TYPES = frozenset({
-        "Node",
-        "DagNode",
-        "ShapeNode",
-        "Transform",
-        "Joint",
-        "Mesh",
-        "Curve",
-        "Nurbs",
-        "Locator",
-        "Light",
-        "Camera",
-        "Controller",
-        "Plug",
-    })
+    TIK_TYPES = frozenset(
+        {
+            "Node",
+            "DagNode",
+            "ShapeNode",
+            "Transform",
+            "Joint",
+            "Mesh",
+            "Curve",
+            "Nurbs",
+            "Locator",
+            "Light",
+            "Camera",
+            "Controller",
+            "Plug",
+        }
+    )
 
     def __init__(
         self,
@@ -177,7 +178,6 @@ class Converter:
         )
 
         # Second pass: convert nodes
-        converted_lines = source_lines.copy()
         line_replacements: Dict[int, str] = {}
 
         for node in ast.walk(tree):
@@ -447,4 +447,3 @@ def convert(
     """
     converter = Converter(add_imports=add_imports, add_header=add_header)
     return converter.convert(source_code)
-

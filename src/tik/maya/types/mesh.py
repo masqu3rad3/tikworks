@@ -5,8 +5,8 @@ from maya.api import OpenMaya
 
 from tik.core.color import Color
 
-from ..core.shapenode import ShapeNode
 from ..core.registry import register
+from ..core.shapenode import ShapeNode
 
 
 @register("mesh")
