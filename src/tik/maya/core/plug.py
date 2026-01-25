@@ -4,6 +4,7 @@ from maya import cmds
 from maya.api import OpenMaya
 
 from .registry import resolve
+from .constants import NodeNames
 
 
 class Plug:
@@ -463,7 +464,7 @@ class Plug:
         Returns:
             Plug: The output plug of the addDL node.
         """
-        node = cmds.createNode("addDL", name="addDL#")
+        node = cmds.createNode(NodeNames.ADD_DOUBLE_LINEAR, name="addDL#")
 
         # Connect input1 (left operand - self)
         cmds.connectAttr(self.path, f"{node}.input1", force=True)
@@ -515,7 +516,7 @@ class Plug:
         Returns:
             Plug: The output plug of the multDL node.
         """
-        node = cmds.createNode("multDL", name="multDL#")
+        node = cmds.createNode(NodeNames.MULT_DOUBLE_LINEAR, name="multDL#")
 
         # Connect input1 (left operand - self)
         cmds.connectAttr(self.path, f"{node}.input1", force=True)
