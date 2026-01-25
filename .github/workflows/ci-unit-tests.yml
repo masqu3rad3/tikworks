@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 #  push:
 #    branches: [ "main", "dev" ]
-#  pull_request:
-#    branches: [ "main", "dev" ]
+  pull_request:
+    branches: [ "main", "dev" ]
 
 jobs:
   maya2024:
@@ -20,8 +20,8 @@ jobs:
 
       matrix:
        include:
-#         - maya: "2024"
-#         - maya: "2025"
+         - maya: "2024"
+         - maya: "2025"
          - maya: "2026"
 
     container: mottosso/maya:${{ matrix.maya }}
