@@ -12,7 +12,7 @@ on:
     branches: [ "main", "dev" ]
 
 jobs:
-  maya2024:
+  maya:
     runs-on: ubuntu-latest
 
     strategy:
