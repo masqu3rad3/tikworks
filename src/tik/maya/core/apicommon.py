@@ -17,6 +17,7 @@ undocommit = apiundo.commit
 #
 # undocommit = mockup_undo_redo
 
+
 def obj_exists(name):
     """Check if a Maya object exists.
 

@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 from maya import cmds
 from maya.api import OpenMaya
 
-from ..core.apicommon import create_node_with_dag_modifier, undocommit
+from ..core.apicommon import create_node_with_dag_modifier
 from ..core.dagnode import DagNode
-from ..core.decorators import add_aliases, protected
+from ..core.decorators import add_aliases
 from ..core.registry import register, resolve
 
 if TYPE_CHECKING:
