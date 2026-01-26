@@ -4,67 +4,99 @@ from maya import cmds
 from maya.api import OpenMaya
 
 from .registry import resolve
+from .constants import NodeNames
+
 
 class Plug:
     """Represents an attribute plug on a Maya node."""
-    _VECTOR_TYPES = frozenset({
-        OpenMaya.MFn.kAttribute3Double,  # double3
-        OpenMaya.MFn.kAttribute3Float,  # float3
-        OpenMaya.MFn.kAttribute2Double,  # double2
-        OpenMaya.MFn.kAttribute2Float,  # float2
-        OpenMaya.MFn.kAttribute3Short,  # short3
-        OpenMaya.MFn.kAttribute3Int,  # long3
-    })
 
-    _SCALAR_TYPES = frozenset({
-        OpenMaya.MFn.kNumericAttribute,  # Bool, Float, Int, Byte, Short
-        OpenMaya.MFn.kEnumAttribute,  # Enums
-        OpenMaya.MFn.kUnitAttribute,  # Time, Angle, Distance
-        OpenMaya.MFn.kDoubleLinearAttribute,  # Time, Angle, Distance
-    })
+    _VECTOR_TYPES = frozenset(
+        {
+            OpenMaya.MFn.kAttribute3Double,  # double3
+            OpenMaya.MFn.kAttribute3Float,  # float3
+            OpenMaya.MFn.kAttribute2Double,  # double2
+            OpenMaya.MFn.kAttribute2Float,  # float2
+            OpenMaya.MFn.kAttribute3Short,  # short3
+            OpenMaya.MFn.kAttribute3Int,  # long3
+        }
+    )
+
+    _SCALAR_TYPES = frozenset(
+        {
+            OpenMaya.MFn.kNumericAttribute,  # Bool, Float, Int, Byte, Short
+            OpenMaya.MFn.kEnumAttribute,  # Enums
+            OpenMaya.MFn.kUnitAttribute,  # Time, Angle, Distance
+            OpenMaya.MFn.kDoubleLinearAttribute,  # Time, Angle, Distance
+        }
+    )
 
     def __init__(self, node, attr: str):
         """Initialize a Plug for the given node and attribute name."""
         self._node = node
         self._attr = attr
-        self._mplug = None # lazy init
+        self._mplug = None  # lazy init
 
     @property
     def attr(self):
-        """The attribute name."""
+        """The attribute name.
+
+        Returns:
+            str: The name of the attribute.
+        """
         return self._attr
 
     @property
     def path(self):
-        """The full attribute path."""
+        """The full attribute path (node.attribute).
+
+        Returns:
+            str: The full path to this attribute.
+        """
         return f"{self._node.name}.{self._attr}"
 
     @property
     def node(self):
-        """The node this plug belongs to."""
+        """The node this plug belongs to.
+
+        Returns:
+            Node: The node wrapper owning this attribute.
+        """
         return self._node
 
     @property
     def mplug(self):
-        """The MPlug representation of this attribute."""
+        """The MPlug representation of this attribute.
+
+        Returns:
+            OpenMaya.MPlug: The Maya API plug object.
+
+        Raises:
+            RuntimeError: If the attribute cannot be found or is invalid.
+        """
         if self._mplug is None:
             self._mplug = self._find_plug()
             if self._mplug is None:
                 raise RuntimeError(
-                    f"Attribute '{self._node.name}.{self._attr}' not found.")
+                    f"Attribute '{self._node.name}.{self._attr}' not found."
+                )
 
         if self._mplug.isNull:
             # Attempt to re-fetch in case it was deleted and recreated (Undo/Redo scenarios)
             self._mplug = self._find_plug()
             if self._mplug is None or self._mplug.isNull:
                 raise RuntimeError(
-                    f"Attribute '{self._node.name}.{self._attr}' acts invalid/deleted.")
+                    f"Attribute '{self._node.name}.{self._attr}' acts invalid/deleted."
+                )
 
         return self._mplug
 
     @property
     def value(self):
-        """Get the value of the attribute."""
+        """Get the value of the attribute.
+
+        Returns:
+            The current value of the attribute.
+        """
         return self.get()
 
     @value.setter
@@ -74,10 +106,15 @@ class Plug:
 
     @property
     def visible(self) -> bool:
-        """Check if the attribute is visible in the channelbox."""
+        """Check if the attribute is visible in the channelbox.
+
+        An attribute is visible if it's either keyable or shown in the channel box.
+
+        Returns:
+            bool: True if visible, False otherwise.
+        """
         # An attribute is considered visible if it is either keyable or in the channel
         # box.
-        # _keyable = cmds.getAttr(self.path, keyable=True)
         _keyable = self.mplug.isKeyable
         _channelbox = cmds.getAttr(self.path, channelBox=True)
         return _keyable or _channelbox
@@ -89,7 +126,6 @@ class Plug:
         Args:
             state (bool): True to show the attribute, False to hide.
         """
-        # _keyable = cmds.getAttr(self.path, keyable=True)
         _keyable = self.mplug.isKeyable
         if not state:
             cmds.setAttr(self.path, edit=True, keyable=False, channelBox=False)
@@ -98,7 +134,11 @@ class Plug:
 
     @property
     def keyable(self) -> bool:
-        """Check if the attribute is keyable."""
+        """Check if the attribute is keyable.
+
+        Returns:
+            bool: True if keyable, False otherwise.
+        """
         return self.mplug.isKeyable
 
     @keyable.setter
@@ -118,7 +158,11 @@ class Plug:
 
     @property
     def locked(self) -> bool:
-        """Check if the attribute is locked."""
+        """Check if the attribute is locked.
+
+        Returns:
+            bool: True if locked, False otherwise.
+        """
         return self.mplug.isLocked
 
     @locked.setter
@@ -132,19 +176,33 @@ class Plug:
 
     @property
     def children(self):
-        """If the plug is a compund attribute, return its child plugs."""
+        """If the plug is a compound attribute, return its child plugs.
+
+        Returns:
+            list: List of child Plug instances, or empty list if not compound.
+        """
         children = cmds.listAttr(self.path, multi=True)
         if not children:
             return []
-        return [Plug(self._node, f"{child}") for child in children if child != self.attr]
+        return [
+            Plug(self._node, f"{child}") for child in children if child != self.attr
+        ]
 
     @property
     def type(self):
-        """The attribute type as a string."""
+        """The attribute type as a string.
+
+        Returns:
+            str: The API type string of the attribute.
+        """
         return self.mplug.attribute().apiTypeStr
 
     def exists(self):
-        """Check if the attribute exists."""
+        """Check if the attribute exists.
+
+        Returns:
+            bool: True if the attribute exists on the node, False otherwise.
+        """
         return cmds.attributeQuery(self.attr, node=self._node.name, exists=True)
 
     def create(self, **kwargs):
@@ -190,17 +248,12 @@ class Plug:
         else:
             raise TypeError(f"Unsupported type for setting attribute: {type(value)}")
 
-    # def as_api_plug(self):
-    #     """Get the attribute as an OpenMaya MPlug."""
-    #     selection_list = OpenMaya.MSelectionList()
-    #     try:
-    #         selection_list.add(self.path)
-    #         return selection_list.getPlug(0)
-    #     except RuntimeError:
-    #         return None
-
     def _find_plug(self):
-        """Get the attribute as an OpenMaya MPlug."""
+        """Get the attribute as an OpenMaya MPlug.
+
+        Returns:
+            OpenMaya.MPlug or None: The MPlug if found, None otherwise.
+        """
         selection_list = OpenMaya.MSelectionList()
         try:
             selection_list.add(self.path)
@@ -411,7 +464,7 @@ class Plug:
         Returns:
             Plug: The output plug of the addDL node.
         """
-        node = cmds.createNode("addDL", name="addDL#")
+        node = cmds.createNode(NodeNames.ADD_DOUBLE_LINEAR, name="addDL#")
 
         # Connect input1 (left operand - self)
         cmds.connectAttr(self.path, f"{node}.input1", force=True)
@@ -431,28 +484,42 @@ class Plug:
     def _create_subtract_node_single(self, other) -> "Plug":
         """Create a subtract node for single-value subtraction.
 
+        For Maya 2025+, uses the native 'subtract' node.
+        For Maya 2024 and older, uses 'floatMath' node with operation=1 (subtract).
+
         Args:
             other: The right-hand operand (Plug or numeric value).
 
         Returns:
             Plug: The output plug of the subtract node.
         """
-        node = cmds.createNode("subtract", name="subtract#")
+        if NodeNames.uses_native_math_nodes:
+            node = cmds.createNode("subtract", name="subtract#")
+            input1_attr = "input1"
+            input2_attr = "input2"
+            output_attr = "output"
+        else:
+            NodeNames.ensure_lookdevkit_loaded()
+            node = cmds.createNode("floatMath", name="floatMath_subtract#")
+            cmds.setAttr(f"{node}.operation", 1)  # 1 = Subtract
+            input1_attr = "floatA"
+            input2_attr = "floatB"
+            output_attr = "outFloat"
 
         # Connect input1 (left operand - self)
-        cmds.connectAttr(self.path, f"{node}.input1", force=True)
+        cmds.connectAttr(self.path, f"{node}.{input1_attr}", force=True)
 
         # Connect or set input2 (right operand - other)
         if isinstance(other, Plug):
-            cmds.connectAttr(other.path, f"{node}.input2", force=True)
+            cmds.connectAttr(other.path, f"{node}.{input2_attr}", force=True)
         elif isinstance(other, (int, float)):
-            cmds.setAttr(f"{node}.input2", float(other))
+            cmds.setAttr(f"{node}.{input2_attr}", float(other))
         else:
             raise TypeError(
                 f"Right operand must be a Plug or numeric value, got {type(other)}"
             )
 
-        return self._create_plug(node, "output")
+        return self._create_plug(node, output_attr)
 
     def _create_multiply_node_single(self, other) -> "Plug":
         """Create a multDL node for single-value multiplication.
@@ -463,7 +530,7 @@ class Plug:
         Returns:
             Plug: The output plug of the multDL node.
         """
-        node = cmds.createNode("multDL", name="multDL#")
+        node = cmds.createNode(NodeNames.MULT_DOUBLE_LINEAR, name="multDL#")
 
         # Connect input1 (left operand - self)
         cmds.connectAttr(self.path, f"{node}.input1", force=True)
@@ -483,28 +550,42 @@ class Plug:
     def _create_divide_node_single(self, other) -> "Plug":
         """Create a divide node for single-value division.
 
+        For Maya 2025+, uses the native 'divide' node.
+        For Maya 2024 and older, uses 'floatMath' node with operation=3 (divide).
+
         Args:
             other: The right-hand operand (Plug or numeric value).
 
         Returns:
             Plug: The output plug of the divide node.
         """
-        node = cmds.createNode("divide", name="divide#")
+        if NodeNames.uses_native_math_nodes:
+            node = cmds.createNode("divide", name="divide#")
+            input1_attr = "input1"
+            input2_attr = "input2"
+            output_attr = "output"
+        else:
+            NodeNames.ensure_lookdevkit_loaded()
+            node = cmds.createNode("floatMath", name="floatMath_divide#")
+            cmds.setAttr(f"{node}.operation", 3)  # 3 = Divide
+            input1_attr = "floatA"
+            input2_attr = "floatB"
+            output_attr = "outFloat"
 
         # Connect input1 (left operand - self / dividend)
-        cmds.connectAttr(self.path, f"{node}.input1", force=True)
+        cmds.connectAttr(self.path, f"{node}.{input1_attr}", force=True)
 
         # Connect or set input2 (right operand - other / divisor)
         if isinstance(other, Plug):
-            cmds.connectAttr(other.path, f"{node}.input2", force=True)
+            cmds.connectAttr(other.path, f"{node}.{input2_attr}", force=True)
         elif isinstance(other, (int, float)):
-            cmds.setAttr(f"{node}.input2", float(other))
+            cmds.setAttr(f"{node}.{input2_attr}", float(other))
         else:
             raise TypeError(
                 f"Right operand must be a Plug or numeric value, got {type(other)}"
             )
 
-        return self._create_plug(node, "output")
+        return self._create_plug(node, output_attr)
 
     def _create_power_node_single(self, other) -> "Plug":
         """Create a power node for single-value power operation.
@@ -593,8 +674,10 @@ class Plug:
         elif isinstance(other, (list, tuple)) and len(other) == 3:
             cmds.setAttr(
                 f"{node}.input3D[1]",
-                float(other[0]), float(other[1]), float(other[2]),
-                type="double3"
+                float(other[0]),
+                float(other[1]),
+                float(other[2]),
+                type="double3",
             )
         else:
             raise TypeError(
@@ -636,8 +719,10 @@ class Plug:
         elif isinstance(other, (list, tuple)) and len(other) == 3:
             cmds.setAttr(
                 f"{node}.input2",
-                float(other[0]), float(other[1]), float(other[2]),
-                type="double3"
+                float(other[0]),
+                float(other[1]),
+                float(other[2]),
+                type="double3",
             )
         else:
             raise TypeError(
@@ -668,8 +753,7 @@ class Plug:
             return self._create_add_node_single(other)
         else:
             raise TypeError(
-                f"Addition not supported for attribute type: "
-                f"{self.type}"
+                f"Addition not supported for attribute type: " f"{self.type}"
             )
 
     def __radd__(self, other) -> "Plug":
@@ -704,8 +788,7 @@ class Plug:
             return self._create_subtract_node_single(other)
         else:
             raise TypeError(
-                f"Subtraction not supported for attribute type: "
-                f"{self.type}"
+                f"Subtraction not supported for attribute type: " f"{self.type}"
             )
 
     def __rsub__(self, other) -> "Plug":
@@ -726,14 +809,14 @@ class Plug:
 
             if isinstance(other, (int, float)):
                 value = float(other)
-                cmds.setAttr(
-                    f"{node}.input3D[0]", value, value, value, type="double3"
-                )
+                cmds.setAttr(f"{node}.input3D[0]", value, value, value, type="double3")
             elif isinstance(other, (list, tuple)) and len(other) == 3:
                 cmds.setAttr(
                     f"{node}.input3D[0]",
-                    float(other[0]), float(other[1]), float(other[2]),
-                    type="double3"
+                    float(other[0]),
+                    float(other[1]),
+                    float(other[2]),
+                    type="double3",
                 )
             else:
                 raise TypeError(
@@ -743,19 +826,30 @@ class Plug:
             return self._create_plug(node, "output3D")
         elif self._is_scalar_numeric():
             # Single value: create subtract node with other as first input
-            node = cmds.createNode("subtract", name="subtract#")
+            if NodeNames.uses_native_math_nodes:
+                node = cmds.createNode("subtract", name="subtract#")
+                input1_attr = "input1"
+                input2_attr = "input2"
+                output_attr = "output"
+            else:
+                NodeNames.ensure_lookdevkit_loaded()
+                node = cmds.createNode("floatMath", name="floatMath_subtract#")
+                cmds.setAttr(f"{node}.operation", 1)  # 1 = Subtract
+                input1_attr = "floatA"
+                input2_attr = "floatB"
+                output_attr = "outFloat"
+
             if isinstance(other, (int, float)):
-                cmds.setAttr(f"{node}.input1", float(other))
+                cmds.setAttr(f"{node}.{input1_attr}", float(other))
             else:
                 raise TypeError(
                     f"Left operand must be a numeric value, got {type(other)}"
                 )
-            cmds.connectAttr(self.path, f"{node}.input2", force=True)
-            return self._create_plug(node, "output")
+            cmds.connectAttr(self.path, f"{node}.{input2_attr}", force=True)
+            return self._create_plug(node, output_attr)
         else:
             raise TypeError(
-                f"Subtraction not supported for attribute type: "
-                f"{self.type}"
+                f"Subtraction not supported for attribute type: " f"{self.type}"
             )
 
     def __mul__(self, other) -> "Plug":
@@ -778,8 +872,7 @@ class Plug:
             return self._create_multiply_node_single(other)
         else:
             raise TypeError(
-                f"Multiplication not supported for attribute type: "
-                f"{self.type}"
+                f"Multiplication not supported for attribute type: " f"{self.type}"
             )
 
     def __rmul__(self, other) -> "Plug":
@@ -814,8 +907,7 @@ class Plug:
             return self._create_divide_node_single(other)
         else:
             raise TypeError(
-                f"Division not supported for attribute type: "
-                f"{self.type}"
+                f"Division not supported for attribute type: " f"{self.type}"
             )
 
     def __rtruediv__(self, other) -> "Plug":
@@ -838,8 +930,10 @@ class Plug:
             elif isinstance(other, (list, tuple)) and len(other) == 3:
                 cmds.setAttr(
                     f"{node}.input1",
-                    float(other[0]), float(other[1]), float(other[2]),
-                    type="double3"
+                    float(other[0]),
+                    float(other[1]),
+                    float(other[2]),
+                    type="double3",
                 )
             else:
                 raise TypeError(
@@ -849,19 +943,30 @@ class Plug:
             return self._create_plug(node, "output")
         elif self._is_scalar_numeric():
             # Single value: create divide node with other as first input
-            node = cmds.createNode("divide", name="divide#")
+            if NodeNames.uses_native_math_nodes:
+                node = cmds.createNode("divide", name="divide#")
+                input1_attr = "input1"
+                input2_attr = "input2"
+                output_attr = "output"
+            else:
+                NodeNames.ensure_lookdevkit_loaded()
+                node = cmds.createNode("floatMath", name="floatMath_divide#")
+                cmds.setAttr(f"{node}.operation", 3)  # 3 = Divide
+                input1_attr = "floatA"
+                input2_attr = "floatB"
+                output_attr = "outFloat"
+
             if isinstance(other, (int, float)):
-                cmds.setAttr(f"{node}.input1", float(other))
+                cmds.setAttr(f"{node}.{input1_attr}", float(other))
             else:
                 raise TypeError(
                     f"Left operand must be a numeric value, got {type(other)}"
                 )
-            cmds.connectAttr(self.path, f"{node}.input2", force=True)
-            return self._create_plug(node, "output")
+            cmds.connectAttr(self.path, f"{node}.{input2_attr}", force=True)
+            return self._create_plug(node, output_attr)
         else:
             raise TypeError(
-                f"Division not supported for attribute type: "
-                f"{self.type}"
+                f"Division not supported for attribute type: " f"{self.type}"
             )
 
     def __pow__(self, other) -> "Plug":
@@ -884,8 +989,7 @@ class Plug:
             return self._create_power_node_single(other)
         else:
             raise TypeError(
-                f"Power operation not supported for attribute type: "
-                f"{self.type}"
+                f"Power operation not supported for attribute type: " f"{self.type}"
             )
 
     def __rpow__(self, other) -> "Plug":
@@ -908,8 +1012,10 @@ class Plug:
             elif isinstance(other, (list, tuple)) and len(other) == 3:
                 cmds.setAttr(
                     f"{node}.input1",
-                    float(other[0]), float(other[1]), float(other[2]),
-                    type="double3"
+                    float(other[0]),
+                    float(other[1]),
+                    float(other[2]),
+                    type="double3",
                 )
             else:
                 raise TypeError(
@@ -931,8 +1037,7 @@ class Plug:
             return self._create_plug(node, "output")
         else:
             raise TypeError(
-                f"Power operation not supported for attribute type: "
-                f"{self.type}"
+                f"Power operation not supported for attribute type: " f"{self.type}"
             )
 
     def __mod__(self, other) -> "Plug":
@@ -964,9 +1069,7 @@ class Plug:
         if isinstance(other, (int, float)):
             cmds.setAttr(f"{node}.input", float(other))
         else:
-            raise TypeError(
-                f"Left operand must be a numeric value, got {type(other)}"
-            )
+            raise TypeError(f"Left operand must be a numeric value, got {type(other)}")
         cmds.connectAttr(self.path, f"{node}.modulus", force=True)
 
         return self._create_plug(node, "output")
@@ -974,4 +1077,3 @@ class Plug:
     def __repr__(self):
         """Return a debug-friendly representation."""
         return f"<Plug '{self.path}'>"
-

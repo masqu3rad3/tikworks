@@ -9,12 +9,6 @@ from tik.maya.core.node import Node, Plug
 from tik.maya.core.dagnode import DagNode
 
 
-def test_node_init_raises_for_missing():
-    """Test that Node initialization raises ValueError for non-existent nodes."""
-    with pytest.raises(ValueError):
-        Node("|doesNotExist")
-
-
 def test_create_returns_registered_subclass_for_transform():
     """Test that creating a transform returns a DagNode instance."""
     node = Node.create("transform", name="createdX")

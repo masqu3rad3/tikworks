@@ -1,12 +1,14 @@
+"""DAG (Directed Acyclic Graph) node wrapper for Maya."""
+
 from maya import cmds
 from maya.api import OpenMaya
 
 from tik.core.color import Color
+
+from .apicommon import create_node_with_dag_modifier, undocommit
 from .decorators import add_aliases, protected
 from .node import Node
-from .registry import register, resolve, undocommit
-from .scene import create_node_with_dag_modifier
-
+from .registry import register, resolve
 
 
 @add_aliases(
@@ -18,6 +20,7 @@ from .scene import create_node_with_dag_modifier
 @register("dagNode")
 class DagNode(Node):
     """DAG-capable node wrapper with parent/children queries."""
+
     is_dag = True
 
     def __init__(self, *args, **kwargs):
@@ -32,7 +35,7 @@ class DagNode(Node):
         Example: 'joint', 'polySphere'.
         """
         full_name = create_node_with_dag_modifier(cmd, parent=parent, name=name)
-        return resolve(full_name)
+        return cls(full_name)
 
     @property
     def visibility(self):
@@ -45,7 +48,11 @@ class DagNode(Node):
 
     @property
     def dag_path(self):
-        """Return the MDagPath for this node."""
+        """Return the MDagPath for this node.
+
+        Returns:
+            OpenMaya.MDagPath: The DAG path of this node.
+        """
         return self._dag_path()
 
     def _dag_path(self):
@@ -57,7 +64,11 @@ class DagNode(Node):
 
     @property
     def parent(self):
-        """Return the parent as a wrapped node (or None if no parent)."""
+        """Return the parent as a wrapped node (or None if no parent).
+
+        Returns:
+            Node wrapper or None: The parent node, or None if this is a world-level node.
+        """
         return self.get_parent()
 
     @parent.setter
@@ -85,22 +96,20 @@ class DagNode(Node):
         else:
             new_parent = resolve(new_parent)  # ensure it's a wrapped node
             if not new_parent.exists():
-                raise ValueError(
-                    f"New parent node '{new_parent.uuid}' does not exist.")
+                raise ValueError(f"New parent node '{new_parent.uuid}' does not exist.")
             mod.reparentNode(self._m_obj, new_parent._m_obj)
-            # protected.append(new_parent._m_obj)
         mod.doIt()
-        undocommit(
-            undo=mod.undoIt,
-            redo=mod.doIt
-        )
-        # commit_safe(apiundo, undo=mod.undoIt, redo=mod.doIt, targets=protected)
+        undocommit(undo=mod.undoIt, redo=mod.doIt)
         # Invalidate cached path since parenting can change the full path.
         self._cached_dag_path = None
 
     @property
     def children(self):
-        """Return children as wrapped nodes."""
+        """Return children as wrapped nodes.
+
+        Returns:
+            list: List of child node wrappers.
+        """
         mfn = OpenMaya.MFnDagNode(self._dag_path())
         children_list = []
         for idx in range(mfn.childCount()):
@@ -111,12 +120,24 @@ class DagNode(Node):
 
     @property
     def bounding_box(self):
-        """Return the world axis-aligned bounding box of this node."""
+        """Return the world axis-aligned bounding box of this node.
+
+        Returns:
+            OpenMaya.MBoundingBox: The bounding box in world space.
+        """
         mfn = OpenMaya.MFnDagNode(self._dag_path())
         return mfn.boundingBox
 
     @property
     def color(self):
+        """Get or set the display color of the node.
+
+        Can be set to:
+            - int: Maya index color (0-31)
+            - tuple/list: RGB values (0.0-1.0)
+            - Color: tik.core.Color object
+            - None: Disable color override
+        """
         return self.get_color()
 
     @color.setter
@@ -192,14 +213,8 @@ class DagNode(Node):
     @protected
     def rename(self, new_name):
         """Rename the node."""
-        # if self.exists():
         mod = OpenMaya.MDagModifier()
         mod.renameNode(self._m_obj, new_name)
         mod.doIt()
-        undocommit(
-            undo=mod.undoIt,
-            redo=mod.doIt
-        )
-        # else:
-        #     raise ValueError(f"Node '{self.name}' does not exist.")
+        undocommit(undo=mod.undoIt, redo=mod.doIt)
         return self

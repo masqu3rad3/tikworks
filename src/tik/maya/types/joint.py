@@ -1,7 +1,8 @@
 import maya.cmds as cmds
-from .transform import Transform
+
+from ..core.apicommon import create_node_with_dag_modifier
 from ..core.registry import register
-from ..core.scene import create_node_with_dag_modifier
+from .transform import Transform
 
 
 @register("joint")
@@ -11,7 +12,6 @@ class Joint(Transform):
     @classmethod
     def create(cls, name=None, parent=None):
         """Create and wrap a new joint node."""
-        # j = cmds.joint(**kwargs)
         jnt = create_node_with_dag_modifier("joint", name=name, parent=parent)
         return cls(jnt)
 

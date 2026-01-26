@@ -15,6 +15,7 @@ def initialize():
         pass
     # Import tik.maya to ensure all node wrappers and the default factory are registered
     import tik.maya  # noqa: F401
+    from maya import cmds # noqa: F401
     yield
     maya.standalone.uninitialize()
 

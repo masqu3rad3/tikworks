@@ -7,18 +7,44 @@ store and retrieve data from a Maya node's attribute.
 import ast
 import logging
 from collections import UserDict
+
 import tik.maya as tm
 
 LOG = logging.getLogger(__name__)
 
+
 class SceneDictionary(UserDict):
+    """Dictionary-like interface for storing and retrieving data from Maya node attributes.
+
+    This class inherits from UserDict and stores data as a stringified dictionary
+    in a Maya node's attribute. Data persists with the Maya scene.
+
+    Args:
+        node: Maya node name or wrapper to store data on.
+        attribute: Name of the attribute to use for storage (default: "sceneData").
+    """
+
     def __init__(self, node, attribute="sceneData"):
+        """Initialize the SceneDictionary.
+
+        Args:
+            node: Maya node to attach the data to.
+            attribute: Attribute name for data storage (default: "sceneData").
+        """
         super(SceneDictionary, self).__init__()
         self.node = tm.resolve(node)
         self.attribute = attribute
 
     def __setitem__(self, key, value):
-        """Set the data on the node."""
+        """Set data on the Maya node attribute.
+
+        Args:
+            key: Dictionary key.
+            value: Value to store.
+
+        Returns:
+            bool: False if the node doesn't exist, otherwise None.
+        """
         if not self.node.exists():
             LOG.error("Node {} doesn't exist".format(self.node.name))
             return False
@@ -28,7 +54,14 @@ class SceneDictionary(UserDict):
         self.node[self.attribute].set(str(self))
 
     def __getitem__(self, key):
-        """Retrieve the data from the scene node."""
+        """Retrieve data from the Maya node attribute.
+
+        Args:
+            key: Dictionary key.
+
+        Returns:
+            The value associated with the key, or raises KeyError if not found.
+        """
         if not self.node.exists():
             _data = None
         else:
@@ -39,9 +72,12 @@ class SceneDictionary(UserDict):
         if _data:
             super(SceneDictionary, self).__setitem__(key, _data)
         # now run the original function with the new data
-        return super(SceneDictionary, self).__getitem__(key)\
+        return super(SceneDictionary, self).__getitem__(key)
 
     def validate_attribute(self):
-        """Create the attribute on the node."""
+        """Ensure the storage attribute exists on the node.
+
+        Creates the attribute if it doesn't exist.
+        """
         if not self.node.has_attr(self.attribute):
             self.node.add_attr(self.attribute, dataType="string")

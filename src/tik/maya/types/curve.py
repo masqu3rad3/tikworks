@@ -3,8 +3,8 @@
 from maya import cmds
 from maya.api import OpenMaya
 
-from ..core.shapenode import ShapeNode
 from ..core.registry import register
+from ..core.shapenode import ShapeNode
 
 
 @register("nurbsCurve")
@@ -72,7 +72,9 @@ class Curve(ShapeNode):
 
         if pivot == "custom":
             if pivot_point is None:
-                raise ValueError("pivot_point must be provided when pivot_mode is 'custom'.")
+                raise ValueError(
+                    "pivot_point must be provided when pivot_mode is 'custom'."
+                )
             pivot = OpenMaya.MPoint(*pivot_point)
         elif pivot == "object":
             pivot = OpenMaya.MPoint(0, 0, 0)
@@ -82,7 +84,9 @@ class Curve(ShapeNode):
                 bbox.expand(cv)
             pivot = bbox.center
         else:
-            raise ValueError("Invalid pivot_mode. Must be 'object', 'center' or 'custom'.")
+            raise ValueError(
+                "Invalid pivot_mode. Must be 'object', 'center' or 'custom'."
+            )
 
         scaled_cvs = OpenMaya.MPointArray()
         for cv in cvs:

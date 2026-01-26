@@ -298,31 +298,33 @@ def check_method_support(
     registry = registry or get_default_registry()
 
     # Built-in methods handled by rules (always supported)
-    BUILTIN_METHODS = frozenset({
-        # Node methods
-        "create",
-        "rename",
-        "delete",
-        "duplicate",
-        "add_attr",
-        "delete_attr",
-        "has_attr",
-        "exists",
-        # Plug methods
-        "get",
-        "set",
-        "connect",
-        "disconnect",
-        "lock",
-        "unlock",
-        "get_input",
-        "list_outputs",
-        # DagNode methods
-        "select",
-        # Transform methods
-        "freeze",
-        # Type-specific create methods are handled by rules
-    })
+    BUILTIN_METHODS = frozenset(
+        {
+            # Node methods
+            "create",
+            "rename",
+            "delete",
+            "duplicate",
+            "add_attr",
+            "delete_attr",
+            "has_attr",
+            "exists",
+            # Plug methods
+            "get",
+            "set",
+            "connect",
+            "disconnect",
+            "lock",
+            "unlock",
+            "get_input",
+            "list_outputs",
+            # DagNode methods
+            "select",
+            # Transform methods
+            "freeze",
+            # Type-specific create methods are handled by rules
+        }
+    )
 
     if method_name in BUILTIN_METHODS:
         return True
@@ -368,4 +370,3 @@ def get_unsupported_reason(method_name: str) -> Optional[str]:
         The reason string if known, None otherwise.
     """
     return UNSUPPORTED_METHODS.get(method_name)
-

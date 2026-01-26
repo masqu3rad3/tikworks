@@ -3,8 +3,8 @@
 from maya import cmds
 from maya.api import OpenMaya
 
-from ..core.shapenode import ShapeNode
 from ..core.registry import register
+from ..core.shapenode import ShapeNode
 
 
 @register("nurbsSurface")

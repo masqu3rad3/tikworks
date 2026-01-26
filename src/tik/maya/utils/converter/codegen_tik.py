@@ -154,4 +154,3 @@ def format_resolve_call(node_name: str) -> str:
         Formatted resolve() call.
     """
     return f"resolve('{node_name}')"
-

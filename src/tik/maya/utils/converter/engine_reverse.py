@@ -16,12 +16,11 @@ import ast
 from typing import Dict, List, Optional, Set
 
 from .codegen import CodeBuilder
-from .codegen_tik import generate_tik_import, generate_tik_header_comment
-from .report import ConversionReport, ConversionEntry, EntryType
+from .codegen_tik import generate_tik_header_comment, generate_tik_import
+from .report import ConversionEntry, ConversionReport, EntryType
 from .rules_reverse import (
     ReverseConversionRule,
     ReverseRuleContext,
-    ReverseRuleMatch,
     get_default_reverse_rules,
     get_unsupported_cmds_reason,
 )
@@ -316,12 +315,20 @@ class ReverseConverter:
         if not isinstance(node, ast.Call):
             return None
         func = node.func
-        if not (isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == "cmds"):
+        if not (
+            isinstance(func, ast.Attribute)
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "cmds"
+        ):
             return None
 
         # Look for name kwarg
         for kw in node.keywords:
-            if kw.arg == "name" and isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str):
+            if (
+                kw.arg == "name"
+                and isinstance(kw.value, ast.Constant)
+                and isinstance(kw.value.value, str)
+            ):
                 return kw.value.value
         return None
 
@@ -447,7 +454,9 @@ class ReverseConverter:
         is_replacement_assignment = False
         try:
             parsed_replacement = ast.parse(replacement)
-            if parsed_replacement.body and isinstance(parsed_replacement.body[0], ast.Assign):
+            if parsed_replacement.body and isinstance(
+                parsed_replacement.body[0], ast.Assign
+            ):
                 is_replacement_assignment = True
         except SyntaxError:
             pass
@@ -490,7 +499,9 @@ class ReverseConverter:
                 for entry in entries
                 if entry.entry_type == EntryType.UNSUPPORTED
             ]
-            header = generate_tik_header_comment(warnings=warnings if warnings else None)
+            header = generate_tik_header_comment(
+                warnings=warnings if warnings else None
+            )
             for line in header.splitlines():
                 builder.add_line(line)
             builder.add_blank_line()
@@ -551,4 +562,3 @@ def convert_to_tik(
     """
     converter = ReverseConverter(add_imports=add_imports, add_header=add_header)
     return converter.convert(source_code)
-

@@ -45,33 +45,38 @@ PySide2.Qt3DLogic, except for defaults which are replaced by "...".
 
 # Module PySide2.Qt3DLogic
 import PySide2
+
 try:
     import typing
 except ImportError:
     from PySide2.support.signature import typing
-from PySide2.support.signature.mapping import (
-    Virtual, Missing, Invalid, Default, Instance)
 
-class Object(object): pass
+from PySide2.support.signature.mapping import (
+    Default,
+    Instance,
+    Invalid,
+    Missing,
+    Virtual,
+)
+
+class Object(object):
+    pass
 
 import shiboken2 as Shiboken
+
 Shiboken.Object = Object
 
-import PySide2.QtCore
 import PySide2.Qt3DCore
 import PySide2.Qt3DLogic
-
+import PySide2.QtCore
 
 class Qt3DLogic(Shiboken.Object):
-
     class QFrameAction(PySide2.Qt3DCore.QComponent):
-
-        def __init__(self, parent:typing.Optional[PySide2.Qt3DCore.Qt3DCore.QNode]=...): ...
-
+        def __init__(
+            self, parent: typing.Optional[PySide2.Qt3DCore.Qt3DCore.QNode] = ...
+        ): ...
 
     class QLogicAspect(PySide2.Qt3DCore.QAbstractAspect):
-
-        def __init__(self, parent:typing.Optional[PySide2.QtCore.QObject]=...): ...
-
+        def __init__(self, parent: typing.Optional[PySide2.QtCore.QObject] = ...): ...
 
 # eof

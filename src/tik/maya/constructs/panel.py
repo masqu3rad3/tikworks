@@ -1,13 +1,15 @@
 """Panel construct for managing model panels and camera settings."""
 
-from typing import Optional, Tuple, Union, Any, Dict
+from typing import Any, Dict, Optional, Tuple, Union
+
 from maya import cmds
 
-from ..types.camera import Camera
-from ..types.transform import Transform
-from ..core.registry import resolve
 from ..core import scene
 from ..core.decorators import keepselection
+from ..core.registry import resolve
+from ..types.camera import Camera
+from ..types.transform import Transform
+
 
 class Panel:
     """Construct for managing a torn-off model panel and associated camera settings.
@@ -323,6 +325,7 @@ class Panel:
 
     @property
     def display_field_chart(self) -> bool:
+        """Whether to display the field chart in the camera view."""
         return cmds.camera(self._camera.name, query=True, displayFieldChart=True)
 
     @display_field_chart.setter
@@ -331,6 +334,7 @@ class Panel:
 
     @property
     def display_gate_mask(self) -> bool:
+        """Whether to display the gate mask."""
         return cmds.camera(self._camera.name, query=True, displayGateMask=True)
 
     @display_gate_mask.setter
@@ -339,6 +343,7 @@ class Panel:
 
     @property
     def display_film_gate(self) -> bool:
+        """Whether to display the film gate."""
         return cmds.camera(self._camera.name, query=True, displayFilmGate=True)
 
     @display_film_gate.setter
@@ -347,6 +352,7 @@ class Panel:
 
     @property
     def display_film_origin(self) -> bool:
+        """Whether to display the film origin."""
         return cmds.camera(self._camera.name, query=True, displayFilmOrigin=True)
 
     @display_film_origin.setter
@@ -355,6 +361,7 @@ class Panel:
 
     @property
     def display_film_pivot(self) -> bool:
+        """Whether to display the film pivot."""
         return cmds.camera(self._camera.name, query=True, displayFilmPivot=True)
 
     @display_film_pivot.setter
@@ -363,6 +370,7 @@ class Panel:
 
     @property
     def display_resolution(self) -> bool:
+        """Whether to display the resolution gate."""
         return cmds.camera(self._camera.name, query=True, displayResolution=True)
 
     @display_resolution.setter
@@ -371,6 +379,7 @@ class Panel:
 
     @property
     def display_safe_action(self) -> bool:
+        """Whether to display the safe action area."""
         return cmds.camera(self._camera.name, query=True, displaySafeAction=True)
 
     @display_safe_action.setter
@@ -379,6 +388,7 @@ class Panel:
 
     @property
     def display_safe_title(self) -> bool:
+        """Whether to display the safe title area."""
         return cmds.camera(self._camera.name, query=True, displaySafeTitle=True)
 
     @display_safe_title.setter
@@ -387,6 +397,7 @@ class Panel:
 
     @property
     def overscan(self) -> float:
+        """The camera overscan value."""
         return cmds.camera(self._camera.name, query=True, overscan=True)
 
     @overscan.setter
@@ -396,16 +407,31 @@ class Panel:
     # === Panel Properties ===
 
     def set_editor_var(self, flag: str, value: Any):
+        """Set a modelEditor flag value.
+
+        Args:
+            flag: The modelEditor flag name.
+            value: The value to set.
+        """
         if self._panel:
             cmds.modelEditor(self._panel, edit=True, **{flag: value})
 
     def get_editor_var(self, flag: str) -> Any:
+        """Get a modelEditor flag value.
+
+        Args:
+            flag: The modelEditor flag name.
+
+        Returns:
+            The current value of the flag, or None if panel doesn't exist.
+        """
         if self._panel:
             return cmds.modelEditor(self._panel, query=True, **{flag: True})
         return None
 
     @property
     def all_objects(self) -> bool:
+        """Whether to display all object types."""
         return self.get_editor_var("allObjects")
 
     @all_objects.setter
@@ -414,6 +440,7 @@ class Panel:
 
     @property
     def display_appearance(self) -> str:
+        """Display appearance mode (e.g., 'wireframe', 'smoothShaded')."""
         return self.get_editor_var("displayAppearance")
 
     @display_appearance.setter
@@ -422,6 +449,7 @@ class Panel:
 
     @property
     def display_textures(self) -> bool:
+        """Whether to display textures."""
         return self.get_editor_var("displayTextures")
 
     @display_textures.setter
@@ -430,6 +458,7 @@ class Panel:
 
     @property
     def grid(self) -> bool:
+        """Whether to display the grid."""
         return self.get_editor_var("grid")
 
     @grid.setter
@@ -438,6 +467,7 @@ class Panel:
 
     @property
     def use_default_material(self) -> bool:
+        """Whether to display objects with default material."""
         return self.get_editor_var("useDefaultMaterial")
 
     @use_default_material.setter
@@ -446,6 +476,7 @@ class Panel:
 
     @property
     def polymeshes(self) -> bool:
+        """Whether to display polygon meshes."""
         return self.get_editor_var("polymeshes")
 
     @polymeshes.setter
@@ -454,6 +485,7 @@ class Panel:
 
     @property
     def nurbs_curves(self) -> bool:
+        """Whether to display NURBS curves."""
         return self.get_editor_var("nurbsCurves")
 
     @nurbs_curves.setter
@@ -462,6 +494,7 @@ class Panel:
 
     @property
     def nurbs_surfaces(self) -> bool:
+        """Whether to display NURBS surfaces."""
         return self.get_editor_var("nurbsSurfaces")
 
     @nurbs_surfaces.setter
@@ -470,6 +503,7 @@ class Panel:
 
     @property
     def joints(self) -> bool:
+        """Whether to display joints."""
         return self.get_editor_var("joints")
 
     @joints.setter
@@ -478,6 +512,7 @@ class Panel:
 
     @property
     def locators(self) -> bool:
+        """Whether to display locators."""
         return self.get_editor_var("locators")
 
     @locators.setter
@@ -486,6 +521,7 @@ class Panel:
 
     @property
     def pivots(self) -> bool:
+        """Whether to display pivots."""
         return self.get_editor_var("pivots")
 
     @pivots.setter
@@ -494,6 +530,7 @@ class Panel:
 
     @property
     def image_plane(self) -> bool:
+        """Whether to display image planes."""
         return self.get_editor_var("imagePlane")
 
     @image_plane.setter
@@ -502,6 +539,7 @@ class Panel:
 
     @property
     def hud(self) -> bool:
+        """Whether to display the heads-up display."""
         return self.get_editor_var("headsUpDisplay")
 
     @hud.setter
@@ -510,6 +548,7 @@ class Panel:
 
     @property
     def selection_highlighting(self) -> bool:
+        """Whether to highlight selected objects."""
         return self.get_editor_var("selectionHiliteDisplay")
 
     @selection_highlighting.setter
@@ -518,10 +557,12 @@ class Panel:
 
     @property
     def camera(self):
+        """The camera associated with this panel."""
         return self._camera
 
     @property
     def color_management_enabled(self) -> bool:
+        """Whether color management is enabled."""
         return self.get_editor_var("cmEnabled")
 
     @color_management_enabled.setter
@@ -530,6 +571,7 @@ class Panel:
 
     @property
     def manipulators(self) -> bool:
+        """Whether to display manipulators."""
         return self.get_editor_var("manipulators")
 
     @manipulators.setter
@@ -553,21 +595,36 @@ class Panel:
             cmds.setFocus(self._panel)
 
 
-
 class PanelIsolate:
+    """Helper class for managing isolation mode in a model panel."""
+
     def __init__(self, panel):
+        """Initialize the PanelIsolate helper.
+
+        Args:
+            panel: The model panel name.
+        """
         self._panel = panel  # modelPanel name
 
     # --- core entry point ---
 
     def __call__(self, nodes):
-        """Replace isolate contents"""
+        """Replace isolate contents with the specified nodes.
+
+        Args:
+            nodes: Single node or list of nodes to isolate.
+        """
         self.clear()
         self.add(nodes)
 
     # --- public API ---
     @keepselection
     def add(self, nodes):
+        """Add nodes to the isolation set.
+
+        Args:
+            nodes: Single node or list of nodes to add to isolation.
+        """
         nodes = self._normalize(nodes)
         self.enable()
         scene.select_nodes(nodes)
@@ -575,6 +632,11 @@ class PanelIsolate:
 
     @keepselection
     def remove(self, nodes):
+        """Remove nodes from the isolation set.
+
+        Args:
+            nodes: Single node or list of nodes to remove from isolation.
+        """
         nodes = self._normalize(nodes)
         self.enable()
         scene.select_nodes(nodes)
@@ -582,16 +644,26 @@ class PanelIsolate:
 
     @keepselection
     def clear(self):
+        """Clear all nodes from the isolation set."""
         cmds.isolateSelect(self._panel, state=False)
         cmds.select(clear=True)
         cmds.isolateSelect(self._panel, loadSelected=True)
 
     def enable(self):
+        """Enable isolation mode for the panel."""
         cmds.isolateSelect(self._panel, state=True)
 
     # --- helpers ---
 
     def _normalize(self, nodes):
+        """Normalize nodes to a list format.
+
+        Args:
+            nodes: Single node or iterable of nodes.
+
+        Returns:
+            List of nodes.
+        """
         if not isinstance(nodes, (list, tuple, set)):
             return [nodes]
         return list(nodes)

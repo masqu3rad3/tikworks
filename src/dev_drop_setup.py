@@ -1,6 +1,7 @@
 """Drag & Drop installer for TikWorks DEVELOPMENT"""
-from pathlib import Path
+
 import sys
+from pathlib import Path
 
 # confirm the maya python interpreter
 CONFIRMED = False
@@ -13,16 +14,20 @@ except ImportError:
 
 
 def onMayaDroppedPythonFile(*args, **kwargs):
-    # check the pyhon interpreter version
+    """Handle Maya drag and drop installation event."""
     if sys.version_info.major < 3:
-        cmds.confirmDialog(title='ERROR:', message="TikWorks requires Python version 3.6 and higher. Current Maya Python interpreter is not compatible. \n\nAborting.", button=['OK'],
-                       defaultButton='OK')
+        cmds.confirmDialog(
+            title="ERROR:",
+            message="TikWorks requires Python version 3.6 and higher. Current Maya Python interpreter is not compatible. \n\nAborting.",
+            button=["OK"],
+            defaultButton="OK",
+        )
         return
     _add_module()
 
 
 def _add_module():
-    # module directory is the project root which is one level above
+    """Add TikWorks module to Maya's module directory."""
     _module_dir = Path(__file__).parent.parent
 
     module_file_content = f"""+ tikworks 1.0.0 {_module_dir.as_posix()}
@@ -45,6 +50,5 @@ MAYA_PLUG_IN_PATH +:= build/Debug
     # first time initialize
     cmds.confirmDialog(
         title="TikWorks Dev",
-        message="TikWorks Dev Module Installed. Please restart Maya to see the shelf and menu items."
+        message="TikWorks Dev Module Installed. Please restart Maya to see the shelf and menu items.",
     )
-
