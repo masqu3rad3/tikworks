@@ -11,6 +11,11 @@ from maya.api import OpenMaya
 from tik.vendor.apiundo import apiundo
 
 undocommit = apiundo.commit
+# def mockup_undo_redo(undo=None, redo=None):
+#     """Mockup function for undocommit to avoid circular imports."""
+#     pass
+#
+# undocommit = mockup_undo_redo
 
 
 def obj_exists(name):

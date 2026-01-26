@@ -26,6 +26,7 @@ _NODE_FACTORIES = {
     "group",
     "circle",
     "curve",
+    "joint",
     "rename",
     # We do NOT need "ls" or "createNode" here because
     # these are handled internally in scene module.

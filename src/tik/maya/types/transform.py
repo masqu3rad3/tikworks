@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from typing import TYPE_CHECKING
 
 from maya import cmds
@@ -299,3 +300,29 @@ class Transform(DagNode):
 
         _traverse(self._dag_path())
         return [Transform(node) for node in transforms]
+
+    def create_offset_group(self, name: str = None) -> "Transform":
+        """Create an offset transform above this transform in the hierarchy.
+
+        Args:
+            name (str, optional): Name for the offset transform.
+                If None, defaults to "<this_node_name>_OFFSET".
+                Defaults to None.
+
+        Returns:
+            Transform: The created offset transform node.
+        """
+        if name is None:
+            name = f"{self.name}_OFFSET"
+        offset_transform = Transform.create(name=name)
+
+        # Snap offset to this transform
+        offset_transform.snap_to(self, position=True, rotation=True, scale=True)
+
+        # Reparent this transform under the offset
+        original_parent = self.parent
+        self.parent = offset_transform
+        if original_parent:
+            offset_transform.parent = original_parent
+
+        return offset_transform
