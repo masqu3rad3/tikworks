@@ -484,28 +484,42 @@ class Plug:
     def _create_subtract_node_single(self, other) -> "Plug":
         """Create a subtract node for single-value subtraction.
 
+        For Maya 2025+, uses the native 'subtract' node.
+        For Maya 2024 and older, uses 'floatMath' node with operation=1 (subtract).
+
         Args:
             other: The right-hand operand (Plug or numeric value).
 
         Returns:
             Plug: The output plug of the subtract node.
         """
-        node = cmds.createNode("subtract", name="subtract#")
+        if NodeNames.uses_native_math_nodes:
+            node = cmds.createNode("subtract", name="subtract#")
+            input1_attr = "input1"
+            input2_attr = "input2"
+            output_attr = "output"
+        else:
+            NodeNames.ensure_lookdevkit_loaded()
+            node = cmds.createNode("floatMath", name="floatMath_subtract#")
+            cmds.setAttr(f"{node}.operation", 1)  # 1 = Subtract
+            input1_attr = "floatA"
+            input2_attr = "floatB"
+            output_attr = "outFloat"
 
         # Connect input1 (left operand - self)
-        cmds.connectAttr(self.path, f"{node}.input1", force=True)
+        cmds.connectAttr(self.path, f"{node}.{input1_attr}", force=True)
 
         # Connect or set input2 (right operand - other)
         if isinstance(other, Plug):
-            cmds.connectAttr(other.path, f"{node}.input2", force=True)
+            cmds.connectAttr(other.path, f"{node}.{input2_attr}", force=True)
         elif isinstance(other, (int, float)):
-            cmds.setAttr(f"{node}.input2", float(other))
+            cmds.setAttr(f"{node}.{input2_attr}", float(other))
         else:
             raise TypeError(
                 f"Right operand must be a Plug or numeric value, got {type(other)}"
             )
 
-        return self._create_plug(node, "output")
+        return self._create_plug(node, output_attr)
 
     def _create_multiply_node_single(self, other) -> "Plug":
         """Create a multDL node for single-value multiplication.
@@ -536,28 +550,42 @@ class Plug:
     def _create_divide_node_single(self, other) -> "Plug":
         """Create a divide node for single-value division.
 
+        For Maya 2025+, uses the native 'divide' node.
+        For Maya 2024 and older, uses 'floatMath' node with operation=3 (divide).
+
         Args:
             other: The right-hand operand (Plug or numeric value).
 
         Returns:
             Plug: The output plug of the divide node.
         """
-        node = cmds.createNode("divide", name="divide#")
+        if NodeNames.uses_native_math_nodes:
+            node = cmds.createNode("divide", name="divide#")
+            input1_attr = "input1"
+            input2_attr = "input2"
+            output_attr = "output"
+        else:
+            NodeNames.ensure_lookdevkit_loaded()
+            node = cmds.createNode("floatMath", name="floatMath_divide#")
+            cmds.setAttr(f"{node}.operation", 3)  # 3 = Divide
+            input1_attr = "floatA"
+            input2_attr = "floatB"
+            output_attr = "outFloat"
 
         # Connect input1 (left operand - self / dividend)
-        cmds.connectAttr(self.path, f"{node}.input1", force=True)
+        cmds.connectAttr(self.path, f"{node}.{input1_attr}", force=True)
 
         # Connect or set input2 (right operand - other / divisor)
         if isinstance(other, Plug):
-            cmds.connectAttr(other.path, f"{node}.input2", force=True)
+            cmds.connectAttr(other.path, f"{node}.{input2_attr}", force=True)
         elif isinstance(other, (int, float)):
-            cmds.setAttr(f"{node}.input2", float(other))
+            cmds.setAttr(f"{node}.{input2_attr}", float(other))
         else:
             raise TypeError(
                 f"Right operand must be a Plug or numeric value, got {type(other)}"
             )
 
-        return self._create_plug(node, "output")
+        return self._create_plug(node, output_attr)
 
     def _create_power_node_single(self, other) -> "Plug":
         """Create a power node for single-value power operation.
@@ -798,15 +826,27 @@ class Plug:
             return self._create_plug(node, "output3D")
         elif self._is_scalar_numeric():
             # Single value: create subtract node with other as first input
-            node = cmds.createNode("subtract", name="subtract#")
+            if NodeNames.uses_native_math_nodes:
+                node = cmds.createNode("subtract", name="subtract#")
+                input1_attr = "input1"
+                input2_attr = "input2"
+                output_attr = "output"
+            else:
+                NodeNames.ensure_lookdevkit_loaded()
+                node = cmds.createNode("floatMath", name="floatMath_subtract#")
+                cmds.setAttr(f"{node}.operation", 1)  # 1 = Subtract
+                input1_attr = "floatA"
+                input2_attr = "floatB"
+                output_attr = "outFloat"
+
             if isinstance(other, (int, float)):
-                cmds.setAttr(f"{node}.input1", float(other))
+                cmds.setAttr(f"{node}.{input1_attr}", float(other))
             else:
                 raise TypeError(
                     f"Left operand must be a numeric value, got {type(other)}"
                 )
-            cmds.connectAttr(self.path, f"{node}.input2", force=True)
-            return self._create_plug(node, "output")
+            cmds.connectAttr(self.path, f"{node}.{input2_attr}", force=True)
+            return self._create_plug(node, output_attr)
         else:
             raise TypeError(
                 f"Subtraction not supported for attribute type: " f"{self.type}"
@@ -903,15 +943,27 @@ class Plug:
             return self._create_plug(node, "output")
         elif self._is_scalar_numeric():
             # Single value: create divide node with other as first input
-            node = cmds.createNode("divide", name="divide#")
+            if NodeNames.uses_native_math_nodes:
+                node = cmds.createNode("divide", name="divide#")
+                input1_attr = "input1"
+                input2_attr = "input2"
+                output_attr = "output"
+            else:
+                NodeNames.ensure_lookdevkit_loaded()
+                node = cmds.createNode("floatMath", name="floatMath_divide#")
+                cmds.setAttr(f"{node}.operation", 3)  # 3 = Divide
+                input1_attr = "floatA"
+                input2_attr = "floatB"
+                output_attr = "outFloat"
+
             if isinstance(other, (int, float)):
-                cmds.setAttr(f"{node}.input1", float(other))
+                cmds.setAttr(f"{node}.{input1_attr}", float(other))
             else:
                 raise TypeError(
                     f"Left operand must be a numeric value, got {type(other)}"
                 )
-            cmds.connectAttr(self.path, f"{node}.input2", force=True)
-            return self._create_plug(node, "output")
+            cmds.connectAttr(self.path, f"{node}.{input2_attr}", force=True)
+            return self._create_plug(node, output_attr)
         else:
             raise TypeError(
                 f"Division not supported for attribute type: " f"{self.type}"

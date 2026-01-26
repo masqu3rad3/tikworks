@@ -4,6 +4,7 @@ import maya.cmds as cmds
 import pytest
 
 import tik.maya as tm
+from tik.maya.core.constants import NodeNames
 
 
 class TestPlugMathOperatorsSingle:
@@ -57,7 +58,7 @@ class TestPlugMathOperatorsSingle:
         assert result_plug.value == 15.0
 
     def test_sub_plug_from_plug(self, new_scene):
-        """Test subtracting two plugs creates a subtract node."""
+        """Test subtracting two plugs creates a subtract or floatMath node."""
         node_a = tm.create_node("transform", name="nodeA")
         node_b = tm.create_node("transform", name="nodeB")
         node_a["tx"].value = 10.0
@@ -65,8 +66,11 @@ class TestPlugMathOperatorsSingle:
 
         result_plug = node_a["tx"] - node_b["tx"]
 
-        # Verify a subtract node was created
-        assert "subtract" in result_plug._node.type
+        # Verify a subtract/floatMath node was created
+        if NodeNames.uses_native_math_nodes:
+            assert "subtract" in result_plug._node.type
+        else:
+            assert "floatMath" in result_plug._node.type
         assert result_plug.value == 7.0
 
     def test_rsub_numeric_from_plug(self, new_scene):
@@ -77,7 +81,10 @@ class TestPlugMathOperatorsSingle:
         result_plug = 10 - node_a["tx"]
 
         # For reversed: 10 - 3 = 7
-        assert cmds.getAttr(f"{result_plug._node.name}.input1") == 10.0
+        if NodeNames.uses_native_math_nodes:
+            assert cmds.getAttr(f"{result_plug._node.name}.input1") == 10.0
+        else:
+            assert cmds.getAttr(f"{result_plug._node.name}.floatA") == 10.0
         assert result_plug.value == 7.0
 
     def test_mul_plug_by_plug(self, new_scene):
@@ -112,7 +119,7 @@ class TestPlugMathOperatorsSingle:
         assert result_plug.value == 12.0
 
     def test_truediv_plug_by_plug(self, new_scene):
-        """Test dividing two plugs creates a divide node."""
+        """Test dividing two plugs creates a divide or floatMath node."""
         node_a = tm.create_node("transform", name="nodeA")
         node_b = tm.create_node("transform", name="nodeB")
         node_a["tx"].value = 10.0
@@ -120,8 +127,11 @@ class TestPlugMathOperatorsSingle:
 
         result_plug = node_a["tx"] / node_b["tx"]
 
-        # Verify a divide node was created
-        assert "divide" in result_plug._node.type
+        # Verify a divide/floatMath node was created
+        if NodeNames.uses_native_math_nodes:
+            assert "divide" in result_plug._node.type
+        else:
+            assert "floatMath" in result_plug._node.type
         assert result_plug.value == 5.0
 
     def test_truediv_plug_by_numeric(self, new_scene):
@@ -141,7 +151,10 @@ class TestPlugMathOperatorsSingle:
         result_plug = 20 / node_a["tx"]
 
         # For reversed: 20 / 5 = 4
-        assert cmds.getAttr(f"{result_plug._node.name}.input1") == 20.0
+        if NodeNames.uses_native_math_nodes:
+            assert cmds.getAttr(f"{result_plug._node.name}.input1") == 20.0
+        else:
+            assert cmds.getAttr(f"{result_plug._node.name}.floatA") == 20.0
         assert result_plug.value == 4.0
 
     def test_pow_plug_to_plug(self, new_scene):
