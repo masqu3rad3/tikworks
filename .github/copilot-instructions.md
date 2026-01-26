@@ -14,9 +14,9 @@
 - No third‑party dependencies unless explicitly approved.
 
 ### Compatibility
-- Target Autodesk Maya 2026 and onwards.
-- Assume Python 3.11+ and `PySide6` availability.
-- No support for pre‑`PySide6` or Python versions before 3.11.
+- Target Autodesk Maya 2024 and onwards.
+- Assume Python 3.10+ and `PySide6` availability.
+- No support for pre‑`PySide6` or Python versions before 3.10.
 
 ### Code Style
 - Follow PEP 8.

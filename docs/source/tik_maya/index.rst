@@ -20,5 +20,5 @@ object-oriented design, and robust node tracking to Maya scripting.
    :maxdepth: 2
    :caption: Guides
 
-   guides/working_with_nodes
-   guides/working_with_plugs
+   Working with Nodes <guides/working_with_nodes>
+   Working with Plugs and Attributes <guides/working_with_plugs>

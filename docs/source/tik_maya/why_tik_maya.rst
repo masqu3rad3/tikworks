@@ -64,6 +64,45 @@ Under the hood, tik.maya uses MObject as the primary handle for speed. If the MO
 becomes stale (e.g., after undo/redo), tik.maya reconstructs it from the stored UUID,
 providing a fast path with a safe fallback.
 
+Flexible Dynamic Wrapping
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+tik.maya's architecture brings **fine-tuning, speed, elegance, and extensibility** 
+together through dynamic wrapping:
+
+.. code-block:: python
+
+   # Works as a drop-in replacement for maya.cmds
+   import tik.maya as tm  # Instead of: import maya.cmds as cmds
+   
+   # All cmds functions work automatically
+   cube = tm.polyCube(name="myCube")[0]
+   tm.xform(cube, translation=(1, 2, 3))
+   tm.setAttr(f"{cube}.visibility", 0)
+
+**But with key advantages:**
+
+- **Automatic object wrapping:** Node-returning commands give you typed objects, not strings
+- **Selective overrides:** Performance-critical functions like ``createNode`` use optimized OpenMaya API
+- **Extensible design:** Add custom behavior without modifying Maya
+- **Zero migration cost:** Change your import statement and existing scripts work
+
+.. code-block:: python
+
+   # You also get the object-oriented benefits
+   cube.translate = (5, 6, 7)
+   cube["visibility"].value = False
+   cube["visibility"].locked = True
+   
+   # And mathematical operators for dependency networks
+   driver = tm.spaceLocator()[0]
+   (driver["translateX"] * 2.0 + 5) >> cube["translateY"]
+
+This flexible structure means you can migrate gradually — use ``tm.polyCube()`` just 
+like ``cmds.polyCube()`` when convenient, or embrace the object-oriented API when it 
+makes sense. See the ``snippets/comparisons/08_cylinder_rig/`` example to see an entire 
+rigging script work with just an import change!
+
 Concise, Readable Code
 ~~~~~~~~~~~~~~~~~~~~~~~
 

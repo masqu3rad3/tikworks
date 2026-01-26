@@ -70,8 +70,8 @@ Full documentation is available at [Read the Docs](https://tikworks.readthedocs.
 
 ## Requirements
 
-- Autodesk Maya 2026+
-- Python 3.11+
+- Autodesk Maya 2024+
+- Python 3.10+
 
 ## License
 

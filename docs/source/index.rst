@@ -19,22 +19,22 @@ and predictable:
 
    tik.core        # semantic primitives
    ↑
-   tik.maya        # disciplined Maya wrapper
+   tik.maya        # disciplined Maya wrapper (ACTIVE)
    ↑
    tik.shared      # reusable infrastructure and UX
    ↑
-   tik.trigger     # rigging language and framework
+   tik.trigger     # rigging language and framework (coming soon)
    ↑
-   tik.tools       # user-facing tools and workflows
+   tik.tools       # user-facing tools and workflows (coming soon)
 
 - **tik.core** defines pure, domain-agnostic value objects.
-- **tik.maya** wraps Maya mechanics while depending only on ``tik.core``.
+- **tik.maya** wraps Maya mechanics while depending only on ``tik.core``. **This is currently the active and primary component of TikWorks.**
 - **tik.shared** hosts cross-tool helpers and shared UI utilities.
 - **tik.trigger** is the rigging framework, building on the lower layers.
 - **tik.tools** are concrete user-facing tools and workflows.
 
-Each pillar has its own dedicated documentation section. Start with the one that
-matches your needs.
+Currently, **tik.maya** is the fully developed and documented component. Future components
+will build on this foundation as they are implemented.
 
 .. tip::
    **Why TikWorks?** Maya scripting is powerful but verbose. TikWorks brings modern
@@ -46,18 +46,6 @@ matches your needs.
    :caption: tik.maya
 
    tik_maya/index
-
-.. toctree::
-   :maxdepth: 2
-   :caption: tik.trigger
-
-   tik_trigger/index
-
-.. toctree::
-   :maxdepth: 2
-   :caption: tik.tools
-
-   tik_tools/index
 
 .. toctree::
    :maxdepth: 2
