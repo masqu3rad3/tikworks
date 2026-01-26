@@ -100,8 +100,8 @@ together through dynamic wrapping:
 
 This flexible structure means you can migrate gradually — use ``tm.polyCube()`` just 
 like ``cmds.polyCube()`` when convenient, or embrace the object-oriented API when it 
-makes sense. See the ``snippets/comparisons/08_cylinder_rig/`` example to see an entire 
-rigging script work with just an import change!
+makes sense. See the ``snippets/comparisons/08_cylinder_rig/`` example to see how an 
+entire rigging script works with just an import change!
 
 Concise, Readable Code
 ~~~~~~~~~~~~~~~~~~~~~~~

@@ -34,9 +34,9 @@ drop-in replacement for ``maya.cmds`` with minimal changes to existing scripts:
    tm.xform("myCube", translation=(1, 2, 3))
    tm.setAttr("myCube.translateX", 5.0)
 
-Under the hood, tik.maya uses **PEP 562's module-level ``__getattr__``** to intercept 
-attribute access. When you call ``tm.polyCube()``, it dynamically proxies to 
-``maya.cmds.polyCube()`` while intelligently wrapping inputs and outputs.
+Under the hood, tik.maya uses `PEP 562 <https://peps.python.org/pep-0562/>`_ (module-level 
+``__getattr__``) to intercept attribute access. When you call ``tm.polyCube()``, it 
+dynamically proxies to ``maya.cmds.polyCube()`` while intelligently wrapping inputs and outputs.
 
 **Key benefits:**
 
