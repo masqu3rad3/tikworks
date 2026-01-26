@@ -10,13 +10,13 @@
 ## Global Guidelines (All Code)
 
 ### Dependencies
-- Stick to vanilla Python stdlib and modules that ship with Maya: `cmds`, `OpenMaya` (API 2.0), `PySide6`, etc.
+- Stick to vanilla Python stdlib and modules that ship with Maya: `cmds`, `OpenMaya` (API 2.0), `PySide2`/`PySide6`, etc.
 - No third‑party dependencies unless explicitly approved.
 
 ### Compatibility
 - Target Autodesk Maya 2024 and onwards.
-- Assume Python 3.10+ and `PySide6` availability.
-- No support for pre‑`PySide6` or Python versions before 3.10.
+- Assume Python 3.10+ and `PySide2` or `PySide6` availability.
+- No support for Python versions before 3.10.
 
 ### Code Style
 - Follow PEP 8.
