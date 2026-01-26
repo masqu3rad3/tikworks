@@ -1,4 +1,6 @@
 """DAG (Directed Acyclic Graph) node wrapper for Maya."""
+from __future__ import annotations
+from typing import Any
 
 from maya import cmds
 from maya.api import OpenMaya
@@ -87,21 +89,50 @@ class DagNode(Node):
         return resolve(parent_path.fullPathName())
 
     @protected
-    def set_parent(self, new_parent):
-        """Set a new parent for this node. Pass None to unparent to world."""
-        mod = OpenMaya.MDagModifier()
+    def set_parent(self, new_parent: Any, relative: bool = False) -> None:
+        """Set a new parent for this node.
+
+        Args:
+            new_parent: New parent node (str, Node wrapper, or None for world).
+            relative: If True, keep local transforms (no world-space compensation).
+                If False (default), preserve world-space placement by compensating
+                transforms after parenting (similar to cmds.parent(relative=False)).
+        """
+        world_matrix_before: OpenMaya.MMatrix | None = None
+        if not relative:
+            # Get the WORLD matrix via inclusiveMatrix(), not local transformation
+            world_matrix_before = self._dag_path().inclusiveMatrix()
+
+        dag_modifier = OpenMaya.MDagModifier()
         if new_parent is None:
-            # Reparent to world
-            mod.reparentNode(self._m_obj)
+            dag_modifier.reparentNode(self._m_obj)
         else:
-            new_parent = resolve(new_parent)  # ensure it's a wrapped node
-            if not new_parent.exists():
-                raise ValueError(f"New parent node '{new_parent.uuid}' does not exist.")
-            mod.reparentNode(self._m_obj, new_parent._m_obj)
-        mod.doIt()
-        undocommit(undo=mod.undoIt, redo=mod.doIt)
-        # Invalidate cached path since parenting can change the full path.
+            new_parent_node = resolve(new_parent)
+            if not new_parent_node.exists():
+                raise ValueError(
+                    f"New parent node '{new_parent_node.uuid}' does not exist."
+                )
+            dag_modifier.reparentNode(self._m_obj, new_parent_node._m_obj)
+
+        dag_modifier.doIt()
+
+        # Invalidate cached path since parenting changes the full path
         self._cached_dag_path = None
+
+        if world_matrix_before is not None:
+            # Get fresh dag path after reparenting
+            new_dag_path = self._dag_path()
+            # Get new parent's world matrix (or identity if parented to world)
+            parent_inverse_matrix = new_dag_path.exclusiveMatrixInverse()
+            # Compute new local matrix to maintain world position
+            new_local_matrix = world_matrix_before * parent_inverse_matrix
+            # Apply the new local transformation
+            transform_fn = OpenMaya.MFnTransform(new_dag_path)
+            transform_fn.setTransformation(
+                OpenMaya.MTransformationMatrix(new_local_matrix)
+            )
+
+        undocommit(undo=dag_modifier.undoIt, redo=dag_modifier.doIt)
 
     @property
     def children(self):

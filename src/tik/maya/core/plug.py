@@ -26,7 +26,8 @@ class Plug:
             OpenMaya.MFn.kNumericAttribute,  # Bool, Float, Int, Byte, Short
             OpenMaya.MFn.kEnumAttribute,  # Enums
             OpenMaya.MFn.kUnitAttribute,  # Time, Angle, Distance
-            OpenMaya.MFn.kDoubleLinearAttribute,  # Time, Angle, Distance
+            OpenMaya.MFn.kDoubleLinearAttribute,  # Time, Distance
+            OpenMaya.MFn.kDoubleAngleAttribute,  # Angle
         }
     )
 
