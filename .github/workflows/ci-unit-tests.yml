@@ -46,10 +46,7 @@ jobs:
           MAYA_DISABLE_ADP: 1
           PYTHONPATH: ${{ github.workspace }}/src
         run: |
-          mayapy -m coverage run \
-            --source=src \
-            ./tests/unit/invoke.py
-      
+          mayapy -m coverage run ./tests/unit/invoke.py
           mayapy -m coverage xml -o coverage.xml
           mayapy -m coverage report
 #      - name: Test with pytest
