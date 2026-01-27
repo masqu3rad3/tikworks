@@ -116,6 +116,10 @@ class Node:
         """Delete the node from the scene."""
         cmds.delete(self.long_name)
 
+    def delete_history(self):
+        """Delete the construction history of the node."""
+        cmds.delete(self.long_name, constructionHistory=True)
+
     @protected
     def rename(self, new_name):
         """Rename the node."""
