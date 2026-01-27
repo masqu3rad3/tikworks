@@ -65,7 +65,7 @@ jobs:
           name: coverage-${{ matrix.maya }}
           path: coverage.xml
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v3
         with:
           files: coverage.xml
           flags: maya-${{ matrix.maya }}
