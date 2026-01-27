@@ -58,7 +58,7 @@ Each subfolder contains paired examples:
 
 ## Requirements
 
-- Maya 2026+
+- Maya 2024+
 - tik.maya in PYTHONPATH: `sys.path.insert(0, "path/to/tikworks/src")`
 
 ## Key Takeaways
