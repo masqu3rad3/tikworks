@@ -1,4 +1,16 @@
+
+![Maya](https://img.shields.io/badge/Maya-2024+-blue)
+[![Build status](https://github.com/masqu3rad3/tikworks/actions/workflows/ci-unit-tests.yml/badge.svg)](https://github.com/masqu3rad3/tikworks/actions/workflows/ci-unit-tests.yml)
+[![Coverage](https://codecov.io/gh/masqu3rad3/tikworks/branch/main/graph/badge.svg)](https://codecov.io/gh/masqu3rad3/tikworks)
+[![Documentation Status](https://readthedocs.org/projects/tik-manager4/badge/?version=latest)](https://tik-manager4.readthedocs.io/en/latest/?badge=latest)
+[![License](https://img.shields.io/github/license/masqu3rad3/tikworks)](https://github.com/masqu3rad3/tikworks/blob/main/LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10+-blue)](https://github.com/masqu3rad3/tikworks)
+[![PySide2](https://img.shields.io/badge/-PySide2-green)](https://github.com/masqu3rad3/tikworks)
+[![PySide6](https://img.shields.io/badge/-PySide6-green)](https://github.com/masqu3rad3/tikworks)
+
+
 # TikWorks
+----------
 
 An ecosystem of Python tools and frameworks for Autodesk Maya.
 
