@@ -1,10 +1,10 @@
 [run]
 source =
-    src/tik
-
-omit =
-    */vendor/**
-    */dev_drop_setup.py
+    src/tik/core
+    src/tik/maya
+    src/tik/shared
+    src/tik/tools
+    src/tik/trigger
 
 [report]
 exclude_lines =
