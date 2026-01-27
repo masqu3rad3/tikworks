@@ -86,6 +86,100 @@ Core Components
 
 For architecture details, see :doc:`/architecture/core_concepts`.
 
+Dynamic cmds Wrapping Architecture
+----------------------------------
+
+One of tik.maya's most powerful features is its **flexible dynamic wrapping structure** 
+that makes it a drop-in replacement for ``maya.cmds`` while enabling fine-tuning and 
+optimizations where needed.
+
+How Dynamic Wrapping Works
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+tik.maya leverages **PEP 562** (module-level ``__getattr__``) to dynamically intercept 
+attribute access:
+
+.. code-block:: python
+
+   def __getattr__(name):
+       """Called when user asks for tm.something that isn't explicitly imported."""
+       if hasattr(cmds, name):
+           return partial(_proxy_wrapper, name)
+       raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+When you call ``tm.polyCube()``, Python checks if ``polyCube`` is explicitly defined in 
+the module. If not, it calls ``__getattr__("polyCube")``, which creates a wrapper that:
+
+1. **Sanitizes inputs:** Converts tik.maya objects to strings
+2. **Calls the real Maya command:** Executes ``maya.cmds.polyCube()``
+3. **Wraps outputs:** Converts returned node names to typed tik.maya objects
+
+This means **any cmds function works through tik.maya automatically**, even functions 
+we haven't explicitly wrapped yet.
+
+Selective Overrides for Performance
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+While the dynamic wrapper handles most commands, tik.maya can **override specific 
+functions** for better performance or enhanced functionality. For example, ``createNode`` 
+is mapped to use Maya's OpenMaya API directly:
+
+.. code-block:: python
+
+   @alias("createNode")
+   def create_node(node_type: str, name=None, parent=None):
+       """Create a new node using optimized OpenMaya API."""
+       # Try DAG modifier first (faster than cmds)
+       full_name = apicommon.create_node_with_dag_modifier(
+           node_type, name=name, parent=parent
+       )
+       return resolve(full_name)
+
+This approach provides:
+
+- **Speed:** API-level node creation is faster than cmds
+- **Elegance:** Cleaner function signature without Maya's complex flags
+- **Extensibility:** We can add custom logic without changing Maya
+
+The Balance of Flexibility
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This architecture brings together four key qualities:
+
+**Fine-tuning**
+   Override specific commands with custom implementations while leaving others untouched
+
+**Speed**
+   Use OpenMaya API for performance-critical operations (node creation, attribute queries)
+
+**Elegance**
+   Pythonic interfaces with properties, operators, and clean method signatures
+
+**Extensibility**
+   Add new functionality without modifying Maya or breaking existing code
+
+.. code-block:: python
+
+   # Example: This entire script works by changing the import
+   import tik.maya as tm  # Instead of: import maya.cmds as cmds
+   
+   # All cmds functions work
+   cube = tm.polyCube(name="myCube")[0]
+   tm.xform(cube, translation=(1, 2, 3))
+   
+   # But you also get object-oriented benefits
+   cube.translate = (5, 6, 7)
+   cube["visibility"].locked = True
+   
+   # And mathematical operators for dependency graph
+   driver = tm.spaceLocator()[0]
+   (driver["translateX"] * 2.0 + 5) >> cube["translateY"]
+
+.. note::
+   The dynamic wrapping is transparent and opt-in. You can use ``tm.polyCube()`` 
+   just like ``cmds.polyCube()``, or you can use ``tm.Mesh.create("polyCube")`` 
+   for the object-oriented interface. Both work!
+
 Next Steps
 ----------
 

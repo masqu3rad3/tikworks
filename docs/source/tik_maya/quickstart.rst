@@ -15,6 +15,53 @@ tik.maya is part of the TikWorks repository. Add the ``src`` directory to your M
 
    import tik.maya as tm
 
+Dynamic cmds Wrapping
+---------------------
+
+**tik.maya dynamically wraps the entire maya.cmds module**, allowing you to use it as a 
+drop-in replacement for ``maya.cmds`` with minimal changes to existing scripts:
+
+.. code-block:: python
+
+   # Traditional approach
+   import maya.cmds as cmds
+   
+   # Simply change the import!
+   import tik.maya as tm
+   
+   # Now all your cmds calls work through tik.maya
+   tm.polyCube(name="myCube")
+   tm.xform("myCube", translation=(1, 2, 3))
+   tm.setAttr("myCube.translateX", 5.0)
+
+Under the hood, tik.maya uses `PEP 562 <https://peps.python.org/pep-0562/>`_ (module-level 
+``__getattr__``) to intercept attribute access. When you call ``tm.polyCube()``, it 
+dynamically proxies to ``maya.cmds.polyCube()`` while intelligently wrapping inputs and outputs.
+
+**Key benefits:**
+
+- **Seamless migration:** Existing scripts can switch namespaces with minimal changes
+- **Automatic type resolution:** Commands that return nodes automatically return typed tik.maya wrappers
+- **Selective overrides:** Critical functions like ``createNode`` use optimized OpenMaya API implementations for better performance
+- **Input cleaning:** tik.maya objects are automatically converted to strings for Maya commands
+- **Output wrapping:** Maya node names are automatically wrapped as tik.maya objects when appropriate
+
+.. code-block:: python
+
+   # Example: This returns a tik.maya.Transform object, not a string
+   cube = tm.polyCube(name="myCube")[0]
+   print(type(cube))  # <class 'tik.maya.types.transform.Transform'>
+   
+   # You can immediately use object-oriented methods
+   cube.translate = (1, 2, 3)
+   cube["visibility"].value = False
+
+.. tip::
+   **Want to see more?** Check out the ``snippets/comparisons/`` folder in the repository 
+   for many side-by-side examples comparing ``maya.cmds`` and ``tik.maya`` approaches. 
+   Example ``08_cylinder_rig`` demonstrates how an entire rigging script can work by 
+   simply changing ``import maya.cmds as cmds`` to ``import tik.maya as tm``!
+
 Wrapping Existing Nodes
 -----------------------
 
