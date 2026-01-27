@@ -70,3 +70,5 @@ jobs:
           files: coverage.xml
           flags: maya-${{ matrix.maya }}
           fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
