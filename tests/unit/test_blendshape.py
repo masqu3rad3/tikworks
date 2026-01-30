@@ -415,15 +415,13 @@ class TestBlendShapeWeightPlugs:
 
     def test_get_weight_plug_returns_none_on_exception(self):
         """Test _get_weight_plug returns None when an exception occurs."""
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import patch
 
         base_mesh, _ = cmds.polySphere(name="plug_exception_base")
         blendshape = cmds.blendShape(base_mesh, name="plugExceptionBS")[0]
         blendshape_node = BlendShape(blendshape)
 
         # Mock the __getitem__ method to raise an exception
-        original_getitem = BlendShape.__getitem__
-
         def raising_getitem(self, key):
             raise RuntimeError("Simulated plug access error")
 
@@ -431,6 +429,90 @@ class TestBlendShapeWeightPlugs:
             result = blendshape_node._get_weight_plug(0, target_id=0)
 
         assert result is None
+
+    def test_write_weights_cmds_global_deformer(self):
+        """Test _write_weights_cmds fallback for global deformer weights."""
+        base_mesh, _ = cmds.polySphere(name="cmds_global_base", sx=4, sy=4)
+        target_mesh, _ = cmds.polySphere(name="cmds_global_target", sx=4, sy=4)
+        cmds.move(0, 1, 0, target_mesh)
+
+        blendshape = cmds.blendShape(target_mesh, base_mesh, name="cmdsGlobalBS")[0]
+        blendshape_node = BlendShape(blendshape)
+
+        # Get vertex count
+        original_weights = blendshape_node.get_weights()
+        new_weights = [0.6] * len(original_weights)
+
+        # Use the cmds fallback directly
+        blendshape_node._write_weights_cmds(0, new_weights, target_id=None)
+
+        # Verify weights were set
+        retrieved_weights = blendshape_node.get_weights()
+        assert all(w == pytest.approx(0.6, abs=0.01) for w in retrieved_weights)
+
+    def test_write_weights_cmds_target_weights(self):
+        """Test _write_weights_cmds fallback for target-specific weights."""
+        base_mesh, _ = cmds.polySphere(name="cmds_target_base", sx=4, sy=4)
+        target_mesh, _ = cmds.polySphere(name="cmds_target_target", sx=4, sy=4)
+        cmds.move(0, 1, 0, target_mesh)
+
+        blendshape = cmds.blendShape(target_mesh, base_mesh, name="cmdsTargetBS")[0]
+        blendshape_node = BlendShape(blendshape)
+
+        # Get vertex count
+        original_weights = blendshape_node.get_target_weights(0)
+        new_weights = [0.7] * len(original_weights)
+
+        # Use the cmds fallback directly with target_id
+        blendshape_node._write_weights_cmds(0, new_weights, target_id=0)
+
+        # Verify weights were set
+        retrieved_weights = blendshape_node.get_target_weights(0)
+        assert all(w == pytest.approx(0.7, abs=0.01) for w in retrieved_weights)
+
+    def test_set_weights_uses_cmds_fallback_when_plug_none(self):
+        """Test set_weights uses cmds fallback when _get_weight_plug returns None."""
+        from unittest.mock import patch
+
+        base_mesh, _ = cmds.polySphere(name="fallback_global_base", sx=4, sy=4)
+        target_mesh, _ = cmds.polySphere(name="fallback_global_target", sx=4, sy=4)
+        cmds.move(0, 1, 0, target_mesh)
+
+        blendshape = cmds.blendShape(target_mesh, base_mesh, name="fallbackGlobalBS")[0]
+        blendshape_node = BlendShape(blendshape)
+
+        original_weights = blendshape_node.get_weights()
+        new_weights = [0.65] * len(original_weights)
+
+        # Mock _get_weight_plug to return None, simulating Maya 2024 behavior
+        with patch.object(blendshape_node, "_get_weight_plug", return_value=None):
+            blendshape_node.set_weights(new_weights)
+
+        # Verify weights were set via cmds fallback
+        retrieved_weights = blendshape_node.get_weights()
+        assert all(w == pytest.approx(0.65, abs=0.01) for w in retrieved_weights)
+
+    def test_set_target_weights_uses_cmds_fallback_when_plug_none(self):
+        """Test set_target_weights uses cmds fallback when _get_weight_plug returns None."""
+        from unittest.mock import patch
+
+        base_mesh, _ = cmds.polySphere(name="fallback_target_base", sx=4, sy=4)
+        target_mesh, _ = cmds.polySphere(name="fallback_target_target", sx=4, sy=4)
+        cmds.move(0, 1, 0, target_mesh)
+
+        blendshape = cmds.blendShape(target_mesh, base_mesh, name="fallbackTargetBS")[0]
+        blendshape_node = BlendShape(blendshape)
+
+        original_weights = blendshape_node.get_target_weights(0)
+        new_weights = [0.55] * len(original_weights)
+
+        # Mock _get_weight_plug to return None, simulating Maya 2024 behavior
+        with patch.object(blendshape_node, "_get_weight_plug", return_value=None):
+            blendshape_node.set_target_weights(0, new_weights)
+
+        # Verify weights were set via cmds fallback
+        retrieved_weights = blendshape_node.get_target_weights(0)
+        assert all(w == pytest.approx(0.55, abs=0.01) for w in retrieved_weights)
 
 
 class TestBlendShapeSaveLoad:

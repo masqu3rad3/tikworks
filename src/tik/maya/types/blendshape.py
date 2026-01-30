@@ -121,6 +121,22 @@ class BlendShape(Node):
             element_plug = plug.elementByLogicalIndex(idx)
             element_plug.setFloat(weight_val)
 
+    def _write_weights_cmds(self, geom_index, weights, target_id=None):
+        """Fallback method to write weights using cmds (slower but more compatible)."""
+        if target_id is None:
+            # Global deformer weights
+            for idx, weight_val in enumerate(weights):
+                attr_path = f"{self.name}.weightList[{geom_index}].weights[{idx}]"
+                cmds.setAttr(attr_path, weight_val)
+        else:
+            # Target-specific weights
+            for idx, weight_val in enumerate(weights):
+                attr_path = (
+                    f"{self.name}.inputTarget[{geom_index}]"
+                    f".inputTargetGroup[{target_id}].targetWeights[{idx}]"
+                )
+                cmds.setAttr(attr_path, weight_val)
+
     # --------------------------------------------------------------------------
     # Public API
     # --------------------------------------------------------------------------
@@ -218,7 +234,12 @@ class BlendShape(Node):
             )
 
         plug = self._get_weight_plug(idx, target_id=target_id)
-        self._write_weights(plug, weights)
+
+        if plug is not None:
+            self._write_weights(plug, weights)
+        else:
+            # Fallback for Maya versions where plug access fails
+            self._write_weights_cmds(idx, weights, target_id=target_id)
 
     def get_weights(self, geometry=None):
         """
@@ -245,7 +266,12 @@ class BlendShape(Node):
         plug = self._get_weight_plug(
             idx, target_id=None
         )  # target_id None implies Base/Deformer
-        self._write_weights(plug, weights)
+
+        if plug is not None:
+            self._write_weights(plug, weights)
+        else:
+            # Fallback for Maya versions where plug access fails
+            self._write_weights_cmds(idx, weights, target_id=None)
 
     def index_by_name(self, target_name):
         """Get the index of a target by its name."""
