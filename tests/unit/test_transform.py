@@ -293,3 +293,71 @@ def test_collect_hierarchy_with_string_node_type():
     collected = root.collect_hierarchy(node_types="transform")
     names = {n.name for n in collected}
     assert "child1Str" in names
+
+
+class TestInsertOffsetParent:
+    """Tests for the create_offset_group method."""
+
+    def test_create_offset_group_basic(self):
+        """Test creating an offset group with default name."""
+        node = Transform.create(name="offsetChild")
+        cmds.setAttr(f"{node.name}.translate", 5, 10, 15, type="double3")
+        cmds.setAttr(f"{node.name}.rotate", 10, 20, 30, type="double3")
+
+        offset = node.create_offset_group()
+
+        # Verify offset name
+        assert offset.name == "offsetChild_OFFSET"
+
+        # Verify offset is now the parent
+        parents = cmds.listRelatives(node.name, parent=True)
+        assert parents and parents[0] == offset.name
+
+        # Verify offset has same transforms as original
+        offset_trans = cmds.getAttr(f"{offset.name}.translate")[0]
+        assert offset_trans == pytest.approx((5, 10, 15), abs=1e-5)
+
+        offset_rot = cmds.getAttr(f"{offset.name}.rotate")[0]
+        assert offset_rot == pytest.approx((10, 20, 30), abs=1e-5)
+
+    def test_create_offset_group_custom_name(self):
+        """Test creating an offset group with custom name."""
+        node = Transform.create(name="customOffsetChild")
+
+        offset = node.create_offset_group(name="myCustomOffset")
+
+        assert offset.name == "myCustomOffset"
+        parents = cmds.listRelatives(node.name, parent=True)
+        assert parents and parents[0] == "myCustomOffset"
+
+    def test_create_offset_group_preserves_hierarchy(self):
+        """Test create_offset_group preserves original parent hierarchy."""
+        grandparent = Transform.create(name="grandparent")
+        parent = Transform.create(name="parentNode", parent=grandparent)
+        child = Transform.create(name="childNode", parent=parent)
+        cmds.setAttr(f"{child.name}.translate", 3, 6, 9, type="double3")
+
+        offset = child.create_offset_group()
+
+        # Verify hierarchy: grandparent -> parent -> offset -> child
+        child_parents = cmds.listRelatives(child.name, parent=True)
+        assert child_parents and child_parents[0] == offset.name
+
+        offset_parents = cmds.listRelatives(offset.name, parent=True)
+        assert offset_parents and offset_parents[0] == parent.name
+
+    def test_create_offset_group_no_parent(self):
+        """Test create_offset_group when node has no parent."""
+        node = Transform.create(name="noParentNode")
+        cmds.setAttr(f"{node.name}.translate", 1, 2, 3, type="double3")
+
+        offset = node.create_offset_group()
+
+        # Verify offset is parent of node
+        parents = cmds.listRelatives(node.name, parent=True)
+        assert parents and parents[0] == offset.name
+
+        # Verify offset has no parent (world space)
+        offset_parents = cmds.listRelatives(offset.name, parent=True)
+        assert offset_parents is None
+

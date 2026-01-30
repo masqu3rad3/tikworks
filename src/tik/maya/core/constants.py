@@ -1,6 +1,160 @@
 """Constants for the Tik Maya Core module."""
 from maya import cmds
 
+NODE_FACTORIES = [
+    # --- General Creation & Management ---
+    # 'createNode', # CreateNode is handled specially in scene.py
+    'duplicate',
+    'duplicateWithTransform',
+    'instance',
+    'group',
+    'rename',
+    'sets',
+    'partition',
+    'container',
+    'shadingNode',
+
+    # --- Retrieval / Query ---
+    # 'ls', # Wrapped separately in scene.py
+    'listRelatives',
+    'listConnections',
+    'listHistory',
+    'listTransforms',
+    'selectedNodes',
+
+    # --- Polygon Primitives ---
+    'polyCube',
+    'polySphere',
+    'polyCylinder',
+    'polyCone',
+    'polyPlane',
+    'polyTorus',
+    'polyPrism',
+    'polyPyramid',
+    'polyPipe',
+    'polyHelix',
+    'polyPlatonicSolid',
+    'polySoccerBall',
+    'polyDisc',
+    'polyGear',
+    'polySuperShape',
+
+    # --- NURBS Primitives ---
+    'nurbsCube',
+    'nurbsPlane',
+    'nurbsSphere',
+    'nurbsCylinder',
+    'nurbsCone',
+    'nurbsTorus',
+    'nurbsSquare',
+    'sphere',
+    'cone',
+    'cylinder',
+    'plane',
+    'torus',
+    'circle',
+    'square',
+
+    # --- Curves & Text ---
+    'curve',
+    'textCurves',
+    'bezierCurveToNurbs',
+    'arcLengthDimension',
+
+    # --- Lights & Cameras ---
+    'ambientLight',
+    'directionalLight',
+    'pointLight',
+    'spotLight',
+    'areaLight',
+    'volumeLight',
+    'camera',
+    'imagePlane',
+
+    # --- Locators & Helpers ---
+    'spaceLocator',
+    'annotate',
+    'distanceDimension',
+
+    # --- Rigging (Joints, IK, Constraints) ---
+    'joint',
+    'ikHandle',
+    'effector',
+    'aimConstraint',
+    'orientConstraint',
+    'pointConstraint',
+    'parentConstraint',
+    'scaleConstraint',
+    'poleVectorConstraint',
+    'geometryConstraint',
+    'normalConstraint',
+    'tangentConstraint',
+    'pointOnPolyConstraint',
+
+    # --- Deformers ---
+    'blendShape',
+    'cluster',
+    'lattice',
+    'skinCluster',
+    'wire',
+    'nonLinear',
+    'sculpt',
+    'deltaMush',
+    'deformer',
+    'boneLattice',
+    'flexor',
+
+    # --- Modeling Operations (Resulting in new nodes/transforms) ---
+    'polyUnite',
+    'polySeparate',
+    'polyBoolOp',
+    'polyBooleanCmd',
+    'polyDuplicateAndConnect',
+    'polyMirrorFace',
+    'polySmooth',
+    'polyBevel',
+    'polyBevel3',
+    'attachCurve',
+    'detachCurve',
+    'alignCurve',
+    'alignSurface',
+    'filletCurve',
+    'intersect',
+    'loft',
+    'revolve',
+    'extrude',
+    'boundary',
+    'planarSrf',
+    'bevel',
+    'bevelPlus',
+    'copySkinWeights',  # Returns list of destination objects
+
+    # --- Dynamics / FX ---
+    'emitter',
+    'fluidEmitter',
+    'particle',
+    'nParticle',
+    'nClothCreate',
+    'air',
+    'drag',
+    'gravity',
+    'newton',
+    'radial',
+    'turbulence',
+    'uniform',
+    'volumeAxis',
+    'vortex',
+    'rigidBody',
+    'rigidSolver',
+    'spring',
+
+    # --- Animation ---
+    'shot',
+    'clip',
+    'character',
+    'expression',  # Returns the expression node name
+    'animLayer'
+]
 
 class _NodeNamesConfig:
     """

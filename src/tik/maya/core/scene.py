@@ -5,32 +5,7 @@ from maya import cmds
 from . import apicommon
 from .decorators import alias
 from .registry import is_registered, resolve
-
-# --- DYNAMIC WRAPPER CONFIGURATION ---
-
-# Commands that return nodes and should be auto-converted to tik objects.
-_NODE_FACTORIES = {
-    "listRelatives",
-    "listConnections",
-    "listHistory",
-    "duplicate",
-    "instance",
-    "polyCube",
-    "polySphere",
-    "polyPlane",
-    "polyCylinder",
-    "polyTorus",
-    "polyExtrudeFacet",
-    "polyBevel",
-    "spaceLocator",
-    "group",
-    "circle",
-    "curve",
-    "joint",
-    "rename",
-    # We do NOT need "ls" or "createNode" here because
-    # these are handled internally in scene module.
-}
+from .constants import NODE_FACTORIES
 
 
 def _clean_input(data):
@@ -65,7 +40,7 @@ def _proxy_wrapper(func_name, *args, **kwargs):
     result = original_func(*clean_args, **clean_kwargs)
 
     # Wrap output if it's a known factory (String -> Object)
-    if func_name in _NODE_FACTORIES and result is not None:
+    if func_name in NODE_FACTORIES and result is not None:
         return _wrap_output(result)
 
     return result

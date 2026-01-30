@@ -1,0 +1,11 @@
+Run with coverage:
+
+Windows:
+mayapy -m coverage erase
+set PYTHONPATH=%CD%\src;%PYTHONPATH% && mayapy -m coverage run tests\unit\invoke.py
+mayapy -m coverage report
+
+Linux/Mac:
+mayapy -m coverage erase
+PYTHONPATH=$(pwd)/src:$PYTHONPATH mayapy -m coverage run ./tests/unit/invoke.py
+mayapy -m coverage report

@@ -80,3 +80,61 @@ class TestCurveLineWidth:
         # Verify with cmds
         assert cmds.getAttr(f"{c.name}.lineWidth") == 2.5
 
+
+class TestCurveScaleCvs:
+    """Tests for the scale_points method."""
+
+    def test_scale_points_object_pivot(self):
+        """Test scaling CVs with object pivot (origin)."""
+        curve = Curve.create(d=1, p=[(1, 0, 0), (2, 0, 0), (3, 0, 0)])
+
+        # Scale by 2x with object pivot (origin)
+        curve.scale_points(2.0, pivot="object")
+
+        cvs = curve.cvs(space="object")
+        assert cvs[0].x == pytest.approx(2.0, abs=1e-5)
+        assert cvs[1].x == pytest.approx(4.0, abs=1e-5)
+        assert cvs[2].x == pytest.approx(6.0, abs=1e-5)
+
+    def test_scale_points_center_pivot(self):
+        """Test scaling CVs with center pivot (bounding box center)."""
+        curve = Curve.create(d=1, p=[(-1, 0, 0), (0, 0, 0), (1, 0, 0)])
+
+        # Get center before scaling
+        cvs_before = curve.cvs(space="object")
+
+        # Scale by 0.5 with center pivot
+        curve.scale_points(0.5, pivot="center")
+
+        cvs_after = curve.cvs(space="object")
+        # With center pivot, the center should stay roughly the same
+        # and the endpoints should move closer
+        assert cvs_after[0].x == pytest.approx(-0.5, abs=1e-5)
+        assert cvs_after[2].x == pytest.approx(0.5, abs=1e-5)
+
+    def test_scale_points_custom_pivot(self):
+        """Test scaling CVs with custom pivot point."""
+        curve = Curve.create(d=1, p=[(0, 0, 0), (2, 0, 0)])
+
+        # Scale by 2x with custom pivot at (2, 0, 0)
+        curve.scale_points(2.0, pivot="custom", pivot_point=(2, 0, 0))
+
+        cvs = curve.cvs(space="object")
+        # Point at (0,0,0) should move to (-2, 0, 0) relative to pivot (2,0,0)
+        assert cvs[0].x == pytest.approx(-2.0, abs=1e-5)
+        # Point at (2,0,0) should stay at (2, 0, 0)
+        assert cvs[1].x == pytest.approx(2.0, abs=1e-5)
+
+    def test_scale_points_custom_pivot_requires_pivot_point(self):
+        """Test scale_points raises ValueError when custom pivot without pivot_point."""
+        curve = Curve.create(d=1, p=[(0, 0, 0), (1, 0, 0)])
+
+        with pytest.raises(ValueError, match="pivot_point must be provided"):
+            curve.scale_points(2.0, pivot="custom")
+
+    def test_scale_points_invalid_pivot_raises(self):
+        """Test scale_points raises ValueError for invalid pivot mode."""
+        curve = Curve.create(d=1, p=[(0, 0, 0), (1, 0, 0)])
+
+        with pytest.raises(ValueError, match="Invalid pivot_mode"):
+            curve.scale_points(2.0, pivot="invalid_pivot")

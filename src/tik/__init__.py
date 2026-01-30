@@ -1,7 +1,7 @@
 """Controller shape library UI widget for TikWorks Maya tools."""
 
 from tik.maya.utils import control_shapes
-from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
+from tik.vendor.Qt import QtCore, QtGui, QtWidgets
 
 cs_handler = control_shapes.ControlShapeLibrary()
 MOCK_DATA = cs_handler.get_shape_data()

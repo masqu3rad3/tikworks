@@ -226,3 +226,20 @@ def test_node_m_obj_re_resolves_when_stale() -> None:
     assert node.exists()
     assert node.name == "staleNode"
 
+
+def test_delete_history_removes_construction_history():
+    """Test delete_history removes construction history from node."""
+    # Create a mesh with construction history
+    sphere_transform, sphere_history = cmds.polySphere(name="sphereWithHistory")
+    node = Node(cmds.ls(sphere_transform, long=True)[0])
+
+    # Verify history exists before deletion
+    history = cmds.listHistory(sphere_transform)
+    assert sphere_history in history
+
+    # Delete history
+    node.delete_history()
+
+    # Verify history is removed (only mesh shape should remain)
+    history_after = cmds.listHistory(sphere_transform)
+    assert sphere_history not in history_after

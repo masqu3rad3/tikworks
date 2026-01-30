@@ -1,0 +1,14 @@
+[run]
+source =
+    src/tik/core
+    src/tik/maya
+    src/tik/shared
+    src/tik/tools
+    src/tik/trigger
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    pass

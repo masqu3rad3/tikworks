@@ -40,20 +40,32 @@ jobs:
             --trusted-host mirrors.aliyun.com \
             coverage==5.5 \
             -r requirements-dev.txt
-#          wget https://bootstrap.pypa.io/pip/get-pip.py
-#          mayapy get-pip.py --user
-#          mayapy -m pip install --user \
-#            coverage==5.5 \
-#            -r requirements-dev.txt \
-#      - name: Environment
-#        run: |
-#          export XDG_RUNTIME_DIR=/var/tmp/runtime-root
-#          export MAYA_DISABLE_ADP=1
-#          export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-      - name: Test with pytest
+      - name: Run tests with coverage
         env:
           XDG_RUNTIME_DIR: /var/tmp/runtime-root
           MAYA_DISABLE_ADP: 1
           PYTHONPATH: ${{ github.workspace }}/src
         run: |
-          mayapy ./tests/unit/invoke.py
+          mayapy -m coverage run ./tests/unit/invoke.py
+          mayapy -m coverage xml -o coverage.xml
+          mayapy -m coverage report
+#      - name: Test with pytest
+#        env:
+#          XDG_RUNTIME_DIR: /var/tmp/runtime-root
+#          MAYA_DISABLE_ADP: 1
+#          PYTHONPATH: ${{ github.workspace }}/src
+#        run: |
+#          mayapy ./tests/unit/invoke.py
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.maya }}
+          path: coverage.xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: coverage.xml
+          flags: maya-${{ matrix.maya }}
+          fail_ci_if_error: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
