@@ -167,3 +167,62 @@ def test_vertex_colors_display_off():
     assert mesh.get_vertex_colors() is None
 
 
+def test_set_vertex_colors_with_color_object():
+    """Test setting vertex colors using a Color object."""
+    from tik.core.color import Color
+
+    mesh = Mesh.create("polyPlane", name="tm_color_obj_plane", sx=1, sy=1)
+
+    green = Color("green")
+    mesh.set_vertex_colors(green)
+
+    assert mesh["displayColors"].get() is True
+    colors = mesh.get_vertex_colors()
+    assert colors is not None
+    # Green is (0, 0.5, 0)
+    for color_val in colors:
+        assert color_val.g == pytest.approx(0.5, abs=1e-2)
+
+
+def test_set_vertex_colors_clears_when_empty():
+    """Test set_vertex_colors disables display colors when given empty/None color."""
+    mesh = Mesh.create("polyPlane", name="tm_clear_colors_plane", sx=1, sy=1)
+
+    # First set some colors
+    mesh.set_vertex_colors((1.0, 0.0, 0.0))
+    assert mesh["displayColors"].get() is True
+
+    # Clear colors by passing empty/falsy value
+    mesh.set_vertex_colors(None)
+    assert mesh["displayColors"].get() is False
+
+    # Also test with empty tuple
+    mesh.set_vertex_colors((1.0, 0.0, 0.0))
+    assert mesh["displayColors"].get() is True
+    mesh.set_vertex_colors(())
+    assert mesh["displayColors"].get() is False
+
+
+def test_get_vertex_colors_empty_array_returns_none():
+    """Test get_vertex_colors returns None when colors array is empty.
+
+    This covers line 138 in mesh.py: if len(colors) == 0: return None
+    We use module-level patching to mock the OpenMaya.MFnMesh class.
+    """
+    from unittest.mock import patch, MagicMock
+    import tik.maya.types.mesh as mesh_module
+
+    mesh = Mesh.create("polyPlane", name="tm_empty_colors_mesh", sx=1, sy=1)
+    mesh["displayColors"].set(True)
+
+    # Create a mock MFnMesh that returns empty color array
+    mock_mfn_mesh_instance = MagicMock()
+    mock_mfn_mesh_instance.getVertexColors.return_value = OpenMaya.MColorArray()
+
+    mock_mfn_mesh_class = MagicMock(return_value=mock_mfn_mesh_instance)
+
+    # Patch OpenMaya.MFnMesh in the mesh module's namespace
+    with patch.object(mesh_module.OpenMaya, "MFnMesh", mock_mfn_mesh_class):
+        result = mesh.get_vertex_colors()
+
+    assert result is None

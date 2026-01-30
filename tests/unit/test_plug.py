@@ -929,3 +929,126 @@ def test_math_unsupported_ops_on_unsupported_attribute_types():
 
     with pytest.raises(TypeError):
         plug ** 1
+
+
+# === Tests for floatMath fallback paths (Maya < 2025 compatibility) ===
+
+
+class TestFloatMathFallbackPaths:
+    """Tests for floatMath fallback code paths used in Maya < 2025.
+
+    These tests mock uses_native_math_nodes to return False to cover
+    the floatMath code paths that would otherwise only run in older Maya.
+    """
+
+    def test_subtract_uses_floatmath_when_native_unavailable(self):
+        """Test __sub__ uses floatMath node when native subtract unavailable."""
+        from unittest.mock import patch, PropertyMock
+
+        node = Node.create("transform", name="subFloatMath")
+        node["tx"].value = 10.0
+
+        # Mock uses_native_math_nodes to return False
+        with patch.object(
+            type(NodeNames), "uses_native_math_nodes", new_callable=PropertyMock
+        ) as mock_native:
+            mock_native.return_value = False
+            result = node["tx"] - 3.0
+
+        # Verify floatMath node was created
+        assert "floatMath" in result._node.type
+        # Verify operation is set to 1 (subtract)
+        assert cmds.getAttr(f"{result._node.name}.operation") == 1
+        # Verify the result value
+        assert pytest.approx(result.value, rel=1e-5) == 7.0
+
+    def test_subtract_plug_uses_floatmath_when_native_unavailable(self):
+        """Test __sub__ with Plug operand uses floatMath when native unavailable."""
+        from unittest.mock import patch, PropertyMock
+
+        node_a = Node.create("transform", name="subFloatMathA")
+        node_b = Node.create("transform", name="subFloatMathB")
+        node_a["tx"].value = 15.0
+        node_b["tx"].value = 5.0
+
+        with patch.object(
+            type(NodeNames), "uses_native_math_nodes", new_callable=PropertyMock
+        ) as mock_native:
+            mock_native.return_value = False
+            result = node_a["tx"] - node_b["tx"]
+
+        assert "floatMath" in result._node.type
+        assert pytest.approx(result.value, rel=1e-5) == 10.0
+
+    def test_divide_uses_floatmath_when_native_unavailable(self):
+        """Test __truediv__ uses floatMath node when native divide unavailable."""
+        from unittest.mock import patch, PropertyMock
+
+        node = Node.create("transform", name="divFloatMath")
+        node["tx"].value = 20.0
+
+        with patch.object(
+            type(NodeNames), "uses_native_math_nodes", new_callable=PropertyMock
+        ) as mock_native:
+            mock_native.return_value = False
+            result = node["tx"] / 4.0
+
+        # Verify floatMath node was created
+        assert "floatMath" in result._node.type
+        # Verify operation is set to 3 (divide)
+        assert cmds.getAttr(f"{result._node.name}.operation") == 3
+        assert pytest.approx(result.value, rel=1e-5) == 5.0
+
+    def test_divide_plug_uses_floatmath_when_native_unavailable(self):
+        """Test __truediv__ with Plug operand uses floatMath when native unavailable."""
+        from unittest.mock import patch, PropertyMock
+
+        node_a = Node.create("transform", name="divFloatMathA")
+        node_b = Node.create("transform", name="divFloatMathB")
+        node_a["tx"].value = 30.0
+        node_b["tx"].value = 6.0
+
+        with patch.object(
+            type(NodeNames), "uses_native_math_nodes", new_callable=PropertyMock
+        ) as mock_native:
+            mock_native.return_value = False
+            result = node_a["tx"] / node_b["tx"]
+
+        assert "floatMath" in result._node.type
+        assert pytest.approx(result.value, rel=1e-5) == 5.0
+
+    def test_rsub_scalar_uses_floatmath_when_native_unavailable(self):
+        """Test __rsub__ (scalar - plug) uses floatMath when native unavailable."""
+        from unittest.mock import patch, PropertyMock
+
+        node = Node.create("transform", name="rsubFloatMath")
+        node["tx"].value = 3.0
+
+        with patch.object(
+            type(NodeNames), "uses_native_math_nodes", new_callable=PropertyMock
+        ) as mock_native:
+            mock_native.return_value = False
+            # 10.0 - plug (rsub)
+            result = 10.0 - node["tx"]
+
+        assert "floatMath" in result._node.type
+        assert cmds.getAttr(f"{result._node.name}.operation") == 1
+        assert pytest.approx(result.value, rel=1e-5) == 7.0
+
+    def test_rtruediv_scalar_uses_floatmath_when_native_unavailable(self):
+        """Test __rtruediv__ (scalar / plug) uses floatMath when native unavailable."""
+        from unittest.mock import patch, PropertyMock
+
+        node = Node.create("transform", name="rdivFloatMath")
+        node["tx"].value = 5.0
+
+        with patch.object(
+            type(NodeNames), "uses_native_math_nodes", new_callable=PropertyMock
+        ) as mock_native:
+            mock_native.return_value = False
+            # 20.0 / plug (rtruediv)
+            result = 20.0 / node["tx"]
+
+        assert "floatMath" in result._node.type
+        assert cmds.getAttr(f"{result._node.name}.operation") == 3
+        assert pytest.approx(result.value, rel=1e-5) == 4.0
