@@ -279,23 +279,22 @@ class TestBlendShapeWeights:
         assert isinstance(weights, list)
         assert len(weights) > 0
 
-    # TODO: Temporarily disabled - This fails on Maya 2024. NEEDS INVESTIGATION.
-    # def test_set_weights_global_deformer(self):
-    #     """Test setting global deformer weights."""
-    #     base_mesh, _ = cmds.polySphere(name="set_global_weights_base", sx=4, sy=4)
-    #     target_mesh, _ = cmds.polySphere(name="set_global_weights_target", sx=4, sy=4)
-    #     cmds.move(0, 1, 0, target_mesh)
-    #
-    #     blendshape = cmds.blendShape(target_mesh, base_mesh, name="setGlobalWeightsBS")[0]
-    #     blendshape_node = BlendShape(blendshape)
-    #
-    #     original_weights = blendshape_node.get_weights()
-    #     new_weights = [0.8] * len(original_weights)
-    #
-    #     blendshape_node.set_weights(new_weights)
-    #
-    #     retrieved_weights = blendshape_node.get_weights()
-    #     assert all(w == pytest.approx(0.8, abs=0.01) for w in retrieved_weights)
+    def test_set_weights_global_deformer(self):
+        """Test setting global deformer weights."""
+        base_mesh, _ = cmds.polySphere(name="set_global_weights_base", sx=4, sy=4)
+        target_mesh, _ = cmds.polySphere(name="set_global_weights_target", sx=4, sy=4)
+        cmds.move(0, 1, 0, target_mesh)
+
+        blendshape = cmds.blendShape(target_mesh, base_mesh, name="setGlobalWeightsBS")[0]
+        blendshape_node = BlendShape(blendshape)
+
+        original_weights = blendshape_node.get_weights()
+        new_weights = [0.8] * len(original_weights)
+
+        blendshape_node.set_weights(new_weights)
+
+        retrieved_weights = blendshape_node.get_weights()
+        assert all(w == pytest.approx(0.8, abs=0.01) for w in retrieved_weights)
 
     def test_set_weights_raises_on_length_mismatch(self):
         """Test set_weights raises ValueError when weight length mismatches."""
