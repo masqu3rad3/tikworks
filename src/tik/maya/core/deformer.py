@@ -7,11 +7,12 @@ However, it is not an abstract class either. If wanted, deformer classes can be 
 
 from __future__ import annotations
 
+import array
 import tempfile
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Union
 
 from maya import cmds
 from maya.api import OpenMaya
@@ -81,8 +82,277 @@ class Deformer(Node):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir) / "temp_weights.json"
             self._save_deformer_weights(temp_path, format="json")
-            weights = Weights.load_json(temp_path)
+            weights = WeightsIO.load_json(temp_path)
         return weights
+
+
+class DeformerWeights:
+    """Container for deformer weights enabling arithmetic operations.
+
+    This class wraps weight data and provides dunder methods for intuitive
+    weight manipulation. It uses array.array('d') for memory efficiency and
+    performance in bulk operations.
+
+    Works with all deformer types: skinCluster, blendShape, deltaMush, etc.
+
+    Attributes:
+        weights: Array of weight values (flat array using array.array('d')).
+        channel_count: Number of channels (influences for skin, targets for blendshape).
+        element_count: Number of elements (vertices, CVs, etc.).
+        channel_names: Optional list of channel names (joint names, target names).
+    """
+
+    def __init__(
+        self,
+        weights: Union[List[float], array.array],
+        channel_count: int,
+        element_count: int,
+        channel_names: Optional[List[str]] = None,
+    ):
+        """Initialize DeformerWeights container.
+
+        Args:
+            weights: Weight values (flat array). Can be list or array.array.
+            channel_count: Number of channels (influences/targets).
+            element_count: Number of elements (vertices/CVs).
+            channel_names: Optional list of channel names for reference.
+        """
+        if isinstance(weights, array.array) and weights.typecode == "d":
+            self._weights = array.array("d", weights)
+        else:
+            self._weights = array.array("d", weights)
+        self._channel_count = channel_count
+        self._element_count = element_count
+        self._channel_names = list(channel_names) if channel_names else []
+
+    # === Properties ===
+
+    @property
+    def weights(self) -> array.array:
+        """The raw weight array (array.array of doubles)."""
+        return self._weights
+
+    @property
+    def channel_count(self) -> int:
+        """Number of channels (influences for skin, targets for blendshape)."""
+        return self._channel_count
+
+    @property
+    def element_count(self) -> int:
+        """Number of elements (vertices, CVs, etc.)."""
+        return self._element_count
+
+    @property
+    def channel_names(self) -> List[str]:
+        """Names of channels if available."""
+        return self._channel_names
+
+    # === Public Methods ===
+
+    def get_element_weights(self, element_index: int) -> List[float]:
+        """Get weights for a single element across all channels.
+
+        Args:
+            element_index: The element index to query (e.g., vertex index).
+
+        Returns:
+            List of weights for each channel at the specified element.
+        """
+        if element_index < 0 or element_index >= self._element_count:
+            raise IndexError(
+                f"Element index {element_index} out of range [0, {self._element_count})"
+            )
+        start_idx = element_index * self._channel_count
+        return list(self._weights[start_idx : start_idx + self._channel_count])
+
+    def get_channel_weights(self, channel_index: int) -> List[float]:
+        """Get weights for a single channel across all elements.
+
+        Args:
+            channel_index: The channel index to query (e.g., influence index).
+
+        Returns:
+            List of weights for each element at the specified channel.
+        """
+        if channel_index < 0 or channel_index >= self._channel_count:
+            raise IndexError(
+                f"Channel index {channel_index} out of range "
+                f"[0, {self._channel_count})"
+            )
+        return [
+            self._weights[elem_idx * self._channel_count + channel_index]
+            for elem_idx in range(self._element_count)
+        ]
+
+    def copy(self) -> "DeformerWeights":
+        """Create a deep copy of this DeformerWeights instance."""
+        return DeformerWeights(
+            array.array("d", self._weights),
+            self._channel_count,
+            self._element_count,
+            list(self._channel_names),
+        )
+
+    def clamp(self, min_value: float = 0.0, max_value: float = 1.0) -> "DeformerWeights":
+        """Clamp all weight values to the specified range.
+
+        Args:
+            min_value: Minimum weight value.
+            max_value: Maximum weight value.
+
+        Returns:
+            Self for method chaining.
+        """
+        for idx in range(len(self._weights)):
+            self._weights[idx] = max(min_value, min(max_value, self._weights[idx]))
+        return self
+
+    def normalize(self) -> "DeformerWeights":
+        """Normalize weights so each element sums to 1.0.
+
+        Returns:
+            Self for method chaining.
+        """
+        for elem_idx in range(self._element_count):
+            start_idx = elem_idx * self._channel_count
+            end_idx = start_idx + self._channel_count
+            total = sum(self._weights[start_idx:end_idx])
+            if total > 0:
+                for idx in range(start_idx, end_idx):
+                    self._weights[idx] /= total
+        return self
+
+    def to_list(self) -> List[float]:
+        """Convert weights to a standard Python list."""
+        return list(self._weights)
+
+    def to_m_double_array(self) -> OpenMaya.MDoubleArray:
+        """Convert weights to an OpenMaya.MDoubleArray."""
+        return OpenMaya.MDoubleArray(self._weights)
+
+    # === Dunder Methods ===
+
+    def __len__(self) -> int:
+        """Return total number of weight values."""
+        return len(self._weights)
+
+    def __getitem__(self, index: int) -> float:
+        """Get weight at index."""
+        return self._weights[index]
+
+    def __setitem__(self, index: int, value: float) -> None:
+        """Set weight at index."""
+        self._weights[index] = value
+
+    def __iter__(self):
+        """Iterate over weight values."""
+        return iter(self._weights)
+
+    def __add__(self, other: Union["DeformerWeights", float]) -> "DeformerWeights":
+        """Add weights or scalar to this instance."""
+        result = self.copy()
+        if isinstance(other, DeformerWeights):
+            if len(other) != len(self):
+                raise ValueError("DeformerWeights dimensions must match for addition.")
+            for idx in range(len(result._weights)):
+                result._weights[idx] = self._weights[idx] + other._weights[idx]
+        else:
+            scalar = float(other)
+            for idx in range(len(result._weights)):
+                result._weights[idx] = self._weights[idx] + scalar
+        return result
+
+    def __radd__(self, other: float) -> "DeformerWeights":
+        """Right-add for scalar values."""
+        return self.__add__(other)
+
+    def __sub__(self, other: Union["DeformerWeights", float]) -> "DeformerWeights":
+        """Subtract weights or scalar from this instance."""
+        result = self.copy()
+        if isinstance(other, DeformerWeights):
+            if len(other) != len(self):
+                raise ValueError("DeformerWeights dimensions must match for subtraction.")
+            for idx in range(len(result._weights)):
+                result._weights[idx] = self._weights[idx] - other._weights[idx]
+        else:
+            scalar = float(other)
+            for idx in range(len(result._weights)):
+                result._weights[idx] = self._weights[idx] - scalar
+        return result
+
+    def __rsub__(self, other: float) -> "DeformerWeights":
+        """Right-subtract for scalar values."""
+        result = self.copy()
+        scalar = float(other)
+        for idx in range(len(result._weights)):
+            result._weights[idx] = scalar - self._weights[idx]
+        return result
+
+    def __mul__(self, other: Union["DeformerWeights", float]) -> "DeformerWeights":
+        """Multiply weights by another DeformerWeights or scalar."""
+        result = self.copy()
+        if isinstance(other, DeformerWeights):
+            if len(other) != len(self):
+                raise ValueError(
+                    "DeformerWeights dimensions must match for multiplication."
+                )
+            for idx in range(len(result._weights)):
+                result._weights[idx] = self._weights[idx] * other._weights[idx]
+        else:
+            scalar = float(other)
+            for idx in range(len(result._weights)):
+                result._weights[idx] = self._weights[idx] * scalar
+        return result
+
+    def __rmul__(self, other: float) -> "DeformerWeights":
+        """Right-multiply for scalar values."""
+        return self.__mul__(other)
+
+    def __truediv__(self, other: Union["DeformerWeights", float]) -> "DeformerWeights":
+        """Divide weights by another DeformerWeights or scalar."""
+        result = self.copy()
+        if isinstance(other, DeformerWeights):
+            if len(other) != len(self):
+                raise ValueError("DeformerWeights dimensions must match for division.")
+            for idx in range(len(result._weights)):
+                if other._weights[idx] != 0:
+                    result._weights[idx] = self._weights[idx] / other._weights[idx]
+                else:
+                    result._weights[idx] = 0.0
+        else:
+            divisor = float(other)
+            if divisor == 0:
+                raise ZeroDivisionError("Cannot divide DeformerWeights by zero.")
+            for idx in range(len(result._weights)):
+                result._weights[idx] = self._weights[idx] / divisor
+        return result
+
+    def __neg__(self) -> "DeformerWeights":
+        """Invert weights (1.0 - weight)."""
+        result = self.copy()
+        for idx in range(len(result._weights)):
+            result._weights[idx] = 1.0 - self._weights[idx]
+        return result
+
+    def __eq__(self, other: "DeformerWeights") -> bool:
+        """Check equality with another DeformerWeights."""
+        if not isinstance(other, DeformerWeights):
+            return False
+        if len(self) != len(other):
+            return False
+        tolerance = 1e-6
+        for idx in range(len(self._weights)):
+            if abs(self._weights[idx] - other._weights[idx]) > tolerance:
+                return False
+        return True
+
+    def __repr__(self) -> str:
+        """Debug representation."""
+        return (
+            f"<DeformerWeights elements={self._element_count} "
+            f"channels={self._channel_count}>"
+        )
+
 
 @dataclass
 class HeaderInfo:
@@ -219,17 +489,20 @@ class WeightLayer:
             data["max"] = self.max_index
         return data
 
-    def dense_weights(self, total_count: int) -> List[float]:
-        """Return a dense weight list using the default value as a fill."""
-        weights = [float(self.default_value)] * total_count
+    def dense_weights(self, total_count: int) -> array.array:
+        """Return a dense weight array using the default value as a fill."""
+        weights = array.array("d", [float(self.default_value)] * total_count)
         for point_index, point_value in self.points.items():
             if 0 <= point_index < total_count:
                 weights[point_index] = float(point_value)
         return weights
 
 
-class Weights:
-    """Deformer-agnostic container for sparse or dense weights.
+class WeightsIO:
+    """Deformer-agnostic container for sparse or dense weights I/O.
+
+    This class handles serialization/deserialization of deformer weights to/from
+    JSON files compatible with Maya's deformerWeights command.
 
     The internal canonical structure is a list of WeightLayer entries, each with a
     sparse point map and a default value. Shapes store optional geometry metadata
@@ -328,7 +601,7 @@ class Weights:
         influence: str,
         total_count: Optional[int] = None,
         layer_index: int = 0,
-    ) -> List[float]:
+    ) -> array.array:
         """Return dense weights for a specific influence and shape."""
         layer = self.get_layer(
             shape_name=shape_name, influence=influence, layer_index=layer_index
@@ -351,7 +624,7 @@ class Weights:
         shape_name: str,
         total_count: Optional[int] = None,
         layer_index: int = 0,
-    ) -> List[float]:
+    ) -> array.array:
         """Return dense base weights for a specific shape."""
         layer = self.get_layer(
             shape_name=shape_name, influence=None, layer_index=layer_index, is_base=True
@@ -372,8 +645,8 @@ class Weights:
     # === Serialization ===
 
     @classmethod
-    def from_dict(cls, data: Dict[str, object]) -> "Weights":
-        """Create Weights from a dictionary.
+    def from_dict(cls, data: Dict[str, object]) -> "WeightsIO":
+        """Create WeightsIO from a dictionary.
 
         Supports input with or without the top-level 'deformerWeight' key.
         """
@@ -399,7 +672,7 @@ class Weights:
         )
 
     def to_dict(self) -> Dict[str, object]:
-        """Serialize Weights to a dictionary matching Maya's deformerWeights format."""
+        """Serialize WeightsIO to a dictionary matching Maya's deformerWeights format."""
         header_info = self._header.to_dict()
         shape_entries = [shape_info.to_dict() for shape_info in self.shapes]
         layer_entries = [
@@ -415,29 +688,68 @@ class Weights:
         return {"deformerWeight": data}
 
     @classmethod
-    def from_json(cls, content: str) -> "Weights":
-        """Parse Weights from JSON text."""
+    def from_json(cls, content: str) -> "WeightsIO":
+        """Parse WeightsIO from JSON text."""
         data = jsonio.loads(content)
         return cls.from_dict(data)
 
     def to_json(self, indent: int = 4) -> str:
-        """Serialize Weights to JSON text."""
+        """Serialize WeightsIO to JSON text."""
         return jsonio.dumps(self.to_dict(), indent=indent, sort_keys=False)
 
     @classmethod
-    def load_json(cls, file_path: str | Path) -> "Weights":
-        """Load Weights from a JSON file path."""
+    def load_json(cls, file_path: str | Path) -> "WeightsIO":
+        """Load WeightsIO from a JSON file path."""
         data = jsonio.load(file_path)
         return cls.from_dict(data)
 
     def save_json(self, file_path: str | Path, indent: int = 4) -> None:
-        """Write Weights to a JSON file path."""
+        """Write WeightsIO to a JSON file path."""
         jsonio.save(file_path, self.to_dict(), indent=indent, sort_keys=False)
 
     def to_m_array(self) -> OpenMaya.MDoubleArray:
-        """Convert the Weights to an MDoubleArray compatible with MFnSkinCluster."""
+        """Convert the WeightsIO to an MDoubleArray compatible with MFnSkinCluster."""
         json_data = self.to_dict()
         return self.__convert_to_m_array(json_data)
+
+    def to_deformer_weights(self, shape_name: Optional[str] = None) -> DeformerWeights:
+        """Convert WeightsIO to a DeformerWeights object for math operations.
+
+        Args:
+            shape_name: Optional shape name. If not provided, uses the first shape.
+
+        Returns:
+            DeformerWeights instance with dense weight data.
+        """
+        if not self._shape_order:
+            raise ValueError("No shapes defined in WeightsIO.")
+
+        target_shape = shape_name or self._shape_order[0]
+        shape_info = self._shapes.get(target_shape)
+        if shape_info is None:
+            raise ValueError(f"Shape '{target_shape}' not found.")
+
+        layers = self.layers_for_shape(target_shape)
+        if not layers:
+            raise ValueError(f"No weight layers found for shape '{target_shape}'.")
+
+        element_count = shape_info.size
+        channel_count = len(layers)
+        channel_names = [layer.influence or f"channel_{idx}" for idx, layer in enumerate(layers)]
+
+        # Build flat weight array: [elem0_ch0, elem0_ch1, ..., elem1_ch0, elem1_ch1, ...]
+        weights = array.array("d")
+        for elem_idx in range(element_count):
+            for layer in layers:
+                weight_value = layer.points.get(elem_idx, layer.default_value)
+                weights.append(float(weight_value))
+
+        return DeformerWeights(
+            weights=weights,
+            channel_count=channel_count,
+            element_count=element_count,
+            channel_names=channel_names,
+        )
 
     @staticmethod
     def __convert_to_m_array(json_data):

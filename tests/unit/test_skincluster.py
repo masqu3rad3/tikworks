@@ -10,7 +10,8 @@ from maya import cmds
 from maya.api import OpenMaya
 
 import tik.maya.types.skincluster as skincluster_module
-from tik.maya.types.skincluster import SkinCluster, SkinWeights
+from tik.maya.types.skincluster import SkinCluster
+from tik.maya.core.deformer import DeformerWeights
 
 
 def _create_joint_chain(prefix: str) -> List[str]:
@@ -55,79 +56,79 @@ def _build_weights(influence_count: int, vertex_count: int, primary: float) -> L
     return weights
 
 
-# === SkinWeights Tests ===
+# === DeformerWeights Tests ===
 
 
-def test_skinweights_access_and_normalize():
+def test_deformerweights_access_and_normalize():
     weights = [0.2, 0.8, 0.5, 0.5]
-    skin_weights = SkinWeights(weights, influence_count=2, vertex_count=2)
+    deformer_weights = DeformerWeights(weights, channel_count=2, element_count=2)
 
-    assert skin_weights.weights == weights
-    assert skin_weights.influence_count == 2
-    assert skin_weights.vertex_count == 2
-    assert skin_weights.influence_names == []
+    assert list(deformer_weights.weights) == weights
+    assert deformer_weights.channel_count == 2
+    assert deformer_weights.element_count == 2
+    assert deformer_weights.channel_names == []
 
-    assert skin_weights.get_vertex_weights(1) == [0.5, 0.5]
-    assert skin_weights.get_influence_weights(0) == [0.2, 0.5]
+    assert deformer_weights.get_element_weights(1) == [0.5, 0.5]
+    assert deformer_weights.get_channel_weights(0) == [0.2, 0.5]
 
-    assert len(skin_weights) == 4
-    assert skin_weights[0] == 0.2
-    skin_weights[0] = 0.4
-    assert skin_weights[0] == 0.4
-    assert list(iter(skin_weights)) == [0.4, 0.8, 0.5, 0.5]
+    assert len(deformer_weights) == 4
+    assert deformer_weights[0] == 0.2
+    deformer_weights[0] = 0.4
+    assert deformer_weights[0] == 0.4
+    assert list(iter(deformer_weights)) == [0.4, 0.8, 0.5, 0.5]
 
-    normalized = skin_weights.copy().normalize()
-    assert normalized.get_vertex_weights(0) == pytest.approx([0.333333, 0.666666], rel=1e-3)
+    normalized = deformer_weights.copy().normalize()
+    assert normalized.get_element_weights(0) == pytest.approx([0.333333, 0.666666], rel=1e-3)
 
-    zero_weights = SkinWeights([0.0, 0.0], influence_count=2, vertex_count=1)
+    zero_weights = DeformerWeights([0.0, 0.0], channel_count=2, element_count=1)
     zero_weights.normalize()
-    assert zero_weights.weights == [0.0, 0.0]
+    assert list(zero_weights.weights) == [0.0, 0.0]
 
-    clamped = SkinWeights([-1.0, 2.0], influence_count=2, vertex_count=1).clamp()
-    assert clamped.weights == [0.0, 1.0]
+    clamped = DeformerWeights([-1.0, 2.0], channel_count=2, element_count=1).clamp()
+    assert list(clamped.weights) == [0.0, 1.0]
 
-    assert "SkinWeights" in repr(skin_weights)
+    assert "DeformerWeights" in repr(deformer_weights)
 
 
-def test_skinweights_index_errors():
-    skin_weights = SkinWeights([0.1, 0.9], influence_count=2, vertex_count=1)
+def test_deformerweights_index_errors():
+    deformer_weights = DeformerWeights([0.1, 0.9], channel_count=2, element_count=1)
     with pytest.raises(IndexError):
-        skin_weights.get_vertex_weights(-1)
+        deformer_weights.get_element_weights(-1)
     with pytest.raises(IndexError):
-        skin_weights.get_vertex_weights(1)
+        deformer_weights.get_element_weights(1)
     with pytest.raises(IndexError):
-        skin_weights.get_influence_weights(-1)
+        deformer_weights.get_channel_weights(-1)
     with pytest.raises(IndexError):
-        skin_weights.get_influence_weights(2)
+        deformer_weights.get_channel_weights(2)
 
 
-def test_skinweights_arithmetic_and_comparisons():
-    weights_one = SkinWeights([0.2, 0.8], influence_count=2, vertex_count=1)
-    weights_two = SkinWeights([0.1, 0.9], influence_count=2, vertex_count=1)
+def test_deformerweights_arithmetic_and_comparisons():
+    weights_one = DeformerWeights([0.2, 0.8], channel_count=2, element_count=1)
+    weights_two = DeformerWeights([0.1, 0.9], channel_count=2, element_count=1)
 
-    assert (weights_one + weights_two).weights == [0.30000000000000004, 1.7000000000000002]
-    assert (weights_one + 0.5).weights == [0.7, 1.3]
-    assert (0.5 + weights_one).weights == [0.7, 1.3]
+    assert list((weights_one + weights_two).weights) == [0.30000000000000004, 1.7000000000000002]
+    assert list((weights_one + 0.5).weights) == [0.7, 1.3]
+    assert list((0.5 + weights_one).weights) == [0.7, 1.3]
 
-    assert (weights_one - weights_two).weights == [0.1, -0.09999999999999998]
-    assert (weights_one - 0.1).weights == [0.1, 0.7000000000000001]
-    assert (1.0 - weights_one).weights == [0.8, 0.19999999999999996]
+    assert list((weights_one - weights_two).weights) == [0.1, -0.09999999999999998]
+    assert list((weights_one - 0.1).weights) == [0.1, 0.7000000000000001]
+    assert list((1.0 - weights_one).weights) == [0.8, 0.19999999999999996]
 
-    assert (weights_one * weights_two).weights == [0.020000000000000004, 0.7200000000000001]
-    assert (weights_one * 2.0).weights == [0.4, 1.6]
-    assert (2.0 * weights_one).weights == [0.4, 1.6]
+    assert list((weights_one * weights_two).weights) == [0.020000000000000004, 0.7200000000000001]
+    assert list((weights_one * 2.0).weights) == [0.4, 1.6]
+    assert list((2.0 * weights_one).weights) == [0.4, 1.6]
 
-    assert (weights_one / weights_two).weights == [2.0, 0.888888888888889]
-    assert (weights_one / 2.0).weights == [0.1, 0.4]
+    assert list((weights_one / weights_two).weights) == [2.0, 0.888888888888889]
+    assert list((weights_one / 2.0).weights) == [0.1, 0.4]
 
-    assert (-weights_one).weights == [0.8, 0.19999999999999996]
+    assert list((-weights_one).weights) == [0.8, 0.19999999999999996]
 
-    assert weights_one == SkinWeights([0.2, 0.8], influence_count=2, vertex_count=1)
-    assert weights_one != SkinWeights([0.2, 0.7], influence_count=2, vertex_count=1)
-    assert weights_one != "not-skinweights"
-    assert weights_one != SkinWeights([0.2], influence_count=1, vertex_count=1)
+    assert weights_one == DeformerWeights([0.2, 0.8], channel_count=2, element_count=1)
+    assert weights_one != DeformerWeights([0.2, 0.7], channel_count=2, element_count=1)
+    assert weights_one != "not-deformerweights"
+    assert weights_one != DeformerWeights([0.2], channel_count=1, element_count=1)
 
-    mismatch = SkinWeights([0.1], influence_count=1, vertex_count=1)
+    mismatch = DeformerWeights([0.1], channel_count=1, element_count=1)
     with pytest.raises(ValueError):
         _ = weights_one + mismatch
     with pytest.raises(ValueError):
@@ -140,8 +141,8 @@ def test_skinweights_arithmetic_and_comparisons():
     with pytest.raises(ZeroDivisionError):
         _ = weights_one / 0.0
 
-    zero_divisor = SkinWeights([0.0, 0.0], influence_count=2, vertex_count=1)
-    assert (weights_one / zero_divisor).weights == [0.0, 0.0]
+    zero_divisor = DeformerWeights([0.0, 0.0], channel_count=2, element_count=1)
+    assert list((weights_one / zero_divisor).weights) == [0.0, 0.0]
 
 
 # === SkinCluster Tests ===
@@ -232,39 +233,39 @@ def test_influence_index_add_remove_and_locking(
 def test_get_set_weights_and_vertices(skincluster_setup: Dict[str, object]):
     skincluster = skincluster_setup["skincluster"]
 
-    influence_count = skincluster.influence_count
-    vertex_count = skincluster.vertex_count
-    weight_values = _build_weights(influence_count, vertex_count, primary=0.25)
+    channel_count = skincluster.influence_count
+    element_count = skincluster.vertex_count
+    weight_values = _build_weights(channel_count, element_count, primary=0.25)
 
     skincluster.set_weights(weight_values, normalize=True)
     retrieved = skincluster.get_weights()
-    assert retrieved.influence_count == influence_count
-    assert retrieved.vertex_count == vertex_count
+    assert retrieved.channel_count == channel_count
+    assert retrieved.element_count == element_count
     assert len(retrieved.weights) == len(weight_values)
-    assert set(retrieved.influence_names) == set(skincluster.influences)
+    assert set(retrieved.channel_names) == set(skincluster.influences)
 
-    skin_weights = SkinWeights(
+    deformer_weights = DeformerWeights(
         weight_values,
-        influence_count=influence_count,
-        vertex_count=vertex_count,
-        influence_names=skincluster.influences,
+        channel_count=channel_count,
+        element_count=element_count,
+        channel_names=skincluster.influences,
     )
-    skincluster.set_weights(skin_weights, normalize=False)
+    skincluster.set_weights(deformer_weights, normalize=False)
 
     vertex_subset = [0, 1]
-    subset_weights = _build_weights(influence_count, len(vertex_subset), primary=0.6)
+    subset_weights = _build_weights(channel_count, len(vertex_subset), primary=0.6)
     skincluster.set_vertex_weights(vertex_subset, subset_weights)
 
-    subset_skin_weights = SkinWeights(
+    subset_deformer_weights = DeformerWeights(
         subset_weights,
-        influence_count=influence_count,
-        vertex_count=len(vertex_subset),
+        channel_count=channel_count,
+        element_count=len(vertex_subset),
     )
-    skincluster.set_vertex_weights(vertex_subset, subset_skin_weights, normalize=False)
+    skincluster.set_vertex_weights(vertex_subset, subset_deformer_weights, normalize=False)
 
     retrieved_subset = skincluster.get_vertex_weights(vertex_subset)
-    assert retrieved_subset.vertex_count == len(vertex_subset)
-    assert retrieved_subset.influence_count == influence_count
+    assert retrieved_subset.element_count == len(vertex_subset)
+    assert retrieved_subset.channel_count == channel_count
 
 
 def test_blend_weights_and_prune(skincluster_setup: Dict[str, object]):

@@ -7,259 +7,11 @@ from maya import cmds
 from maya.api import OpenMaya
 from maya.api import OpenMayaAnim
 
-from ..core.deformer import Deformer, Weights
+from ..core.deformer import Deformer, WeightsIO, DeformerWeights
 from ..core.registry import register
 from ..core.scene import proxy_wrapper
 from ..core.apicommon import create_node_with_dg_modifier
 
-class SkinWeights:
-    """Container for skin weights enabling arithmetic operations.
-
-    This class wraps weight data and provides dunder methods for intuitive
-    weight manipulation.
-
-    Attributes:
-        weights: List of weight values (flat array).
-        influence_count: Number of influences.
-        vertex_count: Number of vertices.
-        influence_names: Optional list of influence names.
-    """
-
-    def __init__(
-        self,
-        weights: List[float],
-        influence_count: int,
-        vertex_count: int,
-        influence_names: Optional[List[str]] = None,
-    ):
-        """Initialize SkinWeights container.
-
-        Args:
-            weights: List of weight values (flat array).
-            influence_count: Number of influences.
-            vertex_count: Number of vertices.
-            influence_names: Optional list of influence names for reference.
-        """
-        self._weights = list(weights)
-        self._influence_count = influence_count
-        self._vertex_count = vertex_count
-        self._influence_names = influence_names or []
-
-    # === Properties ===
-
-    @property
-    def weights(self) -> List[float]:
-        """The raw weight list."""
-        return self._weights
-
-    @property
-    def influence_count(self) -> int:
-        """Number of influences."""
-        return self._influence_count
-
-    @property
-    def vertex_count(self) -> int:
-        """Number of vertices."""
-        return self._vertex_count
-
-    @property
-    def influence_names(self) -> List[str]:
-        """Names of influences if available."""
-        return self._influence_names
-
-    # === Public Methods ===
-
-    def get_vertex_weights(self, vertex_index: int) -> List[float]:
-        """Get weights for a single vertex across all influences.
-
-        Args:
-            vertex_index: The vertex index to query.
-
-        Returns:
-            List of weights for each influence at the specified vertex.
-        """
-        if vertex_index < 0 or vertex_index >= self._vertex_count:
-            raise IndexError(
-                f"Vertex index {vertex_index} out of range [0, {self._vertex_count})"
-            )
-        start_idx = vertex_index * self._influence_count
-        return self._weights[start_idx : start_idx + self._influence_count]
-
-    def get_influence_weights(self, influence_index: int) -> List[float]:
-        """Get weights for a single influence across all vertices.
-
-        Args:
-            influence_index: The influence index to query.
-
-        Returns:
-            List of weights for each vertex at the specified influence.
-        """
-        if influence_index < 0 or influence_index >= self._influence_count:
-            raise IndexError(
-                f"Influence index {influence_index} out of range "
-                f"[0, {self._influence_count})"
-            )
-        return [
-            self._weights[vtx_idx * self._influence_count + influence_index]
-            for vtx_idx in range(self._vertex_count)
-        ]
-
-    def copy(self) -> "SkinWeights":
-        """Create a deep copy of this SkinWeights instance."""
-        return SkinWeights(
-            list(self._weights),
-            self._influence_count,
-            self._vertex_count,
-            list(self._influence_names),
-        )
-
-    def clamp(self, min_value: float = 0.0, max_value: float = 1.0) -> "SkinWeights":
-        """Clamp all weight values to the specified range.
-
-        Args:
-            min_value: Minimum weight value.
-            max_value: Maximum weight value.
-
-        Returns:
-            Self for method chaining.
-        """
-        self._weights = [
-            max(min_value, min(max_value, weight)) for weight in self._weights
-        ]
-        return self
-
-    def normalize(self) -> "SkinWeights":
-        """Normalize weights so each vertex sums to 1.0.
-
-        Returns:
-            Self for method chaining.
-        """
-        for vtx_idx in range(self._vertex_count):
-            start_idx = vtx_idx * self._influence_count
-            end_idx = start_idx + self._influence_count
-            total = sum(self._weights[start_idx:end_idx])
-            if total > 0:
-                for idx in range(start_idx, end_idx):
-                    self._weights[idx] /= total
-        return self
-
-    # === Dunder Methods ===
-
-    def __len__(self) -> int:
-        """Return total number of weight values."""
-        return len(self._weights)
-
-    def __getitem__(self, index: int) -> float:
-        """Get weight at index."""
-        return self._weights[index]
-
-    def __setitem__(self, index: int, value: float) -> None:
-        """Set weight at index."""
-        self._weights[index] = value
-
-    def __iter__(self):
-        """Iterate over weight values."""
-        return iter(self._weights)
-
-    def __add__(self, other: Union["SkinWeights", float]) -> "SkinWeights":
-        """Add weights or scalar to this instance."""
-        result = self.copy()
-        if isinstance(other, SkinWeights):
-            if len(other) != len(self):
-                raise ValueError("SkinWeights dimensions must match for addition.")
-            result._weights = [
-                self_w + other_w
-                for self_w, other_w in zip(self._weights, other._weights)
-            ]
-        else:
-            result._weights = [weight + float(other) for weight in self._weights]
-        return result
-
-    def __radd__(self, other: float) -> "SkinWeights":
-        """Right-add for scalar values."""
-        return self.__add__(other)
-
-    def __sub__(self, other: Union["SkinWeights", float]) -> "SkinWeights":
-        """Subtract weights or scalar from this instance."""
-        result = self.copy()
-        if isinstance(other, SkinWeights):
-            if len(other) != len(self):
-                raise ValueError("SkinWeights dimensions must match for subtraction.")
-            result._weights = [
-                self_w - other_w
-                for self_w, other_w in zip(self._weights, other._weights)
-            ]
-        else:
-            result._weights = [weight - float(other) for weight in self._weights]
-        return result
-
-    def __rsub__(self, other: float) -> "SkinWeights":
-        """Right-subtract for scalar values."""
-        result = self.copy()
-        result._weights = [float(other) - weight for weight in self._weights]
-        return result
-
-    def __mul__(self, other: Union["SkinWeights", float]) -> "SkinWeights":
-        """Multiply weights by another SkinWeights or scalar."""
-        result = self.copy()
-        if isinstance(other, SkinWeights):
-            if len(other) != len(self):
-                raise ValueError(
-                    "SkinWeights dimensions must match for multiplication."
-                )
-            result._weights = [
-                self_w * other_w
-                for self_w, other_w in zip(self._weights, other._weights)
-            ]
-        else:
-            result._weights = [weight * float(other) for weight in self._weights]
-        return result
-
-    def __rmul__(self, other: float) -> "SkinWeights":
-        """Right-multiply for scalar values."""
-        return self.__mul__(other)
-
-    def __truediv__(self, other: Union["SkinWeights", float]) -> "SkinWeights":
-        """Divide weights by another SkinWeights or scalar."""
-        result = self.copy()
-        if isinstance(other, SkinWeights):
-            if len(other) != len(self):
-                raise ValueError("SkinWeights dimensions must match for division.")
-            result._weights = [
-                (self_w / other_w) if other_w != 0 else 0.0
-                for self_w, other_w in zip(self._weights, other._weights)
-            ]
-        else:
-            divisor = float(other)
-            if divisor == 0:
-                raise ZeroDivisionError("Cannot divide SkinWeights by zero.")
-            result._weights = [weight / divisor for weight in self._weights]
-        return result
-
-    def __neg__(self) -> "SkinWeights":
-        """Invert weights (1.0 - weight)."""
-        result = self.copy()
-        result._weights = [1.0 - weight for weight in self._weights]
-        return result
-
-    def __eq__(self, other: "SkinWeights") -> bool:
-        """Check equality with another SkinWeights."""
-        if not isinstance(other, SkinWeights):
-            return False
-        if len(self) != len(other):
-            return False
-        tolerance = 1e-6
-        return all(
-            abs(self_w - other_w) <= tolerance
-            for self_w, other_w in zip(self._weights, other._weights)
-        )
-
-    def __repr__(self) -> str:
-        """Debug representation."""
-        return (
-            f"<SkinWeights vertices={self._vertex_count} "
-            f"influences={self._influence_count}>"
-        )
 
 
 @register("skinCluster")
@@ -316,8 +68,16 @@ class SkinCluster(Deformer):
 
     @classmethod
     def create_from_weights_object(cls, weights_object, **kwargs):
-        """Create a skincluster from the given weights object."""
-        geometry_name = weights_object.shapes[0]
+        """Create a skincluster from the given weights object.
+
+        Args:
+            weights_object: A WeightsIO instance containing weight data.
+            **kwargs: Additional arguments passed to create().
+
+        Returns:
+            SkinCluster instance with weights applied.
+        """
+        geometry_name = weights_object.shapes[0].name
         influences = weights_object.influence_names
         skincluster = cls.create(geometry_name, influences, **kwargs)
         skincluster.set_weights(weights_object.to_m_array())
@@ -332,7 +92,7 @@ class SkinCluster(Deformer):
             **kwargs: Additional arguments passed to load_weights.
         """
         # instanciate the weights object.
-        weights = Weights.load_json(file_path)
+        weights = WeightsIO.load_json(file_path)
         return cls.create_from_weights_object(weights, **kwargs)
 
     # === Properties ===
@@ -532,14 +292,14 @@ class SkinCluster(Deformer):
         index = self.influence_index(influence)
         return cmds.getAttr(f"{self.name}.lockWeights[{index}]")
 
-    def get_weights(self, geometry: Optional[str] = None) -> SkinWeights:
+    def get_weights(self, geometry: Optional[str] = None) -> DeformerWeights:
         """Get all skin weights for the geometry.
 
         Args:
             geometry: Optional specific geometry to query.
 
         Returns:
-            SkinWeights container with weight data.
+            DeformerWeights container with weight data.
         """
         dag_path, vertex_component, skin_fn = self._get_geometry_dag_and_components(
             geometry
@@ -551,23 +311,23 @@ class SkinCluster(Deformer):
             OpenMaya.MFnDagNode(dag).name() for dag in influence_dags
         ]
 
-        return SkinWeights(
+        return DeformerWeights(
             list(weights),
-            influence_count=len(influence_dags),
-            vertex_count=self.vertex_count,
-            influence_names=influence_names,
+            channel_count=len(influence_dags),
+            element_count=self.vertex_count,
+            channel_names=influence_names,
         )
 
     def set_weights(
         self,
-        weights: Union[SkinWeights, List[float]],
+        weights: Union[DeformerWeights, List[float]],
         geometry: Optional[str] = None,
         normalize: bool = True,
     ) -> None:
         """Set all skin weights for the geometry.
 
         Args:
-            weights: SkinWeights or list of weight values.
+            weights: DeformerWeights or list of weight values.
             geometry: Optional specific geometry to set.
             normalize: Whether to normalize weights after setting.
         """
@@ -576,7 +336,7 @@ class SkinCluster(Deformer):
         )
         influence_indices = self._get_influence_indices(skin_fn)
 
-        if isinstance(weights, SkinWeights):
+        if isinstance(weights, DeformerWeights):
             weight_array = OpenMaya.MDoubleArray(weights.weights)
         else:
             weight_array = OpenMaya.MDoubleArray(weights)
@@ -587,7 +347,7 @@ class SkinCluster(Deformer):
 
     def get_vertex_weights(
         self, vertex_indices: List[int], geometry: Optional[str] = None
-    ) -> SkinWeights:
+    ) -> DeformerWeights:
         """Get weights for specific vertices.
 
         Args:
@@ -595,7 +355,7 @@ class SkinCluster(Deformer):
             geometry: Optional specific geometry.
 
         Returns:
-            SkinWeights for the specified vertices.
+            DeformerWeights for the specified vertices.
         """
         target_geo = geometry or self.geometry
         if not target_geo:
@@ -619,17 +379,17 @@ class SkinCluster(Deformer):
             OpenMaya.MFnDagNode(dag).name() for dag in influence_dags
         ]
 
-        return SkinWeights(
+        return DeformerWeights(
             list(weights),
-            influence_count=len(influence_dags),
-            vertex_count=len(vertex_indices),
-            influence_names=influence_names,
+            channel_count=len(influence_dags),
+            element_count=len(vertex_indices),
+            channel_names=influence_names,
         )
 
     def set_vertex_weights(
         self,
         vertex_indices: List[int],
-        weights: Union[SkinWeights, List[float]],
+        weights: Union[DeformerWeights, List[float]],
         geometry: Optional[str] = None,
         normalize: bool = True,
     ) -> None:
@@ -658,7 +418,7 @@ class SkinCluster(Deformer):
         skin_fn = self._get_skin_fn()
         influence_indices = self._get_influence_indices(skin_fn)
 
-        if isinstance(weights, SkinWeights):
+        if isinstance(weights, DeformerWeights):
             weight_array = OpenMaya.MDoubleArray(weights.weights)
         else:
             weight_array = OpenMaya.MDoubleArray(weights)
