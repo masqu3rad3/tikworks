@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
-from . import jsonio
+from tik.core import jsonio
 
 
 @dataclass
