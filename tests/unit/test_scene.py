@@ -5,7 +5,7 @@ from tik.maya.core.scene import (
     select_nodes,
     _clean_input,
     _wrap_output,
-    _proxy_wrapper,
+    proxy_wrapper,
 )
 from tik.maya.types.transform import Transform
 
@@ -214,7 +214,7 @@ def test_proxy_wrapper_basic_command():
     """Test _proxy_wrapper executes Maya commands correctly."""
     cmds.file(new=True, force=True)
     # Use a non-factory command to test basic wrapping
-    result = _proxy_wrapper("ls")
+    result = proxy_wrapper("ls")
     # Should return raw result for non-factory commands
     assert isinstance(result, (list, type(None)))
 
@@ -224,7 +224,7 @@ def test_proxy_wrapper_with_factory_command():
     cmds.file(new=True, force=True)
     # Create a transform first, then use duplicate which is in NODE_FACTORIES
     cmds.createNode("transform", name="originalNode")
-    result = _proxy_wrapper("duplicate", "originalNode", name="duplicatedNode")
+    result = proxy_wrapper("duplicate", "originalNode", name="duplicatedNode")
     assert isinstance(result, list)
     assert len(result) == 1
     assert isinstance(result[0], Transform)

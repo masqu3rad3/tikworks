@@ -28,7 +28,7 @@ def _wrap_output(result):
     return result
 
 
-def _proxy_wrapper(func_name, *args, **kwargs):
+def proxy_wrapper(func_name, *args, **kwargs):
     """The function that executes when a user calls a dynamic command."""
     original_func = getattr(cmds, func_name)
 

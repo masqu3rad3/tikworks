@@ -8,9 +8,10 @@ from .core.dagnode import DagNode
 from .core.node import Node
 from .core.registry import resolve
 from .core.scene import *  # noqa: F401, F403
-from .core.scene import _proxy_wrapper
+from .core.scene import proxy_wrapper
 from .core.shapenode import ShapeNode
 from .types.blendshape import BlendShape
+from .types.skincluster import SkinCluster
 from .types.camera import Camera
 from .types.curve import Curve
 from .types.joint import Joint
@@ -33,6 +34,7 @@ __all__ = [
     "Light",
     "Camera",
     "BlendShape",
+    "SkinCluster",
     "resolve",
 ]
 
@@ -45,7 +47,7 @@ def __getattr__(name):
     """
     # If the name exists in maya.cmds, create a wrapper for it
     if hasattr(cmds, name):
-        return partial(_proxy_wrapper, name)
+        return partial(proxy_wrapper, name)
 
     # Otherwise, it really doesn't exist
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
