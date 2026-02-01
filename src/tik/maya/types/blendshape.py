@@ -6,7 +6,8 @@ from maya import OpenMaya, cmds
 
 from ..core.node import Node
 from ..core.registry import register, resolve
-from ..core.apicommon import undocommit
+from ..core.apicommon import create_node_with_dg_modifier
+# from ..core.apicommon import undocommit
 
 
 @register("blendShape")
@@ -16,12 +17,14 @@ class BlendShape(Node):
     @classmethod
     def create(cls, **kwargs):
         """Create Blendshape node type for Maya."""
-        mod = OpenMaya.MDGModifier()
-        node_obj = mod.createNode("blendShape", **kwargs)
-        mod.doIt()
-        undocommit(undo=mod.undoIt, redo=mod.doIt)
-        blendshape = OpenMaya.MFnDependencyNode(node_obj).name()
-        return cls(blendshape)
+        node_name = create_node_with_dg_modifier("blendShape", name=kwargs.get("name"))
+        return cls(node_name)
+        # mod = OpenMaya.MDGModifier()
+        # node_obj = mod.createNode("blendShape", **kwargs)
+        # mod.doIt()
+        # undocommit(undo=mod.undoIt, redo=mod.doIt)
+        # blendshape = OpenMaya.MFnDependencyNode(node_obj).name()
+        # return cls(blendshape)
 
     @property
     def influences(self):
@@ -183,7 +186,7 @@ class BlendShape(Node):
             **kwargs,
         )
 
-    def get_target_weights(self, target, geometry=None):
+    def get_influence_weights(self, target, geometry=None):
         """
         Get weights for a specific target shape (e.g. 'pCube2').
         Args:
@@ -199,7 +202,7 @@ class BlendShape(Node):
         plug = self._get_weight_plug(idx, target_id=target_id)
         return self._read_weights(plug, count)
 
-    def set_target_weights(self, target, weights, geometry=None):
+    def set_influence_weights(self, target, weights, geometry=None):
         """Set weights for a specific target shape.
         Args:
             target: The index or name of the target.
@@ -221,7 +224,7 @@ class BlendShape(Node):
         plug = self._get_weight_plug(idx, target_id=target_id)
         self._write_weights(plug, weights)
 
-    def get_weights(self, geometry=None):
+    def get_base_weights(self, geometry=None):
         """
         Get the global deformer weights.
         (This corresponds to the BlendShape node entry in the Paint Weights tool).
@@ -232,7 +235,7 @@ class BlendShape(Node):
         )  # target_id None implies Base/Deformer
         return self._read_weights(plug, count)
 
-    def set_weights(self, weights, geometry=None):
+    def set_base_weights(self, weights, geometry=None):
         """
         Set the global deformer weights.
         """

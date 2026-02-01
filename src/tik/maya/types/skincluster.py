@@ -11,7 +11,7 @@ from maya.api import OpenMayaAnim
 from ..core.node import Node
 from ..core.registry import register
 from ..core.scene import proxy_wrapper
-
+from ..core.apicommon import create_node_with_dg_modifier
 
 class SkinWeights:
     """Container for skin weights enabling arithmetic operations.
@@ -270,8 +270,8 @@ class SkinCluster(Node):
     @classmethod
     def create(
         cls,
-        geometry: str,
-        influences: List[str],
+        geometry: str = None,
+        influences: List[str] = None,
         name: Optional[str] = None,
         **kwargs,
     ) -> "SkinCluster":
@@ -286,6 +286,16 @@ class SkinCluster(Node):
         Returns:
             SkinCluster instance wrapping the new node.
         """
+        # if both geometry and influences are None, create a simple skinCluster Node
+        if geometry is None and influences is None:
+            sc_name = create_node_with_dg_modifier("skinCluster", name=name)
+            return cls(sc_name)
+
+        # if only one of the influences or geometry is None, raise an error
+        if geometry is None or influences is None:
+            raise ValueError("To create skincluster with connections, geometry and influences must be provided.\n"
+                             "Alternatively, call SkinCluster.create() without geometry and influences to create an unbound skinCluster node.")
+
         default_kwargs = {
             "toSelectedBones": False,
             "bindMethod": 0,

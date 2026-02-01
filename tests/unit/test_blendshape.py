@@ -176,7 +176,7 @@ class TestBlendShapeWeights:
         blendshape = cmds.blendShape(target_mesh, base_mesh, name="getWeightsBS")[0]
         blendshape_node = BlendShape(blendshape)
 
-        weights = blendshape_node.get_target_weights(0)
+        weights = blendshape_node.get_influence_weights(0)
         assert isinstance(weights, list)
         assert len(weights) > 0
         # Default weights should be 1.0
@@ -192,7 +192,7 @@ class TestBlendShapeWeights:
         blendshape_node = BlendShape(blendshape)
 
         target_name = blendshape_node.influences[0]
-        weights = blendshape_node.get_target_weights(target_name)
+        weights = blendshape_node.get_influence_weights(target_name)
         assert isinstance(weights, list)
 
     def test_get_target_weights_raises_on_invalid_type(self):
@@ -204,7 +204,7 @@ class TestBlendShapeWeights:
         blendshape_node = BlendShape(blendshape)
 
         with pytest.raises(TypeError, match="Target must be an integer index or string name"):
-            blendshape_node.get_target_weights([1, 2])
+            blendshape_node.get_influence_weights([1, 2])
 
     def test_set_target_weights_by_index(self):
         """Test setting target weights by index."""
@@ -216,13 +216,13 @@ class TestBlendShapeWeights:
         blendshape_node = BlendShape(blendshape)
 
         # Get vertex count
-        original_weights = blendshape_node.get_target_weights(0)
+        original_weights = blendshape_node.get_influence_weights(0)
         new_weights = [0.5] * len(original_weights)
 
-        blendshape_node.set_target_weights(0, new_weights)
+        blendshape_node.set_influence_weights(0, new_weights)
 
         # Verify weights were set
-        retrieved_weights = blendshape_node.get_target_weights(0)
+        retrieved_weights = blendshape_node.get_influence_weights(0)
         assert all(w == pytest.approx(0.5, abs=0.01) for w in retrieved_weights)
 
     def test_set_target_weights_by_name(self):
@@ -235,12 +235,12 @@ class TestBlendShapeWeights:
         blendshape_node = BlendShape(blendshape)
 
         target_name = blendshape_node.influences[0]
-        original_weights = blendshape_node.get_target_weights(target_name)
+        original_weights = blendshape_node.get_influence_weights(target_name)
         new_weights = [0.75] * len(original_weights)
 
-        blendshape_node.set_target_weights(target_name, new_weights)
+        blendshape_node.set_influence_weights(target_name, new_weights)
 
-        retrieved_weights = blendshape_node.get_target_weights(target_name)
+        retrieved_weights = blendshape_node.get_influence_weights(target_name)
         assert all(w == pytest.approx(0.75, abs=0.01) for w in retrieved_weights)
 
     def test_set_target_weights_raises_on_invalid_type(self):
@@ -252,7 +252,7 @@ class TestBlendShapeWeights:
         blendshape_node = BlendShape(blendshape)
 
         with pytest.raises(TypeError, match="Target must be an integer index or string name"):
-            blendshape_node.set_target_weights([1, 2], [0.5])
+            blendshape_node.set_influence_weights([1, 2], [0.5])
 
     def test_set_target_weights_raises_on_length_mismatch(self):
         """Test set_target_weights raises ValueError when weight length mismatches."""
@@ -264,7 +264,7 @@ class TestBlendShapeWeights:
         blendshape_node = BlendShape(blendshape)
 
         with pytest.raises(ValueError, match="Weight length"):
-            blendshape_node.set_target_weights(0, [0.5, 0.5])  # Too few weights
+            blendshape_node.set_influence_weights(0, [0.5, 0.5])  # Too few weights
 
     def test_get_weights_global_deformer(self):
         """Test getting global deformer weights."""
@@ -275,7 +275,7 @@ class TestBlendShapeWeights:
         blendshape = cmds.blendShape(target_mesh, base_mesh, name="getGlobalWeightsBS")[0]
         blendshape_node = BlendShape(blendshape)
 
-        weights = blendshape_node.get_weights()
+        weights = blendshape_node.get_base_weights()
         assert isinstance(weights, list)
         assert len(weights) > 0
 
@@ -288,12 +288,12 @@ class TestBlendShapeWeights:
         blendshape = cmds.blendShape(target_mesh, base_mesh, name="setGlobalWeightsBS")[0]
         blendshape_node = BlendShape(blendshape)
 
-        original_weights = blendshape_node.get_weights()
+        original_weights = blendshape_node.get_base_weights()
         new_weights = [0.8] * len(original_weights)
 
-        blendshape_node.set_weights(new_weights)
+        blendshape_node.set_base_weights(new_weights)
 
-        retrieved_weights = blendshape_node.get_weights()
+        retrieved_weights = blendshape_node.get_base_weights()
         assert all(w == pytest.approx(0.8, abs=0.01) for w in retrieved_weights)
 
     def test_set_weights_raises_on_length_mismatch(self):
@@ -305,7 +305,7 @@ class TestBlendShapeWeights:
         blendshape_node = BlendShape(blendshape)
 
         with pytest.raises(ValueError, match="Weight length"):
-            blendshape_node.set_weights([0.5, 0.5])  # Too few weights
+            blendshape_node.set_base_weights([0.5, 0.5])  # Too few weights
 
 
 class TestBlendShapeIndexAndName:

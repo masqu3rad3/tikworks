@@ -35,8 +35,8 @@ def load(path: Path | str) -> dict:
         raise FileNotFoundError(path)
 
     try:
-        with path.open("r", encoding="utf-8") as f:
-            return json.load(f)
+        with path.open("r", encoding="utf-8") as file_handle:
+            return json.load(file_handle)
     except JSONDecodeError as exc:
         raise JsonDecodeError(f"Invalid JSON: {path}") from exc
 
@@ -64,11 +64,55 @@ def save(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    with path.open("w", encoding="utf-8") as _f:
+    with path.open("w", encoding="utf-8") as file_handle:
         json.dump(
             data,
-            _f,
+            file_handle,
             indent=indent,
             sort_keys=sort_keys,
             ensure_ascii=ensure_ascii,
         )
+
+
+def loads(content: str) -> dict:
+    """Parse JSON text into a dictionary.
+
+    Args:
+        content: JSON text payload.
+
+    Returns:
+        Parsed JSON data as a dictionary.
+
+    Raises:
+        JsonDecodeError: If the text contains invalid JSON.
+    """
+    try:
+        return json.loads(content)
+    except JSONDecodeError as exc:
+        raise JsonDecodeError("Invalid JSON text") from exc
+
+
+def dumps(
+    data: dict,
+    *,
+    indent: int = 2,
+    sort_keys: bool = True,
+    ensure_ascii: bool = False,
+) -> str:
+    """Serialize a dictionary into JSON text.
+
+    Args:
+        data: Dictionary data to serialize.
+        indent: Number of spaces for indentation (default: 2).
+        sort_keys: Whether to sort dictionary keys (default: True).
+        ensure_ascii: Whether to escape non-ASCII characters (default: False).
+
+    Returns:
+        JSON text payload.
+    """
+    return json.dumps(
+        data,
+        indent=indent,
+        sort_keys=sort_keys,
+        ensure_ascii=ensure_ascii,
+    )
