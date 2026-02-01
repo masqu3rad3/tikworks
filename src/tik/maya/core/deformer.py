@@ -1,3 +1,5 @@
+# TODO: Make sure all get/set deformer weights go through DeformerWeights and WeightsIO
+
 """Deformer is not an actual maya node representation. It is a base class for deformers like SkinCluster, BlendShape, etc.
 
 The Deformer class itself is not a falloff targer for any nodes.

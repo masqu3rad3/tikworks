@@ -292,6 +292,181 @@ class SkinCluster(Deformer):
         index = self.influence_index(influence)
         return cmds.getAttr(f"{self.name}.lockWeights[{index}]")
 
+    # python
+    def get_influence_weights(
+            self,
+            influences: Union[int, str, List[Union[int, str]]],
+            geometry: Optional[str] = None,
+    ) -> DeformerWeights:
+        """
+        Return weights for the given influence(s) as a DeformerWeights container.
+
+        Args:
+            influences: Single influence name/index or list of names/indices.
+            geometry: Optional geometry to query.
+
+        Returns:
+            DeformerWeights: channel_count == number of requested influences,
+                             element_count == vertex_count.
+        """
+        # Normalize to list
+        if isinstance(influences, (str, int)):
+            requested = [influences]
+        elif isinstance(influences, list):
+            requested = influences
+        else:
+            raise TypeError(
+                "`influences` must be an int, str or list of them.")
+
+        dag_path, vertex_component, skin_fn = self._get_geometry_dag_and_components(
+            geometry
+        )
+
+        # Resolve logical indices for requested influences (names preferred)
+        requested_indices: List[int] = []
+        for influence in requested:
+            if isinstance(influence, str):
+                requested_indices.append(self.influence_index(influence))
+            elif isinstance(influence, int):
+                requested_indices.append(influence)
+            else:
+                raise TypeError("Influence entries must be int or str.")
+
+        # Query full weights and the influence ordering produced by the API
+        full_weights, _ = skin_fn.getWeights(dag_path, vertex_component)
+
+        # Ensure we have the logical influence indices in the same order as the
+        # skin_fn returns weight channels for each vertex.
+        full_influence_indices = self._get_influence_indices(skin_fn)
+        full_influence_count = len(full_influence_indices)
+        vertex_count = self.vertex_count
+
+        # Map logical influence index -> position in full_influence_indices
+        pos_map = {int(full_influence_indices[i]): i for i in
+                   range(full_influence_count)}
+
+        # Determine positions for requested indices and collect channel names
+        influence_dags = skin_fn.influenceObjects()
+        name_map = {
+            int(skin_fn.indexForInfluenceObject(dag)): OpenMaya.MFnDagNode(
+                dag).name()
+            for dag in influence_dags
+        }
+
+        selected_positions: List[int] = []
+        channel_names: List[str] = []
+        for logical_idx in requested_indices:
+            if logical_idx not in pos_map:
+                raise ValueError(
+                    f"Influence index {logical_idx} not found on skinCluster '{self.name}'"
+                )
+            selected_positions.append(pos_map[logical_idx])
+            channel_names.append(name_map.get(logical_idx, None))
+
+        selected_channel_count = len(selected_positions)
+
+        # Extract weights into vertex-major ordering for requested channels
+        flat_weights: List[float] = [0.0] * (
+                    vertex_count * selected_channel_count)
+        for vertex_index in range(vertex_count):
+            base_full = vertex_index * full_influence_count
+            base_selected = vertex_index * selected_channel_count
+            for sel_idx, full_pos in enumerate(selected_positions):
+                flat_weights[base_selected + sel_idx] = float(
+                    full_weights[base_full + full_pos]
+                )
+
+        return DeformerWeights(
+            flat_weights,
+            channel_count=selected_channel_count,
+            element_count=vertex_count,
+            channel_names=channel_names,
+        )
+
+    def set_influence_weights(
+            self,
+            influences: Union[int, str, List[Union[int, str]]],
+            weights: Union[DeformerWeights, List[float]],
+            geometry: Optional[str] = None,
+            normalize: bool = True,
+    ) -> None:
+        """
+        Set weights for the given influence(s). Accepts a DeformerWeights (with
+        channel_count == number of influences) or a flat list of floats
+        (vertex-major ordering).
+
+        Args:
+            influences: Single influence name/index or list of names/indices.
+            weights: DeformerWeights or flat list of floats.
+            geometry: Optional geometry to set.
+            normalize: Whether to normalize weights after setting.
+        """
+        # Normalize to list
+        if isinstance(influences, (str, int)):
+            requested = [influences]
+        elif isinstance(influences, list):
+            requested = influences
+        else:
+            raise TypeError(
+                "`influences` must be an int, str or list of them.")
+
+        dag_path, vertex_component, skin_fn = self._get_geometry_dag_and_components(
+            geometry
+        )
+
+        # Resolve logical indices for requested influences
+        requested_indices: List[int] = []
+        for influence in requested:
+            if isinstance(influence, str):
+                requested_indices.append(self.influence_index(influence))
+            elif isinstance(influence, int):
+                requested_indices.append(influence)
+            else:
+                raise TypeError("Influence entries must be int or str.")
+
+        selected_count = len(requested_indices)
+        vertex_count = self.vertex_count
+
+        # Normalize incoming weights to flat vertex-major list for the requested channels
+        if isinstance(weights, DeformerWeights):
+            if weights.channel_count != selected_count:
+                raise ValueError(
+                    f"DeformerWeights.channel_count {weights.channel_count} != requested {selected_count}"
+                )
+            if weights.element_count != vertex_count:
+                raise ValueError(
+                    f"DeformerWeights.element_count {weights.element_count} != {vertex_count}"
+                )
+            flat_weights = list(weights.weights)
+        else:
+            # plain list
+            if selected_count == 1:
+                if len(weights) != vertex_count:
+                    raise ValueError(
+                        f"Weight length {len(weights)} != {vertex_count} (vertex count)"
+                    )
+                flat_weights = list(weights)
+            else:
+                expected = vertex_count * selected_count
+                if len(weights) != expected:
+                    raise ValueError(
+                        f"Weight length {len(weights)} != expected {expected} "
+                        f"(vertex_count * influence_count)"
+                    )
+                flat_weights = list(weights)
+
+        # Build MIntArray of logical influence indices for the API
+        influence_indices_array = OpenMaya.MIntArray(selected_count, 0)
+        for idx_pos, logical_idx in enumerate(requested_indices):
+            influence_indices_array[idx_pos] = int(logical_idx)
+
+        # Convert to MDoubleArray and set weights (API will accept vertex-major ordering)
+        weight_array = OpenMaya.MDoubleArray(flat_weights)
+        skin_fn.setWeights(
+            dag_path, vertex_component, influence_indices_array, weight_array,
+            normalize
+        )
+
     def get_weights(self, geometry: Optional[str] = None) -> DeformerWeights:
         """Get all skin weights for the geometry.
 

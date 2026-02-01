@@ -377,3 +377,65 @@ def test_empty_skincluster_errors():
 
     with pytest.raises(RuntimeError):
         skincluster.set_vertex_weights([0], [1.0])
+
+
+def test_get_set_influence_weights_single_by_index(skincluster_setup: Dict[str, object]):
+    skincluster = skincluster_setup["skincluster"]
+    mesh_transform = skincluster_setup["mesh_transform"]
+
+    # Get weights for first influence by index
+    dw = skincluster.get_influence_weights(0)
+    assert isinstance(dw, DeformerWeights)
+    assert dw.channel_count == 1
+    assert dw.element_count == skincluster.vertex_count
+    # All default weights should be > 0
+    assert all(isinstance(v, float) for v in dw.weights)
+
+    # Set new weights for that influence
+    new_vals = [0.3] * dw.element_count
+    skincluster.set_influence_weights(0, DeformerWeights(new_vals, channel_count=1, element_count=dw.element_count))
+
+    retrieved = skincluster.get_influence_weights(0)
+    assert all(v == pytest.approx(0.3, abs=1e-4) for v in retrieved.weights)
+
+
+def test_get_set_influence_weights_single_by_name(skincluster_setup: Dict[str, object]):
+    skincluster = skincluster_setup["skincluster"]
+    first_influence = skincluster.influences[0]
+
+    dw = skincluster.get_influence_weights(first_influence)
+    assert isinstance(dw, DeformerWeights)
+    assert dw.channel_count == 1
+
+    new_vals = [0.6] * dw.element_count
+    skincluster.set_influence_weights(first_influence, DeformerWeights(new_vals, channel_count=1, element_count=dw.element_count))
+    retrieved = skincluster.get_influence_weights(first_influence)
+    assert all(v == pytest.approx(0.6, abs=1e-4) for v in retrieved.weights)
+
+
+def test_get_set_influence_weights_multiple(skincluster_setup: Dict[str, object]):
+    skincluster = skincluster_setup["skincluster"]
+    influences = skincluster.influences
+    if len(influences) < 2:
+        pytest.skip("Requires at least 2 influences")
+
+    # Request both influences by names
+    dw = skincluster.get_influence_weights(influences)
+    assert isinstance(dw, DeformerWeights)
+    assert dw.channel_count == len(influences)
+
+    # Create new weights: alternate values per channel
+    vcount = dw.element_count
+    flat = []
+    for i in range(vcount):
+        flat.append(0.2)  # first influence
+        flat.append(0.8)  # second influence
+
+    skincluster.set_influence_weights(influences, DeformerWeights(flat, channel_count=2, element_count=vcount))
+
+    retrieved = skincluster.get_influence_weights(influences)
+    assert retrieved.channel_count == 2
+    # Check a few sample vertices
+    assert retrieved.get_channel_weights(0)[0] == pytest.approx(0.2, abs=1e-4)
+    assert retrieved.get_channel_weights(1)[0] == pytest.approx(0.8, abs=1e-4)
+

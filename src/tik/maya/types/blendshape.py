@@ -1,8 +1,11 @@
+# TODO: Make sure all get/set deformer weights go through DeformerWeights and WeightsIO
+
 """Blendshape type for Maya integration."""
+from typing import List, Optional, Union
 
 from maya import cmds
 
-from ..core.deformer import Deformer
+from ..core.deformer import Deformer, DeformerWeights
 from ..core.registry import register, resolve
 from ..core.apicommon import create_node_with_dg_modifier
 
@@ -177,26 +180,140 @@ class BlendShape(Deformer):
             **kwargs,
         )
 
-    def get_influence_weights(self, target, geometry=None):
+    def get_weights(self, geometry: Optional[str] = None) -> DeformerWeights:
         """
-        Get weights for a specific target shape (e.g. 'pCube2').
+        Get all weights for all target shapes as a list of lists.
+        Each sublist corresponds to a target shape.
+        Args:
+            geometry: The geometry to query weights for.
+
+        Returns:
+            DeformerWeights: An object containing all weights.
+        """
+        geom_index, vertex_count, _ = self._get_geometry_info(geometry)
+        target_count = self.weight_count
+
+        if target_count == 0:
+            return DeformerWeights(
+                [],
+                channel_count=0,
+                element_count=vertex_count,
+                channel_names=[],
+            )
+
+        channel_names = self.influences or []
+        if len(channel_names) != target_count:
+            channel_names = []
+
+        target_weights_by_target = [
+            self._read_weights(self._get_weight_plug(geom_index, target_id=target_index), vertex_count)
+            for target_index in range(target_count)
+        ]
+
+        flat_weights = [0.0] * (vertex_count * target_count)
+        for vertex_index in range(vertex_count):
+            base_offset = vertex_index * target_count
+            for target_index in range(target_count):
+                flat_weights[base_offset + target_index] = target_weights_by_target[target_index][vertex_index]
+
+        return DeformerWeights(
+            flat_weights,
+            channel_count=target_count,
+            element_count=vertex_count,
+            channel_names=channel_names,
+        )
+
+    def set_weights(
+        self,
+        weights: Union[DeformerWeights, List[float]],
+        geometry: Optional[str] = None,
+    ) -> None:
+        """Set all weights for the geometry.
+
+        Args:
+            weights: DeformerWeights or list of weight values.
+            geometry: Optional specific geometry to set.
+            normalize: Whether to normalize weights after setting.
+        """
+        geom_index, vertex_count, geo_name = self._get_geometry_info(geometry)
+        target_count = self.weight_count
+
+        if target_count == 0:
+            if isinstance(weights, DeformerWeights) and len(weights) == 0:
+                return
+            if not isinstance(weights, DeformerWeights) and len(weights) == 0:
+                return
+            raise ValueError(
+                f"BlendShape '{self.name}' has no targets but weights were provided."
+            )
+
+        if isinstance(weights, DeformerWeights):
+            if weights.channel_count != target_count:
+                raise ValueError(
+                    f"Channel count {weights.channel_count} != target count {target_count}"
+                )
+            if weights.element_count != vertex_count:
+                raise ValueError(
+                    f"Element count {weights.element_count} != {geo_name} count {vertex_count}"
+                )
+            flat_weights = weights.weights
+        else:
+            expected_count = vertex_count * target_count
+            if len(weights) != expected_count:
+                raise ValueError(
+                    f"Weight length {len(weights)} != {geo_name} expected {expected_count}"
+                )
+            flat_weights = weights
+
+        for target_index in range(target_count):
+            target_weights = [
+                flat_weights[vertex_index * target_count + target_index]
+                for vertex_index in range(vertex_count)
+            ]
+            plug = self._get_weight_plug(geom_index, target_id=target_index)
+            self._write_weights(plug, target_weights)
+
+    # python
+    def get_influence_weights(self, target, geometry=None) -> DeformerWeights:
+        """
+        Get weights for a specific target shape and return a DeformerWeights container.
+
         Args:
             target: The index or name of the target.
+            geometry: Optional geometry to query.
+
+        Returns:
+            DeformerWeights: channel_count==1, element_count==vertex_count.
         """
         if isinstance(target, str):
             target_id = self.index_by_name(target)
+            target_name = target
         elif isinstance(target, int):
             target_id = target
+            try:
+                target_name = self.name_by_index(target_id)
+            except ValueError:
+                target_name = None
         else:
             raise TypeError("Target must be an integer index or string name.")
-        idx, count, _ = self._get_geometry_info(geometry)
+
+        idx, vertex_count, _ = self._get_geometry_info(geometry)
         plug = self._get_weight_plug(idx, target_id=target_id)
-        return self._read_weights(plug, count)
+        weights_list = self._read_weights(plug, vertex_count)
+
+        channel_names = [target_name] if target_name else []
+        return DeformerWeights(
+            weights_list,
+            channel_count=1,
+            element_count=vertex_count,
+            channel_names=channel_names,
+        )
 
     def set_influence_weights(self, target, weights, geometry=None):
         """Set weights for a specific target shape.
         Args:
             target: The index or name of the target.
+            weights: DeformerWeights or list of floats.
         """
         if isinstance(target, str):
             target_id = self.index_by_name(target)
@@ -207,13 +324,26 @@ class BlendShape(Deformer):
 
         idx, count, geo_name = self._get_geometry_info(geometry)
 
-        if len(weights) != count:
-            raise ValueError(
-                f"Weight length {len(weights)} != {geo_name} count {count}"
-            )
+        # Normalize incoming representation to a dense list per-vertex
+        if isinstance(weights, DeformerWeights):
+            if weights.channel_count != 1:
+                raise ValueError(
+                    f"Expected DeformerWeights.channel_count==1 for a single target, got {weights.channel_count}"
+                )
+            if weights.element_count != count:
+                raise ValueError(
+                    f"Element count {weights.element_count} != {geo_name} count {count}"
+                )
+            target_weights = list(weights.weights)
+        else:
+            if len(weights) != count:
+                raise ValueError(
+                    f"Weight length {len(weights)} != {geo_name} count {count}"
+                )
+            target_weights = list(weights)
 
         plug = self._get_weight_plug(idx, target_id=target_id)
-        self._write_weights(plug, weights)
+        self._write_weights(plug, target_weights)
 
     def get_base_weights(self, geometry=None):
         """

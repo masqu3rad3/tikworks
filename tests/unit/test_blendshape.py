@@ -5,6 +5,7 @@ from maya import cmds
 
 from tik.maya.types.blendshape import BlendShape
 from tik.maya.types.mesh import Mesh
+from tik.maya.core.deformer import DeformerWeights
 
 
 class TestBlendShapeCreate:
@@ -177,10 +178,10 @@ class TestBlendShapeWeights:
         blendshape_node = BlendShape(blendshape)
 
         weights = blendshape_node.get_influence_weights(0)
-        assert isinstance(weights, list)
-        assert len(weights) > 0
+        assert isinstance(weights, DeformerWeights)
+        assert weights.element_count > 0
         # Default weights should be 1.0
-        assert all(w == pytest.approx(1.0) for w in weights)
+        assert all(w == pytest.approx(1.0) for w in weights.weights)
 
     def test_get_target_weights_by_name(self):
         """Test getting target weights by name."""
@@ -193,7 +194,7 @@ class TestBlendShapeWeights:
 
         target_name = blendshape_node.influences[0]
         weights = blendshape_node.get_influence_weights(target_name)
-        assert isinstance(weights, list)
+        assert isinstance(weights, DeformerWeights)
 
     def test_get_target_weights_raises_on_invalid_type(self):
         """Test get_target_weights raises TypeError for invalid target type."""
@@ -217,13 +218,13 @@ class TestBlendShapeWeights:
 
         # Get vertex count
         original_weights = blendshape_node.get_influence_weights(0)
-        new_weights = [0.5] * len(original_weights)
+        new_weights = DeformerWeights([0.5] * original_weights.element_count, channel_count=1, element_count=original_weights.element_count)
 
         blendshape_node.set_influence_weights(0, new_weights)
 
         # Verify weights were set
         retrieved_weights = blendshape_node.get_influence_weights(0)
-        assert all(w == pytest.approx(0.5, abs=0.01) for w in retrieved_weights)
+        assert all(w == pytest.approx(0.5, abs=0.01) for w in retrieved_weights.weights)
 
     def test_set_target_weights_by_name(self):
         """Test setting target weights by name."""
@@ -236,12 +237,12 @@ class TestBlendShapeWeights:
 
         target_name = blendshape_node.influences[0]
         original_weights = blendshape_node.get_influence_weights(target_name)
-        new_weights = [0.75] * len(original_weights)
+        new_weights = DeformerWeights([0.75] * original_weights.element_count, channel_count=1, element_count=original_weights.element_count)
 
         blendshape_node.set_influence_weights(target_name, new_weights)
 
         retrieved_weights = blendshape_node.get_influence_weights(target_name)
-        assert all(w == pytest.approx(0.75, abs=0.01) for w in retrieved_weights)
+        assert all(w == pytest.approx(0.75, abs=0.01) for w in retrieved_weights.weights)
 
     def test_set_target_weights_raises_on_invalid_type(self):
         """Test set_target_weights raises TypeError for invalid target type."""
