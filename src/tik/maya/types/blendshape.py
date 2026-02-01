@@ -5,7 +5,8 @@ from pathlib import Path
 from maya import OpenMaya, cmds
 
 from ..core.node import Node
-from ..core.registry import register, resolve, undocommit
+from ..core.registry import register, resolve
+from ..core.apicommon import undocommit
 
 
 @register("blendShape")

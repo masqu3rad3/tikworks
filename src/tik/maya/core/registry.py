@@ -4,18 +4,12 @@ from typing import Any, Callable, Dict, Optional, Type, TypeVar
 
 import maya.cmds as cmds
 
-from tik.vendor.apiundo import apiundo
-
 from . import apicommon as api
 
 T = TypeVar("T")
 
 _NODE_TYPES: Dict[str, Type[Any]] = {}
 _DEFAULT_FACTORY: Optional[Type[Any]] = None  # set by set_default_factory(Node)
-
-# pass through commit function from apiundo
-undocommit = apiundo.commit
-
 
 def register(node_type: str) -> Callable[[Type[T]], Type[T]]:
     """Decorator for registering Maya node wrappers.

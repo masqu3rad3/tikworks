@@ -34,9 +34,9 @@
 
 ---
 
-## Tikmaya Library Guidelines (`src/tikmaya`)
+## Tikmaya Library Guidelines (`src/tik/maya`)
 
-These rules apply **strictly** when developing or extending the core `tikmaya` library.
+These rules apply **strictly** when developing or extending the core `tik.maya` library.
 
 ### Core Philosophy
 - **"Feel like Python, behave like Maya":** APIs should be expressive and explicit.
@@ -71,13 +71,13 @@ Tikmaya is organized around three distinct concepts. Do not conflate them:
 
 ---
 
-## Tool Development Guidelines (`src/trigger`, `src/etc`)
+## Tool Development Guidelines (`src/tik/trigger`, `src/tik/tools`)
 
-These rules apply when writing tools that use Tikmaya.
+These rules apply when writing tools that use tik.maya.
 
 ### Implementation Rules
-- **Consume Tikmaya:** Tools should consume `tikmaya` objects and wrappers.
+- **Consume tik.maya:** Tools should consume `tik.maya` objects and wrappers.
 - **Avoid Direct Calls:** Avoid calling `cmds` or `OpenMaya` directly in tools.
-- **Gap Handling:** If `tikmaya` lacks functionality required by a tool:
-    1.  Propose and implement the feature in `tikmaya` first.
+- **Gap Handling:** If `tik.maya` lacks functionality required by a tool:
+    1.  Propose and implement the feature in `tik.maya` first.
     2.  Only add ad-hoc logic in the tool if it is strictly domain-specific and not reusable.
