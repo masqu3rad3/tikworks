@@ -7,8 +7,9 @@ from typing import List, Optional, Union
 from maya import cmds
 from maya.api import OpenMaya
 from maya.api import OpenMayaAnim
+from pymel.internal.pmcmds import skinCluster
 
-from ..core.node import Node
+from ..core.deformer import Deformer, Weights
 from ..core.registry import register
 from ..core.scene import proxy_wrapper
 from ..core.apicommon import create_node_with_dg_modifier
@@ -264,8 +265,9 @@ class SkinWeights:
 
 
 @register("skinCluster")
-class SkinCluster(Node):
+class SkinCluster(Deformer):
     """SkinCluster node type for Maya."""
+    tm_skincluster = partial(proxy_wrapper, "skinCluster")
 
     @classmethod
     def create(
@@ -308,11 +310,32 @@ class SkinCluster(Node):
         if name:
             default_kwargs["name"] = name
 
-        skin_fn = partial(proxy_wrapper, "skinCluster")
+        # skin_fn = partial(proxy_wrapper, "skinCluster")
         # result = cmds.skinCluster(influences, geometry, **default_kwargs)
-        result = skin_fn(influences, geometry, **default_kwargs)
+        result = cls.tm_skincluster(influences, geometry, **default_kwargs)
         skin_node = result[0] if isinstance(result, (list, tuple)) else result
         return skin_node
+
+    @classmethod
+    def create_from_weights_object(cls, weights_object, **kwargs):
+        """Create a skincluster from the given weights object."""
+        geometry_name = weights_object.shapes[0]
+        influences = weights_object.influence_names
+        skincluster = cls.create(geometry_name, influences, **kwargs)
+        skincluster.set_weights(weights_object.to_m_array())
+        return skincluster
+
+    @classmethod
+    def create_from_file(cls, file_path, **kwargs) -> "SkinCluster":
+        """Create a skinCluster by importing weights from a file.
+
+        Args:
+            file_path: The file path to import weights from.
+            **kwargs: Additional arguments passed to load_weights.
+        """
+        # instanciate the weights object.
+        weights = Weights.load_json(file_path)
+        return cls.create_from_weights_object(weights, **kwargs)
 
     # === Properties ===
 
@@ -329,13 +352,13 @@ class SkinCluster(Node):
     @property
     def geometry(self) -> Optional[str]:
         """Return the first connected geometry shape name."""
-        geometries = cmds.skinCluster(self.name, query=True, geometry=True)
+        geometries = self.tm_skincluster(self.name, query=True, geometry=True)
         return geometries[0] if geometries else None
 
     @property
     def geometries(self) -> List[str]:
         """Return all connected geometry shape names."""
-        return cmds.skinCluster(self.name, query=True, geometry=True) or []
+        return self.tm_skincluster(self.name, query=True, geometry=True) or []
 
     @property
     def skinning_method(self) -> int:
@@ -425,15 +448,6 @@ class SkinCluster(Node):
                 skin_fn.indexForInfluenceObject(influence_dags[idx])
             )
         return influence_indices
-
-    def __split_path(self, file_path, validate=False):
-        """Validate and split a file path into directory and filename."""
-        file_path = Path(file_path)
-        if validate:
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_name = file_path.name
-        file_dir = file_path.parent.as_posix()
-        return file_dir, file_name
 
     # === Public Methods ===
 
@@ -766,10 +780,9 @@ class SkinCluster(Node):
             file_path (str or Path Object): The file path to export weights to.
             **kwargs: Additional arguments for deformerWeights command.
         """
-        file_dir, file_name = self.__split_path(file_path, validate=True)
+        # file_dir, file_name = self.__split_path(file_path, validate=True)
 
-        base_geo = self.geometry
-        if base_geo and cmds.objectType(base_geo) == "mesh":
+        if self.geometry and self.geometry.type == "mesh":
             vertex_connections = True
         else:
             vertex_connections = False
@@ -781,9 +794,11 @@ class SkinCluster(Node):
         }
         default_kwargs.update(kwargs)
 
-        cmds.deformerWeights(
-            file_name, export=True, deformer=self.name, path=file_dir, **default_kwargs
-        )
+        self.__save_deformer_weights(file_path, **default_kwargs)
+
+        # cmds.deformerWeights(
+        #     file_name, export=True, deformer=self.name, path=file_dir, **default_kwargs
+        # )
 
     def load_weights(self, file_path, method="index", **kwargs):
         """Import skinCluster weights from a file.
@@ -794,7 +809,7 @@ class SkinCluster(Node):
                 Valid values are: "index", "nearest", "barycentric", "bilinear", "over"
             **kwargs: Additional arguments for deformerWeights command.
         """
-        file_dir, file_name = self.__split_path(file_path, validate=False)
+        # file_dir, file_name = self.__split_path(file_path, validate=False)
 
         default_kwargs = {
             "ignoreName": True,
@@ -802,14 +817,16 @@ class SkinCluster(Node):
         }
         default_kwargs.update(kwargs)
 
-        cmds.deformerWeights(
-            file_name,
-            path=file_dir,
-            im=True,
-            deformer=self.name,
-            method=method,
-            **default_kwargs,
-        )
+        self.__load_deformer_weights(file_path, method=method, **default_kwargs)
+
+        # cmds.deformerWeights(
+        #     file_name,
+        #     path=file_dir,
+        #     im=True,
+        #     deformer=self.name,
+        #     method=method,
+        #     **default_kwargs,
+        # )
 
     def unbind(self, delete_history: bool = True) -> None:
         """Unbind the skinCluster from geometry.

@@ -1,17 +1,14 @@
 """Blendshape type for Maya integration."""
 
-from pathlib import Path
+from maya import cmds
 
-from maya import OpenMaya, cmds
-
-from ..core.node import Node
+from ..core.deformer import Deformer
 from ..core.registry import register, resolve
 from ..core.apicommon import create_node_with_dg_modifier
-# from ..core.apicommon import undocommit
 
 
 @register("blendShape")
-class BlendShape(Node):
+class BlendShape(Deformer):
     """Blendshape node type for Maya."""
 
     @classmethod
@@ -19,12 +16,6 @@ class BlendShape(Node):
         """Create Blendshape node type for Maya."""
         node_name = create_node_with_dg_modifier("blendShape", name=kwargs.get("name"))
         return cls(node_name)
-        # mod = OpenMaya.MDGModifier()
-        # node_obj = mod.createNode("blendShape", **kwargs)
-        # mod.doIt()
-        # undocommit(undo=mod.undoIt, redo=mod.doIt)
-        # blendshape = OpenMaya.MFnDependencyNode(node_obj).name()
-        # return cls(blendshape)
 
     @property
     def influences(self):
@@ -269,22 +260,13 @@ class BlendShape(Node):
             )
         return target_name
 
-    def __split_path(self, file_path, validate=False):
-        """Validate and split a file path into directory and filename."""
-        file_path = Path(file_path)
-        if validate:
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_name = file_path.name
-        file_dir = file_path.parent.as_posix()
-        return file_dir, file_name
-
     def save_weights(self, file_path, **kwargs):
         """Export blendshape weights to a file.
 
         Args:
             file_path (str or Path Object): The file path to export weights to.
         """
-        file_dir, file_name = self.__split_path(file_path, validate=True)
+        # file_dir, file_name = self.__split_path(file_path, validate=True)
 
         # the default vertex connections are only True if the base mesh is a mesh.
         base_shapes = self.base_shapes
@@ -301,9 +283,11 @@ class BlendShape(Node):
         # update the default kwargs with any user-provided kwargs
         default_kwargs.update(kwargs)
 
-        cmds.deformerWeights(
-            file_name, export=True, deformer=self.name, path=file_dir, **default_kwargs
-        )
+        self.__save_deformer_weights(file_path, **default_kwargs)
+        #
+        # cmds.deformerWeights(
+        #     file_name, export=True, deformer=self.name, path=file_dir, **default_kwargs
+        # )
 
     def load_weights(self, file_path, method="index", **kwargs):
         """Import blendshape weights from a file.
@@ -313,17 +297,19 @@ class BlendShape(Node):
             method (str): The method to use for importing weights.
                 Valid values are: "index", "nearest", "barycentric", "bilinear" and "over"
         """
-        file_dir, file_name = self.__split_path(file_path, validate=False)
+        # file_dir, file_name = self.__split_path(file_path, validate=False)
 
         default_kwargs = {"ignoreName": True, "attribute": ["origin", "envelope"]}
         # update the default kwargs with any user-provided kwargs
         default_kwargs.update(kwargs)
 
-        cmds.deformerWeights(
-            file_name,
-            path=file_dir,
-            im=True,
-            deformer=self.name,
-            method=method,
-            **default_kwargs,
-        )
+        self.__load_deformer_weights(file_path, method=method, **default_kwargs)
+        #
+        # cmds.deformerWeights(
+        #     file_name,
+        #     path=file_dir,
+        #     im=True,
+        #     deformer=self.name,
+        #     method=method,
+        #     **default_kwargs,
+        # )
