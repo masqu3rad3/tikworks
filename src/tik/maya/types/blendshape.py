@@ -283,7 +283,7 @@ class BlendShape(Deformer):
         # update the default kwargs with any user-provided kwargs
         default_kwargs.update(kwargs)
 
-        self.__save_deformer_weights(file_path, **default_kwargs)
+        self._save_deformer_weights(file_path, **default_kwargs)
         #
         # cmds.deformerWeights(
         #     file_name, export=True, deformer=self.name, path=file_dir, **default_kwargs
@@ -303,7 +303,7 @@ class BlendShape(Deformer):
         # update the default kwargs with any user-provided kwargs
         default_kwargs.update(kwargs)
 
-        self.__load_deformer_weights(file_path, method=method, **default_kwargs)
+        self._load_deformer_weights(file_path, method=method, **default_kwargs)
         #
         # cmds.deformerWeights(
         #     file_name,

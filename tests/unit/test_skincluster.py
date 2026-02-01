@@ -155,8 +155,8 @@ def test_create_and_properties(skincluster_setup: Dict[str, object]):
     assert set(skincluster.influences) == set(skincluster_setup["joints"])
     assert skincluster.influence_count == 2
 
-    assert skincluster.geometry == mesh_shape
-    assert mesh_shape in skincluster.geometries
+    assert skincluster.geometry.name == mesh_shape
+    assert mesh_shape in [x.name for x in skincluster.geometries]
 
     skincluster.skinning_method = 1
     assert skincluster.skinning_method == 1

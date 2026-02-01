@@ -1,13 +1,11 @@
 """SkinCluster type for Maya integration."""
 from functools import partial
 
-from pathlib import Path
 from typing import List, Optional, Union
 
 from maya import cmds
 from maya.api import OpenMaya
 from maya.api import OpenMayaAnim
-from pymel.internal.pmcmds import skinCluster
 
 from ..core.deformer import Deformer, Weights
 from ..core.registry import register
@@ -398,7 +396,7 @@ class SkinCluster(Deformer):
         geometry = self.geometry
         if not geometry:
             return 0
-        return cmds.polyEvaluate(geometry, vertex=True)
+        return cmds.polyEvaluate(str(geometry), vertex=True)
 
     # === Private Helpers ===
 
@@ -422,7 +420,7 @@ class SkinCluster(Deformer):
             raise RuntimeError(f"No geometry connected to skinCluster '{self.name}'")
 
         selection_list = OpenMaya.MSelectionList()
-        selection_list.add(target_geo)
+        selection_list.add(str(target_geo))
         dag_path = selection_list.getDagPath(0)
 
         mesh_iter = OpenMaya.MItMeshVertex(dag_path)
@@ -604,7 +602,7 @@ class SkinCluster(Deformer):
             raise RuntimeError(f"No geometry connected to skinCluster '{self.name}'")
 
         selection_list = OpenMaya.MSelectionList()
-        selection_list.add(target_geo)
+        selection_list.add(str(target_geo))
         dag_path = selection_list.getDagPath(0)
 
         single_indexed_component = OpenMaya.MFnSingleIndexedComponent()
@@ -648,7 +646,7 @@ class SkinCluster(Deformer):
             raise RuntimeError(f"No geometry connected to skinCluster '{self.name}'")
 
         selection_list = OpenMaya.MSelectionList()
-        selection_list.add(target_geo)
+        selection_list.add(str(target_geo))
         dag_path = selection_list.getDagPath(0)
 
         single_indexed_component = OpenMaya.MFnSingleIndexedComponent()
@@ -706,7 +704,7 @@ class SkinCluster(Deformer):
         Args:
             threshold: Weights below this value are set to zero.
         """
-        cmds.skinPercent(self.name, self.geometry, pruneWeights=threshold)
+        cmds.skinPercent(self.name, str(self.geometry), pruneWeights=threshold)
 
     def copy_weights(
         self,
@@ -794,7 +792,7 @@ class SkinCluster(Deformer):
         }
         default_kwargs.update(kwargs)
 
-        self.__save_deformer_weights(file_path, **default_kwargs)
+        self._save_deformer_weights(file_path, **default_kwargs)
 
         # cmds.deformerWeights(
         #     file_name, export=True, deformer=self.name, path=file_dir, **default_kwargs
@@ -817,7 +815,7 @@ class SkinCluster(Deformer):
         }
         default_kwargs.update(kwargs)
 
-        self.__load_deformer_weights(file_path, method=method, **default_kwargs)
+        self._load_deformer_weights(file_path, method=method, **default_kwargs)
 
         # cmds.deformerWeights(
         #     file_name,
@@ -838,7 +836,7 @@ class SkinCluster(Deformer):
         if geometry:
             cmds.skinCluster(self.name, edit=True, unbind=True)
             if delete_history:
-                cmds.delete(geometry, constructionHistory=True)
+                cmds.delete(str(geometry), constructionHistory=True)
 
     def rebind(self) -> None:
         """Rebind geometry to the skinCluster.

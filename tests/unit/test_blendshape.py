@@ -445,7 +445,7 @@ class TestBlendShapeSaveLoad:
         blendshape = cmds.blendShape(target_mesh, base_mesh, name="saveWeightsBS")[0]
         blendshape_node = BlendShape(blendshape)
 
-        output_file = tmp_path / "blendshape_weights.xml"
+        output_file = tmp_path / "blendshape_weights.json"
         blendshape_node.save_weights(str(output_file))
 
         assert output_file.exists()

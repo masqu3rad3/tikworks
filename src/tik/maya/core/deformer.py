@@ -47,7 +47,7 @@ class Deformer(Node):
         file_dir = file_path.parent.as_posix()
         return file_dir, file_name
 
-    def __save_deformer_weights(self, file_path: str | Path, **kwargs) -> None:
+    def _save_deformer_weights(self, file_path: str | Path, **kwargs) -> None:
         """Save the deformer weights to a file.
 
         Args:
@@ -59,7 +59,7 @@ class Deformer(Node):
             file_name, export=True, deformer=self.name, path=file_dir,
             **kwargs
         )
-    def __load_deformer_weights(self, file_path: str | Path, method: str = "index", **kwargs) -> None:
+    def _load_deformer_weights(self, file_path: str | Path, method: str = "index", **kwargs) -> None:
         """Load deformer weights from a file.
 
         Args:
@@ -80,7 +80,7 @@ class Deformer(Node):
         """Create the weights object with the most secure but least efficient way."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir) / "temp_weights.json"
-            self.__save_deformer_weights(temp_path, format="json")
+            self._save_deformer_weights(temp_path, format="json")
             weights = Weights.load_json(temp_path)
         return weights
 
