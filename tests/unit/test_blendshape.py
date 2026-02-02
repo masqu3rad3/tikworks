@@ -22,6 +22,27 @@ class TestBlendShapeCreate:
         blendshape = BlendShape.create()
         assert isinstance(blendshape, BlendShape)
 
+    def test_create_blendshape_no_geometry_no_targets(self):
+        """Test creating blendShape with no geometry or targets."""
+        blendshape = BlendShape.create(name="unboundBS")
+        assert blendshape.exists()
+        assert not blendshape.base_shapes
+        assert not blendshape.influences
+
+    def test_create_blendshape_geometry_no_targets(self):
+        """Test creating blendShape with geometry but no targets."""
+        base_mesh, _ = cmds.polySphere(name="only_geo_base")
+        blendshape = BlendShape.create(geometry=base_mesh, name="onlyGeoBS")
+        assert blendshape.exists()
+        assert len(blendshape.base_shapes) == 1
+        assert not blendshape.influences
+
+    def test_create_blendshape_targets_no_geometry_raises(self):
+        """Test creating blendShape with targets but no geometry raises ValueError."""
+        target_mesh, _ = cmds.polySphere(name="only_targets_target")
+        with pytest.raises(ValueError, match="geometry must be provided"):
+            BlendShape.create(targets=[target_mesh], name="shouldFailBS")
+
 
 class TestBlendShapeProperties:
     """Tests for BlendShape properties."""
@@ -277,7 +298,6 @@ class TestBlendShapeWeights:
         blendshape_node = BlendShape(blendshape)
 
         weights = blendshape_node.get_base_weights()
-        assert isinstance(weights, list)
         assert len(weights) > 0
 
     def test_set_weights_global_deformer(self):
@@ -307,6 +327,92 @@ class TestBlendShapeWeights:
 
         with pytest.raises(ValueError, match="Weight length"):
             blendshape_node.set_base_weights([0.5, 0.5])  # Too few weights
+
+    def test_get_weights_returns_empty_when_no_targets(self):
+        """Test get_weights returns empty channels when no targets exist."""
+        base_mesh, _ = cmds.polySphere(name="get_weights_empty_base", sx=2, sy=2)
+        blendshape = cmds.blendShape(base_mesh, name="getWeightsEmptyBS")[0]
+        blendshape_node = BlendShape(blendshape)
+
+        weights = blendshape_node.get_weights()
+        assert isinstance(weights, DeformerWeights)
+        assert weights.channel_count == 0
+        assert weights.element_count > 0
+        assert len(weights) == 0
+
+    def test_set_weights_all_targets_with_deformerweights(self):
+        """Test set_weights accepts DeformerWeights when targets exist."""
+        base_mesh, _ = cmds.polySphere(name="set_all_weights_base", sx=4, sy=4)
+        target_mesh, _ = cmds.polySphere(name="set_all_weights_target", sx=4, sy=4)
+        cmds.move(0, 1, 0, target_mesh)
+
+        blendshape = cmds.blendShape(target_mesh, base_mesh, name="setAllWeightsBS")[0]
+        blendshape_node = BlendShape(blendshape)
+
+        original = blendshape_node.get_weights()
+        new_weights = DeformerWeights(
+            [0.25] * (original.element_count * original.channel_count),
+            channel_count=original.channel_count,
+            element_count=original.element_count,
+        )
+        blendshape_node.set_weights(new_weights)
+
+        retrieved = blendshape_node.get_weights()
+        assert all(value == pytest.approx(0.25, abs=0.01) for value in retrieved.weights)
+
+    def test_set_weights_no_targets_accepts_empty(self):
+        """Test set_weights ignores empty weights when no targets exist."""
+        base_mesh, _ = cmds.polySphere(name="set_weights_no_targets_base", sx=2, sy=2)
+        blendshape = cmds.blendShape(base_mesh, name="setWeightsNoTargetsBS")[0]
+        blendshape_node = BlendShape(blendshape)
+
+        blendshape_node.set_weights([])
+        blendshape_node.set_weights(
+            DeformerWeights([], channel_count=0, element_count=blendshape_node.get_base_weights().element_count)
+        )
+
+        with pytest.raises(ValueError, match="no targets"):
+            blendshape_node.set_weights([0.5])
+
+    def test_set_weights_raises_on_channel_or_element_mismatch(self):
+        """Test set_weights raises on DeformerWeights size mismatches."""
+        base_mesh, _ = cmds.polySphere(name="set_weights_mismatch_base", sx=2, sy=2)
+        target_mesh, _ = cmds.polySphere(name="set_weights_mismatch_target", sx=2, sy=2)
+        cmds.move(0, 1, 0, target_mesh)
+
+        blendshape = cmds.blendShape(target_mesh, base_mesh, name="setWeightsMismatchBS")[0]
+        blendshape_node = BlendShape(blendshape)
+
+        vertex_count = blendshape_node.get_weights().element_count
+        with pytest.raises(ValueError, match="Channel count"):
+            blendshape_node.set_weights(
+                DeformerWeights([0.2] * vertex_count, channel_count=2, element_count=vertex_count)
+            )
+
+        with pytest.raises(ValueError, match="Element count"):
+            blendshape_node.set_weights(
+                DeformerWeights([0.2] * vertex_count, channel_count=1, element_count=vertex_count + 1)
+            )
+
+    def test_set_base_weights_with_deformerweights(self):
+        """Test set_base_weights accepts DeformerWeights."""
+        base_mesh, _ = cmds.polySphere(name="set_base_dw_base", sx=2, sy=2)
+        target_mesh, _ = cmds.polySphere(name="set_base_dw_target", sx=2, sy=2)
+        cmds.move(0, 1, 0, target_mesh)
+
+        blendshape = cmds.blendShape(target_mesh, base_mesh, name="setBaseWeightsBS")[0]
+        blendshape_node = BlendShape(blendshape)
+
+        base_weights = blendshape_node.get_base_weights()
+        new_weights = DeformerWeights(
+            [0.9] * base_weights.element_count,
+            channel_count=1,
+            element_count=base_weights.element_count,
+        )
+        blendshape_node.set_base_weights(new_weights)
+
+        retrieved = blendshape_node.get_base_weights()
+        assert all(value == pytest.approx(0.9, abs=0.01) for value in retrieved.weights)
 
 
 class TestBlendShapeIndexAndName:
@@ -396,16 +502,25 @@ class TestBlendShapeGeometryInfo:
         assert idx == 0
         assert count > 0
 
+    def test_get_geometry_info_no_connected_geos_raises(self):
+        """Test _get_geometry_info raises RuntimeError if no geometry connected."""
+        # Create unbound blendshape
+        blendshape = BlendShape.create(name="unboundBS_geo_info")
+        with pytest.raises(RuntimeError, match="No geometry connected"):
+            blendshape._get_geometry_info()
+
 
 class TestBlendShapeWeightPlugs:
     """Tests for weight plug helpers."""
 
     def test_read_weights_returns_defaults_when_plug_none(self):
         """Test _read_weights returns default 1.0 weights when plug is None."""
+        from array import array
+
         blendshape = BlendShape.create()
         weights = blendshape._read_weights(None, 10)
 
-        assert weights == [1.0] * 10
+        assert weights == array('d', [1.0] * 10)
 
     def test_write_weights_raises_when_plug_none(self):
         """Test _write_weights raises RuntimeError when plug is None."""
@@ -432,6 +547,24 @@ class TestBlendShapeWeightPlugs:
             result = blendshape_node._get_weight_plug(0, target_id=0)
 
         assert result is None
+
+    def test_get_weight_plug_returns_plug_for_targets(self):
+        """Test _get_weight_plug returns a plug for base and target weights."""
+        base_mesh, _ = cmds.polySphere(name="plug_access_base")
+        target_mesh, _ = cmds.polySphere(name="plug_access_target")
+        cmds.move(0, 1, 0, target_mesh)
+
+        blendshape = cmds.blendShape(target_mesh, base_mesh, name="plugAccessBS")[0]
+        blendshape_node = BlendShape(blendshape)
+
+        geom_index, _vertex_count, _geo_name = blendshape_node._get_geometry_info()
+        base_plug = blendshape_node._get_weight_plug(geom_index, target_id=None)
+        target_plug = blendshape_node._get_weight_plug(geom_index, target_id=0)
+
+        assert base_plug is not None
+        assert target_plug is not None
+
+
 
 
 class TestBlendShapeSaveLoad:
@@ -481,3 +614,33 @@ class TestBlendShapeSaveLoad:
         blendshape_node.save_weights(str(output_file))
 
         assert output_file.exists()
+
+    def test_set_empty_weights_no_targets(self):
+        """Test set_weights with empty list/object and no targets returns early."""
+        base_mesh, _ = cmds.polySphere(name="empty_weights_base")
+        blendshape = BlendShape.create(geometry=base_mesh, name="emptyWeightsBS")
+
+        # Should not raise
+        blendshape.set_weights([])
+        blendshape.set_weights(DeformerWeights([], 0, 0))
+
+    def test_set_weights_raises_on_empty_with_no_targets_and_data(self):
+        """Test set_weights raises if data provided but no targets."""
+        base_mesh, _ = cmds.polySphere(name="empty_weights_raise_base")
+        blendshape = BlendShape.create(geometry=base_mesh, name="emptyWeightsRaiseBS")
+
+        with pytest.raises(ValueError, match="has no targets"):
+            blendshape.set_weights([1.0])
+
+    def test_set_base_weights_length_mismatch(self):
+        """Test set_base_weights raises on length mismatch."""
+        base_mesh, _ = cmds.polySphere(name="base_mismatch_base", sx=2, sy=2) # low vertex count
+        blendshape = BlendShape.create(geometry=base_mesh, name="baseMismatchBS")
+
+        with pytest.raises(ValueError, match="Weight length .* count"):
+            blendshape.set_base_weights([1.0, 1.0]) # Length 2, but sphere implies more vert
+
+        # Test with DeformerWeights mismatch
+        dw = DeformerWeights([1.0, 1.0], 1, 2)
+        with pytest.raises(ValueError, match="Element count .* count"):
+            blendshape.set_base_weights(dw)

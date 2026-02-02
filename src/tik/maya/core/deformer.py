@@ -11,17 +11,17 @@ from __future__ import annotations
 
 import array
 import tempfile
-
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Union
 
 from maya import cmds
 from maya.api import OpenMaya
+
 from tik.core import jsonio
+from .node import Node
 from ..core.apicommon import create_node_with_dg_modifier
 
-from .node import Node
 
 class Deformer(Node):
     """Base class for all deformer nodes."""
@@ -83,7 +83,7 @@ class Deformer(Node):
         """Create the weights object with the most secure but least efficient way."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir) / "temp_weights.json"
-            self._save_deformer_weights(temp_path, format="json")
+            self._save_deformer_weights(temp_path, format="JSON")
             weights = WeightsIO.load_json(temp_path)
         return weights
 
@@ -119,10 +119,8 @@ class DeformerWeights:
             element_count: Number of elements (vertices/CVs).
             channel_names: Optional list of channel names for reference.
         """
-        if isinstance(weights, array.array) and weights.typecode == "d":
-            self._weights = array.array("d", weights)
-        else:
-            self._weights = array.array("d", weights)
+
+        self._weights = array.array("d", weights)
         self._channel_count = channel_count
         self._element_count = element_count
         self._channel_names = list(channel_names) if channel_names else []

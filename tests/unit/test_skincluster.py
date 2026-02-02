@@ -12,6 +12,7 @@ from maya.api import OpenMaya
 import tik.maya.types.skincluster as skincluster_module
 from tik.maya.types.skincluster import SkinCluster
 from tik.maya.core.deformer import DeformerWeights
+from tik.maya.core.deformer import ShapeInfo, WeightLayer, WeightsIO
 
 
 def _create_joint_chain(prefix: str) -> List[str]:
@@ -54,6 +55,36 @@ def _build_weights(influence_count: int, vertex_count: int, primary: float) -> L
     if influence_count != 2:
         raise ValueError("This helper assumes exactly two influences.")
     return weights
+
+
+def _build_weights_io_for_mesh(mesh_transform: str, influence_names: List[str]) -> WeightsIO:
+    vertex_count = cmds.polyEvaluate(mesh_transform, vertex=True)
+    shape_info = ShapeInfo(
+        name=mesh_transform,
+        group=0,
+        stride=3,
+        size=vertex_count,
+        max_index=vertex_count - 1,
+        points={},
+    )
+
+    layers = []
+    for layer_index, influence_name in enumerate(influence_names):
+        points = {
+            vertex_index: 1.0 if layer_index == 0 else 0.0
+            for vertex_index in range(vertex_count)
+        }
+        layers.append(
+            WeightLayer(
+                shape=mesh_transform,
+                layer=layer_index,
+                default_value=0.0,
+                points=points,
+                influence=influence_name,
+            )
+        )
+
+    return WeightsIO(shapes=[shape_info], layers=layers)
 
 
 # === DeformerWeights Tests ===
@@ -438,4 +469,80 @@ def test_get_set_influence_weights_multiple(skincluster_setup: Dict[str, object]
     # Check a few sample vertices
     assert retrieved.get_channel_weights(0)[0] == pytest.approx(0.2, abs=1e-4)
     assert retrieved.get_channel_weights(1)[0] == pytest.approx(0.8, abs=1e-4)
+
+
+def test_create_errors_for_missing_args():
+    with pytest.raises(ValueError, match="geometry and influences must be provided"):
+        SkinCluster.create(geometry=None, influences=["joint1"])
+
+    with pytest.raises(ValueError, match="geometry and influences must be provided"):
+        SkinCluster.create(geometry="mesh", influences=None)
+
+
+def test_create_from_weights_object_and_file(tmp_path: Path):
+    joint_names = _create_joint_chain("weights")
+    mesh_data = _create_mesh("weights")
+
+    weights_object = _build_weights_io_for_mesh(mesh_data["transform"], joint_names)
+    created_skin = SkinCluster.create_from_weights_object(weights_object, name="weights_skin")
+    assert created_skin.exists()
+    assert set(created_skin.influences) == set(joint_names)
+
+    file_mesh_data = _create_mesh("weights_file")
+    file_weights = _build_weights_io_for_mesh(file_mesh_data["transform"], joint_names)
+    json_path = tmp_path / "skin_weights.json"
+    file_weights.save_json(json_path)
+
+    created_from_file = SkinCluster.create_from_file(json_path, name="weights_file_skin")
+    assert created_from_file.exists()
+    assert set(created_from_file.influences) == set(joint_names)
+
+
+def test_influence_weight_errors(skincluster_setup: Dict[str, object]):
+    skincluster = skincluster_setup["skincluster"]
+
+    with pytest.raises(TypeError, match="must be an int, str or list"):
+        skincluster.get_influence_weights({"bad": "type"})
+
+    with pytest.raises(TypeError, match="must be an int, str or list"):
+        skincluster.set_influence_weights({"bad": "type"}, [0.1])
+
+    with pytest.raises(ValueError, match="Weight length"):
+        skincluster.set_influence_weights([0, 1], [0.1])
+
+
+def test_create_unbound_skincluster():
+    """Test creating an unbound skinCluster (no geometry or influences)."""
+    # Should work but maybe name is required if no args? Implementation allows no args.
+    skin = SkinCluster.create(name="unbound_skin")
+    assert skin.exists()
+    assert cmds.nodeType(skin.name) == "skinCluster"
+    assert skin.vertex_count == 0
+
+
+def test_get_vertex_weights_no_geometry_raises(skincluster_setup: Dict[str, object]):
+    """Test get_vertex_weights raises RuntimeError if no geometry connected."""
+    skincluster = skincluster_setup["skincluster"]
+    skincluster.unbind(delete_history=True)
+
+    with pytest.raises(RuntimeError, match="No geometry connected"):
+        skincluster.get_vertex_weights([0])
+
+
+def test_set_vertex_weights_no_geometry_raises(skincluster_setup: Dict[str, object]):
+    """Test set_vertex_weights raises RuntimeError if no geometry connected."""
+    skincluster = skincluster_setup["skincluster"]
+    skincluster.unbind(delete_history=True)
+
+    with pytest.raises(RuntimeError, match="No geometry connected"):
+        skincluster.set_vertex_weights([0], [1.0])
+
+
+def test_get_geometry_dag_no_geometry_raises(skincluster_setup: Dict[str, object]):
+    """Test _get_geometry_dag_and_components raises if not connected."""
+    skincluster = skincluster_setup["skincluster"]
+    skincluster.unbind(delete_history=True)
+
+    with pytest.raises(RuntimeError, match="No geometry connected"):
+        skincluster._get_geometry_dag_and_components()
 

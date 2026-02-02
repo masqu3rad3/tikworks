@@ -1,5 +1,7 @@
 """SkinCluster type for Maya integration."""
+
 from functools import partial
+from array import array
 
 from typing import List, Optional, Union
 
@@ -13,26 +15,26 @@ from ..core.scene import proxy_wrapper
 from ..core.apicommon import create_node_with_dg_modifier
 
 
-
 @register("skinCluster")
 class SkinCluster(Deformer):
     """SkinCluster node type for Maya."""
+
     tm_skincluster = partial(proxy_wrapper, "skinCluster")
 
     @classmethod
     def create(
         cls,
-        geometry: str = None,
-        influences: List[str] = None,
-        name: Optional[str] = None,
+        geometry=None,
+        influences=None,
+        name=None,
         **kwargs,
     ) -> "SkinCluster":
         """Create a new skinCluster on geometry.
 
         Args:
-            geometry: The geometry to bind.
-            influences: List of influence objects (joints, transforms).
-            name: Optional name for the skinCluster node.
+            geometry (str or Node, optional): The geometry to bind.
+            influences (list, optional): List of influence objects (joints, transforms).
+            name (str or Node, optional): Optional name for the skinCluster node.
             **kwargs: Additional arguments passed to cmds.skinCluster.
 
         Returns:
@@ -45,8 +47,10 @@ class SkinCluster(Deformer):
 
         # if only one of the influences or geometry is None, raise an error
         if geometry is None or influences is None:
-            raise ValueError("To create skincluster with connections, geometry and influences must be provided.\n"
-                             "Alternatively, call SkinCluster.create() without geometry and influences to create an unbound skinCluster node.")
+            raise ValueError(
+                "To create skincluster with connections, geometry and influences must be provided.\n"
+                "Alternatively, call SkinCluster.create() without geometry and influences to create an unbound skinCluster node."
+            )
 
         default_kwargs = {
             "toSelectedBones": False,
@@ -60,8 +64,6 @@ class SkinCluster(Deformer):
         if name:
             default_kwargs["name"] = name
 
-        # skin_fn = partial(proxy_wrapper, "skinCluster")
-        # result = cmds.skinCluster(influences, geometry, **default_kwargs)
         result = cls.tm_skincluster(influences, geometry, **default_kwargs)
         skin_node = result[0] if isinstance(result, (list, tuple)) else result
         return skin_node
@@ -110,8 +112,11 @@ class SkinCluster(Deformer):
     @property
     def geometry(self) -> Optional[str]:
         """Return the first connected geometry shape name."""
-        geometries = self.tm_skincluster(self.name, query=True, geometry=True)
-        return geometries[0] if geometries else None
+        try:
+            geometries = self.tm_skincluster(self.name, query=True, geometry=True)
+            return geometries[0] if geometries else None
+        except RuntimeError:
+            return None
 
     @property
     def geometries(self) -> List[str]:
@@ -164,9 +169,7 @@ class SkinCluster(Deformer):
         """Return the MFnSkinCluster function set."""
         return OpenMayaAnim.MFnSkinCluster(self.m_obj)
 
-    def _get_geometry_dag_and_components(
-        self, geometry: Optional[str] = None
-    ) -> tuple:
+    def _get_geometry_dag_and_components(self, geometry: Optional[str] = None) -> tuple:
         """Get the DAG path and component for geometry vertices.
 
         Args:
@@ -294,9 +297,9 @@ class SkinCluster(Deformer):
 
     # python
     def get_influence_weights(
-            self,
-            influences: Union[int, str, List[Union[int, str]]],
-            geometry: Optional[str] = None,
+        self,
+        influences: Union[int, str, List[Union[int, str]]],
+        geometry: Optional[str] = None,
     ) -> DeformerWeights:
         """
         Return weights for the given influence(s) as a DeformerWeights container.
@@ -315,8 +318,7 @@ class SkinCluster(Deformer):
         elif isinstance(influences, list):
             requested = influences
         else:
-            raise TypeError(
-                "`influences` must be an int, str or list of them.")
+            raise TypeError("`influences` must be an int, str or list of them.")
 
         dag_path, vertex_component, skin_fn = self._get_geometry_dag_and_components(
             geometry
@@ -342,14 +344,14 @@ class SkinCluster(Deformer):
         vertex_count = self.vertex_count
 
         # Map logical influence index -> position in full_influence_indices
-        pos_map = {int(full_influence_indices[i]): i for i in
-                   range(full_influence_count)}
+        pos_map = {
+            int(full_influence_indices[i]): i for i in range(full_influence_count)
+        }
 
         # Determine positions for requested indices and collect channel names
         influence_dags = skin_fn.influenceObjects()
         name_map = {
-            int(skin_fn.indexForInfluenceObject(dag)): OpenMaya.MFnDagNode(
-                dag).name()
+            int(skin_fn.indexForInfluenceObject(dag)): OpenMaya.MFnDagNode(dag).name()
             for dag in influence_dags
         }
 
@@ -365,9 +367,9 @@ class SkinCluster(Deformer):
 
         selected_channel_count = len(selected_positions)
 
-        # Extract weights into vertex-major ordering for requested channels
-        flat_weights: List[float] = [0.0] * (
-                    vertex_count * selected_channel_count)
+        flat_weights: array = array(
+            "d", [0.0] * (vertex_count * selected_channel_count)
+        )
         for vertex_index in range(vertex_count):
             base_full = vertex_index * full_influence_count
             base_selected = vertex_index * selected_channel_count
@@ -384,11 +386,11 @@ class SkinCluster(Deformer):
         )
 
     def set_influence_weights(
-            self,
-            influences: Union[int, str, List[Union[int, str]]],
-            weights: Union[DeformerWeights, List[float]],
-            geometry: Optional[str] = None,
-            normalize: bool = True,
+        self,
+        influences: Union[int, str, List[Union[int, str]]],
+        weights: Union[DeformerWeights, List[float]],
+        geometry: Optional[str] = None,
+        normalize: bool = True,
     ) -> None:
         """
         Set weights for the given influence(s). Accepts a DeformerWeights (with
@@ -407,8 +409,7 @@ class SkinCluster(Deformer):
         elif isinstance(influences, list):
             requested = influences
         else:
-            raise TypeError(
-                "`influences` must be an int, str or list of them.")
+            raise TypeError("`influences` must be an int, str or list of them.")
 
         dag_path, vertex_component, skin_fn = self._get_geometry_dag_and_components(
             geometry
@@ -463,8 +464,7 @@ class SkinCluster(Deformer):
         # Convert to MDoubleArray and set weights (API will accept vertex-major ordering)
         weight_array = OpenMaya.MDoubleArray(flat_weights)
         skin_fn.setWeights(
-            dag_path, vertex_component, influence_indices_array, weight_array,
-            normalize
+            dag_path, vertex_component, influence_indices_array, weight_array, normalize
         )
 
     def get_weights(self, geometry: Optional[str] = None) -> DeformerWeights:
@@ -482,12 +482,11 @@ class SkinCluster(Deformer):
         weights, _ = skin_fn.getWeights(dag_path, vertex_component)
 
         influence_dags = skin_fn.influenceObjects()
-        influence_names = [
-            OpenMaya.MFnDagNode(dag).name() for dag in influence_dags
-        ]
+        influence_names = [OpenMaya.MFnDagNode(dag).name() for dag in influence_dags]
 
         return DeformerWeights(
-            list(weights),
+            # array("d", weights),
+            weights,
             channel_count=len(influence_dags),
             element_count=self.vertex_count,
             channel_names=influence_names,
@@ -550,12 +549,10 @@ class SkinCluster(Deformer):
         weights, _ = skin_fn.getWeights(dag_path, vertex_component)
 
         influence_dags = skin_fn.influenceObjects()
-        influence_names = [
-            OpenMaya.MFnDagNode(dag).name() for dag in influence_dags
-        ]
+        influence_names = [OpenMaya.MFnDagNode(dag).name() for dag in influence_dags]
 
         return DeformerWeights(
-            list(weights),
+            weights,
             channel_count=len(influence_dags),
             element_count=len(vertex_indices),
             channel_names=influence_names,
@@ -742,7 +739,6 @@ class SkinCluster(Deformer):
                 Valid values are: "index", "nearest", "barycentric", "bilinear", "over"
             **kwargs: Additional arguments for deformerWeights command.
         """
-        # file_dir, file_name = self.__split_path(file_path, validate=False)
 
         default_kwargs = {
             "ignoreName": True,
@@ -751,15 +747,6 @@ class SkinCluster(Deformer):
         default_kwargs.update(kwargs)
 
         self._load_deformer_weights(file_path, method=method, **default_kwargs)
-
-        # cmds.deformerWeights(
-        #     file_name,
-        #     path=file_dir,
-        #     im=True,
-        #     deformer=self.name,
-        #     method=method,
-        #     **default_kwargs,
-        # )
 
     def unbind(self, delete_history: bool = True) -> None:
         """Unbind the skinCluster from geometry.
