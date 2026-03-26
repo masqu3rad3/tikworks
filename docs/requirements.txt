@@ -34,7 +34,7 @@ pluggy==1.6.0
 Pygments==2.19.2
 pytest==9.0.2
 PyYAML==6.0.3
-requests==2.32.5
+requests==2.33.0
 roman==5.2
 roman-numerals==3.1.0
 roman-numerals-py==3.1.0
