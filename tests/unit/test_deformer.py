@@ -65,7 +65,7 @@ def test_deformer_create_and_split_path(tmp_path: Path) -> None:
     assert cmds.nodeType(deformer.name) == "blendShape"
 
     target_path = tmp_path / "weights" / "file.json"
-    file_dir, file_name = deformer._Deformer__split_path(target_path, validate=True)
+    file_dir, file_name = deformer._split_path(target_path, validate=True)
     assert Path(file_dir).exists()
     assert file_name == "file.json"
 

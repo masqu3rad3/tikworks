@@ -28,8 +28,8 @@ class BlendShape(Deformer):
 
         Args:
             geometry (str, optional): The geometry that will be applied to.
-            influences (list, optional): List of influence objects (joints, transforms).
-            name (str, optional): Optional name for the skinCluster node.
+            targets (list, optional): List of target geometry objects.
+            name (str, optional): Optional name for the blendShape node.
 
         Returns:
             BlendShape: The created BlendShape instance.
@@ -432,11 +432,6 @@ class BlendShape(Deformer):
                     f"Weight length {len(weights)} != {geo_name} count {count}"
                 )
             target_weights = list(weights)
-
-        if len(weights) != count:
-            raise ValueError(
-                f"Weight length {len(weights)} != {geo_name} count {count}"
-            )
 
         plug = self._get_weight_plug(
             idx, target_id=None
