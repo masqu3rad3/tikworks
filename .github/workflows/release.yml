@@ -1,0 +1,94 @@
+#
+# Release workflow for tikworks
+#
+
+name: Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: get_version
+        run: echo "version=$(cat VERSION)" >> $GITHUB_ENV
+
+      - name: Use version
+        run: echo "Releasing version ${{ env.version }}"
+
+      - name: Check if Release Tag Exists
+        id: check_tag
+        run: |
+          git fetch --tags
+          if git rev-parse "v${{ env.version }}" >/dev/null 2>&1; then
+            echo "Error: Tag v${{ env.version }} already exists."
+            exit 1
+          fi
+        shell: bash
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Create tikworks folder structure
+        run: |
+          mkdir -p release/tikworks
+          cp -r dist/* release/tikworks/
+          cp -r src/python/tik release/tikworks/
+          cp VERSION release/tikworks/
+
+      # --------------------------
+      # Build Sphinx Documentation
+      # --------------------------
+      - name: Install Sphinx
+        run: |
+          pip install sphinx furo
+
+      - name: Build Docs
+        run: |
+          cd docs
+          make html
+          mkdir -p ../release/tikworks/docs/build/html
+          cp -r build/html/* ../release/tikworks/docs/build/html/
+
+      # --------------------------
+      # Generate installer script
+      # --------------------------
+      - name: Generate installer
+        run: |
+          python package/package.py --generate-release-mod release/
+
+      # -----------------------
+      # Package and Release
+      # -----------------------
+      - name: Create distribution
+        run: |
+          cd release
+          zip -r tikworks-${{ env.version }}.zip tikworks/
+          cp tikworks-${{ env.version }}.zip ../
+          cd ..
+          zip -j tikworks-${{ env.version }}.zip tikworks-${{ env.version }}.zip LICENSE RELEASE_NOTES.md 2>/dev/null || true
+          zip -j tikworks-${{ env.version }}.zip release/dragAndDropMe.py 2>/dev/null || true
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: tikworks-${{ env.version }}.zip
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: v${{ env.version }}
+          name: v${{ env.version }}

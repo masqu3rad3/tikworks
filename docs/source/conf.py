@@ -25,7 +25,7 @@ extensions = [
     'autoapi.extension',
 ]
 
-autoapi_dirs = ['../../src/', '../../src/tik/core/', '../../src/tik/maya/', '../../src/tik/shared/']
+autoapi_dirs = ['../../src/python/', '../../src/python/tik/core/', '../../src/python/tik/maya/', '../../src/python/tik/shared/']
 autoapi_type = 'python'
 autoapi_ignore = ['*setup*', '*shiboken*', '*PySide2*', '*PySide6*', '*PyQt5*', '*PyQt6*', '*external/**/*']
 autoapi_file_patterns = ['*.py']
