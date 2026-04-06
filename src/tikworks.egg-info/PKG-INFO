@@ -1,0 +1,100 @@
+Metadata-Version: 2.4
+Name: tikworks
+Version: 0.1.0
+Summary: Tikworks core tools
+Author-email: Arda Kutlu <ardakutlu@gmail.com>
+Requires-Python: >3.10
+Description-Content-Type: text/markdown
+License-File: LICENCE
+Dynamic: license-file
+
+
+![Maya](https://img.shields.io/badge/Maya-2024+-blue)
+[![Build status](https://github.com/masqu3rad3/tikworks/actions/workflows/ci-unit-tests.yml/badge.svg)](https://github.com/masqu3rad3/tikworks/actions/workflows/ci-unit-tests.yml)
+[![Coverage](https://codecov.io/github/masqu3rad3/tikworks/graph/bundle/graph/badge.svg)](https://codecov.io/gh/masqu3rad3/tikworks)
+[![Documentation Status](https://readthedocs.org/projects/tikworks/badge/?version=latest)](https://tikworks.readthedocs.io/en/latest/?badge=latest)
+[![License](https://img.shields.io/github/license/masqu3rad3/tikworks)](https://github.com/masqu3rad3/tikworks/blob/main/LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10+-blue)](https://github.com/masqu3rad3/tikworks)
+[![PySide2](https://img.shields.io/badge/-PySide2-green)](https://github.com/masqu3rad3/tikworks)
+[![PySide6](https://img.shields.io/badge/-PySide6-green)](https://github.com/masqu3rad3/tikworks)
+
+
+# TikWorks
+----------
+
+An ecosystem of Python tools and frameworks for Autodesk Maya.
+
+> **Note:** This repository is under active development. APIs may change.
+
+## Overview
+
+TikWorks is a layered ecosystem where each package builds on the foundations below it:
+
+```
+tik.core        # semantic primitives
+↑
+tik.maya        # disciplined Maya wrapper
+↑
+tik.shared      # reusable infrastructure and UX
+↑
+tik.trigger     # rigging language and framework
+↑
+tik.tools       # user-facing tools and workflows
+```
+
+**tik.maya** is the foundational layer — a namespaced, Pythonic wrapper for `maya.cmds` that brings:
+
+- **UUID-based node tracking** — References stay valid after renames
+- **Object-oriented API** — Work with typed objects, not strings
+- **Less code, more clarity** — Common operations in fewer lines
+- **Type safety** — IDE autocomplete and meaningful errors
+
+## Quick Example
+
+```python
+import tik.maya as tm
+
+# Wrap existing nodes with automatic type resolution
+cube = tm.resolve("pCube1")  # Returns Transform
+
+# Properties for state
+cube.translate = (1, 2, 3)
+cube["visibility"].value = False
+
+# Methods for actions
+cube.freeze(translate=True, rotate=True)
+
+locator = tm.Locator.create(name="locator1")
+
+# Attribute connections with operators
+locator["translate"] >> cube["translate"]
+
+# Node references survive renames!
+cube.rename("myNewCube")
+cube.translate_x = 10  # Still works
+```
+
+## Documentation
+
+Full documentation is available at [Read the Docs](https://tikworks.readthedocs.io/).
+
+- [Why tik.maya?](https://tikworks.readthedocs.io/en/latest/tik_maya/why_tik_maya.html) — Benefits over raw `cmds`
+- [Quickstart](https://tikworks.readthedocs.io/en/latest/tik_maya/quickstart.html) — Get started in 5 minutes
+- [API Reference](https://tikworks.readthedocs.io/en/latest/autoapi/index.html) — Full class and method docs
+
+## The TikWorks Ecosystem
+
+- **tik.core** — Pure, domain-agnostic value objects
+- **tik.maya** — Disciplined Maya wrapper (active)
+- **tik.shared** — Cross-tool helpers and shared UI utilities
+- **tik.trigger** — Rigging framework (coming soon)
+- **tik.tools** — User-facing tools and workflows
+
+## Requirements
+
+- Autodesk Maya 2024+
+- Python 3.10+
+
+## License
+
+See LICENSE file for details.
