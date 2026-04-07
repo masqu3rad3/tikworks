@@ -58,7 +58,7 @@ def _find_module_classes(module) -> tuple[Optional[type[GuidesCore]], Optional[t
     return guides_cls, module_cls
 
 
-def _load_module_json(folder_path: Path, module_name: str) -> tuple[Optional[list], Optional[dict]]:
+def _load_module_json(folder_path: Path, module_name: str) -> tuple[Optional[dict], Optional[dict]]:
     """Load ui_definition.json and data.json from module folder.
 
     Args:
@@ -66,7 +66,7 @@ def _load_module_json(folder_path: Path, module_name: str) -> tuple[Optional[lis
         module_name: Name of the module.
 
     Returns:
-        Tuple of (ui_definition, data) or (None, None) if files don't exist.
+        Tuple of (ui_definition dict, data dict) or (None, None) if files don't exist.
     """
     ui_definition = None
     data = None
@@ -82,6 +82,27 @@ def _load_module_json(folder_path: Path, module_name: str) -> tuple[Optional[lis
         logger.debug("Loaded data for %s", module_name)
 
     return ui_definition, data
+
+
+def _create_uid(key: str, data: dict) -> UIDefinition:
+    """Create a UIDefinition from a ui_definition.json entry.
+
+    Args:
+        key: The settings key (from JSON dict key).
+        data: The settings dict with display_name, type, value, etc.
+
+    Returns:
+        A UIDefinition instance.
+    """
+    return UIDefinition(
+        key=key,
+        display_name=data.get("display_name", key),
+        setting_type=data.get("type", "string"),
+        value=data.get("value"),
+        items=data.get("items"),
+        min_value=data.get("min_value"),
+        max_value=data.get("max_value"),
+    )
 
 
 def _register_module_from_folder(module_dir: Path) -> bool:
@@ -136,7 +157,7 @@ def _register_module_from_folder(module_dir: Path) -> bool:
     # Store definition cache
     _MODULE_DEFINITIONS[module_name] = ModuleDefinition(
         name=module_name,
-        ui_definition=[UIDefinition(**ui) for ui in (ui_def_json or [])],
+        ui_definition=[_create_uid(k, v) for k, v in (ui_def_json or {}).items()],
         data=data_json or {},
     )
     _LOADED_MODULE_FOLDERS.add(module_name)

@@ -18,9 +18,9 @@ class TestActionsBaseTemplate:
 
         assert ActionCore is not None
 
-    def test_base_exports_uid_definition(self):
-        """Test that _base.py exports UIDefinition."""
-        from tik.trigger.actions._base import UIDefinition
+    def test_uid_definition_available_from_schemas(self):
+        """Test UIDefinition is available from tik.trigger.core.schemas."""
+        from tik.trigger.core.schemas import UIDefinition
 
         assert UIDefinition is not None
 
@@ -128,23 +128,21 @@ class TestFindModuleClasses:
 class TestLoadActionJson:
     """Tests for _load_action_json helper."""
 
-    def test_load_action_json_returns_tuple(self):
-        """Test _load_action_json returns tuple of (ui_def, defaults)."""
+    def test_load_action_json_returns_dict(self):
+        """Test _load_action_json returns ui_definition dict or None."""
         from tik.trigger.actions import _load_action_json
 
         with tempfile.TemporaryDirectory() as tmpdir:
             folder_path = Path(tmpdir)
             ui_def_path = folder_path / "ui_definition.json"
-            defaults_path = folder_path / "defaults.json"
 
             with open(ui_def_path, "w") as f:
-                json.dump([{"key": "test", "display_name": "Test", "setting_type": "string"}], f)
-            with open(defaults_path, "w") as f:
-                json.dump({"test": "value"}, f)
+                json.dump({"test_key": {"display_name": "Test", "type": "string", "value": "default"}}, f)
 
-            ui_def, defaults = _load_action_json(folder_path, "test_action")
-            assert ui_def is not None
-            assert defaults == {"test": "value"}
+            result = _load_action_json(folder_path, "test_action")
+            assert result is not None
+            assert isinstance(result, dict)
+            assert "test_key" in result
 
     def test_load_action_json_missing_files(self):
         """Test _load_action_json returns None for missing files."""
@@ -152,9 +150,8 @@ class TestLoadActionJson:
 
         with tempfile.TemporaryDirectory() as tmpdir:
             folder_path = Path(tmpdir)
-            ui_def, defaults = _load_action_json(folder_path, "test_action")
-            assert ui_def is None
-            assert defaults is None
+            result = _load_action_json(folder_path, "test_action")
+            assert result is None
 
 
 class TestLoadModuleJson:

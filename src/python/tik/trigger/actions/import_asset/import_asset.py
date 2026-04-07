@@ -19,12 +19,6 @@ class ImportAssetAction(ActionCore):
     """
 
     _action_name = "import_asset"
-    _defaults = {
-        "import_file_path": "",
-        "scale": 1.0,
-        "root_suffix": "",
-        "parent_under": "",
-    }
 
     def __init__(self, name: str | None = None) -> None:
         """Initialize the import asset action."""

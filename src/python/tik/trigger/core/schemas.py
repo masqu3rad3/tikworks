@@ -137,12 +137,11 @@ class ActionDefinition:
     Attributes:
         name: Unique action identifier.
         ui_definition: List of UI definitions for settings.
-        defaults: Default values for settings.
+          Each UIDefinition's value field serves as the default.
     """
 
     name: str
     ui_definition: list[UIDefinition] = field(default_factory=list)
-    defaults: dict = field(default_factory=dict)
 
 
 @dataclass

@@ -316,8 +316,11 @@ class TestActionDefinition:
         action_def = ActionDefinition(name="jointify")
         assert action_def.name == "jointify"
 
-    def test_action_definition_with_ui_and_defaults(self):
-        """Test ActionDefinition with UI definition and defaults."""
+    def test_action_definition_with_ui_definition(self):
+        """Test ActionDefinition with UI definition.
+
+        Default values come from UIDefinition.value fields, not a separate defaults dict.
+        """
         from tik.trigger.core.schemas import ActionDefinition, UIDefinition
 
         ui_def = UIDefinition(
@@ -329,10 +332,9 @@ class TestActionDefinition:
         action_def = ActionDefinition(
             name="jointify",
             ui_definition=[ui_def],
-            defaults={"radius": 1.0},
         )
         assert len(action_def.ui_definition) == 1
-        assert action_def.defaults["radius"] == 1.0
+        assert action_def.ui_definition[0].value == 1.0
 
 
 class TestModuleDefinition:

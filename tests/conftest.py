@@ -1,13 +1,57 @@
 """Pytest configuration for Maya tests."""
 
+import sys
+import types
 import pytest
 
 # IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
+_maya_available = False
+try:
+    import maya.standalone
+    _maya_available = True
+except ImportError:
+    pass
+
+
+def _create_mock_maya():
+    """Create a mock maya module for headless test environments."""
+    mock_maya = types.ModuleType("maya")
+    mock_maya.cmds = types.ModuleType("maya.cmds")
+    mock_maya.cmds.file = lambda *a, **k: ""
+    mock_maya.cmds.select = lambda *a, **k: None
+    mock_maya.standalone = types.ModuleType("maya.standalone")
+    mock_maya.standalone.initialize = lambda: None
+    mock_maya.standalone.uninitialize = lambda: None
+    mock_api = types.ModuleType("maya.api")
+    mock_api.OpenMaya = types.ModuleType("maya.api.OpenMaya")
+    mock_api.OpenMaya.MPxCommand = type("MPxCommand", (), {})
+    mock_maya.api = mock_api
+    sys.modules["maya"] = mock_maya
+    sys.modules["maya.cmds"] = mock_maya.cmds
+    sys.modules["maya.standalone"] = mock_maya.standalone
+    sys.modules["maya.api"] = mock_api
+    sys.modules["maya.api.OpenMaya"] = mock_api.OpenMaya
+    return mock_maya
+
+
+# Always create mock maya FIRST, before any real imports happen.
+# This ensures tik/__init__.py can import maya even in headless environments.
+if not _maya_available:
+    _create_mock_maya()
+
+
 @pytest.fixture(scope='session', autouse=True)
 def initialize():
-    """Initialize Maya standalone session before running tests."""
-    import maya.standalone
+    """Initialize Maya standalone session before running tests.
+
+    Only runs if Maya is available. Maya-independent tests (e.g. tik.trigger)
+    can run without Maya.
+    """
+    if not _maya_available:
+        yield
+        return
+
     try:
         maya.standalone.initialize()
     except RuntimeError:
@@ -15,12 +59,11 @@ def initialize():
         pass
     # Import tik.maya to ensure all node wrappers and the default factory are registered
     import tik.maya  # noqa: F401
-    from maya import cmds # noqa: F401
+    from maya import cmds  # noqa: F401
     yield
     maya.standalone.uninitialize()
 
 
-# make sure every test happens on a fresh scene
 @pytest.fixture(scope="function", autouse=True)
 def new_scene():
     """Reset Maya + tik.maya global state before/after each test.
@@ -28,7 +71,13 @@ def new_scene():
     Maya's selection, current scene, and tik.maya's registry/default-factory are
     all process-global. If they leak between tests, you can get order-dependent
     failures.
+
+    Only runs if Maya is available.
     """
+    if not _maya_available:
+        yield
+        return
+
     from maya import cmds
 
     # Fresh scene and empty selection

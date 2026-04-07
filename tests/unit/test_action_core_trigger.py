@@ -73,15 +73,23 @@ class TestActionCoreProperties:
         action = NamedAction()
         assert action.action_type == "my_named_action"
 
-    def test_ui_definition_empty_by_default(self):
-        """Test ui_definition property returns empty list by default."""
-        action = ConcreteAction()
-        assert action.ui_definition == []
+    def test_ui_definition_not_on_instance(self):
+        """Test ui_definition is not an instance property.
 
-    def test_defaults_empty_by_default(self):
-        """Test defaults property returns empty dict by default."""
+        In the new architecture, ui_definition comes from the registry
+        (via get_action_definition), not from the instance.
+        """
         action = ConcreteAction()
-        assert action.defaults == {}
+        assert not hasattr(action, "ui_definition")
+
+    def test_defaults_not_on_instance(self):
+        """Test defaults is not an instance property.
+
+        In the new architecture, default values come from
+        UIDefinition.value fields in the registry.
+        """
+        action = ConcreteAction()
+        assert not hasattr(action, "defaults")
 
 
 class TestActionCoreSettings:

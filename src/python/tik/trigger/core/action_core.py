@@ -40,7 +40,6 @@ class ActionCore(ABC):
     """
 
     _action_name: str = ""
-    _defaults: dict = {}
 
     def __init__(self, name: Optional[str] = None) -> None:
         """Initialize the action.
@@ -62,11 +61,6 @@ class ActionCore(ABC):
     def action_type(self) -> str:
         """Return the action type name used in registration."""
         return self._action_name or self.__class__.__name__
-
-    @property
-    def defaults(self) -> dict:
-        """Return the default settings for this action."""
-        return self._defaults.copy()
 
     @property
     def settings(self) -> dict:
@@ -92,8 +86,12 @@ class ActionCore(ABC):
         return self._settings.get(key, default)
 
     def reset_settings(self) -> None:
-        """Reset settings to default values."""
-        self._settings = self.defaults
+        """Reset settings to empty dict.
+
+        The UI layer should populate initial values from
+        ui_definition.json values via get_action_definition().
+        """
+        self._settings = {}
         self._feed_cache = None
 
     @abstractmethod

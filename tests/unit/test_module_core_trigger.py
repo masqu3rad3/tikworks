@@ -82,10 +82,14 @@ class TestGuidesCoreProperties:
         guides = ConcreteGuides()
         assert guides.module_name == ""
 
-    def test_ui_definition_empty_by_default(self):
-        """Test ui_definition property returns empty list by default."""
+    def test_ui_definition_not_on_instance(self):
+        """Test ui_definition is not an instance property.
+
+        In the new architecture, ui_definition comes from the registry
+        (via get_module_definition), not from the instance.
+        """
         guides = ConcreteGuides()
-        assert guides.ui_definition == []
+        assert not hasattr(guides, "ui_definition")
 
 
 class TestGuidesCoreGuideManagement:
@@ -260,11 +264,15 @@ class TestModuleCoreProperties:
         module = ConcreteModule(guides)
         assert module.guide_class is None
 
-    def test_ui_definition_empty_by_default(self):
-        """Test ui_definition property returns empty list by default."""
+    def test_ui_definition_not_on_instance(self):
+        """Test ui_definition is not an instance property.
+
+        In the new architecture, ui_definition comes from the registry
+        (via get_module_definition), not from the instance.
+        """
         guides = ConcreteGuides()
         module = ConcreteModule(guides)
-        assert module.ui_definition == []
+        assert not hasattr(module, "ui_definition")
 
 
 class TestModuleCoreSettings:
