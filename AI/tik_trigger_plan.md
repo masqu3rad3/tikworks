@@ -63,16 +63,16 @@ tikworks/src/python/tik/
 │   ├── actions/                       # Rig build actions (folder per action)
 │   │   ├── __init__.py             # Discovery + registry
 │   │   ├── _base.py               # ActionCore base template
-│   │   └── jointify/              # Example action folder
-│   │       ├── jointify.py        # JointifyAction : ActionCore
+│   │   └── import_asset/         # Example action folder
+│   │       ├── import_asset.py    # ImportAssetAction : ActionCore
 │   │       ├── ui_definition.json
 │   │       └── defaults.json
 │   │
 │   ├── modules/                      # Rig limb modules (folder per module)
 │   │   ├── __init__.py            # Discovery + registry
 │   │   ├── _base.py              # ModuleBase template
-│   │   └── bipedArm/             # Example module folder
-│   │       ├── bipedArm.py       # BipedArmGuide + BipedArmModule
+│   │   └── base/                 # Example module folder
+│   │       ├── base.py           # Guides + Base classes
 │   │       ├── ui_definition.json
 │   │       └── data.json          # Module data
 │   │
@@ -105,15 +105,15 @@ tikworks/src/python/tik/
 ### 1. Modules and Actions as Folders with Named .py Files
 
 ```
-actions/jointify/
-├── jointify.py        # Main action class
+actions/import_asset/
+├── import_asset.py    # Main action class
 ├── ui_definition.json # UI definition (optional)
 └── defaults.json       # Default values (optional)
 
-modules/bipedArm/
-├── bipedArm.py        # BipedArmGuide + BipedArmModule classes
+modules/base/
+├── base.py           # Guides + Base classes
 ├── ui_definition.json # (optional)
-└── data.json          # Module data (positions, segments, etc.)
+└── data.json          # Module data
 ```
 
 ### 2. Registry Decorator
@@ -399,15 +399,42 @@ for action_dir in actions_base.iterdir():  # Only direct children
 - Unit tests created in `tests/unit/test_*_trigger.py` (124 tests, all passing)
 
 ### Phase 2: Config System
-- [ ] Implement `config/defaults.json` - FACTORY_DEFAULTS (JSON)
-- [ ] Implement `config/settings.py`
-- [ ] Implement `config/io.py`
+- [x] Implement `config/defaults.json` - FACTORY_DEFAULTS (JSON)
+- [x] Implement `config/settings.py`
+- [x] Implement `config/io.py`
+
+**Completed:** April 2026
+- `config/io.py` - ConfigIO class for JSON I/O with error handling
+- `config/defaults.py` - FACTORY_DEFAULTS dictionary (synced with defaults.json)
+- `config/settings.py` - UserSettings class and trigger_settings singleton facade
+- Unit tests: `tests/unit/test_io_trigger.py` (18 tests), `tests/unit/test_settings_trigger.py` (35 tests)
 
 ### Phase 3: Plugin System
-- [ ] Implement `actions/_base.py`
-- [ ] Implement `actions/__init__.py` with corrected folder-based discovery
-- [ ] Implement `modules/__init__.py` with same pattern
-- [ ] Wire JSON file loading
+- [x] Implement `actions/_base.py`
+- [x] Implement `actions/__init__.py` with corrected folder-based discovery
+- [x] Implement `modules/__init__.py` with same pattern
+- [x] Wire JSON file loading
+
+**Completed:** April 2026
+- Corrected folder-based discovery (scans direct child directories only)
+- Each action/module folder must contain matching .py file (e.g., `jointify/jointify.py`)
+- Auto-discovers and registers actions/modules on import
+- Loads optional `ui_definition.json` and `defaults.json`/`data.json`
+- Unit tests: `tests/unit/test_discovery_trigger.py` (24 tests)
+
+### Example Action: import_asset
+- **Location:** `actions/import_asset/`
+- **Class:** `ImportAssetAction` (inherits ActionCore)
+- **Purpose:** Imports external files (.ma, .mb, .obj, .fbx, .abc, .usd) into Maya
+- **Settings:** file_path, scale, root_suffix, parent_under
+- **Pattern:** feed() validates file path, action() performs import
+
+### Example Module: base
+- **Location:** `modules/base/`
+- **Classes:** `Guides` (GuidesCore), `Base` (ModuleCore)
+- **Purpose:** Simplest module - creates a single root joint
+- **Settings:** build_controls
+- **Note:** Guides registered as `base_guide`, Module registered as `base`
 
 ### Phase 4: Session Management
 - [ ] Implement `session/io.py`

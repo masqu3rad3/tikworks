@@ -1,0 +1,8 @@
+{
+    "name": "base",
+    "description": "Base module with single root joint",
+    "members": ["Base"],
+    "properties": [],
+    "multi_guide": null,
+    "sided": false
+}

@@ -23,7 +23,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 
-from .schemas import GuideData, ModuleDefinition, UIDefinition
+from .schemas import GuideData, ModuleDefinition
 
 if TYPE_CHECKING:
     from .action_core import ActionCore
@@ -40,11 +40,9 @@ class GuidesCore(ABC):
 
     Attributes:
         _module_name: The module identifier this guide belongs to.
-        _ui_definition: List of UI definitions for guide settings.
     """
 
     _module_name: str = ""
-    _ui_definition: list[UIDefinition] = []
 
     def __init__(self, name: Optional[str] = None) -> None:
         """Initialize the guides.
@@ -66,11 +64,6 @@ class GuidesCore(ABC):
     def module_name(self) -> str:
         """Return the module name this guide belongs to."""
         return self._module_name
-
-    @property
-    def ui_definition(self) -> list[UIDefinition]:
-        """Return the UI definition for guide settings."""
-        return self._ui_definition
 
     @property
     def guides(self) -> list[GuideData]:
@@ -174,12 +167,10 @@ class ModuleCore(ABC):
 
     Attributes:
         _module_name: The module identifier.
-        _ui_definition: List of UI definitions for build settings.
         _guide_class: The corresponding GuidesCore subclass.
     """
 
     _module_name: str = ""
-    _ui_definition: list[UIDefinition] = []
     _guide_class: Optional[type[GuidesCore]] = None
 
     def __init__(self, guides: GuidesCore, name: Optional[str] = None) -> None:
@@ -209,11 +200,6 @@ class ModuleCore(ABC):
     def guide_class(self) -> Optional[type[GuidesCore]]:
         """Return the corresponding GuidesCore class for this module."""
         return self._guide_class
-
-    @property
-    def ui_definition(self) -> list[UIDefinition]:
-        """Return the UI definition for build settings."""
-        return self._ui_definition
 
     @property
     def settings(self) -> dict:

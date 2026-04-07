@@ -22,7 +22,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
-from .schemas import ActionDefinition, UIDefinition
+from .schemas import ActionDefinition
 
 logger = logging.getLogger(__name__)
 
@@ -36,12 +36,10 @@ class ActionCore(ABC):
     - action(): Performs the actual Maya operation
     - save_action(): Persists action configuration to session
 
-    Subclasses must implement feed() and action(). They should also define
-    a ui_definition property if they have configurable settings.
+    Subclasses must implement feed() and action().
     """
 
     _action_name: str = ""
-    _ui_definition: list[UIDefinition] = []
     _defaults: dict = {}
 
     def __init__(self, name: Optional[str] = None) -> None:
@@ -64,14 +62,6 @@ class ActionCore(ABC):
     def action_type(self) -> str:
         """Return the action type name used in registration."""
         return self._action_name or self.__class__.__name__
-
-    @property
-    def ui_definition(self) -> list[UIDefinition]:
-        """Return the UI definition for this action's settings panel.
-
-        Override this property in subclasses to define custom settings UI.
-        """
-        return self._ui_definition
 
     @property
     def defaults(self) -> dict:
