@@ -9,6 +9,7 @@ import os
 from typing import Any
 
 from tik.trigger.core import ActionCore, register_action
+from tik.trigger.core.exceptions import ActionFeedError, ActionExecutionError
 
 
 @register_action("import_asset")
@@ -40,8 +41,6 @@ class ImportAssetAction(ActionCore):
         Raises:
             ActionFeedError: If file path is empty or file doesn't exist.
         """
-        from tik.trigger.core.exceptions import ActionFeedError
-
         self.file_path = self.get_setting("import_file_path", "")
         self.scale = self.get_setting("scale", 1.0)
         self.root_suffix = self.get_setting("root_suffix", "")
@@ -87,8 +86,6 @@ class ImportAssetAction(ActionCore):
         elif ext in (".ma", ".mb"):
             return self._import_scene(file_path)
         else:
-            from tik.trigger.core.exceptions import ActionExecutionError
-
             raise ActionExecutionError(f"Unrecognized file format: {ext}")
 
     def save_action(self, feed_data: dict) -> dict:

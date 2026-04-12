@@ -26,7 +26,7 @@ from typing import Optional
 from tik.trigger.core.module_core import GuidesCore, ModuleCore
 from tik.trigger.core.registry import _MODULES_REGISTRY
 from tik.trigger.core.schemas import ModuleDefinition, UIDefinition
-from tik.trigger.config.io import ConfigIO
+from tik.core.jsonio import load as _json_load
 
 logger = logging.getLogger(__name__)
 
@@ -73,12 +73,12 @@ def _load_module_json(folder_path: Path, module_name: str) -> tuple[Optional[dic
 
     ui_def_path = folder_path / "ui_definition.json"
     if ui_def_path.exists():
-        ui_definition = ConfigIO._load_json(ui_def_path)
+        ui_definition = _json_load(ui_def_path)
         logger.debug("Loaded ui_definition for %s", module_name)
 
     data_path = folder_path / "data.json"
     if data_path.exists():
-        data = ConfigIO._load_json(data_path)
+        data = _json_load(data_path)
         logger.debug("Loaded data for %s", module_name)
 
     return ui_definition, data
@@ -205,6 +205,30 @@ def get_module_definition(name: str) -> Optional[ModuleDefinition]:
     return _MODULE_DEFINITIONS.get(name)
 
 
+def get_module_class(name: str) -> Optional[type[ModuleCore]]:
+    """Get the ModuleCore class for a module.
+
+    Args:
+        name: The module name.
+
+    Returns:
+        The ModuleCore subclass, or None if not found.
+    """
+    return _MODULES_REGISTRY.get(name)
+
+
+def get_guide_class(name: str) -> Optional[type[GuidesCore]]:
+    """Get the GuidesCore class for a module.
+
+    Args:
+        name: The module name.
+
+    Returns:
+        The GuidesCore subclass, or None if not found.
+    """
+    return _MODULES_REGISTRY.get(f"{name}_guide")
+
+
 def list_discovered_modules() -> list[str]:
     """Return list of all discovered module names.
 
@@ -220,5 +244,7 @@ _discovered = discover_modules()
 __all__ = [
     "discover_modules",
     "get_module_definition",
+    "get_module_class",
+    "get_guide_class",
     "list_discovered_modules",
 ]

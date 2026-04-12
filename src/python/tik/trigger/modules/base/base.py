@@ -8,6 +8,7 @@ Note: Module configuration is defined in data.json, not in Python code.
 from __future__ import annotations
 
 from tik.trigger.core import GuidesCore, ModuleCore, register_module
+from tik.trigger.core.exceptions import BuildError
 from tik.trigger.core.schemas import GuideData
 
 
@@ -78,8 +79,6 @@ class Base(ModuleCore):
         Creates a single root joint at the guide position.
         """
         if not self.validate_guides():
-            from tik.trigger.core.exceptions import BuildError
-
             raise BuildError("Cannot build base: no guides found.")
 
         self._built_controls = self.get_setting("build_controls", True)

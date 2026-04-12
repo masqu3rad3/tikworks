@@ -1,9 +1,16 @@
-"""Input/output operations for JSON configuration files."""
+"""JSON I/O utilities for tik.shared.
 
-import json
+Provides the IO base class for reading and writing JSON files.
+Delegates to tik.core.jsonio for actual I/O operations.
+"""
+
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 from typing import Any, Optional, Union
+
+from tik.core.jsonio import load as _json_load, save as _json_save
 
 LOG = logging.getLogger(__name__)
 
@@ -11,13 +18,18 @@ LOG = logging.getLogger(__name__)
 class IO:
     """Input/output class for JSON operations."""
 
-    def __init__(self, file_path: Union[str, Path]) -> None:
+    def __init__(
+        self,
+        file_path: Union[str, Path],
+        valid_extensions: Optional[list[str]] = None,
+    ) -> None:
         """Initialize the IO instance.
 
         Args:
             file_path: Path to the file. Must have extension.
+            valid_extensions: List of valid file extensions. Defaults to [".json"].
         """
-        self.valid_extensions = [".json"]
+        self.valid_extensions = valid_extensions or [".json"]
         self.file_path: Optional[Path] = None
         self.set_file_path(file_path)
 
@@ -25,12 +37,16 @@ class IO:
         """Set the file path.
 
         Args:
-            new_path: File path to be set.
+            new_path: File path to be set. Can be None to clear the path.
 
         Raises:
             Exception: If the extension is not defined.
             Exception: If the extension is not among valid extensions.
         """
+        if new_path is None:
+            self.file_path = None
+            return
+
         path = Path(new_path)
         ext = path.suffix
 
@@ -98,14 +114,11 @@ class IO:
         Raises:
             Exception: If the file is not following JSON standards.
         """
-        path = Path(file_path)
         try:
-            with path.open("r", encoding="utf-8") as fp_path:
-                data = json.load(fp_path)
-                return data
-        except ValueError:
-            LOG.error("Corrupted file => %s", path)
-            raise Exception(f"Corrupted file => {path}")
+            return _json_load(file_path)
+        except Exception as e:
+            LOG.error("Corrupted file => %s", file_path)
+            raise Exception(f"Corrupted file => {file_path}") from e
 
     @staticmethod
     def file_exists(file_path: Union[str, Path]) -> bool:
@@ -127,10 +140,7 @@ class IO:
             data: Data to write into JSON file.
             file_path: Path to the file.
         """
-        path = Path(file_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8") as fp_path:
-            json.dump(data, fp_path, indent=4)
+        _json_save(file_path, data)
 
     @staticmethod
     def folder_check(checkpath: Union[str, Path]) -> Path:
@@ -146,3 +156,20 @@ class IO:
         base_folder = path.parent if path.suffix else path
         base_folder.mkdir(parents=True, exist_ok=True)
         return path
+
+
+def ensure_extension(file_path: Path, extension: str) -> Path:
+    """Ensure a file path has the correct extension.
+
+    Args:
+        file_path: The file path to check.
+        extension: The expected extension (e.g., '.trg').
+
+    Returns:
+        The file path with the correct extension.
+    """
+    if not file_path.suffix:
+        return file_path.with_suffix(extension)
+    if file_path.suffix != extension:
+        return file_path.with_suffix(extension)
+    return file_path

@@ -437,9 +437,25 @@ for action_dir in actions_base.iterdir():  # Only direct children
 - **Note:** Guides registered as `base_guide`, Module registered as `base`
 
 ### Phase 4: Session Management
-- [ ] Implement `session/io.py`
-- [ ] Implement `session/guide_session.py`
-- [ ] Implement `session/action_session.py`
+- [x] Implement `session/io.py`
+- [x] Implement `session/guide_session.py`
+- [x] Implement `session/action_session.py`
+- [x] Create `session/__init__.py` with public exports
+- [x] Add `get_module_class`, `get_guide_class` to modules/__init__.py
+- [x] Add `get_action_class` to actions/__init__.py
+- [x] Create unit tests for session module
+
+**Session Architecture:**
+
+| Class | Purpose |
+|-------|---------|
+| `GuideSession` | Manages guide creation workflow: `create_guides()`, `collect_guides()`, `save()`, `load()`, `test_build()` |
+| `ActionSession` | Manages action pipeline: `add_action()`, `run_all_actions()`, `save()`, `load()` |
+| `IO` | JSON file I/O handler with extension enforcement |
+
+**Extensions:**
+- `.trg` - Guide session files
+- `.tra` - Action session files
 
 ### Phase 5: API Layer
 - [ ] Implement `api/actions.py`
@@ -466,3 +482,6 @@ for action_dir in actions_base.iterdir():  # Only direct children
 2. Actions/modules auto-discovered from folders
 3. `ui_definition.json` generates Qt UI via SettingsLayout
 4. Session saves/loads with dataclass schema
+5. `from tik.trigger.session import GuideSession, ActionSession`
+6. `GuideSession.create_guides()`, `save()`, `load()`, `test_build()`
+7. `ActionSession.add_action()`, `run_all_actions()`, `save()`, `load()`

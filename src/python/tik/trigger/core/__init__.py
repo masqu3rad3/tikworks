@@ -6,6 +6,7 @@ This package contains the DCC-agnostic foundation for the trigger system:
 - Registry decorators: @register_action, @register_module
 - Schemas: Dataclasses for typed data
 - Exceptions: Custom exception hierarchy
+- IO: Session file I/O handler extending tik.shared.io.IO
 """
 
 from tik.trigger.core.action_core import ActionCore
@@ -25,6 +26,7 @@ from tik.trigger.core.exceptions import (
     SessionSaveError,
     TriggerError,
 )
+from tik.trigger.core.io import IO, GUIDE_SESSION_EXT, ACTION_SESSION_EXT
 from tik.trigger.core.module_core import GuidesCore, ModuleCore
 from tik.trigger.core.registry import (
     clear_registries,
@@ -53,6 +55,10 @@ __all__ = [
     "ActionCore",
     "ModuleCore",
     "GuidesCore",
+    # IO
+    "IO",
+    "GUIDE_SESSION_EXT",
+    "ACTION_SESSION_EXT",
     # Registry
     "register_action",
     "register_module",

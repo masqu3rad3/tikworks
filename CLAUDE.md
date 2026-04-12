@@ -38,9 +38,9 @@ Maya API wrapper that "feels like Python, behaves like Maya."
 ### tik.trigger (IN DEVELOPMENT)
 Next-generation rigging framework built on tik.maya.
 - **Location:** `src/tik/trigger/`
-- **Status:** Phase 1 Foundation complete (April 2026)
+- **Status:** Phase 4 Session Management complete (April 2026)
 - **Key influences:** tik_manager4 UI patterns, labelmatic config/core separation
-- **Current implementation:** Core foundation with exceptions, registry, schemas, ActionCore, ModuleCore, GuidesCore
+- **Current implementation:** Core foundation + actions + modules + session management
 
 ## Important Patterns
 
@@ -86,6 +86,7 @@ Key decisions:
 - **JSON configs** for UI definitions and defaults
 - **Dataclasses** for typed session data (`core/schemas.py`)
 - **DCC-agnostic core** — `core/` imports no Maya modules
+- **Session management** — GuideSession and ActionSession for save/load workflows
 
 ## tik.trigger Tests
 
@@ -95,6 +96,7 @@ Tests for tik.trigger follow naming convention `test_<module>_trigger.py`:
 - `tests/unit/test_schemas_trigger.py` — Dataclass tests
 - `tests/unit/test_action_core_trigger.py` — ActionCore base class tests
 - `tests/unit/test_module_core_trigger.py` — ModuleCore/GuidesCore tests
+- `tests/unit/test_session_trigger.py` — Session management tests
 
 ## Getting Help
 

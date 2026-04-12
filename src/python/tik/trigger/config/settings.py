@@ -16,8 +16,9 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional, Union
 
+from tik.shared.io import IO
+
 from .defaults import FACTORY_DEFAULTS
-from .io import ConfigIO
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class UserSettings:
             path = path.with_suffix(".json")
 
         self._file_path: Path = path
-        self._io: ConfigIO = ConfigIO(self._file_path)
+        self._io: IO = IO(self._file_path)
         self._original_value: dict = {}
         self._current_value: dict = {}
         self._fallback: Optional[Path] = None
@@ -76,7 +77,7 @@ class UserSettings:
     def _load(self) -> None:
         """Load settings from file or use empty dict if file doesn't exist."""
         data = self._io.read()
-        if data is not None:
+        if data is not False:
             self._original_value = dict(data)
             self._current_value = dict(data)
         else:
@@ -188,7 +189,7 @@ class UserSettings:
         """Use the fallback file to initialize settings."""
         if self._fallback and self._fallback.exists():
             data = self._io.read(self._fallback)
-            if data is not None:
+            if data is not False:
                 self._original_value = dict(data)
                 self._current_value = dict(data)
                 self.save(force=True)

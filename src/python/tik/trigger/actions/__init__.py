@@ -26,7 +26,7 @@ from typing import Optional
 from tik.trigger.core.action_core import ActionCore
 from tik.trigger.core.registry import _ACTIONS_REGISTRY
 from tik.trigger.core.schemas import ActionDefinition, UIDefinition
-from tik.trigger.config.io import ConfigIO
+from tik.core.jsonio import load as _json_load
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def _load_action_json(folder_path: Path, action_name: str) -> Optional[dict]:
     """
     ui_def_path = folder_path / "ui_definition.json"
     if ui_def_path.exists():
-        ui_definition = ConfigIO._load_json(ui_def_path)
+        ui_definition = _json_load(ui_def_path)
         logger.debug("Loaded ui_definition for %s", action_name)
         return ui_definition
     return None
@@ -184,6 +184,18 @@ def get_action_definition(name: str) -> Optional[ActionDefinition]:
     return _ACTION_DEFINITIONS.get(name)
 
 
+def get_action_class(name: str) -> Optional[type[ActionCore]]:
+    """Get the ActionCore class for an action.
+
+    Args:
+        name: The action name.
+
+    Returns:
+        The ActionCore subclass, or None if not found.
+    """
+    return _ACTIONS_REGISTRY.get(name)
+
+
 def list_discovered_actions() -> list[str]:
     """Return list of all discovered action names.
 
@@ -199,5 +211,6 @@ _discovered = discover_actions()
 __all__ = [
     "discover_actions",
     "get_action_definition",
+    "get_action_class",
     "list_discovered_actions",
 ]

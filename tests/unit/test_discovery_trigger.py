@@ -243,11 +243,11 @@ class TestRegisterModuleFromFolder:
 
 
 class TestConfigIOJsonLoading:
-    """Tests for ConfigIO JSON loading functionality."""
+    """Tests for JSON loading functionality (now uses tik.core.jsonio)."""
 
     def test_load_json_with_ui_definition_format(self):
         """Test loading ui_definition.json format."""
-        from tik.trigger.config.io import ConfigIO
+        from tik.core.jsonio import load
 
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir) / "ui_definition.json"
@@ -258,13 +258,13 @@ class TestConfigIOJsonLoading:
             with open(file_path, "w") as f:
                 json.dump(data, f)
 
-            result = ConfigIO._load_json(file_path)
+            result = load(file_path)
             assert result == data
             assert len(result) == 2
 
     def test_load_json_with_defaults_format(self):
         """Test loading defaults.json format."""
-        from tik.trigger.config.io import ConfigIO
+        from tik.core.jsonio import load
 
         with tempfile.TemporaryDirectory() as tmpdir:
             file_path = Path(tmpdir) / "defaults.json"
@@ -272,7 +272,7 @@ class TestConfigIOJsonLoading:
             with open(file_path, "w") as f:
                 json.dump(data, f)
 
-            result = ConfigIO._load_json(file_path)
+            result = load(file_path)
             assert result == data
 
 
