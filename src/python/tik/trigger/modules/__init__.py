@@ -1,9 +1,9 @@
 """Modules discovery and registry for tik.trigger.
 
-This module implements corrected folder-based discovery for modules:
+This module implements folder-based discovery for modules:
 1. Scans only direct child directories of the modules folder
 2. Each module folder must contain a .py file matching the folder name
-3. Registers both GuidesCore and ModuleCore subclasses
+3. Registers RigModule subclasses (unified guide + build class)
 
 Example folder structure:
     modules/
@@ -21,12 +21,15 @@ import importlib
 import inspect
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
-from tik.trigger.core.module_core import GuidesCore, ModuleCore
+from tik.trigger.core.rig_module import RigModule
 from tik.trigger.core.registry import _MODULES_REGISTRY
 from tik.trigger.core.schemas import ModuleDefinition, UIDefinition
 from tik.core.jsonio import load as _json_load
+
+if TYPE_CHECKING:
+    pass  # RigModule is imported at module level for subclasses
 
 logger = logging.getLogger(__name__)
 
@@ -35,27 +38,25 @@ _MODULE_DEFINITIONS: dict[str, ModuleDefinition] = {}
 _LOADED_MODULE_FOLDERS: set[str] = set()
 
 
-def _find_module_classes(module) -> tuple[Optional[type[GuidesCore]], Optional[type[ModuleCore]]]:
-    """Find GuidesCore and ModuleCore subclasses in a module.
+def _find_module_classes(module) -> Optional[type[RigModule]]:
+    """Find RigModule subclass in a module.
 
     Args:
         module: The module to search.
 
     Returns:
-        Tuple of (GuidesCore subclass, ModuleCore subclass) or (None, None).
+        The RigModule subclass found, or None.
     """
-    guides_cls = None
-    module_cls = None
+    rig_module_cls = None
 
     for name, obj in inspect.getmembers(module, inspect.isclass):
-        if obj is GuidesCore or obj is ModuleCore:
+        if obj is RigModule:
             continue
-        if issubclass(obj, GuidesCore):
-            guides_cls = obj
-        elif issubclass(obj, ModuleCore):
-            module_cls = obj
+        if issubclass(obj, RigModule):
+            rig_module_cls = obj
+            break
 
-    return guides_cls, module_cls
+    return rig_module_cls
 
 
 def _load_module_json(folder_path: Path, module_name: str) -> tuple[Optional[dict], Optional[dict]]:
@@ -133,22 +134,18 @@ def _register_module_from_folder(module_dir: Path) -> bool:
         logger.error("Failed to import module '%s': %s", module_name, e)
         return False
 
-    # Find module classes
-    guides_cls, module_cls = _find_module_classes(module)
-    if guides_cls is None and module_cls is None:
+    # Find module class (unified RigModule)
+    rig_module_cls = _find_module_classes(module)
+    if rig_module_cls is None:
         logger.warning(
-            "No GuidesCore or ModuleCore subclass found in module '%s', skipping",
+            "No RigModule subclass found in module '%s', skipping",
             module_name,
         )
         return False
 
     # Register in the global registry (if not already registered via decorator)
-    if guides_cls is not None and f"{module_name}_guide" not in _MODULES_REGISTRY:
-        _MODULES_REGISTRY[f"{module_name}_guide"] = guides_cls
-        logger.debug("Auto-registered guides: %s", f"{module_name}_guide")
-
-    if module_cls is not None and module_name not in _MODULES_REGISTRY:
-        _MODULES_REGISTRY[module_name] = module_cls
+    if module_name not in _MODULES_REGISTRY:
+        _MODULES_REGISTRY[module_name] = rig_module_cls
         logger.debug("Auto-registered module: %s", module_name)
 
     # Load JSON definitions
@@ -169,7 +166,7 @@ def discover_modules() -> list[str]:
     """Discover and register all modules in the modules folder.
 
     This scans only direct child directories (not nested folders) and
-    registers any valid GuidesCore/ModuleCore subclasses found.
+    registers any valid RigModule subclasses found.
 
     Returns:
         List of registered module names.
@@ -205,28 +202,16 @@ def get_module_definition(name: str) -> Optional[ModuleDefinition]:
     return _MODULE_DEFINITIONS.get(name)
 
 
-def get_module_class(name: str) -> Optional[type[ModuleCore]]:
-    """Get the ModuleCore class for a module.
+def get_module_class(name: str) -> Optional[type[RigModule]]:
+    """Get the RigModule class for a module.
 
     Args:
         name: The module name.
 
     Returns:
-        The ModuleCore subclass, or None if not found.
+        The RigModule subclass, or None if not found.
     """
     return _MODULES_REGISTRY.get(name)
-
-
-def get_guide_class(name: str) -> Optional[type[GuidesCore]]:
-    """Get the GuidesCore class for a module.
-
-    Args:
-        name: The module name.
-
-    Returns:
-        The GuidesCore subclass, or None if not found.
-    """
-    return _MODULES_REGISTRY.get(f"{name}_guide")
 
 
 def list_discovered_modules() -> list[str]:
@@ -245,6 +230,5 @@ __all__ = [
     "discover_modules",
     "get_module_definition",
     "get_module_class",
-    "get_guide_class",
     "list_discovered_modules",
 ]

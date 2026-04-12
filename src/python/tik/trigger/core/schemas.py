@@ -157,3 +157,23 @@ class ModuleDefinition:
     name: str
     ui_definition: list[UIDefinition] = field(default_factory=list)
     data: dict = field(default_factory=dict)
+
+
+@dataclass
+class ConnectionData:
+    """Serialized module connection for session persistence.
+
+    Represents a socket-to-plug connection between two modules
+    that can be saved and restored during session load.
+
+    Attributes:
+        parent_module: Instance ID of the module providing the plug.
+        parent_plug: Name of the plug on the parent module.
+        child_module: Instance ID of the module receiving the connection.
+        child_socket: Name of the socket on the child module.
+    """
+
+    parent_module: str
+    parent_plug: str
+    child_module: str
+    child_socket: str

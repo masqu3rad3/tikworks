@@ -14,14 +14,14 @@ from .exceptions import DuplicateRegistrationError, NotFoundError
 
 if TYPE_CHECKING:
     from .action_core import ActionCore
-    from .module_core import ModuleCore
+    from .rig_module import RigModule
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
 _ACTIONS_REGISTRY: dict[str, Type[ActionCore]] = {}
-_MODULES_REGISTRY: dict[str, Type[ModuleCore]] = {}
+_MODULES_REGISTRY: dict[str, Type[RigModule]] = {}
 
 
 def register_action(name: str) -> Callable[[Type[T]], Type[T]]:
@@ -97,7 +97,7 @@ def get_action(name: str) -> Type[ActionCore]:
     return _ACTIONS_REGISTRY[name]
 
 
-def get_module(name: str) -> Type[ModuleCore]:
+def get_module(name: str) -> Type[RigModule]:
     """Retrieve a registered module class by name.
 
     Args:

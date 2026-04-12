@@ -1,5 +1,11 @@
 """ModuleCore and GuidesCore base classes for tik.trigger modules.
 
+.. deprecated::
+    GuidesCore and ModuleCore are deprecated. Use the unified RigModule class
+    in core/rig_module.py instead. RigModule combines guide creation and rig
+    building in a single class with socket/plug support for inter-module
+    connections.
+
 Modules represent rig building blocks (like biped arms, spines, legs) that
 have both a guide phase (where the user positions guides in the scene) and
 a build phase (where the actual rig is constructed from those guides).
@@ -9,17 +15,15 @@ a build phase (where the actual rig is constructed from those guides).
 
 Example:
     @register_module("bipedArm")
-    class BipedArmGuide(GuidesCore):
+    class BipedArmModule(RigModule):
         ...
 
-    @register_module("bipedArm")
-    class BipedArmModule(ModuleCore):
-        ...
 """
 
 from __future__ import annotations
 
 import logging
+import warnings
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 
@@ -29,6 +33,11 @@ if TYPE_CHECKING:
     from .action_core import ActionCore
 
 logger = logging.getLogger(__name__)
+
+
+def _deprecated(msg: str) -> None:
+    """Emit a deprecation warning."""
+    warnings.warn(msg, DeprecationWarning, stacklevel=3)
 
 
 class GuidesCore(ABC):
@@ -50,6 +59,7 @@ class GuidesCore(ABC):
         Args:
             name: Optional custom name for this guide instance.
         """
+        _deprecated("GuidesCore is deprecated. Use RigModule instead.")
         self._name = name or self.__class__.__name__
         self._guides: list[GuideData] = []
         self._selected_guide: Optional[int] = None
@@ -180,6 +190,7 @@ class ModuleCore(ABC):
             guides: The guides instance containing guide configuration.
             name: Optional custom name for this module instance.
         """
+        _deprecated("ModuleCore is deprecated. Use RigModule instead.")
         self._name = name or self.__class__.__name__
         self._guides = guides
         self._settings: dict = {}

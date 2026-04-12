@@ -2,9 +2,10 @@
 
 This package contains the DCC-agnostic foundation for the trigger system:
 - ActionCore: Base class for actions
-- ModuleCore/GuidesCore: Base classes for modules
+- RigModule: Unified base class for modules (guide + build)
 - Registry decorators: @register_action, @register_module
 - Schemas: Dataclasses for typed data
+- Socket/Plug: Connection point data classes
 - Exceptions: Custom exception hierarchy
 - IO: Session file I/O handler extending tik.shared.io.IO
 """
@@ -39,9 +40,11 @@ from tik.trigger.core.registry import (
     register_action,
     register_module,
 )
+from tik.trigger.core.rig_module import RigModule
 from tik.trigger.core.schemas import (
     ActionDefinition,
     ActionInstanceData,
+    ConnectionData,
     GuideData,
     ModuleDefinition,
     ModuleInstanceData,
@@ -49,12 +52,19 @@ from tik.trigger.core.schemas import (
     SessionMetadata,
     UIDefinition,
 )
+from tik.trigger.core.socket_data import JointType, ModuleConnectors, Plug, Socket
 
 __all__ = [
     # Base classes
     "ActionCore",
     "ModuleCore",
     "GuidesCore",
+    "RigModule",
+    # Connection points
+    "Plug",
+    "Socket",
+    "ModuleConnectors",
+    "JointType",
     # IO
     "IO",
     "GUIDE_SESSION_EXT",
@@ -78,6 +88,7 @@ __all__ = [
     "UIDefinition",
     "ActionDefinition",
     "ModuleDefinition",
+    "ConnectionData",
     # Exceptions
     "TriggerError",
     "RegistryError",

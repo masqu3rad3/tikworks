@@ -153,14 +153,14 @@ class TestActionSessionInit:
 
 
 class TestGuideSessionCollectGuides:
-    """Tests for GuideSession.collect_guides()."""
+    """Tests for GuideSession._collect_guides()."""
 
     def test_collect_guides_empty_session(self):
         """Test collecting guides from empty session."""
         from tik.trigger.session.guide_session import GuideSession
 
         session = GuideSession()
-        data = session.collect_guides()
+        data = session._collect_guides()
         assert data == []
 
 

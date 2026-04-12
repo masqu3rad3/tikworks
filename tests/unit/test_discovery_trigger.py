@@ -114,15 +114,14 @@ class TestFindActionClass:
 class TestFindModuleClasses:
     """Tests for the _find_module_classes helper."""
 
-    def test_find_module_classes_returns_tuple(self):
-        """Test that _find_module_classes returns tuple of classes."""
+    def test_find_module_classes_returns_class_or_none(self):
+        """Test that _find_module_classes returns RigModule class or None."""
         from tik.trigger.modules import _find_module_classes
 
         mock_module = MagicMock()
-        # This will return (None, None) since there are no real module classes
+        # This will return None since there are no real module classes
         result = _find_module_classes(mock_module)
-        assert isinstance(result, tuple)
-        assert len(result) == 2
+        assert result is None
 
 
 class TestLoadActionJson:
