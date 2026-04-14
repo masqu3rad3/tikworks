@@ -245,11 +245,14 @@ class GuideSession:
             modules_data: List of module instance dictionaries
                 from a previously saved session.
         """
+        from maya import cmds
+
         # Clear existing modules first
         self.clear()
 
         from tik.trigger.modules import get_module_class
 
+        # First pass: create all module instances and guides
         for module_data in modules_data:
             module_type = module_data["module_type"]
             instance_id = module_data["instance_id"]
@@ -279,9 +282,24 @@ class GuideSession:
 
             # Create the actual Maya nodes
             module.create_guides()
+            # Sync saved positions to scene
+            module.sync_guides_to_scene()
             self._modules[instance_id] = module
 
             logger.info("Rebuilt guides for module: %s (%s)", instance_id, module_type)
+
+        # Second pass: apply parent relationships from saved data
+        for module_data in modules_data:
+            guides_list = module_data.get("guides", [])
+            for gd in guides_list:
+                if gd.get("parent") and cmds.objExists(gd["name"]):
+                    parent_name = gd["parent"]
+                    if cmds.objExists(parent_name):
+                        # Check if already parented correctly
+                        current_parent = cmds.listRelatives(gd["name"], parent=True, type="joint")
+                        if not current_parent or current_parent[0] != parent_name:
+                            cmds.parent(gd["name"], parent_name)
+                            logger.debug("Re-parented %s under %s", gd["name"], parent_name)
 
     def _restore_connections(self, connections_data: list[dict]) -> None:
         """Restore module connections from saved data.
@@ -411,3 +429,147 @@ class GuideSession:
         if not module:
             return None
         return module.get_build_data()
+
+    def load_from_dag(self, root_joint: str, reset_scene: bool = False) -> list[dict]:
+        """Load module hierarchy from existing Maya DAG starting at root_joint.
+
+        This reads guide joints from an existing Maya hierarchy (created manually
+        or from another source) and reconstructs the module hierarchy.
+
+        The guides must already exist in Maya with proper module identification
+        attributes (moduleType, jointRole, moduleInstance).
+
+        Args:
+            root_joint: Name of the root joint to start from.
+            reset_scene: If True, clear existing modules before loading.
+
+        Returns:
+            List of module instance dictionaries representing the hierarchy.
+        """
+        from maya import cmds
+        from tik.trigger.core.module_registry import (
+            MODULE_TYPE_ATTR,
+            JOINT_ROLE_ATTR,
+            MODULE_INSTANCE_ATTR,
+            get_module,
+        )
+
+        if reset_scene:
+            self.clear()
+
+        hierarchy = []
+
+        def traverse(joint: str) -> Optional[dict]:
+            """Recursively traverse DAG and identify modules."""
+            if not cmds.objExists(joint):
+                return None
+
+            # Check if this joint has module identification attributes
+            if not cmds.objExists(f"{joint}.{MODULE_TYPE_ATTR}"):
+                return None
+
+            module_type = cmds.getAttr(f"{joint}.{MODULE_TYPE_ATTR}")
+            instance_name = cmds.getAttr(f"{joint}.{MODULE_INSTANCE_ATTR}") if cmds.objExists(f"{joint}.{MODULE_INSTANCE_ATTR}") else joint
+
+            registry = get_module(module_type)
+            if not registry:
+                logger.warning("Unknown module type: %s", module_type)
+                return None
+
+            joint_role = cmds.getAttr(f"{joint}.{JOINT_ROLE_ATTR}") if cmds.objExists(f"{joint}.{JOINT_ROLE_ATTR}") else ""
+
+            # Only process if this is a module root
+            if joint_role != registry.root_role:
+                return None
+
+            # Collect guides for this module
+            guides = []
+            _collect_module_guides(joint, module_type, guides)
+
+            # Recursively process children
+            children_data = []
+            children = cmds.listRelatives(joint, children=True, type="joint") or []
+            for child in children:
+                child_data = traverse(child)
+                if child_data:
+                    children_data.append(child_data)
+
+            module_data = {
+                "module_type": module_type,
+                "instance_id": instance_name,
+                "guides": guides,
+                "children": children_data,
+            }
+
+            return module_data
+
+        def _collect_module_guides(joint: str, module_type: str, guides: list) -> None:
+            """Collect all guide joints belonging to a module."""
+            registry = get_module(module_type)
+            if not registry:
+                return
+
+            # Start from the root joint and traverse down
+            current = joint
+            visited = set()
+
+            while current and current not in visited:
+                visited.add(current)
+
+                if cmds.objExists(current):
+                    pos = cmds.xform(current, query=True, worldSpace=True, translation=True)
+                    rot = cmds.xform(current, query=True, worldSpace=True, rotation=True)
+
+                    guides.append({
+                        "name": current,
+                        "position": tuple(pos),
+                        "rotation": tuple(rot),
+                        "side": "C",
+                    })
+
+                # Move to first child that belongs to the same module
+                children = cmds.listRelatives(current, children=True, type="joint") or []
+                next_joint = None
+                for child in children:
+                    if cmds.objExists(f"{child}.{MODULE_TYPE_ATTR}"):
+                        child_type = cmds.getAttr(f"{child}.{MODULE_TYPE_ATTR}")
+                        if child_type == module_type:
+                            next_joint = child
+                            break
+                current = next_joint
+
+        # Start traversal
+        module_data = traverse(root_joint)
+        if module_data:
+            hierarchy.append(module_data)
+
+        return hierarchy
+
+    def _find_roots_in_scene(self) -> list[str]:
+        """Find all root joints in the current scene.
+
+        Returns:
+            List of root joint names.
+        """
+        from maya import cmds
+
+        root_joints = []
+        all_joints = cmds.ls(type="joint")
+        if not all_joints:
+            return []
+
+        for jnt in all_joints:
+            if not cmds.objExists(f"{jnt}.{MODULE_TYPE_ATTR}"):
+                continue
+            if not cmds.objExists(f"{jnt}.{JOINT_ROLE_ATTR}"):
+                continue
+
+            module_type = cmds.getAttr(f"{jnt}.{MODULE_TYPE_ATTR}")
+            joint_role = cmds.getAttr(f"{jnt}.{JOINT_ROLE_ATTR}")
+
+            from tik.trigger.core.module_registry import get_module
+            registry = get_module(module_type)
+            if registry and joint_role == registry.root_role:
+                root_joints.append(jnt)
+
+        return root_joints

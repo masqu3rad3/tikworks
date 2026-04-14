@@ -16,8 +16,11 @@ import logging
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Optional
 
+from maya import cmds
+
 from tik.trigger.core.socket_data import JointType, ModuleConnectors, Plug, Socket
 from tik.trigger.core.schemas import GuideData
+from tik.trigger.core.module_registry import MODULES, ModuleRegistry, MODULE_TYPE_ATTR, JOINT_ROLE_ATTR, MODULE_INSTANCE_ATTR
 
 if TYPE_CHECKING:
     import tik.maya as tm
@@ -121,10 +124,20 @@ class RigModule(ABC):
 
         Calls the subclass implementation to create Maya guide nodes
         based on stored guide data, then syncs the guide data.
+
+        If guides have already been added (e.g., from loading a session),
+        their data is preserved and synced to scene. Otherwise, guides
+        are collected fresh from the scene.
         """
         self._create_guides_impl()
-        # Sync guide data from scene to internal list
-        self._guides = self._get_guide_data_impl()
+
+        # Only refresh from scene if we don't already have saved guide data
+        if not self._guides:
+            # Sync guide data from scene to internal list
+            self._guides = self._get_guide_data_impl()
+        else:
+            # We have saved guide data - sync positions to scene
+            self.sync_guides_to_scene()
 
     def update_guide(self, index: int, guide_data: GuideData) -> None:
         """Update a guide at the given index.
@@ -482,6 +495,54 @@ class RigModule(ABC):
     # =========================================================================
     # Utility Methods
     # =========================================================================
+
+    def _set_guide_attributes(self, joint: str, role_name: str) -> None:
+        """Set identification attributes on a guide joint.
+
+        This should be called for each guide joint created by a module.
+        These attributes are used by the kinematics action to identify
+        modules when reading the DAG hierarchy.
+
+        Args:
+            joint: The Maya joint node name.
+            role_name: The joint role name (e.g., "root", "mid", "end").
+        """
+        # Add string attributes first, then set their values
+        cmds.addAttr(joint, longName=MODULE_TYPE_ATTR, dataType="string")
+        cmds.addAttr(joint, longName=JOINT_ROLE_ATTR, dataType="string")
+        cmds.addAttr(joint, longName=MODULE_INSTANCE_ATTR, dataType="string")
+
+        cmds.setAttr(f"{joint}.{MODULE_TYPE_ATTR}", self._module_name, type="string")
+        cmds.setAttr(f"{joint}.{JOINT_ROLE_ATTR}", role_name, type="string")
+        cmds.setAttr(f"{joint}.{MODULE_INSTANCE_ATTR}", self._name, type="string")
+
+    def _get_module_registry(self) -> ModuleRegistry:
+        """Get the registry entry for this module type.
+
+        Returns:
+            The ModuleRegistry entry for this module type.
+
+        Raises:
+            KeyError: If the module type is not registered.
+        """
+        registry = MODULES.get(self._module_name)
+        if registry is None:
+            raise KeyError(f"Module type '{self._module_name}' is not registered in MODULES")
+        return registry
+
+    def get_joint_by_role(self, role_name: str) -> Optional[str]:
+        """Get a guide joint name by its role.
+
+        Args:
+            role_name: The joint role name (e.g., "root", "end").
+
+        Returns:
+            The joint name if found, None otherwise.
+        """
+        joint_name = f"{self._name}_{role_name}_jInit"
+        if cmds.objExists(joint_name):
+            return joint_name
+        return None
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name='{self._name}')"

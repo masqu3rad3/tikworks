@@ -53,6 +53,17 @@ from tik.trigger.core.schemas import (
     UIDefinition,
 )
 from tik.trigger.core.socket_data import JointType, ModuleConnectors, Plug, Socket
+from tik.trigger.core import module_registry
+
+# Alias module_registry items to avoid name conflicts with registry module
+MODULES = module_registry.MODULES
+MODULE_TYPE_ATTR = module_registry.MODULE_TYPE_ATTR
+JOINT_ROLE_ATTR = module_registry.JOINT_ROLE_ATTR
+MODULE_INSTANCE_ATTR = module_registry.MODULE_INSTANCE_ATTR
+JointRole = module_registry.JointRole
+ModuleRegistry = module_registry.ModuleRegistry
+is_registered = module_registry.is_registered
+register_module_type = module_registry.register_module_type
 
 __all__ = [
     # Base classes
