@@ -1,0 +1,7 @@
+{
+    "name": "pushpull",
+    "description": "Push/pull module with base and end",
+    "members": ["base", "end"],
+    "properties": [],
+    "multi_guide": null
+}

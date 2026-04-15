@@ -25,6 +25,7 @@ from typing import Optional, TYPE_CHECKING
 
 from tik.trigger.core.rig_module import RigModule
 from tik.trigger.core.registry import _MODULES_REGISTRY
+from tik.trigger.core.module_registry import JointRole, register_module_type
 from tik.trigger.core.schemas import ModuleDefinition, UIDefinition
 from tik.core.jsonio import load as _json_load
 
@@ -83,6 +84,32 @@ def _load_module_json(folder_path: Path, module_name: str) -> tuple[Optional[dic
         logger.debug("Loaded data for %s", module_name)
 
     return ui_definition, data
+
+
+def _register_module_type(module_name: str, data_json: dict) -> None:
+    """Register a module type from data.json metadata.
+
+    Args:
+        module_name: Name of the module.
+        data_json: The parsed data.json contents.
+    """
+    members = data_json.get("members", [])
+    if not members:
+        logger.warning("Module '%s' has no 'members' in data.json, skipping registry", module_name)
+        return
+
+    joint_roles = [
+        JointRole(name=members[0], is_root=True),  # First member is root
+        *[JointRole(name=m) for m in members[1:]]
+    ]
+
+    register_module_type(
+        module_type=module_name,
+        joint_roles=joint_roles,
+        root_role=members[0],
+        socket_role=None,  # Defined per-instance in _define_connectors()
+    )
+    logger.debug("Registered module type: %s", module_name)
 
 
 def _create_uid(key: str, data: dict) -> UIDefinition:
@@ -150,6 +177,10 @@ def _register_module_from_folder(module_dir: Path) -> bool:
 
     # Load JSON definitions
     ui_def_json, data_json = _load_module_json(module_dir, module_name)
+
+    # Register module type in module_registry
+    if data_json:
+        _register_module_type(module_name, data_json)
 
     # Store definition cache
     _MODULE_DEFINITIONS[module_name] = ModuleDefinition(

@@ -306,11 +306,11 @@ class Kinematics(ActionCore):
         Returns:
             The end joint name, or None.
         """
-        if not registry.end_role:
+        if not registry.socket_role:
             return None
 
-        end_joint_name = root_joint.replace(f"_{registry.root_role}_jInit", f"_{registry.end_role}_jInit")
-        end_joint_name = end_joint_name.replace(f"_{registry.root_role}_jDef", f"_{registry.end_role}_jDef")
+        end_joint_name = root_joint.replace(f"_{registry.root_role}_jInit", f"_{registry.socket_role}_jInit")
+        end_joint_name = end_joint_name.replace(f"_{registry.root_role}_jDef", f"_{registry.socket_role}_jDef")
 
         if cmds.objExists(end_joint_name):
             return end_joint_name
@@ -324,7 +324,7 @@ class Kinematics(ActionCore):
 
             # Check if the first child is the end joint
             child = children[0]
-            if registry.end_role in child:
+            if registry.socket_role in child:
                 return child
             current = child
 
@@ -396,11 +396,17 @@ class Kinematics(ActionCore):
                 parent_module = module_node.built_module
                 child_module = child.built_module
 
+                # Get base name of parent joint (strip _jInit/_jDef suffix)
+                def _base_name(jnt):
+                    return jnt.replace("_jInit", "").replace("_jDef", "") if jnt else jnt
+
+                parent_base = _base_name(child.parent_joint)
+
                 # Find the socket on parent where the child should connect
                 for socket_name, socket in parent_module.sockets.items():
-                    # The socket is defined on a deformation joint (e.g., chain1_end_jDef)
-                    # We need to parent the child's root deformation joint under it
-                    if socket.joint_name:
+                    # Match by base name since guide joints use _jInit and
+                    # deformation joints use _jDef (or other suffixes)
+                    if _base_name(socket.joint_name) == parent_base:
                         try:
                             # Parent child's root joint under parent's socket joint
                             cmds.parent(child_module.plugs.get("rootPlug").joint_name, socket.joint_name)

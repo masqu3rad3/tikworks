@@ -1,0 +1,7 @@
+{
+    "name": "connector",
+    "description": "Simple two-joint connector module",
+    "members": ["root", "end"],
+    "properties": [],
+    "multi_guide": null
+}

@@ -30,7 +30,8 @@ import maya.api.OpenMaya as om
 
 from tik.trigger.core import register_module, RigModule
 from tik.trigger.core.socket_data import JointType, Plug, Socket
-from tik.trigger.core.module_registry import MODULES, MODULE_INSTANCE_ATTR
+from tik.trigger.core.module_registry import MODULE_INSTANCE_ATTR
+from tik.trigger.core.module_registry import get_module
 
 if TYPE_CHECKING:
     from tik.trigger.core.schemas import GuideData
@@ -55,7 +56,10 @@ class FKChain(RigModule):
     def _create_guides_impl(self) -> None:
         """Create the FK chain guide joints: root, mid, end."""
         # Get joint roles from registry
-        registry = MODULES["fkchain"]
+        registry = get_module("fkchain")
+        if not registry:
+            logger.error("FKChain module not registered in module_registry")
+            return
         joint_roles = [role.name for role in registry.joint_roles]  # ["root", "mid", "end"]
 
         # Default positions - chain along Y axis
@@ -93,7 +97,9 @@ class FKChain(RigModule):
             index: The index of the guide to update.
             guide_data: The new guide data.
         """
-        registry = MODULES["fkchain"]
+        registry = get_module("fkchain")
+        if not registry:
+            return
         joint_roles = [role.name for role in registry.joint_roles]
 
         if index >= len(joint_roles):
@@ -121,7 +127,9 @@ class FKChain(RigModule):
         """
         from tik.trigger.core.schemas import GuideData
 
-        registry = MODULES["fkchain"]
+        registry = get_module("fkchain")
+        if not registry:
+            return []
         joint_roles = [role.name for role in registry.joint_roles]
         guides = []
         guide_by_name = {}
@@ -168,7 +176,9 @@ class FKChain(RigModule):
         """Prepare data from guides before building."""
         import maya.cmds as cmds
 
-        registry = MODULES["fkchain"]
+        registry = get_module("fkchain")
+        if not registry:
+            return
         self._joint_roles = [role.name for role in registry.joint_roles]
 
         # Get guide joint references
@@ -220,7 +230,9 @@ class FKChain(RigModule):
         """Create the FK chain deformation joints."""
         import maya.cmds as cmds
 
-        registry = MODULES["fkchain"]
+        registry = get_module("fkchain")
+        if not registry:
+            return
         self._joint_roles = [role.name for role in registry.joint_roles]
 
         self._deformation_joints = {}
@@ -268,7 +280,9 @@ class FKChain(RigModule):
         """
         import tik.maya as tm
 
-        registry = MODULES["fkchain"]
+        registry = get_module("fkchain")
+        if not registry:
+            return
         self._joint_roles = [role.name for role in registry.joint_roles]
 
         self._controllers = {}
@@ -384,12 +398,14 @@ class FKChain(RigModule):
             joint_type=JointType.DEFINITIVE,
         )
 
-        # Define end socket (input - for children to connect to)
-        self._connectors.sockets["endSocket"] = Socket(
-            name="endSocket",
-            joint_name=self._end_jnt,
-            joint_type=JointType.DEFINITIVE,
-            accepts_plugs=["rootPlug"],
-        )
+        # Define sockets for ALL joints - any joint can be a socket for children
+        for role_name, jnt in self._deformation_joints.items():
+            socket_name = f"{role_name}Socket"
+            self._connectors.sockets[socket_name] = Socket(
+                name=socket_name,
+                joint_name=jnt,
+                joint_type=JointType.DEFINITIVE,
+                accepts_plugs=["rootPlug"],
+            )
 
         logger.debug("Defined connectors for FK chain: %s", self._name)

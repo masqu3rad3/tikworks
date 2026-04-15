@@ -43,11 +43,11 @@ class JointRole:
     Attributes:
         name: The role name (e.g., "root", "collar", "shoulder", "end")
         is_root: True if this is the root (start) joint of the module
-        is_end: True if this is the end joint (where children connect)
+        is_socket: True if this joint can accept child connections (any joint can be a socket)
     """
     name: str
     is_root: bool = False
-    is_end: bool = False
+    is_socket: bool = False
 
 
 @dataclass(frozen=True)
@@ -58,12 +58,12 @@ class ModuleRegistry:
         module_type: Unique identifier for the module type (e.g., "fkchain", "arm")
         joint_roles: Tuple of JointRole definitions in order (root to end)
         root_role: Name of the root joint role
-        end_role: Name of the end joint role (for socket connections), or None
+        socket_role: Name of the primary socket joint role (where children typically connect)
     """
     module_type: str
     joint_roles: tuple[JointRole, ...]
     root_role: str
-    end_role: Optional[str] = None
+    socket_role: Optional[str] = None
 
     def get_role(self, role_name: str) -> Optional[JointRole]:
         """Get a joint role by name.
@@ -85,107 +85,18 @@ class ModuleRegistry:
         return self.get_role(self.root_role)
 
     @property
-    def end_joint_role(self) -> Optional[JointRole]:
-        """Get the end joint role, if any."""
-        if self.end_role:
-            return self.get_role(self.end_role)
+    def socket_joint_role(self) -> Optional[JointRole]:
+        """Get the socket joint role, if any."""
+        if self.socket_role:
+            return self.get_role(self.socket_role)
         return None
 
 
 # =============================================================================
-# Module Registry
+# Module Registry (runtime-populated from data.json)
 # =============================================================================
 
-MODULES: dict[str, ModuleRegistry] = {
-    "base": ModuleRegistry(
-        module_type="base",
-        joint_roles=(
-            JointRole(name="root", is_root=True),
-        ),
-        root_role="root",
-        end_role=None,  # Base has no parent socket - it's the top of hierarchy
-    ),
-
-    "fkchain": ModuleRegistry(
-        module_type="fkchain",
-        joint_roles=(
-            JointRole(name="root", is_root=True),
-            JointRole(name="mid"),
-            JointRole(name="end", is_end=True),
-        ),
-        root_role="root",
-        end_role="end",  # Children connect to end joint
-    ),
-
-    "arm": ModuleRegistry(
-        module_type="arm",
-        joint_roles=(
-            JointRole(name="collar", is_root=True),
-            JointRole(name="shoulder"),
-            JointRole(name="elbow"),
-            JointRole(name="hand", is_end=True),
-        ),
-        root_role="collar",
-        end_role="hand",
-    ),
-
-    "leg": ModuleRegistry(
-        module_type="leg",
-        joint_roles=(
-            JointRole(name="hip", is_root=True),
-            JointRole(name="knee"),
-            JointRole(name="ankle"),
-            JointRole(name="ball"),
-            JointRole(name="toe", is_end=True),
-        ),
-        root_role="hip",
-        end_role="toe",
-    ),
-
-    "spine": ModuleRegistry(
-        module_type="spine",
-        joint_roles=(
-            JointRole(name="root", is_root=True),
-            JointRole(name="hip"),
-            JointRole(name="spine1"),
-            JointRole(name="spine2"),
-            JointRole(name="chest", is_end=True),
-        ),
-        root_role="root",
-        end_role="chest",
-    ),
-
-    "head": ModuleRegistry(
-        module_type="head",
-        joint_roles=(
-            JointRole(name="neck", is_root=True),
-            JointRole(name="head"),
-            JointRole(name="jaw", is_end=True),
-        ),
-        root_role="neck",
-        end_role="jaw",
-    ),
-
-    "connector": ModuleRegistry(
-        module_type="connector",
-        joint_roles=(
-            JointRole(name="root", is_root=True),
-            JointRole(name="end", is_end=True),
-        ),
-        root_role="root",
-        end_role="end",
-    ),
-
-    "pushpull": ModuleRegistry(
-        module_type="pushpull",
-        joint_roles=(
-            JointRole(name="base", is_root=True),
-            JointRole(name="end", is_end=True),
-        ),
-        root_role="base",
-        end_role="end",
-    ),
-}
+MODULES: dict[str, ModuleRegistry] = {}
 
 
 # =============================================================================
@@ -220,27 +131,25 @@ def register_module_type(
     module_type: str,
     joint_roles: list[JointRole],
     root_role: str,
-    end_role: Optional[str] = None,
+    socket_role: Optional[str] = None,
 ) -> None:
     """Register a new module type at runtime.
 
-    This allows dynamic module registration if needed.
+    This allows dynamic module registration from data.json files.
 
     Args:
         module_type: Unique identifier for the module type
         joint_roles: List of JointRole definitions
         root_role: Name of the root joint role
-        end_role: Name of the end joint role, if any
-
-    Raises:
-        ValueError: If module_type is already registered
+        socket_role: Name of the primary socket joint role, if any
     """
+    # Skip if already registered (idempotent)
     if module_type in MODULES:
-        raise ValueError(f"Module type '{module_type}' is already registered")
+        return
 
     MODULES[module_type] = ModuleRegistry(
         module_type=module_type,
         joint_roles=tuple(joint_roles),
         root_role=root_role,
-        end_role=end_role,
+        socket_role=socket_role,
     )
