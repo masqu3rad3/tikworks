@@ -368,6 +368,27 @@ class Plug:
                 outputs.append(Plug(node, ".".join(plug_parts)))
         return outputs
 
+    def find_proxy_plugs(self):
+        """
+        Return all proxy attribute plugs that proxy the given plug.
+
+        Args:
+            target_plug_str (str): e.g. 'L_legIK_ctrl.fkIkBlend'
+
+        Returns:
+            list: Plug name strings, e.g. ['R_legIK_ctrl.fkIkBlend', 'spine_ctrl.fkIkBlend']
+        """
+        target_plug = self.mplug
+
+        proxy_plugs = []
+        # Proxy connection direction:  original(src) -> proxy(dst)
+        self.__collect_proxy_plugs(target_plug.connectedTo(False, True), proxy_plugs)  # asSrc=True  -> destinations
+
+        # Safety net: check the reverse direction too
+        self.__collect_proxy_plugs(target_plug.connectedTo(True, False), proxy_plugs)  # asDst=True  -> sources
+
+        return proxy_plugs
+
     def lock(self):
         """Lock the attribute."""
         self.locked = True
@@ -375,6 +396,12 @@ class Plug:
     def unlock(self):
         """Unlock the attribute."""
         self.locked = False
+
+    def __collect_proxy_plugs(self, plug_array, proxy_plugs):
+        """Collect proxy plugs from the given plug array into the given proxy plugs list."""
+        for plug in plug_array:
+            if OpenMaya.MFnAttribute(plug.attribute()).isProxyAttribute:  # property, no ()
+                proxy_plugs.append(plug.name())
 
     def __getitem__(self, attr):
         """Get a child plug (for compound attributes).
