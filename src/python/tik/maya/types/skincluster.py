@@ -119,9 +119,19 @@ class SkinCluster(Deformer):
             return None
 
     @property
+    def original_geometry(self):
+        """Return the first original geometry shape name connected to the skinCluster."""
+        return self.original_geometries[0] if self.original_geometries else None
+
+    @property
     def geometries(self) -> List[str]:
         """Return all connected geometry shape names."""
         return self.tm_skincluster(self.name, query=True, geometry=True) or []
+
+    @property
+    def original_geometries(self) -> List[str]:
+        """Return original geometry shape names connected to the skinCluster."""
+        return self["originalGeometry"].list_inputs()
 
     @property
     def skinning_method(self) -> int:
