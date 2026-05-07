@@ -65,7 +65,7 @@ def test_deformer_create_and_split_path(tmp_path: Path) -> None:
     assert cmds.nodeType(deformer.name) == "blendShape"
 
     target_path = tmp_path / "weights" / "file.json"
-    file_dir, file_name = deformer._Deformer__split_path(target_path, validate=True)
+    file_dir, file_name = deformer._split_path(target_path, validate=True)
     assert Path(file_dir).exists()
     assert file_name == "file.json"
 
@@ -298,3 +298,80 @@ def test_weights_io_from_dict_flat() -> None:
     }
     io = WeightsIO.from_dict(data)
     assert isinstance(io, WeightsIO)
+
+
+def test_weights_io_add_shape() -> None:
+    """Test adding shapes to WeightsIO container."""
+    shape1 = ShapeInfo(name="mesh1", group=0, stride=1, size=10, max_index=9)
+    shape2 = ShapeInfo(name="mesh2", group=0, stride=1, size=20, max_index=19)
+
+    io = WeightsIO(shapes=[shape1])
+
+    # add_shape should add new shape
+    io.add_shape(shape2)
+    assert "mesh2" in io._shapes
+    assert shape2 is io.shape("mesh2")
+
+    # add_shape should replace existing shape
+    shape2_new = ShapeInfo(name="mesh2", group=1, stride=2, size=30, max_index=29)
+    io.add_shape(shape2_new)
+    assert io.shape("mesh2").group == 1
+    assert io.shape("mesh2").size == 30
+
+
+def test_weights_io_add_layer() -> None:
+    """Test adding weight layers to WeightsIO container."""
+    shape = ShapeInfo(name="mesh", group=0, stride=1, size=1, max_index=0)
+    layer1 = WeightLayer(shape="mesh", layer=0, default_value=0.0)
+    layer2 = WeightLayer(shape="mesh", layer=1, default_value=0.0)
+
+    io = WeightsIO(shapes=[shape])
+
+    assert len(io.layers) == 0
+    io.add_layer(layer1)
+    assert len(io.layers) == 1
+    io.add_layer(layer2)
+    assert len(io.layers) == 2
+    assert io.layers[-1] is layer2
+
+
+def test_weights_io_base_layer_names() -> None:
+    """Test base_layer_names property returns a copy."""
+    io = WeightsIO(base_layer_names=["layer1", "layer2"])
+    result = io.base_layer_names
+    result.append("layer3")
+    # Original should be unchanged
+    assert len(io.base_layer_names) == 2
+
+
+def test_weights_io_dense_influence_weights_with_shape_size() -> None:
+    """Test dense_influence_weights uses shape.size when total_count is None."""
+    shape = ShapeInfo(name="mesh", group=0, stride=1, size=5, max_index=4)
+    layer = WeightLayer(
+        shape="mesh", layer=0, default_value=0.5, influence="joint1",
+        points={0: 1.0, 2: 0.75}
+    )
+    io = WeightsIO(shapes=[shape], layers=[layer])
+
+    # When total_count is None, should use shape.size
+    dense = io.dense_influence_weights("mesh", "joint1")
+    assert len(dense) == 5
+    assert list(dense) == [1.0, 0.5, 0.75, 0.5, 0.5]
+
+
+def test_weights_io_dense_base_weights_with_shape_size() -> None:
+    """Test dense_base_weights uses shape.size when total_count is None."""
+    shape = ShapeInfo(name="mesh", group=0, stride=1, size=4, max_index=3)
+    base_layer = WeightLayer(shape="mesh", layer=0, default_value=1.0, is_base=True)
+    io = WeightsIO(shapes=[shape], layers=[base_layer])
+
+    # When total_count is None, should use shape.size
+    dense = io.dense_base_weights("mesh")
+    assert len(dense) == 4
+    assert list(dense) == [1.0, 1.0, 1.0, 1.0]
+
+
+def test_weights_io_shape_method_returns_none_for_missing() -> None:
+    """Test shape() returns None for non-existent shape."""
+    io = WeightsIO()
+    assert io.shape("nonexistent") is None

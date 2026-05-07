@@ -1,4 +1,6 @@
-# TODO: Make sure all get/set deformer weights go through DeformerWeights and WeightsIO
+# TODO: Audit all get/set deformer weights to ensure consistent use of DeformerWeights and WeightsIO
+#       Specifically: verify that SkinCluster.get_weights/set_weights and BlendShape.get_weights/set_weights
+#       always go through DeformerWeights/WeightsIO conversion paths.
 
 """Deformer is not an actual maya node representation. It is a base class for deformers like SkinCluster, BlendShape, etc.
 
@@ -40,7 +42,7 @@ class Deformer(Node):
         deformer_node = create_node_with_dg_modifier(deformer_type, **kwargs)
         return cls(deformer_node)
 
-    def __split_path(self, file_path, validate=False):
+    def _split_path(self, file_path, validate=False):
         """Validate and split a file path into directory and filename."""
         if not isinstance(file_path, Path):
             file_path = Path(file_path)
@@ -56,7 +58,7 @@ class Deformer(Node):
         Args:
             file_path (str | Path): The path to the file where weights will be saved.
         """
-        file_dir, file_name = self.__split_path(file_path, validate=True)
+        file_dir, file_name = self._split_path(file_path, validate=True)
 
         cmds.deformerWeights(
             file_name, export=True, deformer=self.name, path=file_dir,
@@ -68,7 +70,7 @@ class Deformer(Node):
         Args:
             file_path (str | Path): The path to the file from which weights will be loaded.
         """
-        file_dir, file_name = self.__split_path(file_path, validate=False)
+        file_dir, file_name = self._split_path(file_path, validate=False)
 
         cmds.deformerWeights(
             file_name,
@@ -753,7 +755,11 @@ class WeightsIO:
 
     @staticmethod
     def __convert_to_m_array(json_data):
-        """Converts the json data weights compatible to be applied with MFnSkincluster"""
+        """Converts the json data weights compatible to be applied with MFnSkincluster.
+
+        Note: This hardcodes the first shape. For multi-geometry weights,
+        extend to handle multiple shapes with proper indexing.
+        """
         vertex_count = json_data["deformerWeight"]["shapes"][0]["size"]
         weights_data = json_data["deformerWeight"]["weights"]
         m_array = OpenMaya.MDoubleArray()

@@ -644,3 +644,84 @@ class TestBlendShapeSaveLoad:
         dw = DeformerWeights([1.0, 1.0], 1, 2)
         with pytest.raises(ValueError, match="Element count .* count"):
             blendshape.set_base_weights(dw)
+
+
+class TestBlendShapeAdditionalCoverage:
+    """Additional tests to improve code coverage."""
+
+    def test_set_weights_length_mismatch_raises(self):
+        """Test set_weights raises ValueError when weight list length doesn't match."""
+        base_mesh, _ = cmds.polySphere(name="set_weights_len_base", sx=2, sy=2)
+        blendshape = BlendShape.create(geometry=base_mesh, name="setWeightsLenBS")
+
+        # 4 vertices, 0 targets - should not raise
+        blendshape.set_weights([])
+
+        # With 1 target, need vertex_count * target_count weights
+        target_mesh, _ = cmds.polySphere(name="set_weights_len_target")
+        cmds.blendShape(blendshape.name, edit=True, target=(base_mesh, 0, target_mesh, 1.0))
+
+        # Wrong length - should raise
+        with pytest.raises(ValueError, match="Weight length"):
+            blendshape.set_weights([1.0])  # Only 1 weight, need 4
+
+    def test_set_influence_weights_length_mismatch(self):
+        """Test set_influence_weights raises on wrong length."""
+        base_mesh, _ = cmds.polySphere(name="set_inf_len_base", sx=2, sy=2)
+        blendshape = BlendShape.create(geometry=base_mesh, name="setInfLenBS")
+
+        target_mesh, _ = cmds.polySphere(name="set_inf_len_target")
+        idx = blendshape.add_target(target_mesh, name="target1")
+
+        # Wrong length - should raise
+        with pytest.raises(ValueError, match="Weight length"):
+            blendshape.set_influence_weights(idx, [1.0, 2.0, 3.0])  # 3 weights, need 4
+
+    def test_set_influence_weights_deformerweights_channel_mismatch(self):
+        """Test set_influence_weights raises when DeformerWeights channel_count != 1."""
+        base_mesh, _ = cmds.polySphere(name="set_inf_dw_base", sx=2, sy=2)
+        blendshape = BlendShape.create(geometry=base_mesh, name="setInfDWBS")
+
+        target_mesh, _ = cmds.polySphere(name="set_inf_dw_target")
+        idx = blendshape.add_target(target_mesh, name="target1")
+
+        # DeformerWeights with channel_count != 1 should raise
+        dw = DeformerWeights([1.0, 2.0], channel_count=2, element_count=4)
+        with pytest.raises(ValueError, match="channel_count==1"):
+            blendshape.set_influence_weights(idx, dw)
+
+    def test_set_influence_weights_deformerweights_element_mismatch(self):
+        """Test set_influence_weights raises when DeformerWeights element_count != vertex_count."""
+        base_mesh, _ = cmds.polySphere(name="set_inf_elem_base", sx=2, sy=2)
+        blendshape = BlendShape.create(geometry=base_mesh, name="setInfElemBS")
+
+        target_mesh, _ = cmds.polySphere(name="set_inf_elem_target")
+        idx = blendshape.add_target(target_mesh, name="target1")
+
+        # DeformerWeights with wrong element_count should raise
+        dw = DeformerWeights([1.0, 2.0, 3.0, 4.0, 5.0], channel_count=1, element_count=5)
+        with pytest.raises(ValueError, match="Element count"):
+            blendshape.set_influence_weights(idx, dw)
+
+    def test_get_influence_weights_int_target_uses_fallback_name(self):
+        """Test get_influence_weights with int target uses name when available."""
+        base_mesh, _ = cmds.polySphere(name="get_inf_int_base")
+        blendshape = BlendShape.create(geometry=base_mesh, name="getInfIntBS")
+
+        target_mesh, _ = cmds.polySphere(name="get_inf_int_target")
+        idx = blendshape.add_target(target_mesh, name="myTarget")
+
+        # When using int index, channel_names should contain the name
+        weights = blendshape.get_influence_weights(idx)
+        assert weights.channel_count == 1
+        assert weights.element_count == cmds.polyEvaluate(base_mesh, vertex=True)
+
+    def test_set_base_weights_channel_count_mismatch(self):
+        """Test set_base_weights raises when DeformerWeights channel_count != 1."""
+        base_mesh, _ = cmds.polySphere(name="set_base_cc_base", sx=2, sy=2)
+        blendshape = BlendShape.create(geometry=base_mesh, name="setBaseCCBS")
+
+        # channel_count = 2 should raise
+        dw = DeformerWeights([1.0, 2.0, 3.0, 4.0], channel_count=2, element_count=2)
+        with pytest.raises(ValueError, match="channel_count==1"):
+            blendshape.set_base_weights(dw)
