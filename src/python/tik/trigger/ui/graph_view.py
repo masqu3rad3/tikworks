@@ -94,18 +94,21 @@ class NodeItem(QtWidgets.QGraphicsItem):
         painter.setPen(QtCore.Qt.NoPen)
         painter.setBrush(QtGui.QColor("#3a4048" if self.external else self.color))
         path = QtGui.QPainterPath()
+        path.setFillRule(QtCore.Qt.WindingFill)
         path.addRoundedRect(header, 4, 4)
         path.addRect(QtCore.QRectF(0, HEADER / 2, NODE_WIDTH, HEADER / 2))
         painter.drawPath(path)
         font = painter.font()
         font.setBold(True)
-        font.setPointSizeF(max(font.pointSizeF() - 1, 7))
         painter.setFont(font)
         painter.setPen(QtGui.QColor("#c0c0c0" if self.external else "#1a1a1a"))
-        painter.drawText(header.adjusted(8, 0, -4, 0), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, self.title)
+        metrics = QtGui.QFontMetricsF(font)
+        baseline = HEADER / 2 + metrics.capHeight() / 2
+        painter.drawText(QtCore.QPointF(8, baseline), self.title)
         font.setBold(False)
         painter.setFont(font)
-        painter.drawText(header.adjusted(4, 0, -8, 0), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight, self.subtitle)
+        metrics = QtGui.QFontMetricsF(font)
+        painter.drawText(QtCore.QPointF(NODE_WIDTH - 8 - metrics.horizontalAdvance(self.subtitle), baseline), self.subtitle)
         painter.setPen(QtGui.QColor("#bdbdbd"))
         for port in self.inputs.values():
             label = port.name + ("  ●" if port.primary else "")
@@ -324,7 +327,7 @@ class GraphView(QtWidgets.QGraphicsView):
         for handle in sorted(handles, key=lambda item: (depth.get(item.key, 1), item.key)):
             module_cls = handle.module_class
             column = depth.get(handle.key, 1)
-            pos = self._positions.get(handle.key) or (20 + column * (NODE_WIDTH + 90), 40 + columns.get(column, 0) * 110)
+            pos = self._positions.get(handle.key) or (20 + column * (NODE_WIDTH + 60), 30 + columns.get(column, 0) * 96)
             columns[column] = columns.get(column, 0) + 1
             primary = module_cls.primary_input()
             self.graph.add_node(
@@ -340,6 +343,20 @@ class GraphView(QtWidgets.QGraphicsView):
                     source_key = f"{source}.node"
                 self.graph.add_wire(source_key, f"{handle.key}.{input_name}", primary is not None and input_name == primary.name)
         self.graph.setSceneRect(self.graph.itemsBoundingRect().adjusted(-40, -40, 80, 80))
+        self.fit()
+
+    def fit(self) -> None:
+        """Show the whole graph, never zoomed in past 1:1."""
+        rect = self.graph.sceneRect()
+        view = self.viewport().rect()
+        if rect.isEmpty() or view.width() < 60 or view.height() < 60:
+            return
+        self.resetTransform()
+        scale = min(1.0, (view.width() - 20) / max(rect.width(), 1), (view.height() - 20) / max(rect.height(), 1))
+        self.scale(max(scale, 0.75), max(scale, 0.75))
+        self.centerOn(rect.center())
+        if scale < 0.75:  # graph wider than the pane: start at the left edge
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().minimum())
 
     @staticmethod
     def _depths(handles, by_key) -> dict[str, int]:
@@ -389,6 +406,20 @@ class GraphView(QtWidgets.QGraphicsView):
 
     def select_key(self, key: Optional[str]) -> None:
         self.graph.select_key(key)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        super().resizeEvent(event)
+        self.fit()
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        QtCore.QTimer.singleShot(0, self.fit)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() == QtCore.Qt.Key_F:
+            self.fit()
+            return
+        super().keyPressEvent(event)
 
     def wheelEvent(self, event) -> None:  # noqa: N802
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15

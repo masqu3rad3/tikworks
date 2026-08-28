@@ -39,7 +39,7 @@ Maya API wrapper that "feels like Python, behaves like Maya."
 Next-generation rigging framework built on tik.maya.
 - **Location:** `src/python/tik/trigger/`
 - **Status (August 2026):** workflow v2 — the `.tr` session is the rig (nested actions, references with overrides, runner), guides are a `.trg` asset (old format kept), `Session`/`Guides` TD handlers, pipeline UI on the official theme, Guide Designer with two-way binding. Modules `base`/`fkchain`/`arm`; actions `import_asset`/`kinematics`/`script`/`reference`.
-- **Design specs:** `docs/superpowers/specs/2026-08-28-trigger-workflow-and-ui-design.md` (authoritative for workflow/UI/API) and `2026-08-28-trigger-rebuild-design.md` (tik.maya constructs, fields); plans A-E in `docs/superpowers/plans/`
+- **Design specs:** `docs/superpowers/specs/2026-08-29-trigger-ui-v3-and-io-graph-design.md` (UI v3 + module I/O, authoritative), `2026-08-28-trigger-workflow-and-ui-design.md` (session blueprint), `2026-08-28-trigger-rebuild-design.md` (tik.maya constructs, fields); plans A-F in `docs/superpowers/plans/`
 - **Layering rule:** `tik/trigger/core` and `session` import no Maya/Qt (enforced by `tests/unit/test_import_boundaries.py`)
 
 ## Important Patterns

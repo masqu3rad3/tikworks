@@ -17,8 +17,15 @@ Concepts
   editing its rows stores *overrides* in the referencing session only.
 * **Guides** — old-format ``.trg`` joint lists; ``Guides`` authors them in the
   live scene (add/mirror/reparent/test build/export/import).
-* **Module** — manifest (``Guides(...)`` roles, plugs/sockets, typed fields,
-  ``legacy_types`` for old ``.trg`` names) + ``draw_guides(ctx)`` / ``build(ctx)``.
+* **Module** — manifest (``Guides(...)`` roles, ``inputs`` / ``outputs``, typed
+  fields, ``legacy_types`` for old ``.trg`` names) + ``draw_guides(ctx)`` /
+  ``build(ctx)``. Modules register built nodes with ``ctx.output(name, node)``
+  and the node an input drives with ``ctx.attach(input, node)``.
+* **Connections** — ``input <- source`` data in the ``.trg``
+  (``{"input": "L_arm.root", "source": "body.root"}``); a source is another
+  module's output or any scene node name (must exist at build time). Build
+  everything first, then connect. The Guide Designer edits them in a tree
+  (primary input = parenting) and a node graph side by side.
 
 TD API
 ------
@@ -41,7 +48,9 @@ TD API
    guides = trigger.Guides()      # the live scene
    body = guides.add("base", name="body")
    arm = guides.add("arm", side="L", parent=body, ribbon_joints=6)
-   guides.mirror(arm)
+   guides.mirror(arm)                              # -> R_arm, inputs mirrored
+   guides.connect("L_arm.root", "body.root")       # explicit wiring
+   guides.connect("tail.space", "some_jnt")        # any scene node
    guides.test_build(body, arm)
    guides.export("guides/hero_muscle.trg")
 
@@ -53,12 +62,15 @@ UI
    import tik.trigger.ui
    tik.trigger.ui.show()
 
-Tabs are open sessions. Add actions from the collapsible shelf (click = after
+Dockable tool windows (File / Edit / Session / Tools / Help, status bar).
+Tabs are open sessions. Add actions from the shelf pane (click = after
 selection, drag = anywhere, drop on a row = nest) or press **Tab** for the
 search palette (Enter: sibling, Shift+Enter: child). Referenced rows render
-inline, dimmed, with checkboxes; edits become overrides. The Guide Designer
-(toolbar or the ✎ next to a guides file) authors ``.trg`` files with two-way
-scene binding and drag-parenting.
+inline, dimmed, with checkboxes; edits become overrides. Versioned file fields
+are Nuke-style: green = latest, amber = older, Alt+Up / Alt+Down while hovering
+steps versions. The Guide Designer (Tools menu or the ✎ next to a guides file)
+authors ``.trg`` files: tree and node graph over the same connections, Inputs
+group in the properties, two-way scene binding, debounced scene sync.
 
 Writing an action
 -----------------
