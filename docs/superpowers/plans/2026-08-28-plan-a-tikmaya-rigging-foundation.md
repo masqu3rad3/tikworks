@@ -52,9 +52,9 @@
 - Modify: `Makefile`, `make.bat`, `tests/integration/invoke.py`, `CLAUDE.md`
 - Create: `tests/unit/test_import_boundaries.py`
 
-- [ ] **Step 1: Resolve conflict markers** keeping the `HEAD` side (`SRC_DIR := src/python`, cmake/build targets present) in `Makefile` and `make.bat`; in `invoke.py` both sides are identical — keep one.
-- [ ] **Step 2: Fix CLAUDE.md** — replace `src/tik/` with `src/python/tik/` in the tree and location lines; note `tests/integration/trigger/` and the spec/plan paths.
-- [ ] **Step 3: Write the boundary test**
+- [x] **Step 1: Resolve conflict markers** keeping the `HEAD` side (`SRC_DIR := src/python`, cmake/build targets present) in `Makefile` and `make.bat`; in `invoke.py` both sides are identical — keep one.
+- [x] **Step 2: Fix CLAUDE.md** — replace `src/tik/` with `src/python/tik/` in the tree and location lines; note `tests/integration/trigger/` and the spec/plan paths.
+- [x] **Step 3: Write the boundary test**
 
 ```python
 """Layering rules: tik.core < tik.maya < tik.trigger; core/session of trigger are DCC-agnostic."""
@@ -99,8 +99,8 @@ def test_no_forbidden_imports(package, forbidden):
     assert _violations(package, forbidden) == []
 ```
 
-- [ ] **Step 4: Run it** — expect `trigger/core` and `trigger/session` to FAIL (they import `maya.cmds`). That is the known debt Plan B removes; mark those two with `pytest.mark.xfail(strict=True, reason="removed in Plan B")` via a parametrize `marks` for now.
-- [ ] **Step 5: Run full unit suite**, commit `chore: resolve merge markers, fix docs paths, add import-boundary lint`.
+- [x] **Step 4: Run it** — expect `trigger/core` and `trigger/session` to FAIL (they import `maya.cmds`). That is the known debt Plan B removes; mark those two with `pytest.mark.xfail(strict=True, reason="removed in Plan B")` via a parametrize `marks` for now.
+- [x] **Step 5: Run full unit suite**, commit `chore: resolve merge markers, fix docs paths, add import-boundary lint`.
 
 ---
 
@@ -117,7 +117,7 @@ def test_no_forbidden_imports(package, forbidden):
 - `tik.maya.find_by_meta(key: str, value=_ANY, node_type: str | None = None) -> list[Node]`
 - `META_PREFIX = "tikMeta_"`
 
-- [ ] **Step 1: Tests**
+- [x] **Step 1: Tests**
 
 ```python
 import pytest
@@ -218,8 +218,8 @@ def test_undoable():
     assert "kind" not in node.meta
 ```
 
-- [ ] **Step 2: Run, expect AttributeError on `.meta`.**
-- [ ] **Step 3: Implement `meta.py`**
+- [x] **Step 2: Run, expect AttributeError on `.meta`.**
+- [x] **Step 3: Implement `meta.py`**
 
 ```python
 """Typed metadata storage on Maya nodes.
@@ -342,7 +342,7 @@ In `node.py` add:
 
 Export `find_by_meta`, `META_PREFIX` from `tik/maya/__init__.py`.
 
-- [ ] **Step 4: Run tests → PASS. Commit `feat(tik.maya): Node.meta metadata store and find_by_meta`.**
+- [x] **Step 4: Run tests → PASS. Commit `feat(tik.maya): Node.meta metadata store and find_by_meta`.**
 
 ---
 
@@ -361,7 +361,7 @@ Export `find_by_meta`, `META_PREFIX` from `tik/maya/__init__.py`.
 - `add_proxy(node, source: Plug, name=None) -> Plug` — `cmds.addAttr(proxy=...)`
 - `TRANSFORM_ATTRS = ("tx","ty","tz","rx","ry","rz","sx","sy","sz")`, `ALL_CHANNELS = TRANSFORM_ATTRS + ("v",)`
 
-- [ ] **Step 1: Tests**
+- [x] **Step 1: Tests**
 
 ```python
 from maya import cmds
@@ -437,8 +437,8 @@ def test_add_proxy():
     assert src_plug.value == 0.75
 ```
 
-- [ ] **Step 2: Run → ImportError.**
-- [ ] **Step 3: Implement**
+- [x] **Step 2: Run → ImportError.**
+- [x] **Step 3: Implement**
 
 ```python
 """Attribute helpers shared by rig constructs and tools."""
@@ -539,7 +539,7 @@ def add_proxy(node, source: Plug, name: Optional[str] = None) -> Plug:
     return Plug(node, name)
 ```
 
-- [ ] **Step 4: Run → PASS. Commit `feat(tik.maya): attribute helpers`.**
+- [x] **Step 4: Run → PASS. Commit `feat(tik.maya): attribute helpers`.**
 
 ---
 
@@ -551,7 +551,7 @@ def add_proxy(node, source: Plug, name: Optional[str] = None) -> Plug:
 - `unique_name(base: str, separator: str = "") -> str` — returns `base` if free, else `base1`, `base2`, … (respecting existing padded suffix e.g. `base01` → `base02` when `base01` exists).
 - `format_name(*tokens, prefix=None, suffix=None, side=None, sep="_") -> str` — joins non-empty tokens; ordering: `side, prefix, *tokens, suffix`; ints allowed.
 
-- [ ] **Step 1: Tests**
+- [x] **Step 1: Tests**
 
 ```python
 from maya import cmds
@@ -581,7 +581,7 @@ def test_format_name():
     assert naming.format_name("a", "", None, "b", sep="-") == "a-b"
 ```
 
-- [ ] **Step 2–4:** implement with `re.match(r"^(.*?)(\d+)$", base)` for padding, `cmds.objExists` loop; run; commit `feat(tik.maya): naming mechanics`.
+- [x] **Step 2–4:** implement with `re.match(r"^(.*?)(\d+)$", base)` for padding, `cmds.objExists` loop; run; commit `feat(tik.maya): naming mechanics`.
 
 ---
 
@@ -597,7 +597,7 @@ def test_format_name():
 - `Joint.orient_chain(joints, aim_axis="x", up_axis="y", world_up=(0,1,0))` static; `Joint.joint_orient` property; `Joint.chain(positions, name_pattern="{index}", parent=None, radius=1.0) -> list[Joint]` classmethod creating a parented chain; `Joint.mirror(mirror_axis="x", search="L_", replace="R_", behavior=True) -> Joint`.
 - `IkHandle.create(start: Joint, end: Joint, solver="ikRPsolver", name=None) -> IkHandle`; properties `start_joint`, `end_effector`, `solver`; `pole_vector(node)` creates poleVectorConstraint; `twist` plug shortcut.
 
-- [ ] **Step 1: Tests (ikhandle)**
+- [x] **Step 1: Tests (ikhandle)**
 
 ```python
 from maya import cmds
@@ -637,7 +637,7 @@ def test_moving_handle_moves_chain():
     assert abs(end_pos.x - 3) < 1e-3 and abs(end_pos.y - 1) < 1e-3
 ```
 
-- [ ] **Step 2: Tests (joint/transform additions)**
+- [x] **Step 2: Tests (joint/transform additions)**
 
 ```python
 def test_chain_creates_parented_joints():
@@ -680,8 +680,8 @@ def test_aim_at():
     assert not cmds.ls(type="aimConstraint")
 ```
 
-- [ ] **Step 3: Implement** — `Joint.chain` uses `Joint.create(name, parent=prev)` then `world_position` set; `orient_chain` via `cmds.joint(edit=True, orientJoint=..., secondaryAxisOrient=..., zeroScaleOrient=True)` per joint with last joint `orientation=(0,0,0)`; `mirror` via `cmds.mirrorJoint(mirrorYZ/XZ/XY, mirrorBehavior, searchReplace)`; `IkHandle` registered `@register("ikHandle")` subclass of `Transform`, `create` via `cmds.ikHandle(startJoint, endEffector, solver, name)`.
-- [ ] **Step 4: Run → PASS. Commit `feat(tik.maya): joint chain/orient/mirror helpers, Transform aim/between, IkHandle type`.**
+- [x] **Step 3: Implement** — `Joint.chain` uses `Joint.create(name, parent=prev)` then `world_position` set; `orient_chain` via `cmds.joint(edit=True, orientJoint=..., secondaryAxisOrient=..., zeroScaleOrient=True)` per joint with last joint `orientation=(0,0,0)`; `mirror` via `cmds.mirrorJoint(mirrorYZ/XZ/XY, mirrorBehavior, searchReplace)`; `IkHandle` registered `@register("ikHandle")` subclass of `Transform`, `create` via `cmds.ikHandle(startJoint, endEffector, solver, name)`.
+- [x] **Step 4: Run → PASS. Commit `feat(tik.maya): joint chain/orient/mirror helpers, Transform aim/between, IkHandle type`.**
 
 ---
 
@@ -699,7 +699,7 @@ class MatrixConstraint:
 ```
 Rules: `driver` may be a single node or a list (averaged via `wtAddMatrix` with equal weights — exposes `.average` node); joint driven gets jointOrient compensation (as old code); parent inverse matrix appended when driven has a parent; skips are iterables of `"x"/"y"/"z"`.
 
-- [ ] **Step 1: Tests**
+- [x] **Step 1: Tests**
 
 ```python
 import pytest
@@ -778,7 +778,7 @@ def test_delete_cleans_nodes():
     assert cmds.listConnections(f"{driven.name}.t", source=True, destination=False) is None
 ```
 
-- [ ] **Step 2–4:** implement following the old `matrixConstraint` reference (nodes: `{name}_multMatrix`, `{name}_decomposeMatrix`, joint strand `{name}_rotateComposeMatrix` etc.), using `Plug` `>>` connections; run; commit `feat(tik.maya): MatrixConstraint construct`.
+- [x] **Step 2–4:** implement following the old `matrixConstraint` reference (nodes: `{name}_multMatrix`, `{name}_decomposeMatrix`, joint strand `{name}_rotateComposeMatrix` etc.), using `Plug` `>>` connections; run; commit `feat(tik.maya): MatrixConstraint construct`.
 
 ---
 
@@ -790,7 +790,7 @@ def test_delete_cleans_nodes():
 - `MatrixSwitch.create(drivers: list, driven, control: Plug | None = None, *, maintain_offset=True, name=None)` — `blendMatrix` (Maya 2020+) with one target per driver; `control` (enum plug, created on driven's parent-less holder if None) drives target weights via `condition`/setDrivenKey-free math: weight_i = (control == i) using `condition` nodes. Properties: `blend`, `control`, `constraint` (the MatrixConstraint on the blend output).
 - `SpaceSwitch.create(node, spaces: list, *, control=None, attr_name="space", mode="parent", labels=None, default=0, name=None)` — creates offset group `{node}_space` above `node`, enum attr on `control or node` with labels (world + spaces), and a `MatrixSwitch` driving the offset group with skip based on mode (`point` skips rotate, `orient` skips translate). Properties `attr: Plug`, `offset: Transform`, `switch: MatrixSwitch`. `add_space(target, label)`.
 
-- [ ] **Step 1: Tests (space switch)**
+- [x] **Step 1: Tests (space switch)**
 
 ```python
 from maya import cmds
@@ -845,8 +845,8 @@ def test_add_space_extends_enum():
     assert cmds.attributeQuery("space", node=ctrl.name, listEnum=True) == ["world:A:hand"]
 ```
 
-- [ ] **Step 2: Tests (matrix switch)** — two drivers, enum control 0/1, driven follows selected; `maintain_offset` verified; skip through constraint kwargs.
-- [ ] **Step 3–4:** implement, run, commit `feat(tik.maya): MatrixSwitch and SpaceSwitch constructs`.
+- [x] **Step 2: Tests (matrix switch)** — two drivers, enum control 0/1, driven follows selected; `maintain_offset` verified; skip through constraint kwargs.
+- [x] **Step 3–4:** implement, run, commit `feat(tik.maya): MatrixSwitch and SpaceSwitch constructs`.
 
 ---
 
@@ -856,7 +856,7 @@ def test_add_space_extends_enum():
 
 **Produces:** `Measure.create(start, end, name=None) -> Measure` using `distanceBetween` fed by `worldMatrix` plugs; `distance: Plug` (`.distance`), `node`, `start`, `end`, `initial_distance: float`, `ratio_plug(scale_plug=None) -> Plug` (distance / initial [/ global scale]) built with Plug arithmetic.
 
-- [ ] Tests: distance equals 5 for (0,0,0)-(3,4,0); moving end updates plug; `ratio_plug().value == 2.0` after doubling; with `scale_plug` set to 2 ratio returns 1.0. Implement, run, commit `feat(tik.maya): Measure construct`.
+- [x] Tests: distance equals 5 for (0,0,0)-(3,4,0); moving end updates plug; `ratio_plug().value == 2.0` after doubling; with `scale_plug` set to 2 ratio returns 1.0. Implement, run, commit `feat(tik.maya): Measure construct`.
 
 ---
 
@@ -872,7 +872,7 @@ methods: pin_start(node, maintain_offset=True) -> MatrixConstraint; pin_end(...)
 ```
 Implementation follows old `Ribbon`: nurbsPlane along X of length `distance(start,end)`, rebuilt to spans 5, follicles (`createNode follicle` + connect `outTranslate/outRotate`, `inputSurface`, `inputWorldMatrix`) at u = (i + 0.5) / joint_count, a `Joint` under each follicle transform; start/end plug locators with aim setup pointing to each other using the up locators; middle controllers (`Controller.create`) bound to the surface via a `skinCluster` of start/mid/end joints (`cmds.skinCluster(..., maximumInfluences=2)`) — controllers drive those bind joints; whole ribbon group aligned to `start` and aimed at `end`. Hidden helpers get `visibility=False`. Scaleable: per-joint distance-based `sx/sy/sz` driven by measure ratio with `scale_switch` blend.
 
-- [ ] **Step 1: Tests**
+- [x] **Step 1: Tests**
 
 ```python
 import tik.maya as tm
@@ -920,7 +920,7 @@ def test_scaleable_switch_exists():
     assert ribbon.scale_switch.value == 1.0
 ```
 
-- [ ] **Step 2–4:** implement, run, commit `feat(tik.maya): Ribbon construct`.
+- [x] **Step 2–4:** implement, run, commit `feat(tik.maya): Ribbon construct`.
 
 ---
 
@@ -936,7 +936,7 @@ methods: pole_vector(node) -> Node; ik_visibility: Plug; fk_visibility: Plug (re
 ```
 Blend via one `blendMatrix` per joint: input = fk joint worldMatrix, target = ik joint worldMatrix, weight = switch; output through `MatrixConstraint`-style decompose with parent-inverse (reuse `MatrixConstraint.create(blend_output_node, joint)` is not possible — implement small internal decompose). Simpler and robust: per joint `pairBlend`? No — use `blendMatrix` → `multMatrix(parentInverse)` → `decomposeMatrix` → joint t/r/s with jointOrient compensation reused from `MatrixConstraint` by giving `MatrixConstraint.create` an optional `driver_matrix_plug`. Add that kwarg in Task 5 (`driver` may be a `Plug` of matrix type).
 
-- [ ] **Step 1: Tests**
+- [x] **Step 1: Tests**
 
 ```python
 import tik.maya as tm
@@ -981,12 +981,12 @@ def test_visibility_plugs_are_inverse():
     assert abs(chain.fk_visibility.value - 0.75) < 1e-6
 ```
 
-- [ ] **Step 2–4:** implement, run, commit `feat(tik.maya): IkFkChain construct`.
+- [x] **Step 2–4:** implement, run, commit `feat(tik.maya): IkFkChain construct`.
 
 ---
 
 ### Task 10: Exports, docs, full-suite verification
 
-- [ ] Export `IkHandle`, `MatrixConstraint`, `MatrixSwitch`, `SpaceSwitch`, `Measure`, `Ribbon`, `IkFkChain`, `find_by_meta`, `attribute`, `naming` from `tik/maya/__init__.py` and `constructs/__init__.py`.
-- [ ] Add `docs/source/tik_maya/guides/rig_constructs.rst` with one example per construct.
-- [ ] Run `tests/unit` full; all pass. Commit `feat(tik.maya): export rigging constructs, docs`.
+- [x] Export `IkHandle`, `MatrixConstraint`, `MatrixSwitch`, `SpaceSwitch`, `Measure`, `Ribbon`, `IkFkChain`, `find_by_meta`, `attribute`, `naming` from `tik/maya/__init__.py` and `constructs/__init__.py`.
+- [x] Add `docs/source/tik_maya/guides/rig_constructs.rst` with one example per construct.
+- [x] Run `tests/unit` full; all pass. Commit `feat(tik.maya): export rigging constructs, docs`.
