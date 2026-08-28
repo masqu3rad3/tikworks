@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from _fakes_trigger import FakeBackend, ToyChain, ToyRoot
+from trigger_fakes import FakeBackend, ToyChain, ToyRoot
 from tik.trigger.core import (
     Action,
     ActionExecutionError,

@@ -64,6 +64,9 @@ tests-unit: ## Run unit tests
 	$(SET_PYTHONPATH) $(MAYAPY) $(TESTS_DIR)/unit/invoke.py
 
 .PHONY: tests-integration
+tests-ui:
+	$(SET_PYTHONPATH) set TIK_TESTS_NO_MAYA=1 && set QT_QPA_PLATFORM=offscreen && $(MAYAPY) -m pytest tests/ui -q
+
 tests-integration: ## Run integration tests
 	$(SET_PYTHONPATH) $(MAYAPY) $(TESTS_DIR)/integration/invoke.py
 

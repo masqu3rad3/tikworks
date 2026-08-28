@@ -1,17 +1,26 @@
 """Pytest configuration for Maya tests."""
 
+import os
 import sys
 import types
+from pathlib import Path
+
 import pytest
+
+# shared test helpers (fake backends etc.)
+sys.path.insert(0, str(Path(__file__).parent / "helpers"))
 
 # IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
 
 _maya_available = False
-try:
-    import maya.standalone
-    _maya_available = True
-except ImportError:
-    pass
+# TIK_TESTS_NO_MAYA=1 runs Maya-free suites (e.g. Qt UI tests) under mayapy
+# without initializing Maya standalone, which cannot host a QApplication.
+if not os.environ.get("TIK_TESTS_NO_MAYA"):
+    try:
+        import maya.standalone
+        _maya_available = True
+    except ImportError:
+        pass
 
 
 def _create_mock_maya():

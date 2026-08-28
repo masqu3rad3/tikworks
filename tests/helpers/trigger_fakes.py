@@ -75,6 +75,7 @@ class FakeBackend:
         self.connections: list[tuple[str, str, str]] = []
         self.afterlife_mode: Optional[str] = None
         self.fail_on: Optional[str] = None
+        self.selection = None  # ParentRef returned by selected_guide()
 
     def new_scene(self):
         self.calls.append(("new_scene",))
@@ -114,6 +115,20 @@ class FakeBackend:
 
     def guide_node(self, instance_id, role, index=0):
         return f"{instance_id}_{role}_{index}"
+
+    def rename_instance(self, instance_id, name):
+        for item in self.instances:
+            if item.instance_id == instance_id:
+                item.name = name
+
+    def selected_guide(self):
+        return self.selection
+
+    def select_guides(self, instance_id):
+        self.calls.append(("select", instance_id))
+
+    def selected_node_name(self):
+        return "picked_node"
 
     def ensure_rig_root(self, rig_name):
         self.calls.append(("rig_root", rig_name))

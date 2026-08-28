@@ -203,6 +203,28 @@ class MayaBackend:
         root = self._root_guide(self.guide_nodes(instance_id), instance[0].module_type)
         root.meta[tags.NAME] = name
 
+    # ------------------------------------------------------------ selection
+    def selected_guide(self) -> Optional[ParentRef]:
+        """Return the first selected guide as a ``ParentRef`` (for UI parenting)."""
+        for name in cmds.ls(selection=True, long=True, type="joint") or []:
+            node = tm.Joint(name)
+            if node.meta.get(tags.KIND) == tags.GUIDE and tags.INSTANCE in node.meta:
+                return ParentRef(
+                    node.meta[tags.INSTANCE],
+                    node.meta.get(tags.ROLE, ""),
+                    int(node.meta.get(tags.INDEX, 0)),
+                )
+        return None
+
+    def select_guides(self, instance_id: str) -> None:
+        nodes = self.guide_nodes(instance_id)
+        cmds.select([node.long_name for node in nodes.values()], replace=True)
+
+    @staticmethod
+    def selected_node_name() -> str:
+        selected = cmds.ls(selection=True) or []
+        return selected[0] if selected else ""
+
     # ---------------------------------------------------------------- build
     def ensure_rig_root(self, rig_name: str) -> tm.Transform:
         for node in tm.find_by_meta(tags.KIND, tags.RIG_ROOT):

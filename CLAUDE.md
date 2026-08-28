@@ -38,9 +38,9 @@ Maya API wrapper that "feels like Python, behaves like Maya."
 ### tik.trigger (IN DEVELOPMENT)
 Next-generation rigging framework built on tik.maya.
 - **Location:** `src/python/tik/trigger/`
-- **Status:** Phase 4 Session Management complete (April 2026)
-- **Key influences:** tik_manager4 UI patterns, labelmatic config/core separation
-- **Current implementation:** Core foundation + actions + modules + session management
+- **Status:** Rebuilt on tik.maya (August 2026): DCC-agnostic core + Maya backend, modules `base`/`fkchain`/`arm`, actions `import_asset`/`kinematics`/`script`, RigSession (.trg), minimal Qt UI
+- **Design spec:** `docs/superpowers/specs/2026-08-28-trigger-rebuild-design.md` (plans A-D in `docs/superpowers/plans/`)
+- **Layering rule:** `tik/trigger/core` and `session` import no Maya/Qt (enforced by `tests/unit/test_import_boundaries.py`)
 
 ## Important Patterns
 
@@ -74,29 +74,28 @@ See `AGENTS.md` for detailed agent and developer guidance.
 | `AI/system_prompt.md` | System-level instructions |
 | `.github/copilot-instructions.md` | Legacy Copilot instructions |
 
-## tik.trigger Structure Plan
+## tik.trigger Structure
 
-The tik.trigger structural organization plan is stored in:
-- `AI/tik_trigger_plan.md` — Full architectural plan
+Authoritative design: `docs/superpowers/specs/2026-08-28-trigger-rebuild-design.md`
+(`AI/tik_trigger_plan.md` is the superseded first draft).
 
 Key decisions:
-- **Folder-per-action/module** with named `.py` files (e.g., `bipedArm/bipedArm.py`)
-- **Registry decorators** for explicit plugin registration
-- **Folder-based discovery** scanning subdirectories
-- **JSON configs** for UI definitions and defaults
-- **Dataclasses** for typed session data (`core/schemas.py`)
-- **DCC-agnostic core** — `core/` imports no Maya modules
-- **Session management** — GuideSession and ActionSession for save/load workflows
+- **Declarative modules** — manifest (`Guides`, `plugs`, `sockets`, typed `Field`s) + `draw_guides(ctx)` / `build(ctx)`
+- **Python fields are the schema** (`tik.core.fields`); optional `defaults.json` overrides defaults only; UI is generated (`tik.shared.ui.fields.FormBuilder`)
+- **Scene is the truth** — guides are joints tagged via `node.meta` (`trg_*` keys); identity is a uuid, never a name
+- **Backend boundary** — `tik/trigger/backends/maya` is the only Maya-touching layer besides module/action bodies
+- **Folder-per-module/action** with named `.py` files and `@register_module` / `@register_action`
+- **One session document** (`.trg`): guide snapshot + ordered actions
 
 ## tik.trigger Tests
 
 Tests for tik.trigger follow naming convention `test_<module>_trigger.py`:
-- `tests/unit/test_exceptions_trigger.py` — Exception hierarchy tests
-- `tests/unit/test_registry_trigger.py` — Registry and decorator tests
-- `tests/unit/test_schemas_trigger.py` — Dataclass tests
-- `tests/unit/test_action_core_trigger.py` — ActionCore base class tests
-- `tests/unit/test_module_core_trigger.py` — ModuleCore/GuidesCore tests
-- `tests/unit/test_session_trigger.py` — Session management tests
+- `tests/unit/test_core_trigger.py` — manifest, Module, registry, schemas, Builder (fake backend)
+- `tests/unit/test_rig_session_trigger.py` — RigSession (fake backend)
+- `tests/unit/test_maya_backend_trigger.py` — Maya backend, contexts, build pipeline
+- `tests/integration/trigger/` — end-to-end pipeline and arm module
+- `tests/ui/` — Qt UI (run with `TIK_TESTS_NO_MAYA=1`, `QT_QPA_PLATFORM=offscreen`; `make tests-ui`)
+- Shared fakes live in `tests/helpers/trigger_fakes.py`
 
 ## Getting Help
 

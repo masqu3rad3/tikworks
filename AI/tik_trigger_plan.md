@@ -1,3 +1,6 @@
+> **Superseded (2026-08-28):** the authoritative design is now
+> `docs/superpowers/specs/2026-08-28-trigger-rebuild-design.md`. Kept for history.
+
 # tik.trigger Structural Organization Plan
 
 ## Context

@@ -7,6 +7,7 @@ import datetime
 import getpass
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -169,10 +170,13 @@ class RigSession:
         names = set(self.action_names())
         if base not in names:
             return base
-        counter = 1
-        while f"{base}{counter}" in names:
+        match = re.match(r"^(.*?)(\d+)$", base)
+        stem, counter = (match.group(1), int(match.group(2))) if match else (base, 0)
+        while True:
             counter += 1
-        return f"{base}{counter}"
+            candidate = f"{stem}{counter}"
+            if candidate not in names:
+                return candidate
 
     def add_action(
         self, action_type: str, name: Optional[str] = None, index: Optional[int] = None
