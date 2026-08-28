@@ -14,6 +14,7 @@ class FkChain(Module):
     guides = Guides("root", multi="segment", min=1, max=50)
     plugs = ("root", "end")
     sockets = ("root",)
+    legacy_types = {"root": "FkikRoot", "segment": "Fkik"}
 
     segments = IntField(3, min=1, max=50, help="Number of joints after the root")
     spacing = FloatField(5.0, min=0.01, help="Default distance between guides")

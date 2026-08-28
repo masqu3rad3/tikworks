@@ -39,6 +39,7 @@ class Module(Schema):
     plugs: tuple[str, ...] = ("root",)
     sockets: tuple[str, ...] = ("root",)
     module_type: str = ""  # stamped by @register_module
+    legacy_types: dict = {}  # role -> old .trg "type" name (default: capitalised role)
 
     def __init__(
         self,

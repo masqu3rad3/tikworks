@@ -13,8 +13,14 @@ from tik.trigger.core import registry
 from tik.trigger.core.exceptions import AttachError, GuideError
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 
+from tik.maya import attribute
+from tik.trigger.guides.format import legacy_type, make_record
+
 from . import tags
 from .context import MayaBuildContext, MayaGuideContext
+
+_JOINT_SIDES = {"C": 0, "L": 1, "R": 2}
+_AXES = {"upAxis": (0.0, 1.0, 0.0), "mirrorAxis": (1.0, 0.0, 0.0), "lookAxis": (0.0, 0.0, 1.0)}
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +155,8 @@ class MayaBackend:
             if ctx.root is None:
                 raise GuideError(f"'{module.module_type}' drew no guides.")
             self._write_root_meta(ctx.root, module, attach)
+            for (role, _index), node in ctx.created.items():
+                self._tag_legacy_joint(node, type(module), role, module.side.value)
             if poses:
                 self._apply_poses(ctx.created, poses)
         instance = self._instance_from_nodes(module.instance_id, ctx.created)
@@ -160,6 +168,57 @@ class MayaBackend:
         root.meta[tags.SETTINGS] = module.values()
         if attach:
             root.meta[tags.ATTACH] = attach
+        MayaBackend._write_legacy_attrs(root, module)
+
+    @staticmethod
+    def _write_legacy_attrs(root, module) -> None:
+        """Old-Trigger style attributes on the root guide (+ typed module properties)."""
+        if not root.has_attr("moduleName"):
+            attribute.add_string(root, "moduleName")
+        root["moduleName"].value = module.name
+        for axis_name, vector in _AXES.items():
+            if not root.has_attr(axis_name):
+                cmds.addAttr(root.long_name, longName=axis_name, attributeType="float3")
+                for component in "XYZ":
+                    cmds.addAttr(root.long_name, longName=f"{axis_name}{component}", attributeType="float", parent=axis_name)
+            for component, value in zip("XYZ", vector):
+                root[f"{axis_name}{component}"].value = value
+        if not root.has_attr("useRefOri"):
+            attribute.add_bool(root, "useRefOri", default=True)
+        MayaBackend._sync_setting_attrs(root, module)
+
+    @staticmethod
+    def _sync_setting_attrs(root, module) -> None:
+        """Mirror module fields as real attributes (for UI binding and old-style export)."""
+        for name, field_obj in module.fields().items():
+            value = getattr(module, name)
+            kind = field_obj.type_name
+            if kind in ("list", "dict", "vector"):
+                continue
+            if not root.has_attr(name):
+                if kind == "bool":
+                    attribute.add_bool(root, name, default=bool(value))
+                elif kind == "int":
+                    attribute.add_int(root, name, default=int(value), min=field_obj.min, max=field_obj.max)
+                elif kind == "float":
+                    attribute.add_float(root, name, default=float(value), min=field_obj.min, max=field_obj.max)
+                elif kind == "choice":
+                    attribute.add_enum(root, name, [str(item) for item in field_obj.choices], default=field_obj.choices.index(value))
+                else:
+                    attribute.add_string(root, name)
+            if kind == "choice":
+                root[name].value = field_obj.choices.index(value)
+            elif kind in ("string", "file", "node"):
+                root[name].value = str(value)
+            else:
+                root[name].value = value
+
+    @staticmethod
+    def _tag_legacy_joint(node, module_cls, role: str, side: str) -> None:
+        """Old joint labelling: side + type 'Other' with the legacy type name."""
+        node["side"].value = _JOINT_SIDES.get(side, 0)
+        node["type"].value = 18  # Other
+        node["otherType"].value = legacy_type(module_cls, role)
 
     @staticmethod
     def _apply_poses(nodes: dict, poses: Sequence[GuidePose]) -> None:
@@ -190,7 +249,86 @@ class MayaBackend:
         if not instance:
             raise GuideError(f"No guides for instance {instance_id}.")
         root = self._root_guide(self.guide_nodes(instance_id), instance[0].module_type)
-        root.meta[tags.SETTINGS] = dict(settings)
+        module_cls = registry.get_module(instance[0].module_type)
+        module = module_cls(name=instance[0].name, side=instance[0].side, settings=settings)
+        root.meta[tags.SETTINGS] = module.values()
+        self._sync_setting_attrs(root, module)
+
+    def settings_plug(self, instance_id: str, field_name: str):
+        """The plug holding a module property (for two-way UI binding)."""
+        instance = self.find_instances([instance_id])
+        if not instance:
+            raise GuideError(f"No guides for instance {instance_id}.")
+        root = self._root_guide(self.guide_nodes(instance_id), instance[0].module_type)
+        return root[field_name]
+
+    # ------------------------------------------------------- .trg records
+    def export_guide_records(self, instance_ids=None) -> list[dict]:
+        """Serialize scene guides in the legacy ``.trg`` layout (+ explicit keys)."""
+        instances = self.find_instances() if instance_ids is None else self.find_instances(list(instance_ids))
+        records: list[dict] = []
+        for instance in instances:
+            module_cls = registry.get_module(instance.module_type)
+            nodes = self.guide_nodes(instance.instance_id)
+            root_role = module_cls.guides.root
+            ordered = sorted(nodes.items(), key=lambda item: (item[0][0] != root_role, item[0][0], item[0][1]))
+            for (role, index), node in ordered:
+                parent = node.parent
+                parent_name = parent.name if parent is not None and parent.meta.get(tags.KIND) == tags.GUIDE else None
+                is_root = role == root_role and index == 0
+                records.append(make_record(
+                    name=node.name,
+                    position=cmds.xform(node.long_name, query=True, worldSpace=True, translation=True),
+                    rotation=tuple(node.rotate),
+                    joint_orient=node.joint_orient,
+                    parent=parent_name,
+                    side=instance.side,
+                    legacy=legacy_type(module_cls, role),
+                    module=instance.module_type,
+                    role=role,
+                    index=index,
+                    instance=instance.instance_id,
+                    radius=node.radius,
+                    color=node.color or 17,
+                    settings=dict(instance.settings) if is_root else None,
+                    module_name=instance.name if is_root else None,
+                ))
+        return records
+
+    def import_guide_instances(self, guide_instances) -> list[ModuleInstance]:
+        """Recreate guide joints from ``GuideInstance`` records; returns scene instances."""
+        holder = self.holder()
+        created_nodes: dict[str, tm.Joint] = {}  # record name -> joint
+        built: list = []
+        with self.undo_chunk("Trigger import guides"):
+            for guide_instance in guide_instances:
+                module_cls = registry.get_module(guide_instance.module_type)
+                module = module_cls(name=guide_instance.name, side=guide_instance.side, settings=guide_instance.settings)
+                nodes: dict = {}
+                for (role, index), record in guide_instance.joints.items():
+                    joint = tm.Joint.create(name=record["name"], radius=record.get("radius", 1.0))
+                    joint.world_position = record["position"]
+                    joint.joint_orient = record.get("joint_orient", (0, 0, 0))
+                    joint.rotate = tuple(record.get("rotation", (0, 0, 0)))
+                    joint.color = record.get("color") or 17
+                    joint.meta.update({
+                        tags.KIND: tags.GUIDE, tags.MODULE: module.module_type, tags.INSTANCE: module.instance_id,
+                        tags.ROLE: role, tags.INDEX: index, tags.SIDE: module.side.value,
+                    })
+                    self._tag_legacy_joint(joint, module_cls, role, module.side.value)
+                    nodes[(role, index)] = joint
+                    created_nodes[record["name"]] = joint
+                root = nodes[(module_cls.guides.root, 0)]
+                self._write_root_meta(root, module, None)
+                built.append((guide_instance, module, nodes))
+            for guide_instance, module, nodes in built:
+                for (role, index), record in guide_instance.joints.items():
+                    joint = nodes[(role, index)]
+                    parent_name = record.get("parent")
+                    parent_node = created_nodes.get(parent_name) if parent_name else None
+                    joint.parent = parent_node if parent_node is not None else holder
+                    cmds.xform(joint.long_name, worldSpace=True, translation=record["position"])
+        return [self._instance_from_nodes(module.instance_id, nodes) for _gi, module, nodes in built]
 
     def read_settings(self, instance_id: str) -> dict:
         instance = self.find_instances([instance_id])

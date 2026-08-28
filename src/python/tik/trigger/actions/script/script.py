@@ -8,7 +8,7 @@ from tik.trigger.core import Action, StringField, register_action
 from tik.trigger.core.exceptions import ActionExecutionError
 
 
-@register_action("script")
+@register_action("script", category="structure", icon="script")
 class Script(Action):
     """Execute Python with ``ctx`` available as a global."""
 
