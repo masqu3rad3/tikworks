@@ -1,24 +1,34 @@
-"""Core framework for tik.trigger.
+"""DCC-agnostic core of tik.trigger.
 
-This package contains the DCC-agnostic foundation for the trigger system:
-- ActionCore: Base class for actions
-- RigModule: Unified base class for modules (guide + build)
-- Registry decorators: @register_action, @register_module
-- Schemas: Dataclasses for typed data
-- Socket/Plug: Connection point data classes
-- Exceptions: Custom exception hierarchy
-- IO: Session file I/O handler extending tik.shared.io.IO
+Nothing in this package imports Maya or Qt.
 """
 
-from tik.trigger.core.action_core import ActionCore
-from tik.trigger.core.exceptions import (
+from tik.core.fields import (
+    BoolField,
+    ChoiceField,
+    Field,
+    FloatField,
+    IntField,
+    ListField,
+    NodeRefField,
+    StringField,
+    VectorField,
+)
+from tik.core.side import Side
+
+from .action import Action, ActionContext
+from .backend import Backend
+from .builder import AFTERLIFE_MODES, Builder, BuildReport
+from .context import BuildContext, GuideContext, RigGroups
+from .events import ERROR, LOG, PROGRESS, EventBus
+from .exceptions import (
     ActionError,
     ActionExecutionError,
-    ActionFeedError,
+    AttachError,
     BuildError,
     DuplicateRegistrationError,
+    FieldValidationError,
     GuideError,
-    InvalidSessionError,
     ModuleError,
     NotFoundError,
     RegistryError,
@@ -27,92 +37,91 @@ from tik.trigger.core.exceptions import (
     SessionSaveError,
     TriggerError,
 )
-from tik.trigger.core.io import IO, GUIDE_SESSION_EXT, ACTION_SESSION_EXT
-from tik.trigger.core.module_core import GuidesCore, ModuleCore
-from tik.trigger.core.registry import (
+from .manifest import Guides
+from .module import Module
+from .registry import (
     clear_registries,
     get_action,
     get_module,
     is_action_registered,
     is_module_registered,
+    iter_actions,
+    iter_modules,
     list_actions,
     list_modules,
     register_action,
     register_module,
+    unregister_action,
+    unregister_module,
 )
-from tik.trigger.core.rig_module import RigModule
-from tik.trigger.core.schemas import (
-    ActionDefinition,
-    ActionInstanceData,
-    ConnectionData,
-    GuideData,
-    ModuleDefinition,
-    ModuleInstanceData,
-    SessionData,
-    SessionMetadata,
-    UIDefinition,
+from .schemas import (
+    SCHEMA_VERSION,
+    ActionInstance,
+    GuidePose,
+    ModuleInstance,
+    ParentRef,
+    RigDocument,
+    order_instances,
 )
-from tik.trigger.core.socket_data import JointType, ModuleConnectors, Plug, Socket
-from tik.trigger.core import module_registry
-
-# Alias module_registry items to avoid name conflicts with registry module
-MODULES = module_registry.MODULES
-MODULE_TYPE_ATTR = module_registry.MODULE_TYPE_ATTR
-JOINT_ROLE_ATTR = module_registry.JOINT_ROLE_ATTR
-MODULE_INSTANCE_ATTR = module_registry.MODULE_INSTANCE_ATTR
-JointRole = module_registry.JointRole
-ModuleRegistry = module_registry.ModuleRegistry
-is_registered = module_registry.is_registered
-register_module_type = module_registry.register_module_type
 
 __all__ = [
-    # Base classes
-    "ActionCore",
-    "ModuleCore",
-    "GuidesCore",
-    "RigModule",
-    # Connection points
-    "Plug",
-    "Socket",
-    "ModuleConnectors",
-    "JointType",
-    # IO
-    "IO",
-    "GUIDE_SESSION_EXT",
-    "ACTION_SESSION_EXT",
-    # Registry
+    "Action",
+    "ActionContext",
+    "Backend",
+    "Builder",
+    "BuildReport",
+    "AFTERLIFE_MODES",
+    "BuildContext",
+    "GuideContext",
+    "RigGroups",
+    "EventBus",
+    "PROGRESS",
+    "LOG",
+    "ERROR",
+    "Guides",
+    "Module",
+    "Side",
+    "Field",
+    "IntField",
+    "FloatField",
+    "BoolField",
+    "StringField",
+    "ChoiceField",
+    "VectorField",
+    "ListField",
+    "NodeRefField",
     "register_action",
     "register_module",
     "get_action",
     "get_module",
     "list_actions",
     "list_modules",
+    "iter_actions",
+    "iter_modules",
     "is_action_registered",
     "is_module_registered",
+    "unregister_action",
+    "unregister_module",
     "clear_registries",
-    # Schemas
-    "GuideData",
-    "ModuleInstanceData",
-    "ActionInstanceData",
-    "SessionData",
-    "SessionMetadata",
-    "UIDefinition",
-    "ActionDefinition",
-    "ModuleDefinition",
-    "ConnectionData",
-    # Exceptions
+    "SCHEMA_VERSION",
+    "GuidePose",
+    "ParentRef",
+    "ModuleInstance",
+    "ActionInstance",
+    "RigDocument",
+    "order_instances",
     "TriggerError",
     "RegistryError",
     "DuplicateRegistrationError",
     "NotFoundError",
     "SessionError",
-    "InvalidSessionError",
-    "SessionSaveError",
     "SessionLoadError",
+    "SessionSaveError",
     "ModuleError",
     "GuideError",
     "BuildError",
+    "AttachError",
     "ActionError",
-    "ActionFeedError",
     "ActionExecutionError",
+    "FieldValidationError",
 ]

@@ -1,7 +1,0 @@
-{
-    "name": "fkchain",
-    "description": "Simple FK chain with root, mid, end joints",
-    "members": ["root", "mid", "end"],
-    "properties": [],
-    "multi_guide": null
-}

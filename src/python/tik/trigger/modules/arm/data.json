@@ -1,7 +1,0 @@
-{
-    "name": "arm",
-    "description": "IK/FK switching arm with collar, shoulder, elbow, hand",
-    "members": ["collar", "shoulder", "elbow", "hand"],
-    "properties": [],
-    "multi_guide": null
-}

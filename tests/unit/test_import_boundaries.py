@@ -40,25 +40,7 @@ def _violations(package: str, forbidden):
     return found
 
 
-# Packages still carrying DCC imports; the trigger core rebuild (Plan B) removes
-# them. strict=True makes the test fail loudly once they are clean so the mark
-# gets removed.
-_KNOWN_DEBT = {"trigger/core", "trigger/session"}
-
-
-@pytest.mark.parametrize(
-    "package,forbidden",
-    [
-        pytest.param(
-            package,
-            forbidden,
-            marks=pytest.mark.xfail(strict=True, reason="cleaned in Plan B")
-            if package in _KNOWN_DEBT
-            else (),
-        )
-        for package, forbidden in FORBIDDEN.items()
-    ],
-)
+@pytest.mark.parametrize("package,forbidden", FORBIDDEN.items())
 def test_no_forbidden_imports(package, forbidden):
     if not (SRC / package).exists():
         pytest.skip(f"{package} not present")
