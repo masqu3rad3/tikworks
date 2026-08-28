@@ -78,6 +78,13 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
             return QtWidgets.QWidget.close(self)
         return super().close()
 
+    def show(self, *args, **kwargs):  # noqa: D401
+        """Plain show when there is no Maya UI (headless, mayapy with Qt)."""
+        if self.parent() is None or not HAS_MAYA:
+            # bypass the mixin's setVisible/show pair (it recurses without a host)
+            return QtWidgets.QWidget.setVisible(self, True)
+        return super().show(*args, **kwargs)
+
     def dockCloseEventTriggered(self) -> None:  # noqa: N802
         self._kill_script_jobs()
         self.close()
@@ -96,6 +103,6 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
     def show_tool(self, dockable: bool = True) -> None:
         """Show as a dockable workspace control in Maya, plain window elsewhere."""
         if HAS_MAYA and self.parent() is not None:
-            self.show(dockable=dockable, retain=False)
+            super().show(dockable=dockable, retain=False)
         else:
-            self.show()
+            QtWidgets.QWidget.setVisible(self, True)

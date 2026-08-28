@@ -12,6 +12,7 @@ class LogWidget(QtWidgets.QPlainTextEdit):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName("LogWidget")
         self.setReadOnly(True)
         self.setMaximumBlockCount(2000)
 

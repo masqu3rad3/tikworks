@@ -94,8 +94,16 @@ class PipelineDelegate(QtWidgets.QStyledItemDelegate):
         painter.setFont(font)
         painter.setPen(QtGui.QColor("#e6e6e6" if selected else ("#a8b3c2" if linked else theme.TEXT)))
         name = index.data(QtCore.Qt.DisplayRole) or ""
-        if linked:
-            name = "⛓ " + name
+        if linked:  # painted chain glyph (fonts rarely have U+26D3)
+            painter.setRenderHint(QtGui.QPainter.Antialiasing)
+            pen = QtGui.QPen(QtGui.QColor(theme.LINKED), 1.4)
+            painter.setPen(pen)
+            painter.setBrush(QtCore.Qt.NoBrush)
+            cy = rect.center().y() + 0.5
+            painter.drawEllipse(QtCore.QRectF(x, cy - 3, 6, 6))
+            painter.drawEllipse(QtCore.QRectF(x + 5, cy - 3, 6, 6))
+            x += 15
+            painter.setPen(QtGui.QColor("#e6e6e6" if selected else "#a8b3c2"))
         metrics = QtGui.QFontMetrics(font)
         name_width = metrics.horizontalAdvance(name)
         painter.drawText(QtCore.QRect(x, rect.top(), name_width + 4, rect.height()), QtCore.Qt.AlignVCenter, name)
