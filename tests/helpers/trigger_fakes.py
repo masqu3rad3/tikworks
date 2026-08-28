@@ -135,6 +135,19 @@ class FakeBackend:
     def settings_plug(self, instance_id, field_name):
         return f"{instance_id}.{field_name}"
 
+    def install_scene_job(self, event, callback):
+        self.scene_jobs = getattr(self, "scene_jobs", {})
+        self.scene_jobs[event] = callback
+        return len(self.scene_jobs)
+
+    def kill_scene_job(self, job):
+        pass
+
+    def fire(self, event):
+        callback = getattr(self, "scene_jobs", {}).get(event)
+        if callback:
+            callback()
+
     def make_observer(self, callback):
         self.observer_callback = callback
 
