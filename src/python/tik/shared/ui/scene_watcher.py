@@ -1,0 +1,121 @@
+"""Scene-change plumbing: many scriptJob events -> one debounced refresh.
+
+Ported from creature_kit face_control ``ui/state.py``. Two guards are
+load-bearing: a burst of events is coalesced into one refresh
+(``QTimer.singleShot(0)``), and a refresh that touches the scene cannot
+re-trigger itself (re-entrancy flag). ``mute()`` silences events the tool
+causes on purpose (e.g. selecting nodes to mirror its own selection).
+"""
+
+from __future__ import annotations
+
+import contextlib
+import logging
+from typing import Callable, Iterable, Optional
+
+from tik.shared.ui.Qt import QtCore
+
+LOG = logging.getLogger(__name__)
+
+DEFAULT_EVENTS = ("SelectionChanged", "DagObjectCreated", "SceneOpened", "NewSceneOpened", "Undo", "Redo")
+
+
+class SceneWatcher(QtCore.QObject):
+    """Debounced, re-entrancy-guarded scene observer."""
+
+    def __init__(
+        self,
+        on_invalidate: Callable[[str], None],
+        events: Iterable[str] = DEFAULT_EVENTS,
+        parent=None,
+        install_job: Optional[Callable[[str, Callable], int]] = None,
+        kill_job: Optional[Callable[[int], None]] = None,
+    ) -> None:
+        super().__init__(parent)
+        self._on_invalidate = on_invalidate
+        self.events = tuple(events)
+        self._jobs: list[int] = []
+        self._pending: Optional[str] = None
+        self._refreshing = False
+        self._muted = 0
+        self._install_job = install_job
+        self._kill_job = kill_job
+
+    # ------------------------------------------------------------ lifecycle
+    def install(self) -> list[int]:
+        self.uninstall()
+        install = self._install_job or self._maya_install
+        for event in self.events:
+            try:
+                self._jobs.append(install(event, lambda name=event: self.notify(name)))
+            except Exception as error:  # noqa: BLE001 - keep the tool alive
+                LOG.debug("cannot watch %s: %s", event, error)
+        return list(self._jobs)
+
+    def uninstall(self) -> None:
+        kill = self._kill_job or self._maya_kill
+        while self._jobs:
+            job = self._jobs.pop()
+            try:
+                kill(job)
+            except Exception:  # noqa: BLE001
+                pass
+
+    @staticmethod
+    def _maya_install(event: str, callback: Callable) -> int:
+        from maya import cmds
+
+        return cmds.scriptJob(event=[event, callback], protected=False)
+
+    @staticmethod
+    def _maya_kill(job: int) -> None:
+        from maya import cmds
+
+        if cmds.scriptJob(exists=job):
+            cmds.scriptJob(kill=job, force=True)
+
+    @property
+    def jobs(self) -> list[int]:
+        return list(self._jobs)
+
+    @property
+    def is_refreshing(self) -> bool:
+        return self._refreshing
+
+    # ------------------------------------------------------------- events
+    @contextlib.contextmanager
+    def mute(self):
+        """Ignore events while the tool changes the scene itself."""
+        self._muted += 1
+        try:
+            yield
+        finally:
+            self._muted -= 1
+
+    def notify(self, event: str = "manual") -> None:
+        """Feed an event (scriptJob callback or a fake backend)."""
+        if self._muted or self._refreshing:
+            return
+        first = self._pending is None
+        # SelectionChanged is cheap; anything structural wins the coalesced slot
+        if self._pending in (None, "SelectionChanged"):
+            self._pending = event
+        if first:
+            QtCore.QTimer.singleShot(0, self._fire)
+
+    def flush(self) -> None:
+        """Run a pending refresh now (tests)."""
+        if self._pending is not None:
+            self._fire()
+
+    def _fire(self) -> None:
+        event, self._pending = self._pending, None
+        if event is None or self._refreshing:
+            return
+        self._refreshing = True
+        try:
+            self._on_invalidate(event)
+        except Exception:  # noqa: BLE001
+            LOG.exception("scene refresh failed")
+        finally:
+            self._refreshing = False

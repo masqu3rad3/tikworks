@@ -19,18 +19,19 @@ class ActionSettingsPanel(QtWidgets.QWidget):
     edited = QtCore.Signal(str)  # path
     open_file_requested = QtCore.Signal(str, str)  # path, extension
 
-    def __init__(self, parent=None, file_browser: Optional[Callable] = None) -> None:
+    def __init__(self, parent=None, file_browser: Optional[Callable] = None, base_dir: Optional[Callable[[], str]] = None) -> None:
         super().__init__(parent)
         self._handle: Optional[ActionHandle] = None
         self._action = None
         layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(8)
         header = QtWidgets.QHBoxLayout()
         self.icon = QtWidgets.QLabel()
         self.title = QtWidgets.QLabel("No action selected")
-        self.title.setStyleSheet("font-size: 14px; font-weight: 600; color: #ffffff;")
+        self.title.setObjectName("PanelTitle")
         self.subtitle = QtWidgets.QLabel("")
-        self.subtitle.setStyleSheet(f"color: {theme.TEXT_DIM};")
+        self.subtitle.setObjectName("PanelSubtitle")
         self.info_button = QtWidgets.QToolButton()
         self.info_button.setText("?")
         self.info_button.setAutoRaise(True)
@@ -43,12 +44,13 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         header.addWidget(self.info_button)
         layout.addLayout(header)
         self.linked_note = QtWidgets.QLabel("")
-        self.linked_note.setStyleSheet(f"color: {theme.LINKED}; font-size: 11px;")
+        self.linked_note.setObjectName("LinkedNote")
         self.linked_note.setVisible(False)
         layout.addWidget(self.linked_note)
         self.form = FormBuilder(
             file_browser=file_browser,
             file_extras={".trg": ("✎", lambda path: self.open_file_requested.emit(path, ".trg"))},
+            base_dir=base_dir,
         )
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
@@ -60,8 +62,8 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.reset_button = QtWidgets.QPushButton("Reset overrides")
         self.run_button = QtWidgets.QPushButton("Run step")
         self.until_button = QtWidgets.QPushButton("Run until here")
+        buttons.addStretch(1)
         for button in (self.save_button, self.reset_button, self.run_button, self.until_button):
-            button.setFlat(True)
             buttons.addWidget(button)
         layout.addLayout(buttons)
         self.form.changed.connect(self._on_changed)

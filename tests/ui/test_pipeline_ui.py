@@ -79,7 +79,7 @@ def test_add_via_palette_and_shelf(view):
     view.add_action("weights", as_child=True)
     assert _paths(view.model) == ["mark", "mark1", "mark1/weights"]
     assert view.current_path() == "mark1/weights"
-    view.shelf.add_requested.emit("boom")
+    view.shelf.activated.emit("boom")
     assert _paths(view.model) == ["mark", "mark1", "mark1/weights", "mark1/boom"]
     assert view.settings.handle.path == "mark1/boom"
     view.palette.search.setText("wei")
@@ -164,7 +164,7 @@ def test_build_updates_statuses_and_log(view):
     view.session["boom"].enabled = False
     assert view.build()
     assert model.data(model.index_for_path("mark1"), StatusRole) == "done"
-    assert view.counter.text() == "2 / 2"
+    assert view.counter.text().startswith("2 / 2")
     assert view.build_until("mark")
     assert model.data(model.index_for_path("mark1"), StatusRole) == ""
 
@@ -172,6 +172,7 @@ def test_build_updates_statuses_and_log(view):
 def test_main_window_tabs_and_files(qapp, tmp_path):
     window = TriggerWindow(FakeBackend())
     window.ask_discard = lambda session: True
+    window.show()
     assert window.tabs.count() == 1
     view = window.current_view
     view.add_action("mark")
@@ -186,8 +187,38 @@ def test_main_window_tabs_and_files(qapp, tmp_path):
     assert window.session.name == "hero.tr"
     window.open_session(str(tmp_path / "hero.tr"))
     assert window.tabs.count() == 2  # already open -> focused
+    assert window.recent_files and window.recent_files[0].endswith("hero.tr")
     window.toggle_shelf()
-    assert window.current_view.shelf.collapsed
+    assert not window.current_view.shelf_visible
+    window.undo()
+    assert window.menuBar().actions()[0].text() == "&File"
+    assert window.status.text("version").startswith("tik.trigger")
     assert window.close_tab(0)
     assert window.tabs.count() == 1
     window.close()
+
+
+def test_session_undo_redo(view):
+    view.add_action("mark")
+    view.add_action("mark")
+    assert view.session.paths() == ["mark", "mark1"]
+    assert view.session.undo()
+    assert view.session.paths() == ["mark"]
+    assert view.session.redo()
+    assert view.session.paths() == ["mark", "mark1"]
+    view.session["mark"].amount = 4
+    assert view.session.undo() and view.session["mark"].amount == 1
+
+
+def test_reference_children_appear_after_file_edit(view, tmp_path):
+    base = Session(FakeBackend())
+    base.add("mark", "kin")
+    (tmp_path / "rigs").mkdir()
+    base.save(tmp_path / "rigs" / "base.tr")
+    view.session.save(tmp_path / "hero.tr")
+    view.add_action("reference")
+    assert _paths(view.model) == ["reference"]
+    field = view.settings.form.widget("file")
+    field.line.setText("rigs/base.tr")
+    field.line.editingFinished.emit()
+    assert _paths(view.model) == ["reference", "reference/kin"]

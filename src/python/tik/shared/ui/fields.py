@@ -147,6 +147,7 @@ class FormBuilder(QtWidgets.QWidget):
         node_picker: Optional[Callable[[], str]] = None,
         file_browser: Optional[Callable] = None,
         file_extras: Optional[dict] = None,
+        base_dir: Optional[Callable[[], str]] = None,
     ) -> None:
         """
         Args:
@@ -164,6 +165,7 @@ class FormBuilder(QtWidgets.QWidget):
         self.node_picker = node_picker
         self.file_browser = file_browser
         self.file_extras = file_extras or {}
+        self.base_dir = base_dir
         self._overridden: set[str] = set()
         self._reference: dict = {}
         if target is not None:
@@ -195,7 +197,8 @@ class FormBuilder(QtWidgets.QWidget):
             if field.hidden:
                 continue
             if field.group != current_group and field.group:
-                label = QtWidgets.QLabel(f"<b>{field.group}</b>")
+                label = QtWidgets.QLabel(field.group.upper())
+                label.setObjectName("FieldCaption")
                 self._layout.addRow(label)
             current_group = field.group
             widget = self._make_widget(name, field)
@@ -266,9 +269,11 @@ class FormBuilder(QtWidgets.QWidget):
                 if ext in self.file_extras:
                     extra = self.file_extras[ext]
                     break
-            widget = _FileEditor(getattr(field, "extensions", ()), getattr(field, "mode", "open"),
-                                 extra=extra, browser=self.file_browser)
-            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+            from tik.shared.ui.versioned_field import VersionedFileField
+
+            widget = VersionedFileField(getattr(field, "extensions", ()), getattr(field, "mode", "open"),
+                                        extra=extra, browser=self.file_browser, base_dir=self.base_dir)
+            widget.changed.connect(lambda value, n=name: self._on_change(n, value))
         elif kind == "dict":
             widget = QtWidgets.QLabel("(edited in place)")
         else:  # string and unknown types
@@ -302,7 +307,7 @@ class FormBuilder(QtWidgets.QWidget):
             widget.setCurrentIndex(max(index, 0))
         elif isinstance(widget, (QtWidgets.QSpinBox, QtWidgets.QDoubleSpinBox)):
             widget.setValue(value)
-        elif isinstance(widget, (_VectorEditor, _NodeEditor, _FileEditor)):
+        elif hasattr(widget, "setValue") and not isinstance(widget, (QtWidgets.QSpinBox, QtWidgets.QDoubleSpinBox)):
             widget.setValue(value)
         elif isinstance(widget, QtWidgets.QLabel):
             return

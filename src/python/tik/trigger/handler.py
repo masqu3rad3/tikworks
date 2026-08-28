@@ -193,6 +193,9 @@ class Session:
         self.file_path: Optional[Path] = None
         self._saved_state = self.document.to_dict()
         self._reference_cache: dict[str, Document] = {}
+        self._undo: list[dict] = []
+        self._redo: list[dict] = []
+        self._last_state = self.document.to_dict()
         if file_path:
             self.load(file_path)
 
@@ -201,8 +204,39 @@ class Session:
         return cls(backend=backend, file_path=file_path, events=events)
 
     # ------------------------------------------------------------ state
+    UNDO_LIMIT = 50
+
     def _touch(self) -> None:
+        """Record an undo step when the document changed since the last touch."""
         self._reference_cache.clear()
+        state = self.document.to_dict()
+        if state != self._last_state:
+            self._undo.append(self._last_state)
+            del self._undo[: -self.UNDO_LIMIT]
+            self._redo.clear()
+            self._last_state = state
+
+    def undo(self) -> bool:
+        if not self._undo:
+            return False
+        self._redo.append(self.document.to_dict())
+        self.document = Document.from_dict(self._undo.pop())
+        self._last_state = self.document.to_dict()
+        self._reference_cache.clear()
+        return True
+
+    def redo(self) -> bool:
+        if not self._redo:
+            return False
+        self._undo.append(self.document.to_dict())
+        self.document = Document.from_dict(self._redo.pop())
+        self._last_state = self.document.to_dict()
+        self._reference_cache.clear()
+        return True
+
+    @property
+    def can_undo(self) -> bool:
+        return bool(self._undo)
 
     @property
     def is_modified(self) -> bool:
@@ -220,14 +254,20 @@ class Session:
         self.document = Document()
         self.file_path = None
         self._saved_state = self.document.to_dict()
-        self._touch()
+        self._last_state = self._saved_state
+        self._undo.clear()
+        self._redo.clear()
+        self._reference_cache.clear()
 
     def load(self, file_path: str) -> None:
         path = Path(file_path)
         self.document = Document.load(path)
         self.file_path = path
         self._saved_state = self.document.to_dict()
-        self._touch()
+        self._last_state = self._saved_state
+        self._undo.clear()
+        self._redo.clear()
+        self._reference_cache.clear()
         self.events.log(f"Session loaded: {path}")
 
     def save(self, file_path: Optional[str] = None, increment: bool = False) -> Path:
