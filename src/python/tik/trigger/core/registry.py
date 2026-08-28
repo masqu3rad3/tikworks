@@ -35,14 +35,25 @@ def register_module(name: str) -> Callable[[Type[T]], Type[T]]:
     return inner
 
 
-def register_action(name: str) -> Callable[[Type[T]], Type[T]]:
-    """Register an ``Action`` subclass under ``name``."""
+def register_action(
+    name: str, category: str = "utility", icon: str = ""
+) -> Callable[[Type[T]], Type[T]]:
+    """Register an ``Action`` subclass under ``name``.
+
+    Args:
+        name: Unique action type name.
+        category: Shelf/palette group (``structure``, ``build``, ``deform``,
+            ``finish``, ``utility``).
+        icon: Icon name (defaults to ``name``).
+    """
 
     def inner(cls: Type[T]) -> Type[T]:
         existing = _ACTIONS.get(name)
         if existing is not None and existing is not cls:
             raise DuplicateRegistrationError(name, kind="action")
         cls.action_type = name  # type: ignore[attr-defined]
+        cls.category = category  # type: ignore[attr-defined]
+        cls.icon = icon or name  # type: ignore[attr-defined]
         _ACTIONS[name] = cls
         logger.debug("Registered action: %s", name)
         return cls

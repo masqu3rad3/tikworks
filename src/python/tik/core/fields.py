@@ -249,6 +249,58 @@ class NodeRefField(Field):
         return data
 
 
+class FileField(Field):
+    """A file or directory path (string). Stored relative to a session when possible."""
+
+    type_name = "file"
+
+    def __init__(
+        self,
+        default: str = "",
+        *,
+        extensions: Sequence[str] = (),
+        mode: str = "open",
+        **kwargs,
+    ) -> None:
+        if mode not in ("open", "save", "dir"):
+            raise ValueError("mode must be 'open', 'save' or 'dir'")
+        self.extensions = [ext if ext.startswith(".") else f".{ext}" for ext in extensions]
+        self.mode = mode
+        super().__init__(default, **kwargs)
+
+    def coerce(self, value):
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise FieldValidationError(self.name, value, "must be a path string")
+        return value.replace("\\", "/")
+
+    def to_schema(self) -> dict:
+        data = super().to_schema()
+        data["extensions"] = list(self.extensions)
+        data["mode"] = self.mode
+        return data
+
+
+class DictField(Field):
+    """A JSON-like mapping (str keys)."""
+
+    type_name = "dict"
+
+    def __init__(self, default=None, **kwargs) -> None:
+        super().__init__(dict(default) if default else {}, **kwargs)
+
+    def coerce(self, value):
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise FieldValidationError(self.name, value, "must be a mapping")
+        return copy.deepcopy(value)
+
+    def validate(self, value):
+        return self.coerce(value)
+
+
 class Schema:
     """Mixin for classes that declare ``Field`` attributes."""
 

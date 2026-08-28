@@ -29,7 +29,7 @@ from tik.trigger.core import (  # noqa: F401 - public API
     register_action,
     register_module,
 )
-from tik.trigger.session import RigSession  # noqa: F401
+from tik.trigger.handler import ActionHandle, Session  # noqa: F401
 
 
 def load_plugins() -> None:
@@ -59,7 +59,8 @@ __all__ = [
     "EventBus",
     "Guides",
     "Module",
-    "RigSession",
+    "Session",
+    "ActionHandle",
     "Side",
     "TriggerError",
     "get_action",

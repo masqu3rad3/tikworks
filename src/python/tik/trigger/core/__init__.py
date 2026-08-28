@@ -6,7 +6,9 @@ Nothing in this package imports Maya or Qt.
 from tik.core.fields import (
     BoolField,
     ChoiceField,
+    DictField,
     Field,
+    FileField,
     FloatField,
     IntField,
     ListField,
@@ -16,7 +18,9 @@ from tik.core.fields import (
 )
 from tik.core.side import Side
 
+from . import versioning
 from .action import Action, ActionContext
+from .document import ActionNode, Document
 from .backend import Backend
 from .builder import AFTERLIFE_MODES, Builder, BuildReport
 from .context import BuildContext, GuideContext, RigGroups
@@ -67,6 +71,9 @@ from .schemas import (
 __all__ = [
     "Action",
     "ActionContext",
+    "ActionNode",
+    "Document",
+    "versioning",
     "Backend",
     "Builder",
     "BuildReport",
@@ -82,6 +89,8 @@ __all__ = [
     "Module",
     "Side",
     "Field",
+    "FileField",
+    "DictField",
     "IntField",
     "FloatField",
     "BoolField",
