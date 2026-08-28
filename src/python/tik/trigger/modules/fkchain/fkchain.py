@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tik.maya as tm
-from tik.trigger.core import FloatField, Guides, IntField, Module, register_module
+from tik.trigger.core import FloatField, Guides, Input, IntField, Module, register_module
 
 
 @register_module("fkchain")
@@ -12,8 +12,8 @@ class FkChain(Module):
 
     label = "FK Chain"
     guides = Guides("root", multi="segment", min=1, max=50)
-    plugs = ("root", "end")
-    sockets = ("root",)
+    inputs = (Input("root", primary=True, help="Where the chain hangs"),)
+    outputs = ("root", "end")
     legacy_types = {"root": "FkikRoot", "segment": "Fkik"}
 
     segments = IntField(3, min=1, max=50, help="Number of joints after the root")
@@ -40,7 +40,7 @@ class FkChain(Module):
             name=ctx.name("root", suffix="socket"), parent=ctx.groups.controllers.long_name
         )
         socket.align_to(joints[0])
-        ctx.socket("root", socket)
+        ctx.attach("root", socket)
 
         parent = socket
         for index, joint in enumerate(joints[:-1]):
@@ -53,5 +53,5 @@ class FkChain(Module):
 
         for joint in joints:
             ctx.deform_joint(joint)
-        ctx.plug("root", joints[0])
-        ctx.plug("end", joints[-1])
+        ctx.output("root", joints[0])
+        ctx.output("end", joints[-1])

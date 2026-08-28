@@ -1,8 +1,34 @@
-"""Module manifest pieces: the guide declaration."""
+"""Module manifest pieces: guides, inputs and outputs."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional, Sequence
+
+
+@dataclass(frozen=True)
+class Input:
+    """An attachment point another module (or a scene node) can drive.
+
+    Args:
+        name: Input name (unique per module).
+        kind: ``transform`` | ``joint`` | ``attribute`` (graph validation).
+        primary: The input the tree view shows as parenting (one per module).
+        optional: Build succeeds without a source.
+        help: Tooltip text.
+    """
+
+    name: str
+    kind: str = "transform"
+    primary: bool = False
+    optional: bool = False
+    help: str = ""
+
+
+def instance_key(name: str, side: str) -> str:
+    """Stable key used in files and connections: ``L_arm`` / ``body``."""
+    side = str(side)
+    return name if side in ("C", "") else f"{side}_{name}"
 
 
 class Guides:

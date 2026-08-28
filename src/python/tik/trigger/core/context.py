@@ -50,8 +50,8 @@ class BuildContext(Protocol):
     side_mult: int
     groups: RigGroups
     rig_root: Any
-    plugs: dict
-    sockets: dict
+    outputs: dict
+    attachments: dict
     controllers: list
     deform_joints: list
 
@@ -79,8 +79,8 @@ class BuildContext(Protocol):
     def deform_joint(self, node: Any) -> Any:
         """Register (and tag) a deformation joint."""
 
-    def plug(self, name: str, node: Any) -> None:
-        """Expose ``node`` as output plug ``name`` (children attach here)."""
+    def output(self, name: str, node: Any) -> None:
+        """Register the built node for declared output ``name``."""
 
-    def socket(self, name: str, node: Any) -> None:
-        """Expose ``node`` as input socket ``name`` (attaches to a parent plug)."""
+    def attach(self, input_name: str, node: Any) -> None:
+        """Register the node driven by whatever is connected to ``input_name``."""

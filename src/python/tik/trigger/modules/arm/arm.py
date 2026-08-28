@@ -13,6 +13,7 @@ from tik.trigger.core import (
     ChoiceField,
     FloatField,
     Guides,
+    Input,
     IntField,
     Module,
     register_module,
@@ -25,8 +26,8 @@ class Arm(Module):
 
     label = "Arm"
     guides = Guides("collar", "shoulder", "elbow", "hand")
-    plugs = ("collar", "hand")
-    sockets = ("root",)
+    inputs = (Input("root", primary=True, help="Where the collar hangs (chest/body)"),)
+    outputs = ("collar", "shoulder", "elbow", "hand")
 
     ribbon_joints = IntField(5, min=1, max=20, help="Deformer joints per ribbon segment")
     ribbon_controllers = IntField(1, min=0, max=5, help="Mid controllers per ribbon segment")
@@ -70,7 +71,7 @@ class Arm(Module):
             name=ctx.name("root", suffix="socket"), parent=ctx.groups.controllers.long_name
         )
         socket.align_to(collar_jnt)
-        ctx.socket("root", socket)
+        ctx.attach("root", socket)
         collar_ctrl = ctx.controller("collar", shape="CurvedCircle", size=size, parent=socket, match=collar_jnt)
         collar_ctrl.transform.create_offset_group(name=ctx.name("collar", suffix="offset"))
         tm.MatrixConstraint.create(collar_ctrl.transform, collar_jnt, maintain_offset=True)
@@ -142,8 +143,10 @@ class Arm(Module):
 
         for joint in deform:
             ctx.deform_joint(joint)
-        ctx.plug("collar", collar_jnt)
-        ctx.plug("hand", hand_jnt)
+        ctx.output("collar", collar_jnt)
+        ctx.output("shoulder", shoulder_jnt)
+        ctx.output("elbow", elbow_jnt)
+        ctx.output("hand", hand_jnt)
 
     @staticmethod
     def _pole_position(start, mid, end, distance: float):

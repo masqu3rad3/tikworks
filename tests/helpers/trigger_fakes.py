@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 from typing import Optional, Sequence
 
-from tik.trigger.core import Guides, IntField, Module, RigGroups
+from tik.trigger.core import Guides, Input, IntField, Module, RigGroups
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 
 
@@ -30,8 +30,8 @@ class FakeBuildContext:
         self.side_mult = module.side.multiplier
         self.groups = RigGroups(limb=f"{module.name}_grp")
         self.rig_root = rig_root
-        self.plugs: dict = {}
-        self.sockets: dict = {}
+        self.outputs: dict = {}
+        self.attachments: dict = {}
         self.controllers: list = []
         self.deform_joints: list = []
         self.calls: list = []
@@ -56,11 +56,11 @@ class FakeBuildContext:
         self.deform_joints.append(node)
         return node
 
-    def plug(self, name, node):
-        self.plugs[name] = node
+    def output(self, name, node):
+        self.outputs[name] = node
 
-    def socket(self, name, node):
-        self.sockets[name] = node
+    def attach(self, name, node):
+        self.attachments[name] = node
 
 
 class FakeBackend:
@@ -73,6 +73,7 @@ class FakeBackend:
         self.calls: list[tuple] = []
         self.settings: dict[str, dict] = {}
         self.connections: list[tuple[str, str, str]] = []
+        self.scene_nodes: set[str] = set()
         self.afterlife_mode: Optional[str] = None
         self.fail_on: Optional[str] = None
         self.selection = None  # ParentRef returned by selected_guide()
@@ -92,13 +93,22 @@ class FakeBackend:
             return list(self.instances)
         return [item for item in self.instances if item.instance_id in scope]
 
-    def create_guides(self, module, parent=None, poses: Optional[Sequence[GuidePose]] = None, attach=None):
+    def create_guides(self, module, parent=None, poses: Optional[Sequence[GuidePose]] = None, attach=None, inputs=None):
         ctx = FakeGuideContext(module, self)
         module.draw_guides(ctx)
         guides = list(poses) if poses else [
             GuidePose(role, index, position) for role, index, position in ctx.joints
         ]
-        instance = module.to_instance(guides=guides, parent=parent, attach=attach)
+        resolved = dict(inputs or {})
+        if not resolved and parent is not None and module.primary_input() is not None:
+            parent_instance = next((item for item in self.instances if item.instance_id == parent.instance_id), None)
+            if parent_instance is not None:
+                from tik.trigger.core import registry as _registry
+
+                output = attach or _registry.get_module(parent_instance.module_type).output_for_role(parent.role)
+                if output:
+                    resolved = {module.primary_input().name: f"{parent_instance.key}.{output}"}
+        instance = module.to_instance(guides=guides, parent=parent, attach=attach, inputs=resolved)
         self.instances.append(instance)
         self.calls.append(("create_guides", instance.instance_id))
         return instance
@@ -166,8 +176,16 @@ class FakeBackend:
     def finalize(self, ctx):
         self.calls.append(("finalize", ctx.instance.instance_id))
 
-    def connect(self, child_ctx, parent_ctx, plug_name):
-        self.connections.append((child_ctx.instance.name, parent_ctx.instance.name, plug_name))
+    def connect(self, ctx, input_name, source_node):
+        self.connections.append((ctx.instance.key, input_name, source_node))
+
+    def scene_node(self, name):
+        return name if name in self.scene_nodes else None
+
+    def set_inputs(self, instance_id, inputs):
+        for item in self.instances:
+            if item.instance_id == instance_id:
+                item.inputs = {key: value for key, value in inputs.items() if value}
 
     def afterlife(self, instances, mode):
         self.afterlife_mode = mode
@@ -177,21 +195,21 @@ class ToyRoot(Module):
     label = "Toy Root"
     sided = False
     guides = Guides("root")
-    plugs = ("root",)
-    sockets = ()
+    inputs = ()
+    outputs = ("root",)
 
     def draw_guides(self, ctx):
         ctx.joint("root", (0, 0, 0))
 
     def build(self, ctx):
-        ctx.plug("root", ctx.name("root", suffix="jnt"))
+        ctx.output("root", ctx.name("root", suffix="jnt"))
 
 
 class ToyChain(Module):
     label = "Toy Chain"
     guides = Guides("root", multi="segment", min=1)
-    plugs = ("root", "end")
-    sockets = ("root",)
+    inputs = (Input("root", primary=True), Input("space", optional=True))
+    outputs = ("root", "end")
     segments = IntField(2, min=1)
 
     def guide_count(self):
@@ -203,8 +221,9 @@ class ToyChain(Module):
             ctx.joint("segment", (index + 1, 0, 0), index=index)
 
     def build(self, ctx):
-        ctx.socket("root", ctx.name("root", suffix="grp"))
-        ctx.plug("root", ctx.guide("root"))
-        ctx.plug("end", ctx.guides("segment")[-1])
+        ctx.attach("root", ctx.name("root", suffix="grp"))
+        ctx.attach("space", ctx.name("space", suffix="grp"))
+        ctx.output("root", ctx.guide("root"))
+        ctx.output("end", ctx.guides("segment")[-1])
         for joint in ctx.guides("segment"):
             ctx.deform_joint(joint)

@@ -19,6 +19,8 @@ from tik.trigger.guides.format import legacy_type, make_record
 from . import tags
 from .context import MayaBuildContext, MayaGuideContext
 
+INPUTS = "trg_inputs"
+
 _JOINT_SIDES = {"C": 0, "L": 1, "R": 2}
 _AXES = {"upAxis": (0.0, 1.0, 0.0), "mirrorAxis": (1.0, 0.0, 0.0), "lookAxis": (0.0, 0.0, 1.0)}
 
@@ -36,10 +38,18 @@ class MayaBackend:
 
     @contextlib.contextmanager
     def undo_chunk(self, label: str):
+        """One undo step; a failure inside rolls the whole chunk back."""
         cmds.undoInfo(openChunk=True, chunkName=label)
         try:
             yield
-        finally:
+        except BaseException:
+            cmds.undoInfo(closeChunk=True)
+            try:
+                cmds.undo()
+            except RuntimeError:
+                pass
+            raise
+        else:
             cmds.undoInfo(closeChunk=True)
 
     # --------------------------------------------------------------- guides
@@ -104,6 +114,7 @@ class MayaBackend:
             guides=poses,
             parent=self._parent_ref(root),
             attach=root.meta.get(tags.ATTACH),
+            inputs=dict(root.meta.get(INPUTS, {}) or {}),
         )
 
     def find_instances(self, scope: Any = "scene") -> list[ModuleInstance]:
@@ -143,6 +154,7 @@ class MayaBackend:
         parent: Optional[ParentRef] = None,
         poses: Optional[Sequence[GuidePose]] = None,
         attach: Optional[str] = None,
+        inputs: Optional[dict] = None,
     ) -> ModuleInstance:
         if self.guide_nodes(module.instance_id):
             raise GuideError(f"Guides for instance {module.instance_id} already exist.")
@@ -159,8 +171,31 @@ class MayaBackend:
                 self._tag_legacy_joint(node, type(module), role, module.side.value)
             if poses:
                 self._apply_poses(ctx.created, poses)
+            resolved_inputs = dict(inputs or {})
+            if not resolved_inputs and parent is not None and module.primary_input() is not None:
+                # convenience: parenting under another module's guide pre-fills the primary input
+                parent_instance = self.find_instances([parent.instance_id])
+                if parent_instance:
+                    parent_cls = registry.get_module(parent_instance[0].module_type)
+                    output = attach or parent_cls.output_for_role(parent.role)
+                    if output:
+                        resolved_inputs = {module.primary_input().name: f"{parent_instance[0].key}.{output}"}
+            ctx.root.meta[INPUTS] = resolved_inputs
         instance = self._instance_from_nodes(module.instance_id, ctx.created)
         return instance
+
+    def set_inputs(self, instance_id: str, inputs: dict) -> None:
+        instance = self.find_instances([instance_id])
+        if not instance:
+            raise GuideError(f"No guides for instance {instance_id}.")
+        root = self._root_guide(self.guide_nodes(instance_id), instance[0].module_type)
+        root.meta[INPUTS] = {key: value for key, value in dict(inputs).items() if value}
+
+    @staticmethod
+    def scene_node(name: str):
+        if not name or not cmds.objExists(name):
+            return None
+        return tm.resolve(name)
 
     @staticmethod
     def _write_root_meta(root, module, attach) -> None:
@@ -320,6 +355,7 @@ class MayaBackend:
                     created_nodes[record["name"]] = joint
                 root = nodes[(module_cls.guides.root, 0)]
                 self._write_root_meta(root, module, None)
+                root.meta[INPUTS] = dict(guide_instance.inputs)
                 built.append((guide_instance, module, nodes))
             for guide_instance, module, nodes in built:
                 for (role, index), record in guide_instance.joints.items():
@@ -403,26 +439,15 @@ class MayaBackend:
         return MayaBuildContext(module, instance, rig_root, guide_nodes)
 
     def finalize(self, ctx: MayaBuildContext) -> None:
-        for name, node in ctx.plugs.items():
-            tags.tag(node, **{tags.KIND: tags.PLUG, tags.INSTANCE: ctx.instance.instance_id, tags.ROLE: name})
-        for name, node in ctx.sockets.items():
-            tags.tag(node, **{tags.KIND: tags.SOCKET, tags.INSTANCE: ctx.instance.instance_id, tags.ROLE: name})
+        for name, node in ctx.outputs.items():
+            tags.tag(node, **{tags.KIND: tags.OUTPUT, tags.INSTANCE: ctx.instance.instance_id, tags.ROLE: name})
+        for name, node in ctx.attachments.items():
+            tags.tag(node, **{tags.KIND: tags.INPUT, tags.INSTANCE: ctx.instance.instance_id, tags.ROLE: name})
 
-    def connect(self, child_ctx: MayaBuildContext, parent_ctx: MayaBuildContext, plug_name: str) -> None:
-        plug_node = parent_ctx.plugs[plug_name]
-        if not child_ctx.sockets:
-            raise AttachError(
-                f"'{child_ctx.instance.name}' exposes no socket to attach.",
-                instance_id=child_ctx.instance.instance_id,
-                module_type=child_ctx.instance.module_type,
-            )
-        socket_name = child_ctx.module.sockets[0]
-        socket_node = child_ctx.sockets.get(socket_name) or next(iter(child_ctx.sockets.values()))
+    def connect(self, ctx: MayaBuildContext, input_name: str, source_node) -> None:
+        target = ctx.attachments[input_name]
         tm.MatrixConstraint.create(
-            plug_node,
-            socket_node,
-            maintain_offset=True,
-            name=child_ctx.name("attach"),
+            source_node, target, maintain_offset=True, name=ctx.name("attach", input_name)
         )
 
     def afterlife(self, instances: Sequence[ModuleInstance], mode: str) -> None:

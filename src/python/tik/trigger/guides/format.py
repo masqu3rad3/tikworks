@@ -59,6 +59,11 @@ class GuideInstance:
     joints: dict = field(default_factory=dict)  # (role, index) -> record
     settings: dict = field(default_factory=dict)
     parent_joint: Optional[str] = None  # joint name of another instance we hang under
+    inputs: dict = field(default_factory=dict)  # input name -> source
+
+    @property
+    def key(self) -> str:
+        return self.name if self.side in ("C", "") else f"{self.side}_{self.name}"
 
     @property
     def joint_names(self) -> list[str]:
@@ -68,8 +73,10 @@ class GuideInstance:
 class GuideFile:
     """Load/save ``.trg`` files and group their joints into module instances."""
 
-    def __init__(self, records: Optional[list[dict]] = None) -> None:
+    def __init__(self, records: Optional[list[dict]] = None, connections: Optional[list[dict]] = None, meta: Optional[dict] = None) -> None:
         self.records: list[dict] = list(records or [])
+        self.connections: list[dict] = list(connections or [])  # {"input": "L_arm.root", "source": "body.root"}
+        self.meta: dict = dict(meta or {})
         self.unknown: list[str] = []  # legacy types no module claims
 
     # ------------------------------------------------------------- file io
@@ -80,17 +87,29 @@ class GuideFile:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as error:
             raise GuideError(f"Cannot read guides '{path}': {error}") from error
-        if not isinstance(data, list):
-            raise GuideError(f"'{path}' is not a Trigger guide file.")
-        return cls(data)
+        if isinstance(data, list):  # legacy: bare joint list
+            return cls(data)
+        if isinstance(data, dict) and isinstance(data.get("joints"), list):
+            return cls(data["joints"], data.get("connections", []), data.get("meta", {}))
+        raise GuideError(f"'{path}' is not a Trigger guide file.")
 
     def save(self, file_path) -> Path:
         path = Path(file_path)
         if path.suffix != EXTENSION:
             path = path.with_suffix(EXTENSION)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.records, indent=2), encoding="utf-8")
+        payload = {"joints": self.records, "connections": self.connections, "meta": self.meta}
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         return path
+
+    def inputs_for(self, key: str) -> dict:
+        """``{input name: source}`` for the instance ``key`` from the connections list."""
+        found = {}
+        for item in self.connections:
+            target = str(item.get("input", ""))
+            if target.startswith(key + "."):
+                found[target[len(key) + 1:]] = item.get("source", "")
+        return found
 
     # ------------------------------------------------------------ queries
     def by_name(self) -> dict[str, dict]:
@@ -125,9 +144,30 @@ class GuideFile:
         self.unknown = sorted({
             record.get("type", "") for record in self.records if self.classify(record) is None
         })
-        if any(record.get("instance") for record in self.records):
-            return self._instances_explicit()
-        return self._instances_legacy()
+        instances = self._instances_explicit() if any(record.get("instance") for record in self.records) else self._instances_legacy()
+        self._resolve_inputs(instances)
+        return instances
+
+    def _resolve_inputs(self, instances: list[GuideInstance]) -> None:
+        """Explicit connections win; otherwise derive the primary input from the parent joint."""
+        by_joint: dict[str, tuple[GuideInstance, str]] = {}
+        for instance in instances:
+            for (role, _index), record in instance.joints.items():
+                by_joint[record["name"]] = (instance, role)
+        for instance in instances:
+            explicit = self.inputs_for(instance.key)
+            if explicit:
+                instance.inputs = explicit
+                continue
+            if not instance.parent_joint or instance.parent_joint not in by_joint:
+                continue
+            parent, role = by_joint[instance.parent_joint]
+            module_cls = registry.get_module(instance.module_type)
+            parent_cls = registry.get_module(parent.module_type)
+            primary = module_cls.primary_input()
+            output = parent_cls.output_for_role(role)
+            if primary is not None and output is not None:
+                instance.inputs = {primary.name: f"{parent.key}.{output}"}
 
     def _instances_explicit(self) -> list[GuideInstance]:
         grouped: dict[str, GuideInstance] = {}

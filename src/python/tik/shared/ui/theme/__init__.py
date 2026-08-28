@@ -71,8 +71,7 @@ QTabWidget::pane { border: 1px solid #303030; }
 QToolButton { background-color: transparent; border: 1px solid transparent; border-radius: 3px; padding: 2px 6px; color: #c0c0c0; }
 QToolButton:hover { background-color: #353535; border-color: #454545; }
 QMenuBar::item { padding: 4px 10px; }
-QTreeView::branch { background-color: transparent; }
-QTreeView::branch:selected, QTreeView::branch:selected:active { background-color: transparent; }
+QTreeView::branch:selected, QTreeView::branch:selected:active, QTreeView::branch:hover { background-color: transparent; }
 #PipelineTree::item:selected, #PipelineTree::item:selected:active, #PipelineTree::item:hover { background-color: transparent; }
 #LogWidget { background-color: #151515; color: #c0c0c0; border: none; font-family: Consolas, "Roboto Mono", monospace; font-size: 11px; }
 QDockWidget::title { background-color: #1e1e1e; padding: 4px 8px; color: #7b7b7b; }

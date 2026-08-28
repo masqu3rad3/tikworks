@@ -57,7 +57,12 @@ class ModuleInstance:
     settings: dict = field(default_factory=dict)
     guides: list[GuidePose] = field(default_factory=list)
     parent: Optional[ParentRef] = None
-    attach: Optional[str] = None  # plug name override on the parent
+    attach: Optional[str] = None  # legacy: output name override on the parent
+    inputs: dict = field(default_factory=dict)  # input name -> "<key>.<output>" | scene node
+
+    @property
+    def key(self) -> str:
+        return self.name if self.side in ("C", "") else f"{self.side}_{self.name}"
 
     @property
     def guide_pairs(self) -> list[tuple[str, int]]:
@@ -79,6 +84,7 @@ class ModuleInstance:
             guides=[GuidePose.from_dict(item) for item in data.get("guides", [])],
             parent=ParentRef.from_dict(data.get("parent")),
             attach=data.get("attach"),
+            inputs=dict(data.get("inputs", {}) or {}),
         )
 
 

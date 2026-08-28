@@ -82,8 +82,8 @@ class MayaBuildContext:
         self.side_mult = module.side.multiplier
         self.rig_root = rig_root
         self._guides = guide_nodes  # (role, index) -> Joint
-        self.plugs: dict[str, Any] = {}
-        self.sockets: dict[str, Any] = {}
+        self.outputs: dict[str, Any] = {}
+        self.attachments: dict[str, Any] = {}
         self.controllers: list[Controller] = []
         self.deform_joints: list[tm.Joint] = []
         self.groups = self._create_groups()
@@ -172,12 +172,12 @@ class MayaBuildContext:
         self.deform_joints.append(node)
         return node
 
-    def plug(self, name: str, node) -> None:
-        if name not in self.module.plugs:
-            raise GuideError(f"'{self.module.module_type}' does not declare plug '{name}'.")
-        self.plugs[name] = node
+    def output(self, name: str, node) -> None:
+        if name not in self.module.outputs:
+            raise GuideError(f"'{self.module.module_type}' does not declare output '{name}'.")
+        self.outputs[name] = node
 
-    def socket(self, name: str, node) -> None:
-        if name not in self.module.sockets:
-            raise GuideError(f"'{self.module.module_type}' does not declare socket '{name}'.")
-        self.sockets[name] = node
+    def attach(self, input_name: str, node) -> None:
+        if self.module.get_input(input_name) is None:
+            raise GuideError(f"'{self.module.module_type}' does not declare input '{input_name}'.")
+        self.attachments[input_name] = node

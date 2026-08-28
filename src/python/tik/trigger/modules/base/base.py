@@ -13,8 +13,8 @@ class Base(Module):
     label = "Base"
     sided = False
     guides = Guides("root")
-    plugs = ("root",)
-    sockets = ()
+    inputs = ()
+    outputs = ("root",)
     legacy_types = {"root": "Base"}
 
     controller_size = FloatField(10.0, min=0.01, label="Controller Size")
@@ -33,4 +33,4 @@ class Base(Module):
         joint.align_to(root_guide)
         tm.MatrixConstraint.create(controller.transform, joint, maintain_offset=True)
         ctx.deform_joint(joint)
-        ctx.plug("root", joint)
+        ctx.output("root", joint)

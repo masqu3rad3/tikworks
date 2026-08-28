@@ -29,8 +29,8 @@ def _build_arm(backend, side="L", **settings):
 def test_arm_builds_expected_nodes(backend):
     report, arm = _build_arm(backend, ribbon_joints=4)
     ctx = report.contexts[arm.instance_id]
-    assert set(ctx.plugs) == {"collar", "hand"}
-    assert list(ctx.sockets) == ["root"]
+    assert set(ctx.outputs) == {"collar", "shoulder", "elbow", "hand"}
+    assert list(ctx.attachments) == ["root"]
     assert len(ctx.deform_joints) == 1 + 4 + 4 + 1
     for name in (
         "L_arm_collar_ctrl", "L_arm_fk_upArm_ctrl", "L_arm_fk_lowArm_ctrl", "L_arm_fk_hand_ctrl",

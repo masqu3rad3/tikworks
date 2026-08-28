@@ -68,7 +68,7 @@ def test_add_settings_attrs_export_import_roundtrip(guides, tmp_path):
 
     path = guides.export(tmp_path / "hero")
     assert path.suffix == ".trg"
-    records = json.loads(path.read_text())
+    records = json.loads(path.read_text())["joints"]
     assert {record["type"] for record in records} >= {"Base", "Collar", "Hand", "FkikRoot", "Fkik"}
     root_record = next(record for record in records if record["name"] == root.name)
     assert root_record["parent"] == body.root.name

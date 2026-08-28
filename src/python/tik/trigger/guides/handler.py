@@ -15,6 +15,14 @@ from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 from .format import GuideFile, GuideInstance, legacy_type, make_record
 
 
+def _mirror_source(source: str, side: str, target_side: str) -> str:
+    """``L_arm.hand`` -> ``R_arm.hand`` when mirroring; center/scene sources unchanged."""
+    key, dot, output = source.rpartition(".")
+    if dot and key.startswith(f"{side}_"):
+        return f"{target_side}_{key[2:]}{dot}{output}"
+    return source
+
+
 class GuideHandle:
     """One module instance in the scene; settings are attributes."""
 
@@ -99,6 +107,34 @@ class GuideHandle:
             setattr(self, key, value)
         return self
 
+    @property
+    def key(self) -> str:
+        return self._refresh().key
+
+    @property
+    def inputs(self) -> dict:
+        """``{input name: source}`` (explicit connections only)."""
+        return dict(self._refresh().inputs)
+
+    @property
+    def input_names(self) -> list[str]:
+        return self.module_class.input_names()
+
+    @property
+    def outputs(self) -> tuple:
+        return self.module_class.outputs
+
+    def set_input(self, input_name: str, source: Optional[str]) -> None:
+        if self.module_class.get_input(input_name) is None:
+            raise GuideError(f"'{self.module_type}' has no input '{input_name}'.")
+        inputs = self.inputs
+        if source:
+            inputs[input_name] = source
+        else:
+            inputs.pop(input_name, None)
+        self._guides.backend.set_inputs(self.instance_id, inputs)
+        self._refresh()
+
     def select(self) -> None:
         self._guides.backend.select_guides(self.instance_id)
 
@@ -164,6 +200,36 @@ class Guides:
     def remove(self, handle: GuideHandle) -> None:
         self.backend.delete_guides(handle.instance_id)
 
+    # -------------------------------------------------------- connections
+    def by_key(self, key: str) -> Optional[GuideHandle]:
+        return next((handle for handle in self.instances() if handle.key == key), None)
+
+    def connect(self, target: str, source: str) -> None:
+        """``connect("L_arm.root", "body.root")`` or ``connect("tail.space", "some_jnt")``."""
+        key, _dot, input_name = target.rpartition(".")
+        handle = self.by_key(key)
+        if handle is None or not input_name:
+            raise GuideError(f"No module input '{target}'.")
+        source_key, _d, output = source.rpartition(".")
+        producer = self.by_key(source_key) if source_key else None
+        if producer is not None and output not in producer.outputs:
+            raise GuideError(f"'{source_key}' has no output '{output}' (has {list(producer.outputs)}).")
+        handle.set_input(input_name, source)
+
+    def disconnect(self, target: str) -> None:
+        key, _dot, input_name = target.rpartition(".")
+        handle = self.by_key(key)
+        if handle is None:
+            raise GuideError(f"No module input '{target}'.")
+        handle.set_input(input_name, None)
+
+    def connections(self) -> list[dict]:
+        found = []
+        for handle in self.instances():
+            for input_name, source in handle.inputs.items():
+                found.append({"input": f"{handle.key}.{input_name}", "source": source})
+        return found
+
     def reparent(self, handle: GuideHandle, parent: Optional[GuideHandle | ParentRef]) -> None:
         """Hang ``handle`` under ``parent`` (its root guide) or back at the top level."""
         parent_ref = parent
@@ -189,9 +255,14 @@ class Guides:
             existing_instance.guides = poses
             self.backend.apply_guide_poses(existing_instance)
             self.backend.write_settings(existing.instance_id, instance.settings)
+            self.backend.set_inputs(
+                existing.instance_id,
+                {name: _mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()},
+            )
             return existing
         module = handle.module_class(name=instance.name, side=target_side, settings=instance.settings)
-        created = self.backend.create_guides(module, parent=instance.parent, poses=poses, attach=instance.attach)
+        mirrored_inputs = {name: _mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()}
+        created = self.backend.create_guides(module, parent=instance.parent, poses=poses, attach=instance.attach, inputs=mirrored_inputs)
         return GuideHandle(self, created)
 
     # ------------------------------------------------------------- build
@@ -203,7 +274,9 @@ class Guides:
     def export(self, file_path, *handles: GuideHandle) -> Path:
         wanted = {handle.instance_id for handle in handles} or None
         records = self.backend.export_guide_records(wanted)
-        return GuideFile(records).save(file_path)
+        keys = {handle.key for handle in (handles or self.instances())}
+        connections = [item for item in self.connections() if item["input"].split(".")[0] in keys]
+        return GuideFile(records, connections).save(file_path)
 
     def import_(self, file_path, reset: bool = False) -> list[GuideHandle]:
         guide_file = GuideFile.load(file_path)

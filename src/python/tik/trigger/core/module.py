@@ -26,7 +26,7 @@ from typing import Optional
 from tik.core.fields import Schema
 from tik.core.side import Side
 
-from .manifest import Guides
+from .manifest import Guides, Input, instance_key
 from .schemas import GuidePose, ModuleInstance, ParentRef
 
 
@@ -36,8 +36,8 @@ class Module(Schema):
     label: str = ""
     sided: bool = True
     guides: Guides = Guides("root")
-    plugs: tuple[str, ...] = ("root",)
-    sockets: tuple[str, ...] = ("root",)
+    inputs: tuple[Input, ...] = (Input("root", primary=True),)
+    outputs: tuple[str, ...] = ("root",)
     module_type: str = ""  # stamped by @register_module
     legacy_types: dict = {}  # role -> old .trg "type" name (default: capitalised role)
 
@@ -59,6 +59,32 @@ class Module(Schema):
     @classmethod
     def display_label(cls) -> str:
         return cls.label or cls.module_type or cls.__name__
+
+    @classmethod
+    def input_names(cls) -> list[str]:
+        return [item.name for item in cls.inputs]
+
+    @classmethod
+    def primary_input(cls) -> Optional[Input]:
+        for item in cls.inputs:
+            if item.primary:
+                return item
+        return cls.inputs[0] if cls.inputs else None
+
+    @classmethod
+    def get_input(cls, name: str) -> Optional[Input]:
+        return next((item for item in cls.inputs if item.name == name), None)
+
+    @classmethod
+    def output_for_role(cls, role: str) -> Optional[str]:
+        """Output matching a guide role (legacy derivation), else the first output."""
+        if role in cls.outputs:
+            return role
+        return cls.outputs[0] if cls.outputs else None
+
+    @property
+    def key(self) -> str:
+        return instance_key(self.name, self.side.value)
 
     def guide_count(self) -> int:
         """Number of multi-role guides to draw; override when a setting drives it."""
@@ -88,6 +114,7 @@ class Module(Schema):
         guides: Optional[list[GuidePose]] = None,
         parent: Optional[ParentRef] = None,
         attach: Optional[str] = None,
+        inputs: Optional[dict] = None,
     ) -> ModuleInstance:
         """Serialize this module into a ``ModuleInstance``."""
         return ModuleInstance(
@@ -99,6 +126,7 @@ class Module(Schema):
             guides=list(guides or []),
             parent=parent,
             attach=attach,
+            inputs=dict(inputs or {}),
         )
 
     @classmethod

@@ -167,26 +167,39 @@ def test_builder_builds_in_order_and_connects():
     report = Builder(backend, events).build(rig_name="rig", afterlife="hide")
     assert report.built == [root.instance_id, chain.instance_id]
     assert seen == ["Building body", "Building tail"]
-    assert backend.connections == [("tail", "body", "root")]
+    assert backend.connections == [("L_tail", "root", "C_body_root_jnt")]
+    assert report.connections == [("L_tail.root", "body.root")]
     assert backend.afterlife_mode == "hide"
     assert ("rig_root", "rig") in backend.calls
     assert backend.calls.index(("undo_open", "Trigger build: rig")) < backend.calls.index(
         ("rig_root", "rig")
     )
     ctx = report.contexts[chain.instance_id]
-    assert ctx.plugs["end"] == "tail_segment_2"
+    assert ctx.outputs["end"] == "tail_segment_2"
     assert len(ctx.deform_joints) == 3
     assert ctx.name("upper", suffix="jnt") == "L_tail_upper_jnt"
 
 
-def test_builder_attach_override_and_error():
+def test_builder_inputs_scene_node_missing_and_optional():
     backend, root, chain = _scene()
-    chain.attach = "root"
-    Builder(backend).build()
-    assert backend.connections[-1][2] == "root"
-    chain.attach = "missing"
-    with pytest.raises(AttachError):
+    # explicit inputs win over the DAG-derived one; scene node sources must exist
+    chain.inputs = {"root": "body.root", "space": "some_jnt"}
+    with pytest.raises(AttachError) as info:
         Builder(backend).build()
+    assert "some_jnt" in str(info.value) and "L_tail.space" in str(info.value)
+    backend.scene_nodes.add("some_jnt")
+    report = Builder(backend).build()
+    assert ("L_tail", "space", "some_jnt") in backend.connections
+    assert ("L_tail.space", "some_jnt") in report.connections
+    chain.inputs = {"root": "body.nope"}
+    with pytest.raises(AttachError) as info:
+        Builder(backend).build()
+    assert "not built" in str(info.value)
+    chain.inputs = {}
+    chain.parent = None  # nothing to derive from -> required input missing
+    with pytest.raises(AttachError) as info:
+        Builder(backend).build()
+    assert "required input" in str(info.value)
 
 
 def test_builder_wraps_failures():

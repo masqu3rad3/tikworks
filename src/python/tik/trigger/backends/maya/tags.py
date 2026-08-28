@@ -17,8 +17,10 @@ RIG = "rig"
 RIG_ROOT = "rig_root"
 DEFORM = "deform"
 CONTROLLER = "controller"
-PLUG = "plug"
-SOCKET = "socket"
+OUTPUT = "output"
+INPUT = "input"
+PLUG = OUTPUT  # legacy aliases
+SOCKET = INPUT
 
 GUIDE_HOLDER = "trigger_guides_grp"
 
