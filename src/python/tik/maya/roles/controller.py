@@ -252,7 +252,7 @@ class Controller:
             curve_shape, f"{self.node.name}Shape#"
         )  # Ensure unique name
 
-        cmds.parent(curve_shape, self.node.name, relative=True, shape=True)
+        cmds.parent(curve_shape, self.node.partial_name, relative=True, shape=True)
         cmds.delete(curve_trans)
 
     def set_shape(self, shape, size=1.0):
@@ -301,7 +301,7 @@ class Controller:
             name=f"{self.node.name}_tempShape", shape=shape, size=size, color=None
         )
         replace_curve(
-            orig_curve=self.node.name,
+            orig_curve=self.node.partial_name,
             new_curve=temp_ctrl.node.name,
             snap=snap,
             transfer_color=transfer_color,

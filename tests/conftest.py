@@ -84,13 +84,18 @@ def new_scene():
     cmds.file(new=True, force=True)
     cmds.select(clear=True)
 
-    # Restore tik.maya default factory in case a test altered it.
+    # Restore tik.maya default factory and node registry in case a test altered them.
+    from tik.maya.core import registry as node_registry
     from tik.maya.core.node import Node
     from tik.maya.core.registry import set_default_factory
 
     set_default_factory(Node)
+    registry_snapshot = dict(node_registry._NODE_TYPES)
 
     yield
+
+    node_registry._NODE_TYPES.clear()
+    node_registry._NODE_TYPES.update(registry_snapshot)
 
     # Clean up again so the next test always starts from a known state.
     cmds.file(new=True, force=True)

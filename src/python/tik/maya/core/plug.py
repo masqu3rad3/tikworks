@@ -53,7 +53,7 @@ class Plug:
         Returns:
             str: The full path to this attribute.
         """
-        return f"{self._node.name}.{self._attr}"
+        return f"{self._node.partial_name}.{self._attr}"
 
     @property
     def node(self):
@@ -204,7 +204,7 @@ class Plug:
         Returns:
             bool: True if the attribute exists on the node, False otherwise.
         """
-        return cmds.attributeQuery(self.attr, node=self._node.name, exists=True)
+        return cmds.attributeQuery(self.attr, node=self._node.partial_name, exists=True)
 
     def create(self, **kwargs):
         """Add a new attribute to the node.

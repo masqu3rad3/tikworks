@@ -33,9 +33,13 @@ from tik.trigger.session import RigSession  # noqa: F401
 
 
 def load_plugins() -> None:
-    """Discover the built-in modules and actions."""
-    import tik.trigger.actions  # noqa: F401
-    import tik.trigger.modules  # noqa: F401
+    """Discover (and re-register if needed) the built-in modules and actions."""
+    import tik.trigger.actions as actions_pkg
+    import tik.trigger.modules as modules_pkg
+    from tik.trigger.core.discovery import discover
+
+    discover(modules_pkg.__name__, modules_pkg.__path__)
+    discover(actions_pkg.__name__, actions_pkg.__path__)
 
 
 def maya_backend():

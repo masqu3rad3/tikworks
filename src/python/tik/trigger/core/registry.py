@@ -50,6 +50,28 @@ def register_action(name: str) -> Callable[[Type[T]], Type[T]]:
     return inner
 
 
+def ensure_registered(cls: type) -> None:
+    """Re-register a class that carries ``module_type``/``action_type``.
+
+    Needed after ``clear_registries()`` when the defining module is already
+    imported (decorators do not run again on re-import).
+    """
+    module_type = getattr(cls, "module_type", "")
+    action_type = getattr(cls, "action_type", "")
+    if module_type and module_type not in _MODULES and _is_module(cls):
+        _MODULES[module_type] = cls
+    if action_type and action_type not in _ACTIONS and _is_action(cls):
+        _ACTIONS[action_type] = cls
+
+
+def _is_module(cls: type) -> bool:
+    return any(base.__name__ == "Module" for base in cls.__mro__[1:])
+
+
+def _is_action(cls: type) -> bool:
+    return any(base.__name__ == "Action" for base in cls.__mro__[1:])
+
+
 def get_module(name: str) -> type:
     """Return the module class registered as ``name``."""
     try:

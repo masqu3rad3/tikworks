@@ -75,6 +75,15 @@ class Node:
         return self._resolve_short_name()
 
     @property
+    def partial_name(self):
+        """Shortest name that is unique in the scene (safe for cmds calls)."""
+        if not self.exists():
+            return None
+        if self.m_obj.hasFn(OpenMaya.MFn.kDagNode):
+            return OpenMaya.MDagPath.getAPathTo(self.m_obj).partialPathName()
+        return self._fn_dep.name()
+
+    @property
     def uuid(self):
         """The UUID of the node."""
         return self._uuid

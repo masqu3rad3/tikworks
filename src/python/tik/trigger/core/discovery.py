@@ -36,8 +36,18 @@ def discover(package_name: str, package_path: Iterable[str]) -> list[str]:
                 logger.error("Failed to import %s: %s", module_name, error)
                 continue
             imported.append(module_name)
+            _ensure_registered(module)
             _apply_defaults(module, folder / "defaults.json")
     return imported
+
+
+def _ensure_registered(module) -> None:
+    """Re-register plugin classes if the registries were cleared."""
+    from . import registry
+
+    for attr in vars(module).values():
+        if isinstance(attr, type) and getattr(attr, "__module__", "") == module.__name__:
+            registry.ensure_registered(attr)
 
 
 def _apply_defaults(module, defaults_file: Path) -> None:
