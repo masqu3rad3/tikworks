@@ -1,0 +1,169 @@
+"""Matrix based parent constraint.
+
+Drives a transform from one or more driver matrices through a
+``multMatrix`` -> ``decomposeMatrix`` network. Joints get a joint-orient
+compensation strand so the driven rotation stays clean.
+"""
+
+from __future__ import annotations
+
+from typing import Iterable, Optional, Sequence, Union
+
+from maya import cmds
+from maya.api import OpenMaya
+
+from ..core.decorators import undo
+from ..core.plug import Plug
+from ..core.registry import resolve
+from ..core.scene import create_node, ensure_plugin
+
+DriverType = Union[str, "Transform", Plug, Sequence[Union[str, "Transform", Plug]]]
+
+
+def _matrix_plug(driver) -> Plug:
+    """Return a world matrix plug for a node/name, or the plug itself."""
+    if isinstance(driver, Plug):
+        return driver
+    node = resolve(driver) if isinstance(driver, str) else driver
+    return node["worldMatrix[0]"]
+
+
+class MatrixConstraint:
+    """Matrix constraint wrapper holding the created network nodes."""
+
+    def __init__(
+        self,
+        driven,
+        mult_matrix,
+        decompose,
+        average=None,
+        rotate_nodes: Optional[list] = None,
+    ) -> None:
+        self.driven = driven
+        self.mult_matrix = mult_matrix
+        self.decompose = decompose
+        self.average = average
+        self._rotate_nodes = rotate_nodes or []
+
+    @classmethod
+    @undo
+    def create(
+        cls,
+        driver: DriverType,
+        driven,
+        *,
+        maintain_offset: bool = True,
+        skip_translate: Iterable[str] = (),
+        skip_rotate: Iterable[str] = (),
+        skip_scale: Iterable[str] = (),
+        name: Optional[str] = None,
+    ) -> "MatrixConstraint":
+        """Constrain ``driven`` to ``driver``.
+
+        Args:
+            driver: Node, name, matrix plug, or a list of those (averaged).
+            driven: Transform (or name) to drive.
+            maintain_offset: Keep the current offset between driver and driven.
+            skip_translate: Axes (``"x"``, ``"y"``, ``"z"``) left unconnected.
+            skip_rotate: Axes left unconnected.
+            skip_scale: Axes left unconnected.
+            name: Prefix for created nodes (defaults to the driven name).
+        """
+        driven = resolve(driven) if isinstance(driven, str) else driven
+        name = name or driven.name
+        skip_translate = {axis.lower() for axis in skip_translate}
+        skip_rotate = {axis.lower() for axis in skip_rotate}
+        skip_scale = {axis.lower() for axis in skip_scale}
+
+        drivers = list(driver) if isinstance(driver, (list, tuple)) else [driver]
+        driver_plugs = [_matrix_plug(item) for item in drivers]
+
+        average = None
+        if len(driver_plugs) > 1:
+            average = create_node("wtAddMatrix", name=f"{name}_averageMatrix")
+            weight = 1.0 / len(driver_plugs)
+            for index, plug in enumerate(driver_plugs):
+                plug >> average[f"wtMatrix[{index}].matrixIn"]
+                average[f"wtMatrix[{index}].weightIn"].value = weight
+            source_plug = average["matrixSum"]
+        else:
+            source_plug = driver_plugs[0]
+
+        mult_matrix = create_node("multMatrix", name=f"{name}_multMatrix")
+        decompose = create_node("decomposeMatrix", name=f"{name}_decomposeMatrix")
+
+        parent = driven.parent
+        index = 0
+        if maintain_offset:
+            driven_world = OpenMaya.MMatrix(driven["worldMatrix[0]"].value)
+            driver_world = OpenMaya.MMatrix(source_plug.value)
+            offset = driven_world * driver_world.inverse()
+            mult_matrix[f"matrixIn[{index}]"].value = list(offset)
+            index += 1
+        source_plug >> mult_matrix[f"matrixIn[{index}]"]
+        index += 1
+        if parent is not None:
+            parent["worldInverseMatrix[0]"] >> mult_matrix[f"matrixIn[{index}]"]
+        mult_matrix["matrixSum"] >> decompose["inputMatrix"]
+
+        rotate_nodes: list = []
+        rotate_source = decompose
+        is_joint = driven.type == "joint"
+        if is_joint and len(skip_rotate) < 3:
+            rotate_source, rotate_nodes = cls._joint_rotation_strand(
+                name, driven, parent, source_plug
+            )
+
+        cls._connect_channels(decompose, "outputTranslate", driven, "translate", skip_translate)
+        cls._connect_channels(rotate_source, "outputRotate", driven, "rotate", skip_rotate)
+        cls._connect_channels(decompose, "outputScale", driven, "scale", skip_scale)
+
+        return cls(driven, mult_matrix, decompose, average, rotate_nodes)
+
+    @staticmethod
+    def _joint_rotation_strand(name, joint, parent, source_plug):
+        """Build the joint orient compensation network for a joint driven."""
+        ensure_plugin("matrixNodes")
+        compose = create_node("composeMatrix", name=f"{name}_rotateComposeMatrix")
+        first_mult = create_node("multMatrix", name=f"{name}_firstRotateMultMatrix")
+        inverse = create_node("inverseMatrix", name=f"{name}_rotateInverseMatrix")
+        second_mult = create_node("multMatrix", name=f"{name}_secRotateMultMatrix")
+        rotate_decompose = create_node(
+            "decomposeMatrix", name=f"{name}_rotateDecomposeMatrix"
+        )
+
+        compose["inputRotate"].value = joint["jointOrient"].value[0]
+        compose["outputMatrix"] >> first_mult["matrixIn[0]"]
+        if parent is not None:
+            parent["worldMatrix[0]"] >> first_mult["matrixIn[1]"]
+        first_mult["matrixSum"] >> inverse["inputMatrix"]
+        source_plug >> second_mult["matrixIn[0]"]
+        inverse["outputMatrix"] >> second_mult["matrixIn[1]"]
+        second_mult["matrixSum"] >> rotate_decompose["inputMatrix"]
+        return rotate_decompose, [compose, first_mult, inverse, second_mult, rotate_decompose]
+
+    @staticmethod
+    def _connect_channels(source_node, source_attr, target, target_attr, skip):
+        if len(skip) == 3:
+            return
+        if not skip:
+            source_node[source_attr] >> target[target_attr]
+            return
+        for axis in "xyz":
+            if axis in skip:
+                continue
+            upper = axis.upper()
+            source_node[f"{source_attr}{upper}"] >> target[f"{target_attr}{upper}"]
+
+    @property
+    def nodes(self) -> list:
+        """Return every network node created by this constraint."""
+        created = [self.mult_matrix, self.decompose, *self._rotate_nodes]
+        if self.average is not None:
+            created.append(self.average)
+        return created
+
+    @undo
+    def delete(self) -> None:
+        """Delete the constraint network, leaving the driven node in place."""
+        cmds.delete([node.long_name for node in self.nodes if node.exists()])

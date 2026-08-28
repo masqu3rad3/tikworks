@@ -15,6 +15,7 @@ from .types.blendshape import BlendShape
 from .types.skincluster import SkinCluster
 from .types.camera import Camera
 from .types.curve import Curve
+from .types.ikhandle import IkHandle
 from .types.joint import Joint
 from .types.light import Light
 from .types.locator import Locator
@@ -27,6 +28,7 @@ __all__ = [
     "DagNode",
     "ShapeNode",
     "Joint",
+    "IkHandle",
     "Transform",
     "Mesh",
     "Curve",
