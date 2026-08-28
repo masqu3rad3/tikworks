@@ -5,6 +5,7 @@ from functools import partial
 from maya import cmds
 
 from .core.dagnode import DagNode
+from .core.meta import META_PREFIX, find_by_meta
 from .core.node import Node
 from .core.registry import resolve
 from .core.scene import *  # noqa: F401, F403
@@ -36,6 +37,8 @@ __all__ = [
     "BlendShape",
     "SkinCluster",
     "resolve",
+    "find_by_meta",
+    "META_PREFIX",
 ]
 
 # --- MODULE LEVEL GETATTR (PEP 562) ---

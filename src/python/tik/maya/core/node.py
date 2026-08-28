@@ -103,6 +103,16 @@ class Node:
             return None
         return self._fn_dep.name()
 
+    @property
+    def meta(self):
+        """Typed metadata stored as hidden string attributes.
+
+        See :mod:`tik.maya.core.meta`.
+        """
+        from .meta import MetaStore  # local import avoids an import cycle
+
+        return MetaStore(self)
+
     def duplicate(self, **kwargs):
         """Duplicate the node in the scene.
 
