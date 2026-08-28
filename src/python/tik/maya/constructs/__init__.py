@@ -1,7 +1,19 @@
-"""Maya constructs and high-level utilities."""
+"""Maya constructs: multi-node rig patterns and high-level utilities."""
 
+from .ikfk_chain import IkFkChain
+from .matrix_constraint import MatrixConstraint
+from .matrix_switch import MatrixSwitch
+from .measure import Measure
 from .panel import Panel
+from .ribbon import Ribbon
+from .space_switch import SpaceSwitch
 
 __all__ = [
+    "IkFkChain",
+    "MatrixConstraint",
+    "MatrixSwitch",
+    "Measure",
     "Panel",
+    "Ribbon",
+    "SpaceSwitch",
 ]

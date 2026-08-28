@@ -4,6 +4,7 @@ from functools import partial
 
 from maya import cmds
 
+from .core import attribute, naming
 from .core.dagnode import DagNode
 from .core.meta import META_PREFIX, find_by_meta
 from .core.node import Node
@@ -11,6 +12,14 @@ from .core.registry import resolve
 from .core.scene import *  # noqa: F401, F403
 from .core.scene import proxy_wrapper
 from .core.shapenode import ShapeNode
+from .constructs import (
+    IkFkChain,
+    MatrixConstraint,
+    MatrixSwitch,
+    Measure,
+    Ribbon,
+    SpaceSwitch,
+)
 from .types.blendshape import BlendShape
 from .types.skincluster import SkinCluster
 from .types.camera import Camera
@@ -40,6 +49,14 @@ __all__ = [
     "SkinCluster",
     "resolve",
     "find_by_meta",
+    "attribute",
+    "naming",
+    "MatrixConstraint",
+    "MatrixSwitch",
+    "Measure",
+    "SpaceSwitch",
+    "Ribbon",
+    "IkFkChain",
     "META_PREFIX",
 ]
 
