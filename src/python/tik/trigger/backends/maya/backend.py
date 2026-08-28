@@ -341,6 +341,32 @@ class MayaBackend:
         root = self._root_guide(self.guide_nodes(instance_id), instance[0].module_type)
         root.meta[tags.NAME] = name
 
+    def reparent_guides(self, instance_id: str, parent: Optional[ParentRef]) -> None:
+        """Hang an instance's root guide under another instance's guide (or the holder)."""
+        instance = self.find_instances([instance_id])
+        if not instance:
+            raise GuideError(f"No guides for instance {instance_id}.")
+        root = self._root_guide(self.guide_nodes(instance_id), instance[0].module_type)
+        if parent is None:
+            target = self.holder()
+        else:
+            if parent.instance_id == instance_id:
+                raise GuideError("Cannot parent guides under themselves.")
+            target = self.guide_node(parent.instance_id, parent.role, parent.index)
+            # refuse cycles: the target must not live under our root
+            node = target
+            while node is not None:
+                if node.meta.get(tags.INSTANCE) == instance_id:
+                    raise GuideError("Cannot parent guides under their own descendants.")
+                node = node.parent
+        with self.undo_chunk("Trigger reparent guides"):
+            root.parent = target
+
+    def make_observer(self, callback):
+        from .observer import SceneObserver
+
+        return SceneObserver(callback)
+
     # ------------------------------------------------------------ selection
     def selected_guide(self) -> Optional[ParentRef]:
         """Return the first selected guide as a ``ParentRef`` (for UI parenting)."""

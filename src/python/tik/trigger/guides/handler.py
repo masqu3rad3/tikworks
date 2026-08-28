@@ -164,6 +164,13 @@ class Guides:
     def remove(self, handle: GuideHandle) -> None:
         self.backend.delete_guides(handle.instance_id)
 
+    def reparent(self, handle: GuideHandle, parent: Optional[GuideHandle | ParentRef]) -> None:
+        """Hang ``handle`` under ``parent`` (its root guide) or back at the top level."""
+        parent_ref = parent
+        if isinstance(parent, GuideHandle):
+            parent_ref = ParentRef(parent.instance_id, parent.module_class.guides.root)
+        self.backend.reparent_guides(handle.instance_id, parent_ref)
+
     def mirror(self, handle: GuideHandle) -> GuideHandle:
         """Create (or update) the opposite-side copy of ``handle``."""
         instance = handle.instance

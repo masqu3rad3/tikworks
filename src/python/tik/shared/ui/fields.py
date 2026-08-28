@@ -74,6 +74,61 @@ class _NodeEditor(QtWidgets.QWidget):
         self.line.setText(str(value or ""))
 
 
+class _FileEditor(QtWidgets.QWidget):
+    """Line edit + browse button (+ optional extra action button)."""
+
+    valueChanged = QtCore.Signal(object)
+
+    def __init__(self, extensions=(), mode="open", parent=None, extra=None, browser=None) -> None:
+        super().__init__(parent)
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        self.line = QtWidgets.QLineEdit()
+        self.browse = QtWidgets.QPushButton("…")
+        self.browse.setFixedWidth(28)
+        self.browse.setToolTip("Browse")
+        layout.addWidget(self.line, 1)
+        layout.addWidget(self.browse)
+        self.extra_button = None
+        if extra is not None:
+            label, callback = extra
+            self.extra_button = QtWidgets.QPushButton(label)
+            self.extra_button.setFixedWidth(28)
+            self.extra_button.clicked.connect(lambda: callback(self.value()))
+            layout.addWidget(self.extra_button)
+        self.extensions = list(extensions)
+        self.mode = mode
+        self.browser = browser
+        self.line.editingFinished.connect(lambda: self.valueChanged.emit(self.value()))
+        self.browse.clicked.connect(self._browse)
+
+    def _filter(self) -> str:
+        if not self.extensions:
+            return "All files (*)"
+        patterns = " ".join(f"*{ext}" for ext in self.extensions)
+        return f"Files ({patterns})"
+
+    def _browse(self) -> None:
+        if self.browser is not None:
+            picked = self.browser(self.mode, self.extensions, self.value())
+        elif self.mode == "dir":
+            picked = QtWidgets.QFileDialog.getExistingDirectory(self, "Choose folder", self.value())
+        elif self.mode == "save":
+            picked, _filter = QtWidgets.QFileDialog.getSaveFileName(self, "Save", self.value(), self._filter())
+        else:
+            picked, _filter = QtWidgets.QFileDialog.getOpenFileName(self, "Open", self.value(), self._filter())
+        if picked:
+            self.line.setText(picked)
+            self.valueChanged.emit(picked)
+
+    def value(self) -> str:
+        return self.line.text()
+
+    def setValue(self, value) -> None:  # noqa: N802
+        self.line.setText(str(value or ""))
+
+
 class FormBuilder(QtWidgets.QWidget):
     """Form generated from a ``Schema`` object.
 
@@ -90,13 +145,27 @@ class FormBuilder(QtWidgets.QWidget):
         target: Optional[Schema] = None,
         parent=None,
         node_picker: Optional[Callable[[], str]] = None,
+        file_browser: Optional[Callable] = None,
+        file_extras: Optional[dict] = None,
     ) -> None:
+        """
+        Args:
+            target: The Schema instance to edit.
+            node_picker: Callable returning a node name for NodeRefField pickers.
+            file_browser: Optional ``(mode, extensions, current) -> path`` replacing the dialogs.
+            file_extras: ``{extension: (label, callback(path))}`` extra button on matching FileFields.
+        """
         super().__init__(parent)
         self._layout = QtWidgets.QFormLayout(self)
         self._layout.setContentsMargins(4, 4, 4, 4)
         self._widgets: dict[str, QtWidgets.QWidget] = {}
+        self._labels: dict[str, QtWidgets.QLabel] = {}
         self._target: Optional[Schema] = None
         self.node_picker = node_picker
+        self.file_browser = file_browser
+        self.file_extras = file_extras or {}
+        self._overridden: set[str] = set()
+        self._reference: dict = {}
         if target is not None:
             self.set_target(target)
 
@@ -112,6 +181,7 @@ class FormBuilder(QtWidgets.QWidget):
             if widget is not None:
                 widget.deleteLater()
         self._widgets.clear()
+        self._labels.clear()
 
     def set_target(self, target: Optional[Schema]) -> None:
         self.clear()
@@ -129,8 +199,22 @@ class FormBuilder(QtWidgets.QWidget):
             widget = self._make_widget(name, field)
             widget.setToolTip(field.help or "")
             self._widgets[name] = widget
-            self._layout.addRow(field.label or name, widget)
+            label = QtWidgets.QLabel(field.label or name)
+            self._labels[name] = label
+            self._layout.addRow(label, widget)
         self.refresh()
+
+    def mark_overrides(self, names, reference_values: Optional[dict] = None) -> None:
+        """Highlight fields carrying an override; ``reference_values`` show in tooltips."""
+        self._overridden = set(names)
+        self._reference = dict(reference_values or {})
+        for name, label in self._labels.items():
+            if name in self._overridden:
+                label.setStyleSheet("color: #FE7E00; font-weight: bold;")
+                label.setToolTip(f"override (referenced value: {self._reference.get(name, '?')!r})")
+            else:
+                label.setStyleSheet("")
+                label.setToolTip("")
 
     def widget(self, name: str) -> QtWidgets.QWidget:
         return self._widgets[name]
@@ -174,6 +258,17 @@ class FormBuilder(QtWidgets.QWidget):
         elif kind == "node":
             widget = _NodeEditor(self.node_picker)
             widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+        elif kind == "file":
+            extra = None
+            for ext in getattr(field, "extensions", []):
+                if ext in self.file_extras:
+                    extra = self.file_extras[ext]
+                    break
+            widget = _FileEditor(getattr(field, "extensions", ()), getattr(field, "mode", "open"),
+                                 extra=extra, browser=self.file_browser)
+            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+        elif kind == "dict":
+            widget = QtWidgets.QLabel("(edited in place)")
         else:  # string and unknown types
             widget = QtWidgets.QLineEdit()
             widget.editingFinished.connect(lambda n=name, w=widget: self._on_change(n, w.text()))
@@ -205,8 +300,10 @@ class FormBuilder(QtWidgets.QWidget):
             widget.setCurrentIndex(max(index, 0))
         elif isinstance(widget, (QtWidgets.QSpinBox, QtWidgets.QDoubleSpinBox)):
             widget.setValue(value)
-        elif isinstance(widget, (_VectorEditor, _NodeEditor)):
+        elif isinstance(widget, (_VectorEditor, _NodeEditor, _FileEditor)):
             widget.setValue(value)
+        elif isinstance(widget, QtWidgets.QLabel):
+            return
         elif isinstance(widget, QtWidgets.QLineEdit):
             widget.setText(", ".join(map(str, value)) if isinstance(value, list) else str(value))
 

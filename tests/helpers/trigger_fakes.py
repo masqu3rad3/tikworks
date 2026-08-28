@@ -116,6 +116,30 @@ class FakeBackend:
     def guide_node(self, instance_id, role, index=0):
         return f"{instance_id}_{role}_{index}"
 
+    def reparent_guides(self, instance_id, parent):
+        for item in self.instances:
+            if item.instance_id == instance_id:
+                item.parent = parent
+        self.calls.append(("reparent", instance_id, parent.instance_id if parent else None))
+
+    def settings_plug(self, instance_id, field_name):
+        return f"{instance_id}.{field_name}"
+
+    def make_observer(self, callback):
+        self.observer_callback = callback
+
+        class _Observer:
+            active = False
+            muted = False
+
+            def start(self_inner):
+                self_inner.active = True
+
+            def stop(self_inner):
+                self_inner.active = False
+
+        return _Observer()
+
     def rename_instance(self, instance_id, name):
         for item in self.instances:
             if item.instance_id == instance_id:
