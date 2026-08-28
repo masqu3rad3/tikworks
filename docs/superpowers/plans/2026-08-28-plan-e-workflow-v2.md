@@ -17,7 +17,7 @@
 
 ---
 
-### Task 1: Document, versioning, runner, reference, Session handler (core, no UI)
+### Task 1 ✅: Document, versioning, runner, reference, Session handler (core, no UI)
 
 **Files:** `tik/core/fields.py` (+`FileField`, `DictField`), `tik/trigger/core/document.py`, `core/versioning.py`, `core/runner.py`, `core/action.py` (category/icon/validate/save_from_scene, `ActionContext.resolve`), `core/registry.py` (`register_action(name, category, icon)`), `tik/trigger/actions/reference/reference.py`, `tik/trigger/handler.py`, `tik/trigger/__init__.py`.
 
@@ -34,21 +34,21 @@ ActionHandle: name/type/path/enabled/settings/children, add(), __getitem__, fiel
 ```
 Tests: `tests/unit/test_document_trigger.py`, `test_runner_trigger.py`, `test_handler_trigger.py` (fake backend + toy actions).
 
-### Task 2: Guides (`.trg` compatible) + kinematics on files
+### Task 2 ✅: Guides (`.trg` compatible) + kinematics on files
 
 **Files:** `tik/trigger/guides/format.py` (`GuideFile`), `guides/handler.py` (`Guides`), `backends/maya` (guide joints carry old attrs `moduleName`, `upAxis*`, `useRefOri`, side/type + our meta), `actions/kinematics/kinematics.py` (guides_file/guide_roots/after_build/auto_switchers/selection_sets; master setup), `actions/import_asset` label "Import Model".
 Tests: `.trg` roundtrip against the sample; guides handler add/mirror/export/import; kinematics builds from a file in a fresh scene.
 
-### Task 3: UI — theme, pipeline window, shelf, palette, reference rows
+### Task 3 ✅: UI — theme, pipeline window, shelf, palette, reference rows
 
 **Files:** `tik/shared/ui/theme/` (theme.qss copy + `apply(widget)`), `tik/trigger/ui/model.py` (`PipelineModel` QAbstractItemModel over `Session`, DnD), `ui/pipeline_view.py`, `ui/shelf.py`, `ui/palette.py`, `ui/settings_panel.py`, `ui/main.py` (tabs = sessions), `ui/icons/` (category glyphs).
 Tests (`tests/ui`): model tree/DnD/nesting, palette filter/insert, linked rows + override edit, run status colouring from events.
 
-### Task 4: Guide Designer + binding
+### Task 4 ✅: Guide Designer + binding
 
 **Files:** `tik/shared/ui/binding.py`, `tik/trigger/ui/guide_designer.py` (module tiles + palette, side control, tree with drag-parenting, bound properties, Import/Export/Test build), backend `SceneObserver`.
 Tests: designer with fake guides handler; binding with fake plugs.
 
-### Task 5: Remove v1 pieces, docs, verification
+### Task 5 ✅: Remove v1 pieces, docs, verification
 
 Remove `session/` package (RigSession), scene-scope kinematics, old panels; update docs, CLAUDE.md, memory; full suites green; commit.

@@ -1,97 +1,49 @@
 tik.trigger
 ===========
 
-Modular rigging framework built on ``tik.maya``.
+Modular rigging built on ``tik.maya``. **The session is the rig**: a ``.tr``
+file is an ordered, nested list of actions; Build resets the scene and runs
+them. Guides are an asset (``.trg``) authored in the Guide Designer and consumed
+by the Kinematics action.
 
 Concepts
 --------
 
-* **Module** — declares the guides it needs, its plugs/sockets and its settings,
-  and implements ``draw_guides(ctx)`` and ``build(ctx)``.
-* **Guides** — tagged joints in the scene (``node.meta["trg_*"]``). The scene is
-  the source of truth; a session file only stores a snapshot.
-* **Builder** — reads the guide instances, builds them parents-first, attaches
-  each child's socket to a parent plug, then keeps/hides/deletes the guides.
-* **Actions** — an ordered, serializable pipeline (``kinematics`` is one of them).
-* **RigSession** — the ``.trg`` document: guide snapshot + actions + metadata.
+* **Session** (``.tr``, schema 4) — nested actions; every input is a file path
+  or a value stored in the action. Old flat ``.tr`` files convert on load.
+* **Action** — typed fields + ``run(ctx)`` (+ optional ``validate``,
+  ``save_from_scene``); registered with a category for the shelf/palette.
+* **Reference** — an action that runs another session inline; ticking or
+  editing its rows stores *overrides* in the referencing session only.
+* **Guides** — old-format ``.trg`` joint lists; ``Guides`` authors them in the
+  live scene (add/mirror/reparent/test build/export/import).
+* **Module** — manifest (``Guides(...)`` roles, plugs/sockets, typed fields,
+  ``legacy_types`` for old ``.trg`` names) + ``draw_guides(ctx)`` / ``build(ctx)``.
 
-Write a module in 50 lines
---------------------------
-
-.. code-block:: python
-
-   import tik.maya as tm
-   from tik.trigger.core import FloatField, Guides, IntField, Module, register_module
-
-
-   @register_module("fkchain")
-   class FkChain(Module):
-       label = "FK Chain"
-       guides = Guides("root", multi="segment", min=1, max=50)
-       plugs = ("root", "end")
-       sockets = ("root",)
-
-       segments = IntField(3, min=1, max=50)
-       spacing = FloatField(5.0, min=0.01)
-       controller_size = FloatField(2.0, min=0.01)
-
-       def guide_count(self):
-           return self.segments
-
-       def draw_guides(self, ctx):
-           previous = ctx.joint("root", (0, 0, 0))
-           for index in range(self.segments):
-               offset = self.spacing * (index + 1) * ctx.side_mult
-               previous = ctx.joint("segment", (offset, 0, 0), index=index, parent=previous)
-
-       def build(self, ctx):
-           guides = [ctx.guide("root"), *ctx.guides("segment")]
-           joints = tm.Joint.chain(
-               [tuple(node.world_position) for node in guides],
-               name_pattern=ctx.name("{index}", suffix="jnt"),
-               parent=ctx.groups.joints,
-           )
-           socket = tm.Transform.create(name=ctx.name("root", suffix="socket"),
-                                        parent=ctx.groups.controllers.long_name)
-           socket.align_to(joints[0])
-           ctx.socket("root", socket)
-
-           parent = socket
-           for index, joint in enumerate(joints[:-1]):
-               controller = ctx.controller(f"fk{index}", size=self.controller_size,
-                                           parent=parent, match=joint)
-               controller.transform.create_offset_group(name=ctx.name(f"fk{index}", suffix="offset"))
-               tm.MatrixConstraint.create(controller.transform, joint, maintain_offset=True)
-               parent = controller.transform
-
-           for joint in joints:
-               ctx.deform_joint(joint)
-           ctx.plug("root", joints[0])
-           ctx.plug("end", joints[-1])
-
-The framework creates the groups, applies the naming convention, tags every
-node, handles side mirroring, parents the module under the rig root and
-attaches it to its parent module.
-
-Scripting
----------
+TD API
+------
 
 .. code-block:: python
 
-   import tik.trigger as trigger
-   from tik.trigger.core import ParentRef, get_module
+   from tik import trigger
 
-   backend = trigger.maya_backend()
-   body = backend.create_guides(get_module("base")(name="body"))
-   arm = backend.create_guides(get_module("arm")(name="arm", side="L"),
-                               parent=ParentRef(body.instance_id, "root"))
-   # ... move the guides ...
-   trigger.Builder(backend).build(rig_name="hero", afterlife="keep")
+   rig = trigger.Session.open("hero_muscle.tr", backend=trigger.maya_backend())
+   rig.add("import_asset", "import_model", file_path="geo/hero_muscle_v02.ma")
+   base = rig.add("reference", "baseRig", file="rigs/baseRig.tr")
+   base["scripts/head_rotation"].enabled = False          # override
+   base["kinematics"].guides_file = "guides/hero_muscle.trg"
+   rig.add("script", "fix", parent=rig["import_model"], code="...")
+   rig.build()                    # reset scene, run everything
+   rig.build(until="kinematics")
+   rig.run("fix")                 # single step, no reset
+   rig.save(increment=True)
 
-   session = trigger.RigSession(backend)
-   session.snapshot_guides()
-   session.add_action("kinematics")
-   session.save("D:/rigs/hero.trg")
+   guides = trigger.Guides()      # the live scene
+   body = guides.add("base", name="body")
+   arm = guides.add("arm", side="L", parent=body, ribbon_joints=6)
+   guides.mirror(arm)
+   guides.test_build(body, arm)
+   guides.export("guides/hero_muscle.trg")
 
 UI
 --
@@ -101,9 +53,38 @@ UI
    import tik.trigger.ui
    tik.trigger.ui.show()
 
+Tabs are open sessions. Add actions from the collapsible shelf (click = after
+selection, drag = anywhere, drop on a row = nest) or press **Tab** for the
+search palette (Enter: sibling, Shift+Enter: child). Referenced rows render
+inline, dimmed, with checkboxes; edits become overrides. The Guide Designer
+(toolbar or the ✎ next to a guides file) authors ``.trg`` files with two-way
+scene binding and drag-parenting.
+
+Writing an action
+-----------------
+
+.. code-block:: python
+
+   from tik.trigger.core import Action, BoolField, FileField, register_action
+
+   @register_action("weights", category="deform")
+   class Weights(Action):
+       """Apply skin weights from a file."""
+       file = FileField("", extensions=[".trw"])
+       create_deformers = BoolField(True)
+
+       def run(self, ctx):
+           path = ctx.resolve(self.file)
+           ...
+
+       def save_from_scene(self, ctx):
+           ...  # write the .trw next to the session
+           return [str(path)]
+
 Tests
 -----
 
-``tests/unit/test_*_trigger.py`` (core with a fake backend, Maya backend),
-``tests/integration/trigger`` (full pipeline), ``tests/ui`` (Qt, run with
-``TIK_TESTS_NO_MAYA=1``).
+``tests/unit/test_{document,runner,handler,guides}_trigger.py``,
+``tests/integration/trigger`` (rebuild story from files),
+``tests/ui`` (``TIK_TESTS_NO_MAYA=1``: pipeline, palette, reference rows,
+Guide Designer, binding).

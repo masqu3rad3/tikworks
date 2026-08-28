@@ -38,8 +38,8 @@ Maya API wrapper that "feels like Python, behaves like Maya."
 ### tik.trigger (IN DEVELOPMENT)
 Next-generation rigging framework built on tik.maya.
 - **Location:** `src/python/tik/trigger/`
-- **Status:** Rebuilt on tik.maya (August 2026): DCC-agnostic core + Maya backend, modules `base`/`fkchain`/`arm`, actions `import_asset`/`kinematics`/`script`, RigSession (.trg), minimal Qt UI
-- **Design spec:** `docs/superpowers/specs/2026-08-28-trigger-rebuild-design.md` (plans A-D in `docs/superpowers/plans/`)
+- **Status (August 2026):** workflow v2 — the `.tr` session is the rig (nested actions, references with overrides, runner), guides are a `.trg` asset (old format kept), `Session`/`Guides` TD handlers, pipeline UI on the official theme, Guide Designer with two-way binding. Modules `base`/`fkchain`/`arm`; actions `import_asset`/`kinematics`/`script`/`reference`.
+- **Design specs:** `docs/superpowers/specs/2026-08-28-trigger-workflow-and-ui-design.md` (authoritative for workflow/UI/API) and `2026-08-28-trigger-rebuild-design.md` (tik.maya constructs, fields); plans A-E in `docs/superpowers/plans/`
 - **Layering rule:** `tik/trigger/core` and `session` import no Maya/Qt (enforced by `tests/unit/test_import_boundaries.py`)
 
 ## Important Patterns
@@ -91,7 +91,8 @@ Key decisions:
 
 Tests for tik.trigger follow naming convention `test_<module>_trigger.py`:
 - `tests/unit/test_core_trigger.py` — manifest, Module, registry, schemas, Builder (fake backend)
-- `tests/unit/test_rig_session_trigger.py` — RigSession (fake backend)
+- `tests/unit/test_document_trigger.py`, `test_runner_trigger.py`, `test_handler_trigger.py` — session document, runner/references, Session API (fake backend)
+- `tests/unit/test_guides_trigger.py` — .trg format + Guides handler (Maya)
 - `tests/unit/test_maya_backend_trigger.py` — Maya backend, contexts, build pipeline
 - `tests/integration/trigger/` — end-to-end pipeline and arm module
 - `tests/ui/` — Qt UI (run with `TIK_TESTS_NO_MAYA=1`, `QT_QPA_PLATFORM=offscreen`; `make tests-ui`)

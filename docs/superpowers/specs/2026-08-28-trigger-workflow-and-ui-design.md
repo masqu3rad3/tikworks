@@ -1,7 +1,7 @@
 # Trigger Workflow, UI and TD API — Design Spec (v2)
 
 Date: 2026-08-28
-Status: brainstormed with Arda Kutlu; awaiting spec review.
+Status: approved; implemented via Plan E (2026-08-28). Build & Publish and module parity remain open.
 Supersedes the workflow/session/UI parts of
 `2026-08-28-trigger-rebuild-design.md`. The tik.maya constructs and the typed
 `tik.core.fields` from that spec stay; the scene-centric session, builder scope
