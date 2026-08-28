@@ -6,7 +6,7 @@ This file provides project-level context to Claude Code when working in this rep
 
 **TikWorks** is a multi-tool repository centered around Maya automation and rigging.
 
-- **Location:** `c:/dev/tikworks/`
+- **Location:** `D:/dev/tikworks/`
 - **Primary DCC:** Autodesk Maya 2024+
 - **Python:** 3.10+
 
@@ -14,7 +14,7 @@ This file provides project-level context to Claude Code when working in this rep
 
 ```
 tikworks/
-├── src/
+├── src/python/
 │   ├── tik/
 │   │   ├── maya/              # tik.maya - Maya cmds/API wrapper
 │   │   ├── core/               # tik.core - Shared utilities
@@ -31,13 +31,13 @@ tikworks/
 
 ### tik.maya
 Maya API wrapper that "feels like Python, behaves like Maya."
-- **Location:** `src/tik/maya/`
+- **Location:** `src/python/tik/maya/`
 - **Architecture:** Types / Roles / Constructs separation
 - **Key modules:** `core/`, `types/`, `roles/`, `constructs/`
 
 ### tik.trigger (IN DEVELOPMENT)
 Next-generation rigging framework built on tik.maya.
-- **Location:** `src/tik/trigger/`
+- **Location:** `src/python/tik/trigger/`
 - **Status:** Phase 4 Session Management complete (April 2026)
 - **Key influences:** tik_manager4 UI patterns, labelmatic config/core separation
 - **Current implementation:** Core foundation + actions + modules + session management
