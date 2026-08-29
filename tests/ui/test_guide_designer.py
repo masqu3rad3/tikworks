@@ -364,7 +364,7 @@ def test_unique_names_layout_persistence_and_slice(designer, tmp_path):
     assert designer.guides.layout["positions"]["L_tail"] == [40.0, 40.0]
 
 
-def test_multi_selection_edits_same_type_together(designer):
+def test_multi_selection_edits_same_type_together(designer, qapp):
     designer.set_side("Both")
     chains = designer.create_guides("toy_chain")
     designer.set_side("C")
@@ -374,6 +374,8 @@ def test_multi_selection_edits_same_type_together(designer):
         designer.item_for(chain.instance_id).setSelected(True)
     assert designer.multi_label.isVisible() and "2 Toy Chain" in designer.multi_label.text()
     assert not designer.name_edit.isEnabled()
+    qapp.processEvents()  # Qt shows freshly added children on the next event round
+    assert designer.form.widget("segments").isVisible()  # the fields really are there to edit
     designer.form.widget("segments").setValue(5)
     assert all(designer.backend.settings[chain.instance_id]["segments"] == 5 for chain in chains)
     designer.item_for(body.instance_id).setSelected(True)
@@ -452,7 +454,7 @@ def test_grid_snap_default_and_free_placement(designer):
     assert nodes[other.key].pos().x() % 20 == 0 and nodes[other.key].pos().y() % 20 == 0  # snapped
 
 
-def test_tree_filter_and_ctrl_click_toggle(designer):
+def test_tree_filter_and_ctrl_click_toggle(designer, qapp):
     designer.set_side("C")
     body = designer.create_guides("toy_root")[0]
     designer.set_side("Both")
@@ -477,6 +479,10 @@ def test_tree_filter_and_ctrl_click_toggle(designer):
     view.toggle_node_at(view.mapFromScene(view.graph.nodes["R_toy_chain"].sceneBoundingRect().center()))
     assert {n.key for n in view.graph.selected_nodes()} == {"L_toy_chain", "R_toy_chain"}
     assert len(designer.selected_handles()) == 2 and designer.multi_label.isVisible()
+    qapp.processEvents()
+    assert designer.form.widget("segments").isVisible()
+    designer.form.widget("segments").setValue(9)
+    assert all(designer.backend.settings[c.instance_id]["segments"] == 9 for c in chains)
     view.toggle_node_at(view.mapFromScene(view.graph.nodes["L_toy_chain"].sceneBoundingRect().center()))
     assert {n.key for n in view.graph.selected_nodes()} == {"R_toy_chain"}
     assert len(view.graph.wires) == 2  # nothing sliced

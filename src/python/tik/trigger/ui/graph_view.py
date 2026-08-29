@@ -272,7 +272,12 @@ class GraphScene(QtWidgets.QGraphicsScene):
 
     # ------------------------------------------------------------ building
     def clear_graph(self) -> None:
-        self.clear()
+        # clearing selected items emits selectionChanged; nobody must react mid-rebuild
+        self.blockSignals(True)
+        try:
+            self.clear()
+        finally:
+            self.blockSignals(False)
         self.nodes = {}
         self.wires = []
         self.moved = set()

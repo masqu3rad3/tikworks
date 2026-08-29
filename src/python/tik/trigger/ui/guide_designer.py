@@ -132,6 +132,7 @@ class InputRow(QtWidgets.QWidget):
         self.input = input_decl
         self.picker = picker
         self.sources = sources  # callable -> (modules: [(key, label, [outputs])], scene_nodes: [(group, node)])
+        self._last = ""  # last source we showed or reported; editingFinished fires on focus loss too
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
@@ -146,16 +147,25 @@ class InputRow(QtWidgets.QWidget):
         layout.addWidget(self.line, 1)
         layout.addWidget(self.pick)
         layout.addWidget(self.clear)
-        self.line.editingFinished.connect(lambda: self.changed.emit(self.input.name, self.line.text().strip()))
+        self.line.editingFinished.connect(self._edited)
         self.line.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.line.customContextMenuRequested.connect(self._menu)
         self.pick.clicked.connect(self._pick)
-        self.clear.clicked.connect(lambda: (self.line.setText(""), self.changed.emit(self.input.name, "")))
+        self.clear.clicked.connect(lambda: self.choose(""))
 
     def set_source(self, source: str) -> None:
-        self.line.setText(source or "")
+        self._last = source or ""
+        self.line.setText(self._last)
+
+    def _edited(self) -> None:
+        text = self.line.text().strip()
+        if text == self._last:
+            return
+        self._last = text
+        self.changed.emit(self.input.name, text)
 
     def choose(self, source: str) -> None:
+        self._last = source
         self.line.setText(source)
         self.changed.emit(self.input.name, source)
 
@@ -202,6 +212,7 @@ class SceneNodesPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self.picker = picker  # callable -> [selected scene node names]
         self.rows: list[QtWidgets.QLineEdit] = []
+        self._last: list[str] = []
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
@@ -228,6 +239,7 @@ class SceneNodesPanel(QtWidgets.QWidget):
         return list(self.picker() or []) if self.picker else []
 
     def set_nodes(self, nodes: list[str]) -> None:
+        self._last = [node for node in nodes if node]
         while self.rows_layout.count():
             item = self.rows_layout.takeAt(0)
             if item.widget() is not None:
@@ -274,7 +286,11 @@ class SceneNodesPanel(QtWidgets.QWidget):
         self._emit()
 
     def _emit(self) -> None:
-        self.changed.emit(self.nodes())
+        nodes = self.nodes()
+        if nodes == self._last:
+            return  # focus loss / teardown, nothing changed
+        self._last = nodes
+        self.changed.emit(nodes)
 
 
 class GuideDesigner(MayaToolWindow):
@@ -751,6 +767,9 @@ class GuideDesigner(MayaToolWindow):
         self._multi = list(group or [])
         self._external = None
         self.bindings.clear()
+        for row in self._input_rows.values():
+            row.blockSignals(True)
+            row.line.blockSignals(True)
         while self.inputs_form.count():
             item = self.inputs_form.takeAt(0)
             if item.widget() is not None:
