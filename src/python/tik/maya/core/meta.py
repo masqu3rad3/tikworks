@@ -91,7 +91,24 @@ class MetaStore:
 
     def items(self) -> list[tuple[str, Any]]:
         """Return ``(key, value)`` pairs."""
-        return [(key, self[key]) for key in self.keys()]
+        return list(self.as_dict().items())
+
+    def as_dict(self) -> dict:
+        """Read every metadata key in one go (one ``listAttr`` + one ``getAttr`` per key).
+
+        Much cheaper than ``meta[key]`` in a loop, which pays an
+        ``attributeQuery`` per key; use it when several keys are needed.
+        """
+        name = self._node.long_name
+        attrs = cmds.listAttr(name, userDefined=True) or []
+        prefix_length = len(META_PREFIX)
+        result = {}
+        for attr in attrs:
+            if not attr.startswith(META_PREFIX):
+                continue
+            raw = cmds.getAttr(f"{name}.{attr}")
+            result[attr[prefix_length:]] = json.loads(raw) if raw else None
+        return result
 
     def update(self, mapping: dict) -> None:
         """Set several keys at once."""

@@ -31,11 +31,16 @@ class GuideHandle:
         object.__setattr__(self, "_instance", instance)
 
     def _refresh(self) -> ModuleInstance:
-        found = self._guides.backend.find_instances([self._instance.instance_id])
-        if not found:
+        found = self._guides._snapshot().get(self._instance.instance_id)
+        if found is None:
             raise GuideError(f"Guides for '{self._instance.name}' no longer exist.")
-        object.__setattr__(self, "_instance", found[0])
-        return found[0]
+        object.__setattr__(self, "_instance", found)
+        return found
+
+    def _touch(self) -> ModuleInstance:
+        """After a write: drop the cache and re-read this instance."""
+        self._guides.invalidate()
+        return self._refresh()
 
     @property
     def instance(self) -> ModuleInstance:
@@ -52,7 +57,7 @@ class GuideHandle:
     @name.setter
     def name(self, value: str) -> None:
         self._guides.backend.rename_instance(self.instance_id, value)
-        self._refresh()
+        self._touch()
 
     @property
     def module_type(self) -> str:
@@ -100,7 +105,7 @@ class GuideHandle:
         settings = self.settings
         settings[item] = fields[item].validate(value)
         self._guides.backend.write_settings(self.instance_id, settings)
-        self._refresh()
+        self._touch()
 
     def set(self, **settings) -> "GuideHandle":
         for key, value in settings.items():
@@ -133,7 +138,7 @@ class GuideHandle:
         else:
             inputs.pop(input_name, None)
         self._guides.backend.set_inputs(self.instance_id, inputs)
-        self._refresh()
+        self._touch()
 
     def select(self) -> None:
         self._guides.backend.select_guides(self.instance_id)
@@ -152,17 +157,33 @@ class Guides:
             backend = trigger.maya_backend()
         self.backend = backend
         self.events = events or EventBus()
+        self._cache: Optional[dict[str, ModuleInstance]] = None
+
+    # ----------------------------------------------------------- caching
+    def _snapshot(self) -> dict[str, ModuleInstance]:
+        """One scene scan, reused by every handle until something changes."""
+        if self._cache is None:
+            self._cache = {item.instance_id: item for item in self.backend.find_instances()}
+        return self._cache
+
+    def invalidate(self) -> None:
+        """Forget the cached scene snapshot.
+
+        Every write through this API does it for you; call it yourself after
+        editing guides directly in Maya (moving joints, undo, deleting).
+        """
+        self._cache = None
 
     # ----------------------------------------------------------- listing
     def instances(self) -> list[GuideHandle]:
-        return [GuideHandle(self, item) for item in self.backend.find_instances()]
+        return [GuideHandle(self, item) for item in self._snapshot().values()]
 
     def roots(self) -> list[GuideHandle]:
         return [handle for handle in self.instances() if handle.instance.parent is None]
 
     def get(self, instance_id: str) -> Optional[GuideHandle]:
-        found = self.backend.find_instances([instance_id])
-        return GuideHandle(self, found[0]) if found else None
+        found = self._snapshot().get(instance_id)
+        return GuideHandle(self, found) if found else None
 
     def find(self, name: str, side: Optional[str] = None) -> Optional[GuideHandle]:
         for handle in self.instances():
@@ -179,6 +200,7 @@ class Guides:
     def clear(self) -> None:
         for handle in self.instances():
             self.backend.delete_guides(handle.instance_id)
+        self.invalidate()
 
     # ---------------------------------------------------------- authoring
     def add(
@@ -199,10 +221,12 @@ class Guides:
         if isinstance(parent, GuideHandle):
             parent_ref = ParentRef(parent.instance_id, parent.module_class.guides.root)
         instance = self.backend.create_guides(module, parent=parent_ref, inputs=inputs)
+        self.invalidate()
         return GuideHandle(self, instance)
 
     def remove(self, handle: GuideHandle) -> None:
         self.backend.delete_guides(handle.instance_id)
+        self.invalidate()
 
     # -------------------------------------------------------- connections
     def by_key(self, key: str) -> Optional[GuideHandle]:
@@ -240,9 +264,11 @@ class Guides:
         if isinstance(parent, GuideHandle):
             parent_ref = ParentRef(parent.instance_id, parent.module_class.guides.root)
         self.backend.reparent_guides(handle.instance_id, parent_ref)
+        self.invalidate()
 
     def mirror(self, handle: GuideHandle) -> GuideHandle:
         """Create (or update) the opposite-side copy of ``handle``."""
+        self.invalidate()  # poses may have been edited by hand
         instance = handle.instance
         if handle.side is Side.CENTER:
             raise GuideError("Center guides cannot be mirrored.")
@@ -263,20 +289,27 @@ class Guides:
                 existing.instance_id,
                 {name: _mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()},
             )
+            self.invalidate()
             return existing
         module = handle.module_class(name=instance.name, side=target_side, settings=instance.settings)
         mirrored_inputs = {name: _mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()}
         created = self.backend.create_guides(module, parent=instance.parent, poses=poses, attach=instance.attach, inputs=mirrored_inputs)
+        self.invalidate()
         return GuideHandle(self, created)
 
     # ------------------------------------------------------------- build
     def test_build(self, *handles: GuideHandle, rig_name: str = "test") -> Any:
         scope = [handle.instance_id for handle in handles] or "scene"
-        return Builder(self.backend, self.events).build(scope=scope, rig_name=rig_name, afterlife="keep")
+        self.invalidate()  # guides may have been moved by hand since the last read
+        try:
+            return Builder(self.backend, self.events).build(scope=scope, rig_name=rig_name, afterlife="keep")
+        finally:
+            self.invalidate()
 
     # ------------------------------------------------------------ files
     def export(self, file_path, *handles: GuideHandle) -> Path:
         wanted = {handle.instance_id for handle in handles} or None
+        self.invalidate()  # export the joints as they are now
         records = self.backend.export_guide_records(wanted)
         keys = {handle.key for handle in (handles or self.instances())}
         connections = [item for item in self.connections() if item["input"].split(".")[0] in keys]
@@ -290,6 +323,7 @@ class Guides:
         if reset:
             self.clear()
         created = self.backend.import_guide_instances(instances)
+        self.invalidate()
         return [GuideHandle(self, item) for item in created]
 
     load = import_

@@ -90,9 +90,22 @@ class MayaBackend:
             parent = parent.parent
         return None
 
-    def _instance_from_nodes(self, instance_id: str, nodes: dict) -> Optional[ModuleInstance]:
+    def _instance_from_nodes(self, instance_id: str, nodes: dict, meta: Optional[dict] = None) -> Optional[ModuleInstance]:
+        """Build a ``ModuleInstance`` from ``{(role, index): joint}``.
+
+        ``meta`` may carry the already-read ``node.meta.as_dict()`` per joint
+        (keyed by long name) so a scene scan reads each attribute once.
+        """
+        meta = meta or {}
+
+        def read(node):
+            data = meta.get(node.long_name)
+            if data is None:
+                data = meta[node.long_name] = node.meta.as_dict()
+            return data
+
         any_node = next(iter(nodes.values()))
-        module_type = any_node.meta.get(tags.MODULE, "")
+        module_type = read(any_node).get(tags.MODULE, "")
         if not registry.is_module_registered(module_type):
             logger.warning("Skipping guides of unknown module type '%s'.", module_type)
             return None
@@ -100,6 +113,7 @@ class MayaBackend:
         if root is None:
             logger.warning("Instance %s has no root guide; skipped.", instance_id)
             return None
+        root_meta = read(root)
         poses = []
         for (role, index), node in sorted(nodes.items(), key=lambda item: (item[0][0], item[0][1])):
             position = tuple(cmds.xform(node.long_name, query=True, worldSpace=True, translation=True))
@@ -108,33 +122,36 @@ class MayaBackend:
         return ModuleInstance(
             module_type=module_type,
             instance_id=instance_id,
-            name=root.meta.get(tags.NAME, module_type),
-            side=root.meta.get(tags.SIDE, "C"),
-            settings=root.meta.get(tags.SETTINGS, {}) or {},
+            name=root_meta.get(tags.NAME, module_type),
+            side=root_meta.get(tags.SIDE, "C"),
+            settings=root_meta.get(tags.SETTINGS, {}) or {},
             guides=poses,
             parent=self._parent_ref(root),
-            attach=root.meta.get(tags.ATTACH),
-            inputs=dict(root.meta.get(INPUTS, {}) or {}),
+            attach=root_meta.get(tags.ATTACH),
+            inputs=dict(root_meta.get(INPUTS, {}) or {}),
         )
 
     def find_instances(self, scope: Any = "scene") -> list[ModuleInstance]:
-        joints = [
-            node
-            for node in tm.find_by_meta(tags.KIND, tags.GUIDE, node_type="joint")
-            if tags.INSTANCE in node.meta
-        ]
+        """Scan the scene once: every guide joint's meta is read a single time."""
+        meta: dict[str, dict] = {}
+        joints = []
+        for name in cmds.ls(f"*.{tm.META_PREFIX}{tags.KIND}", long=True, objectsOnly=True, type="joint") or []:
+            node = tm.resolve(name)
+            data = node.meta.as_dict()
+            if data.get(tags.KIND) == tags.GUIDE and tags.INSTANCE in data:
+                meta[node.long_name] = data
+                joints.append(node)
         if scope == "selection":
             selected = set(cmds.ls(selection=True, long=True, dagObjects=True) or [])
             joints = [node for node in joints if node.long_name in selected]
         elif scope != "scene":
             wanted = set(scope)
-            joints = [node for node in joints if node.meta[tags.INSTANCE] in wanted]
+            joints = [node for node in joints if meta[node.long_name][tags.INSTANCE] in wanted]
 
         grouped: dict[str, dict] = {}
         for node in joints:
-            grouped.setdefault(node.meta[tags.INSTANCE], {})[
-                (node.meta[tags.ROLE], int(node.meta.get(tags.INDEX, 0)))
-            ] = node
+            data = meta[node.long_name]
+            grouped.setdefault(data[tags.INSTANCE], {})[(data[tags.ROLE], int(data.get(tags.INDEX, 0)))] = node
         if scope == "selection":
             # complete partially selected instances
             for instance_id in list(grouped):
@@ -142,7 +159,7 @@ class MayaBackend:
 
         instances = []
         for instance_id, nodes in grouped.items():
-            instance = self._instance_from_nodes(instance_id, nodes)
+            instance = self._instance_from_nodes(instance_id, nodes, meta)
             if instance is not None:
                 instances.append(instance)
         instances.sort(key=lambda item: item.name)

@@ -203,7 +203,7 @@ def test_tree_drag_sets_primary_and_scene_sync(designer):
     assert designer.status.text("modules") == "2 module(s)"
 
 
-def test_pick_up_wire_delete_and_shake(designer):
+def test_pick_up_wire_delete_and_sever(designer):
     designer.set_side("C")
     body = designer.create_guides("toy_root")[0]
     designer.set_side("L")
@@ -225,13 +225,10 @@ def test_pick_up_wire_delete_and_shake(designer):
     assert designer.graph.delete_selected()
     assert designer.guides.get(chain.instance_id).inputs == {}
     assert len(designer.guides.instances()) == 2
-    # shake the node -> sever everything touching it
+    # sever everything touching a node (context menu / Edit > Sever Connections)
     designer.guides.connect("L_toy_chain.root", "toy_root.root")
     designer.refresh()
-    node = designer.graph.graph.nodes["toy_root"]
-    xs = [0, 30, 0, 30, 0, 30, 0]
-    fired = [node.track_shake(x, now=0.05 * index) for index, x in enumerate(xs)]
-    assert True in fired
+    designer.graph.sever("toy_root")
     assert designer.guides.get(chain.instance_id).inputs == {}
 
 
@@ -248,7 +245,33 @@ def test_manual_scene_node_and_side_combo(designer):
     assert designer.guides.get(chain.instance_id).inputs == {"space": "hip_jnt"}
     designer.graph.remove_scene_node("hip_jnt")
     assert designer.guides.get(chain.instance_id).inputs == {} and "hip_jnt" not in designer.graph.graph.nodes
-    assert designer.side == "L"
+    # Scene Node from the shelf/palette: placeholder, rename via the properties name field
+    designer.create_guides("__scene_node__")
+    assert designer._external == "sceneNode1" and designer.name_edit.text() == "sceneNode1"
+    graph = designer.graph.graph
+    graph.start_wire(graph.nodes["sceneNode1"].outputs["node"], QtCore.QPointF(0, 0))
+    graph.finish_wire(graph.nodes["L_toy_chain"].inputs["space"])
+    assert designer.guides.get(chain.instance_id).inputs == {"space": "sceneNode1"}
+    designer.graph.select_key("sceneNode1")
+    designer._on_external_selection("sceneNode1")
+    designer.name_edit.setText("pelvis_jnt")
+    designer.name_edit.editingFinished.emit()
+    assert designer.guides.get(chain.instance_id).inputs == {"space": "pelvis_jnt"}
+    assert "pelvis_jnt" in designer.graph.graph.nodes and "sceneNode1" not in designer.graph.graph.nodes
+    # right-click menu on an input field lists other modules -> outputs, and scene nodes
+    designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
+    modules, scene_nodes = designer._input_rows["root"].sources()
+    assert [m[0] for m in modules] == [] and scene_nodes == ["pelvis_jnt"]
+    designer.set_side("C")
+    designer.create_guides("toy_root")
+    designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
+    modules, _ = designer._input_rows["root"].sources()
+    assert modules == [("toy_root", "Toy Root", ["root"])] or modules[0][0] == "toy_root"
+    menu = designer._input_rows["root"].build_menu()
+    assert any(action.menu() is not None for action in menu.actions())
+    designer.tree.clearSelection()
+    designer._set_current(None)
+    assert designer.side == "C"
     designer.set_side("Both")
     assert designer.side_combo.currentText() == "Both"
     assert [item.side.value for item in designer.create_guides("toy_chain")] == ["L", "R"]
@@ -269,6 +292,31 @@ def test_properties_binding_rename_mirror_delete(designer):
     designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
     designer.delete_current()
     assert [handle.key for handle in designer.guides.instances()] == ["R_tail"]
+
+
+def test_handles_share_one_scene_scan(designer):
+    designer.set_side("C")
+    designer.create_guides("toy_root")
+    designer.set_side("Both")
+    designer.create_guides("toy_chain")
+    backend = designer.backend
+    calls = {"n": 0}
+    original = backend.find_instances
+
+    def counting(*args, **kwargs):
+        calls["n"] += 1
+        return original(*args, **kwargs)
+
+    backend.find_instances = counting
+    designer.refresh()
+    assert calls["n"] == 1  # tree + graph + status from a single scan
+    calls["n"] = 0
+    for handle in designer.guides.instances():
+        _ = (handle.key, handle.inputs, handle.outputs, handle.settings, handle.instance)
+    assert calls["n"] == 0
+    designer.guides.connect("L_toy_chain.root", "toy_root.root")
+    assert calls["n"] == 1  # a write invalidates once
+    backend.find_instances = original
 
 
 def test_export_import_and_test_build(designer, tmp_path, monkeypatch):

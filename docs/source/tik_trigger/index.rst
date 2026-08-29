@@ -73,12 +73,20 @@ authors ``.trg`` files: tree and node graph over the same connections, Inputs
 group in the properties, two-way scene binding, debounced scene sync.
 Connections are data only — guide joints are never parented into each other
 and the designer never touches the Maya selection (use *Select guides*).
-Graph: Alt+MMB pans, Alt+RMB / wheel zooms, F fits; drag output → input to
-connect, drag a plugged input away to unplug, Delete disconnects selected
-wires, shaking a node severs all of its wires, right-click → *Add scene
-node…* creates an arbitrary scene node to connect to. *Build selected* /
-*Build all* test-build from the live scene; the Kinematics action has an
-*Open Guide Designer* button.
+Graph: Alt+MMB pans, Alt+RMB zooms around the press point, wheel zooms under
+the pointer, F fits; drag output → input to connect, drag a plugged input away
+to unplug, Delete disconnects selected wires, node menu → *Sever all
+connections*. A **Scene Node** entry in the shelf / Tab palette adds a
+placeholder for any Maya node (rename it in the properties; connections
+follow). Right-click an input field for a menu of every other module → its
+outputs, plus the scene nodes. Modules may declare any number of inputs and
+outputs (or none); the "primary" input only drives the tree layout.
+*Build selected* / *Build all* test-build from the live scene; the Kinematics
+action has an *Open Guide Designer* button.
+
+``Guides`` caches one scene scan per edit; every write through the API
+invalidates it. After moving or deleting guide joints by hand in Maya, call
+``guides.invalidate()`` (the designer does this on every refresh).
 
 Writing an action
 -----------------

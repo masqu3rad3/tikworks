@@ -6,17 +6,16 @@ The graph edits the same connections the tree does (through ``Guides``):
 * drag a connected input port away to unplug it (drop on another input to
   re-plug, drop on empty space to disconnect);
 * select wires and press Delete / Backspace to disconnect;
-* shake a node to sever all of its connections (Houdini style);
+* right-click a node for *Sever all connections*;
 * right-click the background to add a scene node (an arbitrary Maya node
   modules can connect to); Delete removes a selected scene node again.
 
-Navigation follows Maya: Alt + middle drag pans, Alt + right drag zooms,
-the wheel zooms, F fits the graph.
+Navigation follows Maya: Alt + middle drag pans, Alt + right drag zooms
+around the point you pressed, the wheel zooms under the pointer, F fits.
 """
 
 from __future__ import annotations
 
-import time
 from typing import Optional
 
 from tik.shared.ui import theme
@@ -30,8 +29,7 @@ HEADER = 22
 PORT_RADIUS = 5
 WIRE_PRIMARY = QtGui.QColor(theme.ACCENT)
 WIRE_SECONDARY = QtGui.QColor("#8fa4c0")
-SHAKE_REVERSALS = 4  # direction changes needed to sever
-SHAKE_WINDOW = 0.6  # seconds
+WORLD = 100000.0  # scene rect half-size: effectively infinite canvas so panning is never clamped
 
 
 class Port(QtWidgets.QGraphicsEllipseItem):
@@ -84,9 +82,6 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.external = external
         self.inputs: dict[str, Port] = {}
         self.outputs: dict[str, Port] = {}
-        self._shake: list[tuple[float, float]] = []  # (time, x)
-        self._shake_dir = 0
-        self._shake_turns = 0
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsMovable | QtWidgets.QGraphicsItem.ItemIsSelectable
                       | QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
         self.setZValue(2)
@@ -144,36 +139,6 @@ class NodeItem(QtWidgets.QGraphicsItem):
             self.scene().update_wires()
         return super().itemChange(change, value)
 
-    # ------------------------------------------------------------- shake
-    def mousePressEvent(self, event) -> None:  # noqa: N802
-        self._shake = []
-        self._shake_dir = 0
-        self._shake_turns = 0
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event) -> None:  # noqa: N802
-        super().mouseMoveEvent(event)
-        self.track_shake(event.scenePos().x())
-
-    def track_shake(self, x: float, now: Optional[float] = None) -> bool:
-        """Feed a horizontal position; returns True (once) when a shake is detected."""
-        now = time.monotonic() if now is None else now
-        self._shake = [(t, px) for t, px in self._shake if now - t <= SHAKE_WINDOW]
-        if self._shake:
-            delta = x - self._shake[-1][1]
-            direction = (delta > 0) - (delta < 0)
-            if direction and self._shake_dir and direction != self._shake_dir:
-                self._shake_turns += 1
-            if direction:
-                self._shake_dir = direction
-        self._shake.append((now, x))
-        if self._shake_turns >= SHAKE_REVERSALS and self.scene() is not None:
-            self._shake_turns = 0
-            self._shake = []
-            self.scene().sever_requested.emit(self.key)
-            return True
-        return False
-
 
 class WireItem(QtWidgets.QGraphicsPathItem):
     def __init__(self, source: Port, target: Port, primary: bool) -> None:
@@ -221,9 +186,9 @@ class WireItem(QtWidgets.QGraphicsPathItem):
 class GraphScene(QtWidgets.QGraphicsScene):
     connect_requested = QtCore.Signal(str, str)  # input key, source
     disconnect_requested = QtCore.Signal(str)  # input key
-    sever_requested = QtCore.Signal(str)  # node key: drop every connection touching it
     remove_external_requested = QtCore.Signal(str)  # scene node name
     node_selected = QtCore.Signal(str)  # instance key
+    external_selected = QtCore.Signal(str)  # scene node name
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -359,8 +324,8 @@ class GraphScene(QtWidgets.QGraphicsScene):
 
     def _on_selection(self) -> None:
         for item in self.selectedItems():
-            if isinstance(item, NodeItem) and not item.external:
-                self.node_selected.emit(item.key)
+            if isinstance(item, NodeItem):
+                (self.external_selected if item.external else self.node_selected).emit(item.key)
                 return
 
     def select_key(self, key: Optional[str]) -> None:
@@ -376,6 +341,7 @@ class GraphView(QtWidgets.QGraphicsView):
     """Renders a ``Guides`` handler's instances and connections; edits go back through it."""
 
     selection_changed = QtCore.Signal(str)
+    external_selection_changed = QtCore.Signal(str)
     edited = QtCore.Signal()
 
     def __init__(self, guides, parent=None, events=None) -> None:
@@ -389,19 +355,23 @@ class GraphView(QtWidgets.QGraphicsView):
         self.setDragMode(QtWidgets.QGraphicsView.RubberBandDrag)
         self.setViewportUpdateMode(QtWidgets.QGraphicsView.FullViewportUpdate)
         self.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorUnderMouse)
-        # Maya-style navigation: no scrollbars, pan with the middle button
+        self.setResizeAnchor(QtWidgets.QGraphicsView.AnchorViewCenter)
+        # Maya-style navigation: no scrollbars, pan with the middle button anywhere
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.graph.setSceneRect(QtCore.QRectF(-WORLD, -WORLD, 2 * WORLD, 2 * WORLD))
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self._positions: dict[str, tuple] = {}
         self.externals: set[str] = set()  # scene nodes added by hand (kept even when unconnected)
         self._nav: Optional[str] = None  # "pan" | "zoom"
         self._nav_last = QtCore.QPoint()
+        self._zoom_anchor = QtCore.QPointF()  # scene point kept under the press position while zooming
+        self._zoom_origin = QtCore.QPoint()
         self.graph.connect_requested.connect(self.connect_input)
         self.graph.disconnect_requested.connect(self.disconnect_input)
-        self.graph.sever_requested.connect(self.sever)
         self.graph.remove_external_requested.connect(self.remove_scene_node)
         self.graph.node_selected.connect(self.selection_changed)
+        self.graph.external_selected.connect(self.external_selection_changed)
 
     # ------------------------------------------------------------ building
     def rebuild(self) -> None:
@@ -444,8 +414,6 @@ class GraphView(QtWidgets.QGraphicsView):
                 if key is None or key not in by_key:
                     source_key = f"{source}.node"
                 self.graph.add_wire(source_key, f"{handle.key}.{input_name}", primary is not None and input_name == primary.name)
-        # a roomy scene rect so panning is not clamped to the nodes
-        self.graph.setSceneRect(self.graph.itemsBoundingRect().adjusted(-600, -600, 600, 600))
         if first:
             self.fit()
 
@@ -510,12 +478,39 @@ class GraphView(QtWidgets.QGraphicsView):
 
         self._apply(run)
 
-    def add_scene_node(self, name: str) -> None:
+    def add_scene_node(self, name: str = "") -> str:
+        """Add a scene-node placeholder; without a name a unique ``sceneNode#`` is used."""
         name = (name or "").strip()
         if not name:
-            return
+            taken = set(self.externals) | set(self.graph.nodes)
+            index = 1
+            while f"sceneNode{index}" in taken:
+                index += 1
+            name = f"sceneNode{index}"
         self.externals.add(name)
         self.rebuild()
+        self.graph.select_key(name)
+        return name
+
+    def rename_scene_node(self, old: str, new: str) -> bool:
+        """Rename a scene node placeholder and every connection that points at it."""
+        new = (new or "").strip()
+        if not new or new == old:
+            return False
+
+        def run():
+            for item in self.guides.connections():
+                if item["source"] == old:
+                    self.guides.connect(item["input"], new)
+            self.externals.discard(old)
+            self.externals.add(new)
+            if old in self._positions:
+                self._positions[new] = self._positions.pop(old)
+
+        return self._apply(run)
+
+    def scene_nodes(self) -> list[str]:
+        return sorted(name for name, node in self.graph.nodes.items() if node.external)
 
     def remove_scene_node(self, name: str) -> None:
         self.externals.discard(name)
@@ -538,7 +533,15 @@ class GraphView(QtWidgets.QGraphicsView):
         super().showEvent(event)
         QtCore.QTimer.singleShot(0, self.fit)
 
+    palette_requested = QtCore.Signal()
+
+    def focusNextPrevChild(self, next_child: bool) -> bool:  # noqa: N802
+        return False  # keep Tab for the palette
+
     def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() == QtCore.Qt.Key_Tab:
+            self.palette_requested.emit()
+            return
         if event.key() == QtCore.Qt.Key_F:
             self.fit()
             return
@@ -549,7 +552,8 @@ class GraphView(QtWidgets.QGraphicsView):
 
     def wheelEvent(self, event) -> None:  # noqa: N802
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
-        self.scale(factor, factor)
+        origin = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        self.zoom_at(factor, origin)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         alt = bool(event.modifiers() & QtCore.Qt.AltModifier)
@@ -557,6 +561,8 @@ class GraphView(QtWidgets.QGraphicsView):
             self._nav = "pan"
         elif alt and event.button() == QtCore.Qt.RightButton:
             self._nav = "zoom"
+            self._zoom_origin = event.pos()
+            self._zoom_anchor = self.mapToScene(event.pos())
         if self._nav:
             self._nav_last = event.pos()
             self.setCursor(QtCore.Qt.ClosedHandCursor if self._nav == "pan" else QtCore.Qt.SizeHorCursor)
@@ -564,17 +570,35 @@ class GraphView(QtWidgets.QGraphicsView):
             return
         super().mousePressEvent(event)
 
+    def pan_by(self, dx: int, dy: int) -> None:
+        """Pan by viewport pixels (works anywhere on the infinite canvas)."""
+        self.setTransformationAnchor(QtWidgets.QGraphicsView.NoAnchor)
+        try:
+            self.translate(dx / self.transform().m11(), dy / self.transform().m22())
+        finally:
+            self.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorUnderMouse)
+
+    def zoom_at(self, factor: float, origin: QtCore.QPoint, anchor: Optional[QtCore.QPointF] = None) -> None:
+        """Scale by ``factor`` keeping scene point ``anchor`` under viewport point ``origin``."""
+        anchor = self.mapToScene(origin) if anchor is None else anchor
+        self.setTransformationAnchor(QtWidgets.QGraphicsView.NoAnchor)
+        try:
+            self.scale(factor, factor)
+            shifted = self.mapToScene(origin)
+            self.translate(shifted.x() - anchor.x(), shifted.y() - anchor.y())
+        finally:
+            self.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorUnderMouse)
+
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
         if self._nav:
             delta = event.pos() - self._nav_last
             self._nav_last = event.pos()
             if self._nav == "pan":
-                self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - delta.x())
-                self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta.y())
+                self.pan_by(delta.x(), delta.y())
             else:
                 factor = 1.0 + (delta.x() - delta.y()) * 0.01
                 factor = min(max(factor, 0.5), 2.0)
-                self.scale(factor, factor)
+                self.zoom_at(factor, self._zoom_origin, self._zoom_anchor)
             event.accept()
             return
         super().mouseMoveEvent(event)

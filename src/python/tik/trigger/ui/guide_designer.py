@@ -35,7 +35,8 @@ from .session_view import pane
 
 MIME_MODULE = "application/x-trigger-module-type"
 SIDES = ("L", "R", "C", "Both", "Auto")
-MODULE_COLORS = {"body": "#c9a24a", "limbs": "#5b8fd0", "generic": "#7fa86a", "face": "#b86b9a"}
+SCENE_NODE = "__scene_node__"  # pseudo module: an arbitrary scene node modules can connect to
+MODULE_COLORS = {"body": "#c9a24a", "limbs": "#5b8fd0", "generic": "#7fa86a", "face": "#b86b9a", "scene": "#8a93a0"}
 MODULE_CATEGORY = {"base": "body", "spine": "body", "head": "body", "arm": "limbs", "leg": "limbs",
                    "finger": "limbs", "fkchain": "generic", "tail": "generic", "surface": "generic"}
 
@@ -46,6 +47,8 @@ def module_entries():
         category = MODULE_CATEGORY.get(module_cls.module_type, "generic")
         tiles.append(TileEntry(module_cls.module_type, module_cls.display_label(), category))
         palette.append(PaletteEntry(module_cls.module_type, module_cls.display_label(), category))
+    tiles.append(TileEntry(SCENE_NODE, "Scene Node", "scene"))
+    palette.append(PaletteEntry(SCENE_NODE, "Scene Node", "scene"))
     return tiles, palette
 
 
@@ -110,14 +113,19 @@ class GuideTree(QtWidgets.QTreeWidget):
 
 
 class InputRow(QtWidgets.QWidget):
-    """One input: source editor + "from selection" + clear."""
+    """One input: source editor + "from selection" + clear.
+
+    Right-click the field for a menu of every other module (submenu = its
+    outputs) and the scene nodes in the graph.
+    """
 
     changed = QtCore.Signal(str, str)  # input name, source ("" = disconnect)
 
-    def __init__(self, input_decl, parent=None, picker=None) -> None:
+    def __init__(self, input_decl, parent=None, picker=None, sources=None) -> None:
         super().__init__(parent)
         self.input = input_decl
         self.picker = picker
+        self.sources = sources  # callable -> (modules: [(key, label, [outputs])], scene_nodes: [name])
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
@@ -133,11 +141,38 @@ class InputRow(QtWidgets.QWidget):
         layout.addWidget(self.pick)
         layout.addWidget(self.clear)
         self.line.editingFinished.connect(lambda: self.changed.emit(self.input.name, self.line.text().strip()))
+        self.line.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.line.customContextMenuRequested.connect(self._menu)
         self.pick.clicked.connect(self._pick)
         self.clear.clicked.connect(lambda: (self.line.setText(""), self.changed.emit(self.input.name, "")))
 
     def set_source(self, source: str) -> None:
         self.line.setText(source or "")
+
+    def choose(self, source: str) -> None:
+        self.line.setText(source)
+        self.changed.emit(self.input.name, source)
+
+    def build_menu(self, parent=None) -> QtWidgets.QMenu:
+        menu = QtWidgets.QMenu(parent or self)
+        modules, scene_nodes = self.sources() if self.sources else ([], [])
+        for key, label, outputs in modules:
+            sub = menu.addMenu(f"{key}  ·  {label}")
+            for output in outputs:
+                sub.addAction(output, lambda source=f"{key}.{output}": self.choose(source))
+        if scene_nodes:
+            if modules:
+                menu.addSeparator()
+            for name in scene_nodes:
+                menu.addAction(f"{name}  ·  scene", lambda source=name: self.choose(source))
+        if not modules and not scene_nodes:
+            menu.addAction("No other modules or scene nodes").setEnabled(False)
+        menu.addSeparator()
+        menu.addAction("Disconnect", lambda: self.choose(""))
+        return menu
+
+    def _menu(self, point) -> None:
+        self.build_menu().exec(self.line.mapToGlobal(point))
 
     def _pick(self) -> None:
         if self.picker is None:
@@ -161,6 +196,7 @@ class GuideDesigner(MayaToolWindow):
         self.file_path: str = ""
         self.bindings = BindingManager()
         self._current: Optional[GuideHandle] = None
+        self._external: Optional[str] = None  # selected scene-node placeholder (graph only)
         self._module_obj = None
         self._input_rows: dict[str, InputRow] = {}
         self._syncing = False
@@ -273,7 +309,9 @@ class GuideDesigner(MayaToolWindow):
         self.tree.itemSelectionChanged.connect(self._on_tree_selection)
         self.tree.reparent_requested.connect(self.reparent)
         self.tree.palette_requested.connect(self.show_palette)
+        self.graph.palette_requested.connect(self.show_palette)
         self.graph.selection_changed.connect(self._on_graph_selection)
+        self.graph.external_selection_changed.connect(self._on_external_selection)
         self.graph.edited.connect(lambda: self.refresh(keep_graph=True))
         self.select_button.clicked.connect(self.select_current)
         self.mirror_button.clicked.connect(self.mirror_current)
@@ -367,6 +405,7 @@ class GuideDesigner(MayaToolWindow):
         self._syncing = True
         try:
             keep = self._current.instance_id if self._current else None
+            self.guides.invalidate()  # one scene scan per refresh; handles share it
             handles = self.guides.instances()
             by_key = {handle.key: handle for handle in handles}
             self.tree.clear()
@@ -421,6 +460,9 @@ class GuideDesigner(MayaToolWindow):
             if keep in items:
                 self.tree.setCurrentItem(items[keep])
                 self._set_current(self.guides.get(keep))
+            elif self._external is not None and self._external in self.graph.graph.nodes:
+                self.graph.select_key(self._external)
+                self._set_current_external(self._external)
             else:
                 self._set_current(None)
         finally:
@@ -443,6 +485,24 @@ class GuideDesigner(MayaToolWindow):
         self._set_current(handles[0] if handles else None)
         self.graph.select_key(handles[0].key if handles else None)
 
+    def _on_external_selection(self, name: str) -> None:
+        self._syncing = True
+        try:
+            self.tree.clearSelection()
+        finally:
+            self._syncing = False
+        self._set_current_external(name)
+
+    def _set_current_external(self, name: str) -> None:
+        """Properties for a scene-node placeholder: just its name."""
+        self._set_current(None)
+        self._external = name
+        self.name_edit.setText(name)
+        self.name_edit.setPlaceholderText("scene node name")
+        self.type_label.setText("Scene node")
+        self.icon.setPixmap(glyph_icon("SN", MODULE_COLORS["scene"], 24).pixmap(24, 24))
+        self.status.set_activity(f"{name} — scene node (rename it here; Delete removes it)")
+
     def _on_graph_selection(self, key: str) -> None:
         handle = self.guides.by_key(key)
         if handle is None:
@@ -464,6 +524,7 @@ class GuideDesigner(MayaToolWindow):
     # ---------------------------------------------------------- properties
     def _set_current(self, handle: Optional[GuideHandle]) -> None:
         self._current = handle
+        self._external = None
         self.bindings.clear()
         while self.inputs_form.count():
             item = self.inputs_form.takeAt(0)
@@ -487,7 +548,7 @@ class GuideDesigner(MayaToolWindow):
         self.type_label.setText(f"{module_cls.display_label()} · {instance.side}")
         self.icon.setPixmap(glyph_icon(initials(module_cls.display_label()), theme.SIDE.get(instance.side, theme.SIDE["C"]), 24).pixmap(24, 24))
         for declared in module_cls.inputs:
-            row = InputRow(declared, picker=self._pick_source)
+            row = InputRow(declared, picker=self._pick_source, sources=self._source_choices)
             row.set_source(handle.inputs.get(declared.name, ""))
             row.changed.connect(self._on_input_changed)
             label = declared.name + (" ●" if declared.primary else "")
@@ -522,6 +583,16 @@ class GuideDesigner(MayaToolWindow):
         except TriggerError:
             pass
 
+    def _source_choices(self):
+        """Every other module (with its outputs) and the scene nodes in the graph."""
+        current = self._current.instance_id if self._current else None
+        modules = [
+            (handle.key, handle.module_class.display_label(), list(handle.outputs))
+            for handle in self.guides.instances()
+            if handle.instance_id != current and handle.outputs
+        ]
+        return modules, self.graph.scene_nodes()
+
     def _pick_source(self) -> str:
         picked = self.backend.selected_guide() if hasattr(self.backend, "selected_guide") else None
         if picked is not None:
@@ -554,6 +625,14 @@ class GuideDesigner(MayaToolWindow):
             self.refresh()
 
     def _rename_current(self) -> None:
+        if self._current is None and self._external is not None:
+            new_name = self.name_edit.text().strip()
+            if new_name and new_name != self._external:
+                old = self._external
+                if self.graph.rename_scene_node(old, new_name):
+                    self._external = new_name
+                    self.refresh()
+            return
         if self._current is None:
             return
         new_name = self.name_edit.text().strip()
@@ -563,9 +642,15 @@ class GuideDesigner(MayaToolWindow):
 
     # ------------------------------------------------------------ actions
     def show_palette(self) -> None:
-        self.palette.popup(self.tree.viewport().mapToGlobal(QtCore.QPoint(20, 20)))
+        self.palette.popup(QtGui.QCursor.pos())
 
     def create_guides(self, module_type: str) -> list[GuideHandle]:
+        if module_type == SCENE_NODE:
+            name = self.graph.add_scene_node()
+            self._on_external_selection(name)
+            self.name_edit.setFocus()
+            self.name_edit.selectAll()
+            return []
         module_cls = registry.get_module(module_type)
         parent_handle = self._current  # tree/graph selection only; nothing selected = no connection
         inputs = {}
@@ -649,6 +734,11 @@ class GuideDesigner(MayaToolWindow):
     def delete_current(self) -> None:
         if self.graph.hasFocus() and self.graph.delete_selected():
             return  # Delete in the graph disconnects wires / removes scene nodes
+        if self._current is None and self._external is not None:
+            self.graph.remove_scene_node(self._external)
+            self._external = None
+            self.refresh()
+            return
         with self.watcher.mute():
             for handle in self.selected_handles():
                 self.guides.remove(handle)
