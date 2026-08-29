@@ -85,3 +85,15 @@ def test_arm_ribbon_stretch_and_undo(backend):
     cmds.undo()
     cmds.undo()
     assert not cmds.objExists("hero_rig")
+
+
+def test_arm_forearm_twists_with_fk_wrist_beyond_180(backend):
+    report, arm = _build_arm(backend, ribbon_joints=3)
+    tm.Transform("L_arm_switch_ctrl")["ikFk"].value = 0.0
+    tm.Transform("L_arm_fk_hand_ctrl").rotate = (270, 0, 0)
+    last = tm.Joint("L_arm_lowArm_2_jnt")
+    # drivers start/mid/end -> quadratic weights at u=5/6 are 1/36, 10/36, 25/36;
+    # the mid controller carries half the end twist: 10/36*135 + 25/36*270 = 225
+    assert last["rotateX"].value == pytest.approx(225.0, abs=1e-2)
+    assert tm.Joint("L_arm_lowArm_0_jnt")["rotateX"].value < last["rotateX"].value
+    assert tm.Joint("L_arm_upArm_2_jnt")["rotateX"].value == pytest.approx(0.0, abs=1e-2)

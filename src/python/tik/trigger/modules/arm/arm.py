@@ -1,7 +1,8 @@
 """Arm module: collar + IK/FK arm with ribbon segments.
 
-Composes tik.maya constructs: ``IkFkChain`` for the blend, two ``Ribbon``
-setups for the upper/lower arm, ``MatrixConstraint`` for wiring.
+Composes tik.maya constructs: ``IkFkChain`` for the blend, two pure-math
+``Ribbon`` setups for the upper/lower arm (twist wired as floats),
+``MatrixConstraint`` for wiring.
 """
 
 from __future__ import annotations
@@ -94,6 +95,7 @@ class Arm(Module):
         # fk controllers -----------------------------------------------------
         fk_parent = collar_ctrl.transform
         fk_group = None
+        fk_controllers = []
         for label, joint in zip(("upArm", "lowArm", "hand"), chain.fk_joints):
             controller = ctx.controller(f"fk_{label}", shape="Circle", size=size, parent=fk_parent, match=joint)
             offset = controller.transform.create_offset_group(name=ctx.name(f"fk_{label}", suffix="offset"))
@@ -101,6 +103,7 @@ class Arm(Module):
             tm.MatrixConstraint.create(controller.transform, joint, maintain_offset=True, skip_scale="xyz")
             fk_group = fk_group or offset
             fk_parent = controller.transform
+            fk_controllers.append(controller)
         chain.fk_visibility >> fk_group["visibility"]
 
         # ik controllers -----------------------------------------------------
@@ -123,8 +126,24 @@ class Arm(Module):
         chain.pole_vector(pole.transform)
 
         # ribbons ------------------------------------------------------------
+        # twist travels as floats only (never through a matrix): accumulate each
+        # control's own axial rotation along the chain per IK/FK branch, then
+        # blend the two float sums through the switch.
+        twists = []
+        fk_sum = ik_sum = None
+        for fk_ctrl, ik_joint in zip(fk_controllers, chain.ik_joints):
+            fk_roll, ik_roll = fk_ctrl.transform["rotateX"], ik_joint["rotateX"]
+            fk_sum = fk_roll if fk_sum is None else fk_sum + fk_roll
+            ik_sum = ik_roll if ik_sum is None else ik_sum + ik_roll
+            twists.append(fk_sum * (1.0 - switch_plug) + ik_sum * switch_plug)
+        shoulder_twist, elbow_twist, wrist_twist = twists
+
         deform = [collar_jnt]
-        for label, start, end in (("upArm", shoulder_jnt, elbow_jnt), ("lowArm", elbow_jnt, hand_rig_jnt)):
+        segments = (
+            ("upArm", shoulder_jnt, elbow_jnt, shoulder_twist, elbow_twist),
+            ("lowArm", elbow_jnt, hand_rig_jnt, elbow_twist, wrist_twist),
+        )
+        for label, start, end, start_twist, end_twist in segments:
             ribbon = tm.Ribbon.create(
                 start,
                 end,
@@ -136,6 +155,8 @@ class Arm(Module):
             )
             ribbon.pin_start(start)
             ribbon.pin_end(end)
+            start_twist >> ribbon.start_twist
+            end_twist >> ribbon.end_twist
             for controller in ribbon.controllers:
                 ctx.controllers.append(controller)
             deform.extend(ribbon.deformer_joints)
