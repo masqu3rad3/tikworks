@@ -389,23 +389,23 @@ class GraphView(QtWidgets.QGraphicsView):
                 if key is None or key not in by_key:
                     externals.add(source)
         depth = self._depths(handles, by_key)
-        columns: dict[int, int] = {}
+        columns: dict[int, float] = {}  # column -> next free y (nodes stack by their real height)
         for name in sorted(externals):
-            pos = self._positions.get(name) or (20, 40 + columns.get(0, 0) * 90)
-            columns[0] = columns.get(0, 0) + 1
+            pos = self._positions.get(name) or (20, 30 + columns.get(0, 0.0))
             node = self.graph.add_node(name, name, "scene", [], ["node"], "", external=True, pos=pos)
+            columns[0] = columns.get(0, 0.0) + node.boundingRect().height() + 24
             exists = self.guides.backend.scene_node(name) is not None if hasattr(self.guides.backend, "scene_node") else True
             node.subtitle = "scene ✓" if exists else "scene ✗ missing"
         for handle in sorted(handles, key=lambda item: (depth.get(item.key, 1), item.key)):
             module_cls = handle.module_class
             column = depth.get(handle.key, 1)
-            pos = self._positions.get(handle.key) or (20 + column * (NODE_WIDTH + 60), 30 + columns.get(column, 0) * 96)
-            columns[column] = columns.get(column, 0) + 1
+            pos = self._positions.get(handle.key) or (20 + column * (NODE_WIDTH + 60), 30 + columns.get(column, 0.0))
             primary = module_cls.primary_input()
-            self.graph.add_node(
+            node = self.graph.add_node(
                 handle.key, handle.key, module_cls.display_label(), module_cls.input_names(), list(handle.outputs),
                 theme.SIDE.get(handle.side.value, theme.SIDE["C"]), primary_input=primary.name if primary else None, pos=pos,
             )
+            columns[column] = columns.get(column, 0.0) + node.boundingRect().height() + 24
         for handle in handles:
             primary = handle.module_class.primary_input()
             for input_name, source in handle.inputs.items():

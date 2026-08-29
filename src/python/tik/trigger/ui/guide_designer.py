@@ -47,7 +47,7 @@ def module_entries():
         category = MODULE_CATEGORY.get(module_cls.module_type, "generic")
         tiles.append(TileEntry(module_cls.module_type, module_cls.display_label(), category))
         palette.append(PaletteEntry(module_cls.module_type, module_cls.display_label(), category))
-    tiles.append(TileEntry(SCENE_NODE, "Scene Node", "scene"))
+    tiles.append(TileEntry(SCENE_NODE, "Scene", "scene"))
     palette.append(PaletteEntry(SCENE_NODE, "Scene Node", "scene"))
     return tiles, palette
 
