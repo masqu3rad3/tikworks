@@ -553,7 +553,7 @@ class GuideDesigner(MayaToolWindow):
             self.guides.invalidate()  # one scene scan per refresh; handles share it
             handles = self.guides.instances()
             by_key = {handle.key: handle for handle in handles}
-            self.tree.clear()
+            self._clear_tree()
             items: dict[str, QtWidgets.QTreeWidgetItem] = {}
             pending = list(handles)
             # parent in the tree = the primary input's producer
@@ -615,6 +615,19 @@ class GuideDesigner(MayaToolWindow):
                 self._set_current(None)
         finally:
             self._syncing = False
+
+    def _clear_tree(self) -> None:
+        """Drop every row without Qt signalling into a half-torn-down tree (PySide crashed on plain clear())."""
+        tree = self.tree
+        tree.blockSignals(True)
+        try:
+            tree.setCurrentItem(None)
+            tree.clearSelection()
+            while tree.topLevelItemCount():
+                item = tree.takeTopLevelItem(0)
+                item.takeChildren()
+        finally:
+            tree.blockSignals(False)
 
     def item_for(self, instance_id: str) -> Optional[QtWidgets.QTreeWidgetItem]:
         iterator = QtWidgets.QTreeWidgetItemIterator(self.tree)
