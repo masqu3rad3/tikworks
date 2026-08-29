@@ -64,7 +64,8 @@ nodes, valid for any joint/controller count.
 | Twist purity | Twist never enters a matrix before it reaches the joint's `rotateX`. Verified live (2026-08-29): `decomposeMatrix` wraps 270° → −90°, a float channel does not; 270°+ is a hard requirement. |
 | Interpolation | Selectable `degree` (simple API knob), default 3 = exact cubic B-spline basis via de Boor. |
 | Twist source | Karoly method: controller rotations *are* the twist interface, wired in as floats. Channel-box attrs only as offsets/multipliers layered on top. Mid controllers twist via their own rotation. |
-| Pinning | Pins drive translate/scale only by default; orientation is aim + float twist. Per-end `orient=True` mode takes full rotation from the pinned matrix (±180° twist caveat). |
+| Pinning | Pins drive full TRS of the plug transforms (as the old API did). Orientation of every output is aim + float twist; the pinned rotation only feeds the **up frame**. |
+| Up frame | `aimMatrix` secondary = Align to the Y axis of `Rx(−start_twist) × start_plug.worldMatrix` — the pinned start matrix with the wired twist float removed (verified live 2026-08-29: matches a swing-only reference at 90°/270°/450°). The frame follows the arm's swing (no flip when a segment points along a static up) and carries no twist. Karoly uses no secondary at all (*"in my example I don't have that"*), which leaves roll uncontrolled; we do not copy that. |
 | Layering | Internals free to use raw `cmds`/OpenMaya (idiomatic inside `tik.maya`); public API idiomatic tik.maya (Types/Roles/Constructs, Plug operators, `@undo`). |
 
 ## 4. Architecture
@@ -84,10 +85,15 @@ creates one internal output transform driven by:
   TRS stays zero.
 - **Orientation (swing only):** one `aimMatrix` aiming at the next output
   along the strip (the last output aims backward with a negated aim vector).
-  The up input is a **twist-free** axis taken from the spline's own frame (the
-  ribbon group / plug transforms, which carry no axial rotation because pins
-  skip rotation), so no twist can ever leak into this matrix. The degenerate
-  case (aim ∥ up) has the same envelope as the old aimConstraints.
+  The up input (`up_matrix`, secondary mode Align on the Y axis) is a
+  **twist-free** frame supplied by the caller; the ribbon passes
+  `Rx(−start_twist) × start_plug.worldMatrix` (a `composeMatrix` fed by the
+  negated twist float, multiplied by the plug's world matrix), so the frame
+  swings with the pinned start but carries no twist. The degenerate case
+  (aim ∥ up: the strip bent 90°+ relative to its own start frame) has the same
+  envelope as the old aimConstraints. Aim targets are the *next output's
+  pre-aim (pickMatrix) matrix*, the last output aims at the last driver — so
+  parameters must be ascending in [0, 1) and no cycles are possible.
 - **Twist (float only):** twistᵢ = Σⱼ Nⱼ(uᵢ)·θⱼ as pure float math through
   the Plug operators (a few multiply/add nodes). θⱼ is driver j's twist Plug.
   Reusing the same basis weights makes twist fall off along the strip exactly
@@ -111,8 +117,8 @@ Public API kept close to today so consumer shape survives:
 ```python
 Ribbon.create(start, end, *, name, joint_count=5, controller_count=1,
               degree=3, scaleable=True, parent=None) -> Ribbon
-ribbon.pin_start(node, maintain_offset=True, orient=False)
-ribbon.pin_end(node, maintain_offset=True, orient=False)
+ribbon.pin_start(node, maintain_offset=True)
+ribbon.pin_end(node, maintain_offset=True)
 ribbon.start_twist / ribbon.end_twist   # unbounded keyable float Plugs
 ribbon.deformer_joints, ribbon.controllers, ribbon.scale_switch, ribbon.measure
 ribbon.delete()
@@ -149,9 +155,13 @@ Internals:
   preservation: `scaleY = scaleZ = ratio ** -0.5`, gated by the same switch.
 - Twist inputs: `start_twist`/`end_twist` are float attrs on the plug
   transforms, fed to `MatrixSpline` as the end drivers' twist plugs.
-- `pin_start`/`pin_end`: `MatrixConstraint` onto the plug transform, skipping
-  rotation by default; `orient=True` drives rotation too (replaces the old
-  `orient_start` delete-the-constraint mutation).
+- `pin_start`/`pin_end`: full `MatrixConstraint` onto the plug transform (no
+  skips), exactly as before. There is no `orient` mode; the old
+  `orient_start` mutation is gone.
+- Up frame: `composeMatrix(inputRotateX = −start_twist)` → `multMatrix` with
+  `start_plug.worldMatrix` → `up_matrix` for both splines.
+- If a consumer wires no twist, the up frame keeps the pinned start's roll and
+  the end's roll is ignored (no interpolation, no flip) — graceful degradation.
 - `_place`: group positioned between start/end and aimed with the caller's
   `up_vector` — initial placement only, as today.
 
@@ -206,9 +216,9 @@ same wire; the ribbon adds no attrs to consumer controllers.
   twist past ±180° does not flip and `rotateX` on the deformer joint reads
   the unbounded value (e.g. 270, 450), flat-joint hookup matches a parented
   swing+twist reference matrix to ~1e-12, stretch ratio and volume
-  preservation, pin translate-only default vs `orient=True`, deformer joint
-  count, flatness and channel-box-visible TRS, `degree` clamping, undo of
-  `create`.
+  preservation, pinned start rotated 270° about its axis with the twist wired
+  → joints follow without flipping, deformer joint count, flatness and
+  channel-box-visible TRS, `degree` clamping, undo of `create`.
 - **Integration:** arm e2e tests in `tests/integration/trigger/` will break and
   are rewritten with `arm.py` in the follow-up task.
 - **Live sandboxing:** a running Maya session is reachable through the Maya
@@ -222,8 +232,10 @@ same wire; the ribbon adds no attrs to consumer controllers.
 - Silhouette drift vs the old 2-influence skin look — accepted (arm rewrite).
 - Slight per-output node growth vs a single surface, outweighed at scale by
   parallel evaluation (source profiling).
-- Matrix-derived twist (`orient=True` mode) flips past ±180° — inherent to
-  stock nodes; documented.
+- If the wired twist float and the pinned start's actual roll disagree (e.g.
+  IK solver roll vs. the wired IK joint `rotateX`), the residual shows as a
+  uniform bounded roll on all joints — not a flip, but a mismatch to document
+  in the arm rewrite.
 - Swing Euler gimbal: `rotateY/Z` of a direction has one singular direction
   (segment aiming along the joint group's Z for `xyz` order). There the
   channel *numbers* jump; orientation and deformation stay correct (same as the
