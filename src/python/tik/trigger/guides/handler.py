@@ -425,6 +425,21 @@ class Guides:
         self.invalidate()
         return GuideHandle(self, created)
 
+    def duplicate(self, handle: GuideHandle, name: Optional[str] = None) -> GuideHandle:
+        """Copy a module: same type/side/settings/inputs/poses, a unique name (``arm`` -> ``arm1``)."""
+        self.invalidate()
+        instance = handle.instance
+        module = handle.module_class(name=name or instance.name, side=instance.side, settings=instance.settings)
+        module.name = self.unique_name(module.name, module.side.value)
+        created = self.backend.create_guides(module, poses=list(instance.guides), attach=instance.attach, inputs=dict(instance.inputs))
+        self.invalidate()
+        layout = self.layout
+        collapse = layout.get("collapse", {})
+        if handle.key in collapse:
+            collapse[module.key] = collapse[handle.key]
+            self.update_layout(collapse=collapse)
+        return GuideHandle(self, created)
+
     # ------------------------------------------------------------- build
     def test_build(self, *handles: GuideHandle, rig_name: str = "test") -> Any:
         scope = [handle.instance_id for handle in handles] or "scene"

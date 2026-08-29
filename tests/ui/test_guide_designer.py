@@ -384,7 +384,7 @@ def test_multi_selection_edits_same_type_together(designer, qapp):
     # the shared context menu works from the tree and the graph
     menu = designer.module_menu()
     labels = [action.text() for action in menu.actions() if not action.isSeparator()]
-    assert labels[:4] == ["Select root", "Select all guides", "Mirror", "Build"]
+    assert labels[:5] == ["Select root", "Select all guides", "Mirror", "Duplicate	Ctrl+D", "Build"]
     designer.select_root()
     assert designer.backend.calls[-1][0] == "select_nodes"
 
@@ -486,3 +486,27 @@ def test_tree_filter_and_ctrl_click_toggle(designer, qapp):
     view.toggle_node_at(view.mapFromScene(view.graph.nodes["L_toy_chain"].sceneBoundingRect().center()))
     assert {n.key for n in view.graph.selected_nodes()} == {"R_toy_chain"}
     assert len(view.graph.wires) == 2  # nothing sliced
+
+
+def test_multi_inherit_orientation_and_duplicate(designer):
+    designer.set_side("Both")
+    chains = designer.create_guides("toy_chain")
+    designer.tree.clearSelection()
+    for chain in chains:
+        designer.item_for(chain.instance_id).setSelected(True)
+    assert len(designer._multi) == 2
+    designer.inherit_orientation.setChecked(False)
+    assert all(FakeAdapter.store[f"{chain.instance_id}.useRefOri"] is False for chain in chains)
+    designer.inherit_orientation.setChecked(True)
+    assert all(FakeAdapter.store[f"{chain.instance_id}.useRefOri"] is True for chain in chains)
+    # duplicate: same type/side/settings/inputs, unique names, becomes the selection
+    designer.tree.clearSelection()
+    designer.item_for(chains[0].instance_id).setSelected(True)
+    designer.form.widget("segments").setValue(4)
+    copies = designer.duplicate_current()
+    assert [c.key for c in copies] == ["L_toy_chain1"]
+    assert copies[0].module_type == "toy_chain" and copies[0].side.value == "L"  # settings copy is covered by the Maya test
+    assert copies[0].inputs == designer.guides.get(chains[0].instance_id).inputs
+    assert designer.current.instance_id == copies[0].instance_id
+    labels = [a.text() for a in designer.module_menu().actions() if not a.isSeparator()]
+    assert "Duplicate\tCtrl+D" in labels

@@ -115,3 +115,15 @@ def test_mirror_and_test_build(guides):
     assert guides["body"].instance_id == body.instance_id
     with pytest.raises(GuideError):
         guides["ghost"]
+
+
+def test_duplicate_copies_everything_with_a_unique_name(guides):
+    body = guides.add("base", name="body")
+    arm = guides.add("arm", side="L", name="arm", ribbon_joints=6)
+    guides.connect("L_arm.root", "body.root")
+    cmds.xform(arm.root.long_name, ws=True, t=(3, 12, 1))
+    copy = guides.duplicate(arm)
+    assert copy.key == "L_arm1" and copy.instance_id != arm.instance_id
+    assert copy.settings == arm.settings and copy.inputs == {"root": "body.root"}
+    assert round(copy.root.world_position.x, 3) == 3.0
+    assert len(guides.instances()) == 3

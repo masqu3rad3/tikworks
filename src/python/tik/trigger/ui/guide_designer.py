@@ -19,7 +19,7 @@ from typing import Optional
 
 from tik.core.side import Side
 from tik.shared.ui import theme
-from tik.shared.ui.binding import BindingManager, bind
+from tik.shared.ui.binding import BindingManager, MayaAttributeAdapter, bind
 from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.filter_bar import FilterBar
 from tik.shared.ui.icons import glyph_icon, initials
@@ -446,6 +446,7 @@ class GuideDesigner(MayaToolWindow):
         self.test_button.clicked.connect(lambda: self.test_build())
         self.build_all_button.clicked.connect(lambda: self.test_build(all_modules=True))
         self.name_edit.editingFinished.connect(self._rename_current)
+        self.inherit_orientation.toggled.connect(self._on_inherit_toggled)
         self.form.changed.connect(self._on_setting_changed)
         self.form.error.connect(lambda _name, message: self.events.log(message, level="warning"))
         self.scene_panel.changed.connect(self._on_scene_nodes_changed)
@@ -477,12 +478,13 @@ class GuideDesigner(MayaToolWindow):
         self._action(edit_menu, "Select Root", self.select_root)
         self._action(edit_menu, "Select All Guides", self.select_current)
         self._action(edit_menu, "Mirror", self.mirror_current, "Ctrl+M")
+        self._action(edit_menu, "Duplicate", self.duplicate_current, "Ctrl+D")
         self._action(edit_menu, "Rename", lambda: self.name_edit.setFocus(), "F2")
         self._action(edit_menu, "Delete", self.delete_current)
         edit_menu.addSeparator()
         self._action(edit_menu, "Connect Input…", self.connect_dialog)
         self._action(edit_menu, "Disconnect Primary Input", self.disconnect_primary)
-        self._action(edit_menu, "Sever Connections", self.sever_current, "Ctrl+D")
+        self._action(edit_menu, "Sever Connections", self.sever_current, "Ctrl+Shift+D")
         view_menu = bar.addMenu("&View")
         self.tree_action = self._action(view_menu, "Tree", lambda: self.set_pane_visible(self.tree_pane, self.tree_action.isChecked()), checkable=True)
         self.graph_action = self._action(view_menu, "Graph", lambda: self.set_pane_visible(self.graph_pane, self.graph_action.isChecked()), checkable=True)
@@ -518,6 +520,7 @@ class GuideDesigner(MayaToolWindow):
         menu.addAction("Select all guides", self.select_current)
         menu.addSeparator()
         menu.addAction("Mirror", self.mirror_current)
+        menu.addAction("Duplicate\tCtrl+D", self.duplicate_current)
         menu.addAction("Build", lambda: self.test_build())
         menu.addSeparator()
         menu.addAction("Sever connections", self.sever_current)
@@ -820,7 +823,35 @@ class GuideDesigner(MayaToolWindow):
             self._bind_properties(handle)
             self.status.set_activity(f"{handle.key} — {module_cls.display_label()}")
         else:
+            adapter = self._plug_adapter(handle, "useRefOri")
+            self.inherit_orientation.blockSignals(True)
+            try:
+                self.inherit_orientation.setChecked(bool(adapter.get()) if adapter is not None and adapter.exists() else True)
+            finally:
+                self.inherit_orientation.blockSignals(False)
             self.status.set_activity(f"{len(self._multi)} × {module_cls.display_label()} selected")
+
+    def _plug_adapter(self, handle: GuideHandle, name: str):
+        """Read/write adapter for a guide attribute (the same one the two-way bindings use)."""
+        plug_factory = getattr(self.backend, "settings_plug", None)
+        if plug_factory is None:
+            return None
+        try:
+            plug = plug_factory(handle.instance_id, name)
+        except TriggerError:
+            return None
+        plug_path = plug if isinstance(plug, str) else plug.path
+        return self.binding_adapter(plug_path) if self.binding_adapter else MayaAttributeAdapter(plug_path)
+
+    def _on_inherit_toggled(self, checked: bool) -> None:
+        """Single selection is handled by the two-way binding; several modules are written here."""
+        if len(self._multi) < 2:
+            return
+        with self.watcher.mute():
+            for handle in self._multi:
+                adapter = self._plug_adapter(handle, "useRefOri")
+                if adapter is not None:
+                    adapter.set(bool(checked))
 
     def _bind_properties(self, handle: GuideHandle) -> None:
         plug_factory = getattr(self.backend, "settings_plug", None)
@@ -1036,6 +1067,19 @@ class GuideDesigner(MayaToolWindow):
                 except TriggerError as error:
                     self.events.log(str(error), level="warning")
         self.refresh()
+
+    def duplicate_current(self) -> list[GuideHandle]:
+        created = []
+        with self.watcher.mute():
+            for handle in self.selected_handles():
+                try:
+                    created.append(self.guides.duplicate(handle))
+                except TriggerError as error:
+                    self.events.log(str(error), level="warning")
+        if created:
+            self._current, self._multi = created[0], created if len(created) > 1 else []
+        self.refresh()
+        return created
 
     def delete_current(self) -> None:
         if self.graph.hasFocus() and self.graph.delete_selected():
