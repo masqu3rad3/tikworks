@@ -2,6 +2,7 @@
 
 from .ikfk_chain import IkFkChain
 from .matrix_constraint import MatrixConstraint
+from .matrix_spline import MatrixSpline
 from .matrix_switch import MatrixSwitch
 from .measure import Measure
 from .panel import Panel
@@ -11,6 +12,7 @@ from .space_switch import SpaceSwitch
 __all__ = [
     "IkFkChain",
     "MatrixConstraint",
+    "MatrixSpline",
     "MatrixSwitch",
     "Measure",
     "Panel",

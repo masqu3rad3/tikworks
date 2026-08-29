@@ -113,3 +113,44 @@ def test_outputs_are_world_space_regardless_of_parent():
     assert spline.group.parent.name == "parent"
     assert spline.group["inheritsTransform"].value is False
     assert _close(spline.outputs[0].transform.world_translation, (5, 0, 0))
+
+
+def test_twist_interpolates_with_position_weights():
+    drivers = _drivers([(0, 0, 0), (5, 0, 0), (10, 0, 0)])
+    twists = [tm.attribute.add_float(driver, "twist") for driver in drivers]
+    spline = MatrixSpline.create(drivers, [0.5], name="spl", degree=2, twists=twists)
+    twists[0].value = 100.0
+    twists[1].value = 20.0
+    twists[2].value = 300.0
+    assert spline.outputs[0].twist.value == pytest.approx(0.25 * 100 + 0.5 * 20 + 0.25 * 300)
+
+
+def test_twist_is_unbounded_and_stays_out_of_the_matrix():
+    drivers = _drivers([(0, 0, 0), (10, 0, 0)])
+    twists = [tm.attribute.add_float(driver, "twist") for driver in drivers]
+    spline = MatrixSpline.create(drivers, [0.5], name="spl", twists=twists)
+    twists[1].value = 900.0
+    assert spline.outputs[0].twist.value == pytest.approx(450.0)
+    _, y_axis = _axes(spline.outputs[0].transform)
+    assert _close(y_axis, (0, 1, 0))
+
+
+def test_missing_twists_leave_plug_at_zero():
+    drivers = _drivers([(0, 0, 0), (10, 0, 0)])
+    spline = MatrixSpline.create(drivers, [0.5], name="spl", twists=[None, None])
+    assert spline.outputs[0].twist.value == 0.0
+    assert not cmds.listConnections(spline.outputs[0].twist.path, source=True, destination=False)
+
+
+def test_delete_removes_network():
+    drivers = _drivers([(0, 0, 0), (10, 0, 0)])
+    twists = [tm.attribute.add_float(driver, "twist") for driver in drivers]
+    spline = MatrixSpline.create(drivers, [0.25, 0.75], name="spl", twists=twists)
+    spline.delete()
+    assert not cmds.objExists("spl_spline_grp")
+    assert not cmds.ls(type=["parentMatrix", "pickMatrix", "aimMatrix"])
+    assert not cmds.ls("multDL*")
+
+
+def test_exported_from_tik_maya():
+    assert tm.MatrixSpline is MatrixSpline

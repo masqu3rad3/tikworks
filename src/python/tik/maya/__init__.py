@@ -15,6 +15,7 @@ from .core.shapenode import ShapeNode
 from .constructs import (
     IkFkChain,
     MatrixConstraint,
+    MatrixSpline,
     MatrixSwitch,
     Measure,
     Ribbon,
@@ -52,6 +53,7 @@ __all__ = [
     "attribute",
     "naming",
     "MatrixConstraint",
+    "MatrixSpline",
     "MatrixSwitch",
     "Measure",
     "SpaceSwitch",

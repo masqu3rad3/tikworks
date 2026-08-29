@@ -116,8 +116,42 @@ class MatrixSpline:
             output = Transform.create(name=f"{name}_{index}_out", parent=group.long_name)
             aim["outputMatrix"] >> output["offsetParentMatrix"]
             twist = attribute.add_float(output, "twist", default=0.0)
-            spline.outputs.append(SplineOutput(u, weights, output, twist, [*nodes, aim]))
+            twist_source, math_nodes = spline._weighted_sum(twists, weights)
+            if twist_source is not None:
+                twist_source >> twist
+            spline.outputs.append(SplineOutput(u, weights, output, twist, [*nodes, aim, *math_nodes]))
         return spline
+
+    @staticmethod
+    def _weighted_sum(plugs: Sequence[Optional[Plug]], weights: Sequence[float]):
+        """Return ``(plug, nodes)`` for ``sum(w * plug)``; ``(None, [])`` if nothing contributes."""
+        total = None
+        nodes: list = []
+        for plug, weight in zip(plugs, weights):
+            if plug is None or abs(weight) < 1e-9:
+                continue
+            term = plug
+            if abs(weight - 1.0) > 1e-9:
+                term = plug * weight
+                nodes.append(term.node)
+            if total is None:
+                total = term
+            else:
+                total = total + term
+                nodes.append(total.node)
+        return total, nodes
+
+    @property
+    def nodes(self) -> list:
+        """Every DG node created for the spline (output transforms excluded)."""
+        return [node for output in self.outputs for node in output.nodes]
+
+    @undo
+    def delete(self) -> None:
+        """Delete the spline group, its outputs and the whole network."""
+        cmds.delete([node.long_name for node in self.nodes if node.exists()])
+        if self.group.exists():
+            cmds.delete(self.group.long_name)
 
     def _create_blend(self, index: int, u: float):
         """parentMatrix (weighted drivers) -> pickMatrix (translate + scale only)."""
