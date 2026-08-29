@@ -1,8 +1,15 @@
-"""Ribbon: a NURBS strip with follicle-driven joints between two ends.
+"""Ribbon: a pure-math strip of deformer joints between two ends.
 
-The ribbon is built along +X in its own group, then the group is placed
-between ``start`` and ``end``. Start/end "plug" transforms are what callers
-pin to their controllers; everything else is internal.
+No geometry. Start/end "plug" transforms are what callers pin to their
+controllers; ``MatrixSpline`` blends the plugs and the mid controllers into
+swing-only frames, and every deformer joint is a flat joint with live TRS
+channels: translate/scale/swing decomposed from its spline output and the
+interpolated twist added as a float onto ``rotateX`` — never through a
+matrix, so twist is unbounded.
+
+The aim up frame is the pinned start matrix with the wired ``start_twist``
+removed (``Rx(-twist) * start_plug.worldMatrix``): it swings with the limb
+but carries no twist.
 """
 
 from __future__ import annotations
@@ -15,11 +22,15 @@ from ..core import attribute
 from ..core.decorators import undo
 from ..core.plug import Plug
 from ..core.registry import resolve
+from ..core.scene import create_node, ensure_plugin
 from ..roles.controller import Controller
 from ..types.joint import Joint
 from ..types.transform import Transform
 from .matrix_constraint import MatrixConstraint
+from .matrix_spline import MatrixSpline
 from .measure import Measure
+
+ROTATE_ORDER_XYZ = 0
 
 
 def _node(item):
@@ -32,24 +43,20 @@ class Ribbon:
     def __init__(self, name: str) -> None:
         self.name = name
         self.group: Transform = None
-        self.scale_group: Transform = None
-        self.nonscale_group: Transform = None
-        self.surface = None
-        self.surface_transform: Transform = None
-        self.deformer_joints: list[Joint] = []
-        self.controllers: list[Controller] = []
-        self.bind_joints: list[Joint] = []
-        self.follicles: list[Transform] = []
         self.start_plug: Transform = None
         self.end_plug: Transform = None
-        self.start_aim: Transform = None
-        self.end_aim: Transform = None
-        self.start_up: Transform = None
-        self.end_up: Transform = None
+        self.start_twist: Plug = None
+        self.end_twist: Plug = None
+        self.up_frame: Plug = None
+        self.control_spline: Optional[MatrixSpline] = None
+        self.spline: MatrixSpline = None
+        self.joint_group: Transform = None
+        self.controllers: list[Controller] = []
+        self.deformer_joints: list[Joint] = []
         self.scale_switch: Optional[Plug] = None
         self.measure: Optional[Measure] = None
-        self.skin_cluster = None
-        self._aim_constraints: list = []
+        self._decomposes: list = []
+        self._nodes: list = []
 
     # ------------------------------------------------------------------ build
     @classmethod
@@ -62,8 +69,10 @@ class Ribbon:
         name: str,
         joint_count: int = 5,
         controller_count: int = 1,
+        degree: int = 3,
         up_vector: Sequence[float] = (0, 1, 0),
         scaleable: bool = True,
+        preserve_volume: bool = False,
         parent=None,
     ) -> "Ribbon":
         """Build a ribbon between ``start`` and ``end``.
@@ -72,197 +81,131 @@ class Ribbon:
             start: Transform at the ribbon start.
             end: Transform at the ribbon end.
             name: Prefix for all created nodes.
-            joint_count: Number of follicle-driven deformer joints.
+            joint_count: Number of deformer joints.
             controller_count: Number of mid controllers between the ends.
-            up_vector: World up used to orient the ribbon plane.
-            scaleable: Add stretch driven scaling on the deformer joints.
+            degree: B-spline degree of the joint strip (clamped to the number
+                of drivers minus one; 0 mid controllers is always linear).
+            up_vector: World up used for the initial placement of the group.
+            scaleable: Add stretch driven ``scaleX`` on the deformer joints.
+            preserve_volume: With ``scaleable``, counter-scale Y/Z by
+                ``ratio ** -0.5``.
             parent: Optional parent for the ribbon group.
         """
         start, end = _node(start), _node(end)
-        ribbon = cls(name)
+        if joint_count < 1:
+            raise ValueError("Ribbon needs at least one deformer joint.")
         length = start.distance_to(end)
         if length <= 0:
             raise ValueError("Ribbon start and end must not overlap.")
-
-        ribbon._create_groups(parent)
-        ribbon._create_surface(length)
+        ribbon = cls(name)
+        ribbon._create_group(parent)
         ribbon._create_plugs(length, scaleable)
-        ribbon._create_follicles(joint_count)
+        ribbon._create_up_frame()
         ribbon._create_controllers(controller_count, length)
-        ribbon._bind_surface()
+        ribbon._create_joints(joint_count, degree)
         ribbon._place(start, end, up_vector)
         if scaleable:
-            ribbon._create_scaling()
+            ribbon._create_scaling(preserve_volume)
         return ribbon
 
-    def _create_groups(self, parent) -> None:
+    def _create_group(self, parent) -> None:
         self.group = Transform.create(name=f"{self.name}_ribbon_grp")
         if parent is not None:
             self.group.parent = _node(parent)
-        self.scale_group = Transform.create(
-            name=f"{self.name}_ribbonScale_grp", parent=self.group.long_name
-        )
-        self.nonscale_group = Transform.create(
-            name=f"{self.name}_ribbonNonScale_grp", parent=self.group.long_name
-        )
-        # follicles output world-space values; do not let the group transform
-        # them a second time.
-        self.nonscale_group["inheritsTransform"].value = False
-
-    def _create_surface(self, length: float) -> None:
-        transform_name = cmds.nurbsPlane(
-            axis=(0, 0, 1),
-            patchesU=5,
-            patchesV=1,
-            width=length,
-            lengthRatio=1.0 / length,
-            name=f"{self.name}_ribbon_surface",
-            constructionHistory=False,
-        )[0]
-        cmds.rebuildSurface(
-            transform_name,
-            constructionHistory=False,
-            replaceOriginal=True,
-            rebuildType=0,
-            endKnots=1,
-            keepRange=2,
-            keepControlPoints=False,
-            keepCorners=False,
-            spansU=5,
-            degreeU=3,
-            spansV=1,
-            degreeV=1,
-            direction=1,
-        )
-        self.surface_transform = Transform(transform_name)
-        # skinned geometry lives in the non-inheriting group, otherwise the
-        # bind joints and the surface transform would both move it.
-        self.surface_transform.parent = self.nonscale_group
-        self.surface = self.surface_transform.shapes[0]
-        self.surface_transform.visibility = False
 
     def _create_plugs(self, length: float, scaleable: bool) -> None:
         half = length * 0.5
-        self.start_plug = self._locator(f"{self.name}_start_plug", (-half, 0, 0))
-        self.end_plug = self._locator(f"{self.name}_end_plug", (half, 0, 0))
-        self.start_up = self._locator(f"{self.name}_start_up", (-half, 1, 0))
-        self.end_up = self._locator(f"{self.name}_end_up", (half, 1, 0))
-        self.start_aim = Transform.create(name=f"{self.name}_start_aim")
-        self.end_aim = Transform.create(name=f"{self.name}_end_aim")
-        self.start_aim.translate = (-half, 0, 0)
-        self.end_aim.translate = (half, 0, 0)
-        for node in (self.start_up, self.start_aim):
-            node.parent = self.start_plug
-        for node in (self.end_up, self.end_aim):
-            node.parent = self.end_plug
-        for node in (self.start_plug, self.end_plug):
-            node.parent = self.scale_group
-
-        self._aim_constraints.append(
-            cmds.aimConstraint(
-                self.end_plug.long_name,
-                self.start_aim.long_name,
-                aimVector=(1, 0, 0),
-                upVector=(0, 1, 0),
-                worldUpType="object",
-                worldUpObject=self.start_up.long_name,
-            )[0]
-        )
-        self._aim_constraints.append(
-            cmds.aimConstraint(
-                self.start_plug.long_name,
-                self.end_aim.long_name,
-                aimVector=(-1, 0, 0),
-                upVector=(0, 1, 0),
-                worldUpType="object",
-                worldUpObject=self.end_up.long_name,
-            )[0]
-        )
+        self.start_plug = Transform.create(name=f"{self.name}_start_plug", parent=self.group.long_name)
+        self.end_plug = Transform.create(name=f"{self.name}_end_plug", parent=self.group.long_name)
+        self.start_plug.translate = (-half, 0, 0)
+        self.end_plug.translate = (half, 0, 0)
+        self.start_twist = attribute.add_float(self.start_plug, "twist")
+        self.end_twist = attribute.add_float(self.end_plug, "twist")
         if scaleable:
             self.scale_switch = attribute.add_float(
                 self.start_plug, "scaleSwitch", default=1.0, min=0.0, max=1.0
             )
 
-    def _locator(self, name: str, position) -> Transform:
-        transform_name = cmds.spaceLocator(name=name)[0]
-        locator = Transform(transform_name)
-        locator.translate = position
-        for shape in locator.shapes:
-            shape.visibility = False
-        return locator
+    def _create_up_frame(self) -> None:
+        """``Rx(-start_twist) * start_plug.worldMatrix``: swings with the pin, no twist."""
+        ensure_plugin("matrixNodes")
+        compose = create_node("composeMatrix", name=f"{self.name}_upFrame_composeMatrix")
+        negated = self.start_twist * -1.0
+        negated >> compose["inputRotateX"]
+        mult = create_node("multMatrix", name=f"{self.name}_upFrame_multMatrix")
+        compose["outputMatrix"] >> mult["matrixIn[0]"]
+        self.start_plug["worldMatrix[0]"] >> mult["matrixIn[1]"]
+        self.up_frame = mult["matrixSum"]
+        self._nodes.extend([negated.node, compose, mult])
 
-    def _create_follicles(self, joint_count: int) -> None:
-        for index in range(joint_count):
-            follicle = Transform.create(
-                name=f"{self.name}_follicle{index}", parent=self.nonscale_group.long_name
-            )
-            shape = cmds.createNode(
-                "follicle", name=f"{follicle.name}Shape", parent=follicle.long_name
-            )
-            shape = resolve(shape)
-            self.surface["local"] >> shape["inputSurface"]
-            self.surface["worldMatrix[0]"] >> shape["inputWorldMatrix"]
-            shape["outTranslate"] >> follicle["translate"]
-            shape["outRotate"] >> follicle["rotate"]
-            shape["parameterU"].value = (index + 0.5) / joint_count
-            shape["parameterV"].value = 0.5
-            shape.visibility = False
-            attribute.lock_and_hide(follicle, attribute.TRANSFORM_ATTRS[:6], hide=False)
-            joint = Joint.create(
-                name=f"{self.name}_{index}_jnt", parent=follicle.long_name
-            )
-            self.follicles.append(follicle)
-            self.deformer_joints.append(joint)
-
-    def _create_controllers(self, controller_count: int, length: float) -> None:
-        start_bind = Joint.create(
-            name=f"{self.name}_start_bind_jnt", parent=self.start_aim.long_name
+    def _create_controllers(self, count: int, length: float) -> None:
+        if count < 1:
+            return
+        parameters = [(index + 1) / (count + 1) for index in range(count)]
+        self.control_spline = MatrixSpline.create(
+            [self.start_plug, self.end_plug],
+            parameters,
+            name=f"{self.name}_ctrl",
+            degree=1,
+            twists=[self.start_twist, self.end_twist],
+            up_matrix=self.up_frame,
+            parent=self.group,
         )
-        end_bind = Joint.create(
-            name=f"{self.name}_end_bind_jnt", parent=self.end_aim.long_name
-        )
-        start_bind.visibility = False
-        end_bind.visibility = False
-        self.bind_joints = [start_bind]
-        for index in range(controller_count):
-            ratio = (index + 1) / (controller_count + 1)
-            position_x = -length * 0.5 + length * ratio
+        for index, output in enumerate(self.control_spline.outputs):
+            # the output frame carries the interpolated twist so the controller rides it
+            output.transform["rotateOrder"].value = ROTATE_ORDER_XYZ
+            output.twist >> output.transform["rotateX"]
             controller = Controller.create(
                 name=f"{self.name}_mid{index}_ctrl",
                 shape="Circle",
                 size=length * 0.15,
-                parent=self.scale_group.long_name,
+                parent=output.transform.long_name,
             )
-            controller.transform.translate = (position_x, 0, 0)
-            offset = controller.transform.create_offset_group(
-                name=f"{self.name}_mid{index}_ctrl_offset"
-            )
-            MatrixConstraint.create(
-                [self.start_aim, self.end_aim],
-                offset,
-                maintain_offset=True,
-                name=f"{self.name}_mid{index}",
-            )
-            bind = Joint.create(
-                name=f"{self.name}_mid{index}_bind_jnt",
-                parent=controller.transform.long_name,
-            )
-            bind.visibility = False
+            controller.transform["rotateOrder"].value = ROTATE_ORDER_XYZ
             self.controllers.append(controller)
-            self.bind_joints.append(bind)
-        self.bind_joints.append(end_bind)
 
-    def _bind_surface(self) -> None:
-        from ..types.skincluster import SkinCluster
+    def _mid_twists(self) -> list[Plug]:
+        """Per mid controller: interpolated end twist plus the controller's own roll."""
+        twists = []
+        outputs = self.control_spline.outputs if self.control_spline is not None else []
+        for output, controller in zip(outputs, self.controllers):
+            twist = output.twist + controller.transform["rotateX"]
+            self._nodes.append(twist.node)
+            twists.append(twist)
+        return twists
 
-        self.skin_cluster = SkinCluster.create(
-            self.surface_transform.long_name,
-            [joint.long_name for joint in self.bind_joints],
-            name=f"{self.name}_ribbon_skinCluster",
-            toSelectedBones=True,
-            maximumInfluences=2,
-            dropoffRate=2.0,
+    def _create_joints(self, count: int, degree: int) -> None:
+        drivers = [self.start_plug, *[ctrl.transform for ctrl in self.controllers], self.end_plug]
+        twists = [self.start_twist, *self._mid_twists(), self.end_twist]
+        parameters = [(index + 0.5) / count for index in range(count)]
+        self.spline = MatrixSpline.create(
+            drivers,
+            parameters,
+            name=self.name,
+            degree=degree,
+            twists=twists,
+            up_matrix=self.up_frame,
+            parent=self.group,
         )
+        self.joint_group = Transform.create(name=f"{self.name}_joints_grp", parent=self.group.long_name)
+        # joints hold world-space channel values; the group must not transform them again
+        self.joint_group["inheritsTransform"].value = False
+        for index, output in enumerate(self.spline.outputs):
+            joint = Joint.create(name=f"{self.name}_{index}_jnt", parent=self.joint_group.long_name)
+            joint["rotateOrder"].value = ROTATE_ORDER_XYZ
+            decompose = create_node("decomposeMatrix", name=f"{self.name}_{index}_decomposeMatrix")
+            output.transform["worldMatrix[0]"] >> decompose["inputMatrix"]
+            decompose["outputTranslate"] >> joint["translate"]
+            decompose["outputRotateY"] >> joint["rotateY"]
+            decompose["outputRotateZ"] >> joint["rotateZ"]
+            # twist is added after decomposition so rotateX stays an unbounded float
+            rotate_x = decompose["outputRotateX"] + output.twist
+            rotate_x >> joint["rotateX"]
+            for axis in "XYZ":
+                decompose[f"outputScale{axis}"] >> joint[f"scale{axis}"]
+            self.deformer_joints.append(joint)
+            self._decomposes.append(decompose)
+            self._nodes.extend([decompose, rotate_x.node])
 
     def _place(self, start, end, up_vector) -> None:
         self.group.world_position = Transform.between(start, end)
@@ -270,20 +213,28 @@ class Ribbon:
             end, aim_vector=(1, 0, 0), up_vector=(0, 1, 0), world_up=tuple(up_vector)
         )
 
-    def _create_scaling(self) -> None:
-        self.measure = Measure.create(
-            self.start_plug, self.end_plug, name=f"{self.name}_ribbon"
-        )
+    def _create_scaling(self, preserve_volume: bool) -> None:
+        self.measure = Measure.create(self.start_plug, self.end_plug, name=f"{self.name}_ribbon")
         ratio = self.measure.ratio_plug()
         # blend between 1.0 (switch off) and the live ratio (switch on)
-        scaled = (ratio - 1.0) * self.scale_switch + 1.0
-        for joint in self.deformer_joints:
-            scaled >> joint["scaleX"]
+        stretch = (ratio - 1.0) * self.scale_switch + 1.0
+        volume = None
+        if preserve_volume:
+            volume = (ratio ** -0.5 - 1.0) * self.scale_switch + 1.0
+        for joint, decompose in zip(self.deformer_joints, self._decomposes):
+            scale_x = decompose["outputScaleX"] * stretch
+            scale_x >> joint["scaleX"]
+            self._nodes.append(scale_x.node)
+            if volume is not None:
+                for axis in "YZ":
+                    scaled = decompose[f"outputScale{axis}"] * volume
+                    scaled >> joint[f"scale{axis}"]
+                    self._nodes.append(scaled.node)
 
     # -------------------------------------------------------------- pinning
     @undo
     def pin_start(self, node, maintain_offset: bool = True) -> MatrixConstraint:
-        """Drive the start plug from ``node``."""
+        """Drive the start plug from ``node`` (full TRS)."""
         return MatrixConstraint.create(
             node, self.start_plug, maintain_offset=maintain_offset,
             name=f"{self.name}_startPin",
@@ -291,26 +242,20 @@ class Ribbon:
 
     @undo
     def pin_end(self, node, maintain_offset: bool = True) -> MatrixConstraint:
-        """Drive the end plug from ``node``."""
+        """Drive the end plug from ``node`` (full TRS)."""
         return MatrixConstraint.create(
             node, self.end_plug, maintain_offset=maintain_offset,
             name=f"{self.name}_endPin",
         )
 
     @undo
-    def orient_start(self, node, maintain_offset: bool = True) -> MatrixConstraint:
-        """Replace the start aim behaviour with rotation from ``node``."""
-        cmds.delete(self._aim_constraints[0])
-        return MatrixConstraint.create(
-            node, self.start_aim, maintain_offset=maintain_offset,
-            skip_translate=("x", "y", "z"), skip_scale=("x", "y", "z"),
-            name=f"{self.name}_startOrient",
-        )
-
-    @undo
     def delete(self) -> None:
-        """Delete the entire ribbon hierarchy."""
+        """Delete the entire ribbon hierarchy and network."""
         if self.measure is not None:
             self.measure.delete()
+        for spline in (self.control_spline, self.spline):
+            if spline is not None:
+                spline.delete()
+        cmds.delete([node.long_name for node in self._nodes if node.exists()])
         if self.group is not None and self.group.exists():
             cmds.delete(self.group.long_name)
