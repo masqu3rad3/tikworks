@@ -122,7 +122,7 @@ class GuideHandle:
 
     @property
     def outputs(self) -> tuple:
-        return self.module_class.outputs
+        return self.module_class.output_names(self.settings)
 
     def set_input(self, input_name: str, source: Optional[str]) -> None:
         if self.module_class.get_input(input_name) is None:
@@ -187,14 +187,18 @@ class Guides:
         side: str = "C",
         name: Optional[str] = None,
         parent: Optional[GuideHandle | ParentRef] = None,
+        inputs: Optional[dict] = None,
         **settings,
     ) -> GuideHandle:
+        """Draw a module's guides. ``parent`` also hangs the joints under that guide and
+        pre-fills the primary input; ``inputs`` sets connections explicitly without any
+        scene parenting (what the Guide Designer does)."""
         module_cls = registry.get_module(module_type)
         module = module_cls(name=name, side=side, settings=settings)
         parent_ref = parent
         if isinstance(parent, GuideHandle):
             parent_ref = ParentRef(parent.instance_id, parent.module_class.guides.root)
-        instance = self.backend.create_guides(module, parent=parent_ref)
+        instance = self.backend.create_guides(module, parent=parent_ref, inputs=inputs)
         return GuideHandle(self, instance)
 
     def remove(self, handle: GuideHandle) -> None:

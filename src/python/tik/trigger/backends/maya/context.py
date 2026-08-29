@@ -173,7 +173,7 @@ class MayaBuildContext:
         return node
 
     def output(self, name: str, node) -> None:
-        if name not in self.module.outputs:
+        if name not in self.module.output_names(self.module.values()):
             raise GuideError(f"'{self.module.module_type}' does not declare output '{name}'.")
         self.outputs[name] = node
 

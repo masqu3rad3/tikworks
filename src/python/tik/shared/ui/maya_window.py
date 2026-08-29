@@ -78,9 +78,19 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
             return QtWidgets.QWidget.close(self)
         return super().close()
 
+    @staticmethod
+    def has_maya_ui() -> bool:
+        """True inside an interactive Maya session (not mayapy / headless)."""
+        return HAS_MAYA and get_main_window() is not None
+
     def show(self, *args, **kwargs):  # noqa: D401
-        """Plain show when there is no Maya UI (headless, mayapy with Qt)."""
-        if self.parent() is None or not HAS_MAYA:
+        """Plain show when there is no Maya UI (headless, mayapy with Qt).
+
+        Note: ``MayaQWidgetDockableMixin.__init__`` deliberately drops a parent
+        that is Maya's main window (deferred parenting), so ``self.parent()``
+        says nothing about whether we are inside Maya.
+        """
+        if not self.has_maya_ui():
             # bypass the mixin's setVisible/show pair (it recurses without a host)
             return QtWidgets.QWidget.setVisible(self, True)
         return super().show(*args, **kwargs)
@@ -102,7 +112,7 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
 
     def show_tool(self, dockable: bool = True) -> None:
         """Show as a dockable workspace control in Maya, plain window elsewhere."""
-        if HAS_MAYA and self.parent() is not None:
+        if self.has_maya_ui():
             super().show(dockable=dockable, retain=False)
         else:
             QtWidgets.QWidget.setVisible(self, True)

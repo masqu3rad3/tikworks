@@ -159,7 +159,7 @@ class Builder:
         try:
             ctx = self.backend.build_context(module, instance, rig_root)
             module.build(ctx)
-            missing = [name for name in module_cls.outputs if name not in ctx.outputs]
+            missing = [name for name in module_cls.output_names(instance.settings) if name not in ctx.outputs]
             if missing:
                 raise BuildError(
                     f"module '{instance.module_type}' did not produce output(s) {missing}",

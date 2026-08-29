@@ -58,6 +58,10 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         scroll.setWidget(self.form)
         layout.addWidget(scroll, 1)
         buttons = QtWidgets.QHBoxLayout()
+        self.guides_button = QtWidgets.QPushButton("Open Guide Designer")
+        self.guides_button.setToolTip("Author the guides file of this action in the Guide Designer")
+        self.guides_button.setVisible(False)
+        buttons.addWidget(self.guides_button)
         self.save_button = QtWidgets.QPushButton("Save from scene")
         self.reset_button = QtWidgets.QPushButton("Reset overrides")
         self.run_button = QtWidgets.QPushButton("Run step")
@@ -71,6 +75,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.until_button.clicked.connect(lambda: self._emit(self.run_until_requested))
         self.save_button.clicked.connect(lambda: self._emit(self.save_requested))
         self.reset_button.clicked.connect(self._reset_overrides)
+        self.guides_button.clicked.connect(self._open_guides)
         self.info_button.clicked.connect(self._show_info)
         self.set_handle(None)
 
@@ -92,6 +97,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
             self.linked_note.setVisible(False)
             self.save_button.setVisible(False)
             self.reset_button.setVisible(False)
+            self.guides_button.setVisible(False)
             return
         action_cls = registry.get_action(handle.type)
         self._action = action_cls(settings=handle.settings)
@@ -101,12 +107,28 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.form.set_target(self._action)
         self.linked_note.setVisible(handle.is_linked)
         self.reset_button.setVisible(handle.is_linked)
+        self.guides_button.setVisible(self._guides_field_name() is not None)
         self.save_button.setVisible(type(self._action).save_from_scene is not registry.get_action(handle.type).__mro__[-2].save_from_scene if False else self._has_save(action_cls))
         if handle.is_linked:
             self.linked_note.setText("Referenced action — edits here are stored as overrides in this session.")
             self._refresh_override_marks()
         else:
             self.form.mark_overrides(())
+
+    def _guides_field_name(self) -> Optional[str]:
+        """Name of the first ``.trg`` FileField on the current action, if any."""
+        if self._action is None:
+            return None
+        for name, field in type(self._action).fields().items():
+            if ".trg" in (getattr(field, "extensions", None) or ()):
+                return name
+        return None
+
+    def _open_guides(self) -> None:
+        name = self._guides_field_name()
+        if name is None:
+            return
+        self.open_file_requested.emit(str(getattr(self._action, name, "") or ""), ".trg")
 
     @staticmethod
     def _has_save(action_cls) -> bool:

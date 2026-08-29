@@ -71,6 +71,14 @@ are Nuke-style: green = latest, amber = older, Alt+Up / Alt+Down while hovering
 steps versions. The Guide Designer (Tools menu or the ✎ next to a guides file)
 authors ``.trg`` files: tree and node graph over the same connections, Inputs
 group in the properties, two-way scene binding, debounced scene sync.
+Connections are data only — guide joints are never parented into each other
+and the designer never touches the Maya selection (use *Select guides*).
+Graph: Alt+MMB pans, Alt+RMB / wheel zooms, F fits; drag output → input to
+connect, drag a plugged input away to unplug, Delete disconnects selected
+wires, shaking a node severs all of its wires, right-click → *Add scene
+node…* creates an arbitrary scene node to connect to. *Build selected* /
+*Build all* test-build from the live scene; the Kinematics action has an
+*Open Guide Designer* button.
 
 Writing an action
 -----------------

@@ -1,12 +1,22 @@
 """Node graph of module instances: input ports left, output ports right, wires between.
 
 The graph edits the same connections the tree does (through ``Guides``):
-drag from an output port to an input port to connect, drop on empty space to
-type a scene node name, select a wire and press Delete to disconnect.
+
+* drag from an output port to an input port to connect;
+* drag a connected input port away to unplug it (drop on another input to
+  re-plug, drop on empty space to disconnect);
+* select wires and press Delete / Backspace to disconnect;
+* shake a node to sever all of its connections (Houdini style);
+* right-click the background to add a scene node (an arbitrary Maya node
+  modules can connect to); Delete removes a selected scene node again.
+
+Navigation follows Maya: Alt + middle drag pans, Alt + right drag zooms,
+the wheel zooms, F fits the graph.
 """
 
 from __future__ import annotations
 
+import time
 from typing import Optional
 
 from tik.shared.ui import theme
@@ -20,6 +30,8 @@ HEADER = 22
 PORT_RADIUS = 5
 WIRE_PRIMARY = QtGui.QColor(theme.ACCENT)
 WIRE_SECONDARY = QtGui.QColor("#8fa4c0")
+SHAKE_REVERSALS = 4  # direction changes needed to sever
+SHAKE_WINDOW = 0.6  # seconds
 
 
 class Port(QtWidgets.QGraphicsEllipseItem):
@@ -49,7 +61,15 @@ class Port(QtWidgets.QGraphicsEllipseItem):
         self.setPen(QtGui.QPen(QtGui.QColor("#111111"), 1))
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
-        self.scene().start_wire(self, event.scenePos())
+        if event.button() != QtCore.Qt.LeftButton:
+            event.ignore()
+            return
+        scene = self.scene()
+        wire = scene.wire_for_input(self) if not self.is_output else None
+        if wire is not None:
+            scene.pick_up_wire(wire, event.scenePos())  # unplug from the input end
+        else:
+            scene.start_wire(self, event.scenePos())
         event.accept()
 
 
@@ -64,6 +84,9 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.external = external
         self.inputs: dict[str, Port] = {}
         self.outputs: dict[str, Port] = {}
+        self._shake: list[tuple[float, float]] = []  # (time, x)
+        self._shake_dir = 0
+        self._shake_turns = 0
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsMovable | QtWidgets.QGraphicsItem.ItemIsSelectable
                       | QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
         self.setZValue(2)
@@ -121,6 +144,36 @@ class NodeItem(QtWidgets.QGraphicsItem):
             self.scene().update_wires()
         return super().itemChange(change, value)
 
+    # ------------------------------------------------------------- shake
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        self._shake = []
+        self._shake_dir = 0
+        self._shake_turns = 0
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        super().mouseMoveEvent(event)
+        self.track_shake(event.scenePos().x())
+
+    def track_shake(self, x: float, now: Optional[float] = None) -> bool:
+        """Feed a horizontal position; returns True (once) when a shake is detected."""
+        now = time.monotonic() if now is None else now
+        self._shake = [(t, px) for t, px in self._shake if now - t <= SHAKE_WINDOW]
+        if self._shake:
+            delta = x - self._shake[-1][1]
+            direction = (delta > 0) - (delta < 0)
+            if direction and self._shake_dir and direction != self._shake_dir:
+                self._shake_turns += 1
+            if direction:
+                self._shake_dir = direction
+        self._shake.append((now, x))
+        if self._shake_turns >= SHAKE_REVERSALS and self.scene() is not None:
+            self._shake_turns = 0
+            self._shake = []
+            self.scene().sever_requested.emit(self.key)
+            return True
+        return False
+
 
 class WireItem(QtWidgets.QGraphicsPathItem):
     def __init__(self, source: Port, target: Port, primary: bool) -> None:
@@ -135,6 +188,15 @@ class WireItem(QtWidgets.QGraphicsPathItem):
     @property
     def target_key(self) -> str:
         return self.target.key
+
+    @property
+    def source_key(self) -> str:
+        return self.source.key
+
+    def shape(self) -> QtGui.QPainterPath:  # generous hit area so wires are easy to pick
+        stroker = QtGui.QPainterPathStroker()
+        stroker.setWidth(10)
+        return stroker.createStroke(self.path())
 
     def refresh(self) -> None:
         start = self.source.scenePos()
@@ -159,8 +221,9 @@ class WireItem(QtWidgets.QGraphicsPathItem):
 class GraphScene(QtWidgets.QGraphicsScene):
     connect_requested = QtCore.Signal(str, str)  # input key, source
     disconnect_requested = QtCore.Signal(str)  # input key
+    sever_requested = QtCore.Signal(str)  # node key: drop every connection touching it
+    remove_external_requested = QtCore.Signal(str)  # scene node name
     node_selected = QtCore.Signal(str)  # instance key
-    scene_node_requested = QtCore.Signal(str)  # input key (ask user for a scene node name)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -169,6 +232,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         self.wires: list[WireItem] = []
         self._drag_from: Optional[Port] = None
         self._drag_line: Optional[QtWidgets.QGraphicsPathItem] = None
+        self._detached: Optional[str] = None  # input key of a picked-up wire
         self.selectionChanged.connect(self._on_selection)
 
     # ------------------------------------------------------------ building
@@ -176,6 +240,9 @@ class GraphScene(QtWidgets.QGraphicsScene):
         self.clear()
         self.nodes = {}
         self.wires = []
+        self._drag_from = None
+        self._drag_line = None
+        self._detached = None
 
     def add_node(self, key, title, subtitle, inputs, outputs, color, external=False, primary_input=None, pos=None) -> NodeItem:
         node = NodeItem(key, title, subtitle, inputs, outputs, color, external, primary_input)
@@ -199,6 +266,9 @@ class GraphScene(QtWidgets.QGraphicsScene):
         target.set_connected(True)
         return wire
 
+    def wire_for_input(self, port: Port) -> Optional[WireItem]:
+        return next((wire for wire in self.wires if wire.target is port), None)
+
     def update_wires(self) -> None:
         for wire in self.wires:
             wire.refresh()
@@ -211,6 +281,14 @@ class GraphScene(QtWidgets.QGraphicsScene):
         self._drag_line.setZValue(4)
         self.addItem(self._drag_line)
         self._update_drag(pos)
+
+    def pick_up_wire(self, wire: WireItem, pos) -> None:
+        """Unplug ``wire`` from its input and keep dragging it from the source."""
+        self._detached = wire.target_key
+        wire.target.set_connected(False)
+        self.wires.remove(wire)
+        self.removeItem(wire)
+        self.start_wire(wire.source, pos)
 
     def _update_drag(self, pos) -> None:
         if self._drag_from is None or self._drag_line is None:
@@ -243,27 +321,41 @@ class GraphScene(QtWidgets.QGraphicsScene):
 
     def finish_wire(self, port: Optional[Port]) -> None:
         origin, self._drag_from = self._drag_from, None
+        detached, self._detached = self._detached, None
         if self._drag_line is not None:
             self.removeItem(self._drag_line)
             self._drag_line = None
         if origin is None:
             return
-        if port is None:
-            if not origin.is_output:
-                self.scene_node_requested.emit(origin.key)
-            return
-        if origin.is_output and not port.is_output:
-            self.connect_requested.emit(port.key, origin.key)
-        elif not origin.is_output and port.is_output:
-            self.connect_requested.emit(origin.key, port.key)
+        target = None
+        if port is not None:
+            if origin.is_output and not port.is_output:
+                target = (port.key, origin.key)
+            elif not origin.is_output and port.is_output:
+                target = (origin.key, port.key)
+        if detached is not None and (target is None or target[0] != detached):
+            self.disconnect_requested.emit(detached)
+        if target is not None:
+            self.connect_requested.emit(*target)
+        elif detached is None:
+            self.update()  # nothing happened; repaint the dropped drag line away
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         if event.key() in (QtCore.Qt.Key_Delete, QtCore.Qt.Key_Backspace):
-            for item in self.selectedItems():
-                if isinstance(item, WireItem):
-                    self.disconnect_requested.emit(item.target_key)
+            self.delete_selected()
+            event.accept()
             return
         super().keyPressEvent(event)
+
+    def delete_selected(self) -> bool:
+        """Disconnect selected wires and remove selected scene nodes. True when anything was selected."""
+        wires = [item for item in self.selectedItems() if isinstance(item, WireItem)]
+        externals = [item for item in self.selectedItems() if isinstance(item, NodeItem) and item.external]
+        for wire in wires:
+            self.disconnect_requested.emit(wire.target_key)
+        for node in externals:
+            self.remove_external_requested.emit(node.key)
+        return bool(wires or externals)
 
     def _on_selection(self) -> None:
         for item in self.selectedItems():
@@ -296,26 +388,36 @@ class GraphView(QtWidgets.QGraphicsView):
         self.setRenderHint(QtGui.QPainter.Antialiasing)
         self.setDragMode(QtWidgets.QGraphicsView.RubberBandDrag)
         self.setViewportUpdateMode(QtWidgets.QGraphicsView.FullViewportUpdate)
+        self.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorUnderMouse)
+        # Maya-style navigation: no scrollbars, pan with the middle button
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self._positions: dict[str, tuple] = {}
+        self.externals: set[str] = set()  # scene nodes added by hand (kept even when unconnected)
+        self._nav: Optional[str] = None  # "pan" | "zoom"
+        self._nav_last = QtCore.QPoint()
         self.graph.connect_requested.connect(self.connect_input)
         self.graph.disconnect_requested.connect(self.disconnect_input)
+        self.graph.sever_requested.connect(self.sever)
+        self.graph.remove_external_requested.connect(self.remove_scene_node)
         self.graph.node_selected.connect(self.selection_changed)
-        self.graph.scene_node_requested.connect(self._ask_scene_node)
 
     # ------------------------------------------------------------ building
     def rebuild(self) -> None:
         for key, node in self.graph.nodes.items():
             self._positions[key] = (node.pos().x(), node.pos().y())
+        first = not self._positions
         self.graph.clear_graph()
         handles = self.guides.instances()
         by_key = {handle.key: handle for handle in handles}
-        # external sources
-        externals: dict[str, set] = {}
+        # external sources: connected scene nodes + the ones added by hand
+        externals: set[str] = set(self.externals)
         for handle in handles:
             for source in handle.inputs.values():
                 key, output = split_source(source)
                 if key is None or key not in by_key:
-                    externals.setdefault(source, set()).add("world")
+                    externals.add(source)
         depth = self._depths(handles, by_key)
         columns: dict[int, int] = {}
         for name in sorted(externals):
@@ -331,7 +433,7 @@ class GraphView(QtWidgets.QGraphicsView):
             columns[column] = columns.get(column, 0) + 1
             primary = module_cls.primary_input()
             self.graph.add_node(
-                handle.key, handle.key, module_cls.display_label(), module_cls.input_names(), list(module_cls.outputs),
+                handle.key, handle.key, module_cls.display_label(), module_cls.input_names(), list(handle.outputs),
                 theme.SIDE.get(handle.side.value, theme.SIDE["C"]), primary_input=primary.name if primary else None, pos=pos,
             )
         for handle in handles:
@@ -342,21 +444,21 @@ class GraphView(QtWidgets.QGraphicsView):
                 if key is None or key not in by_key:
                     source_key = f"{source}.node"
                 self.graph.add_wire(source_key, f"{handle.key}.{input_name}", primary is not None and input_name == primary.name)
-        self.graph.setSceneRect(self.graph.itemsBoundingRect().adjusted(-40, -40, 80, 80))
-        self.fit()
+        # a roomy scene rect so panning is not clamped to the nodes
+        self.graph.setSceneRect(self.graph.itemsBoundingRect().adjusted(-600, -600, 600, 600))
+        if first:
+            self.fit()
 
     def fit(self) -> None:
         """Show the whole graph, never zoomed in past 1:1."""
-        rect = self.graph.sceneRect()
+        rect = self.graph.itemsBoundingRect().adjusted(-40, -40, 40, 40)
         view = self.viewport().rect()
         if rect.isEmpty() or view.width() < 60 or view.height() < 60:
             return
         self.resetTransform()
         scale = min(1.0, (view.width() - 20) / max(rect.width(), 1), (view.height() - 20) / max(rect.height(), 1))
-        self.scale(max(scale, 0.75), max(scale, 0.75))
+        self.scale(max(scale, 0.3), max(scale, 0.3))
         self.centerOn(rect.center())
-        if scale < 0.75:  # graph wider than the pane: start at the left edge
-            self.horizontalScrollBar().setValue(self.horizontalScrollBar().minimum())
 
     @staticmethod
     def _depths(handles, by_key) -> dict[str, int]:
@@ -378,39 +480,60 @@ class GraphView(QtWidgets.QGraphicsView):
         return depth
 
     # ------------------------------------------------------------- editing
+    def _apply(self, action) -> bool:
+        try:
+            action()
+        except TriggerError as error:
+            if self.events is not None:
+                self.events.log(str(error), level="warning")
+            self.rebuild()
+            return False
+        self.rebuild()
+        self.edited.emit()
+        return True
+
     def connect_input(self, input_key: str, source: str) -> None:
         source = source[:-5] if source.endswith(".node") else source
-        try:
-            self.guides.connect(input_key, source)
-        except TriggerError as error:
-            if self.events is not None:
-                self.events.log(str(error), level="warning")
-            return
-        self.rebuild()
-        self.edited.emit()
+        self._apply(lambda: self.guides.connect(input_key, source))
 
     def disconnect_input(self, input_key: str) -> None:
-        try:
-            self.guides.disconnect(input_key)
-        except TriggerError as error:
-            if self.events is not None:
-                self.events.log(str(error), level="warning")
-            return
-        self.rebuild()
-        self.edited.emit()
+        self._apply(lambda: self.guides.disconnect(input_key))
 
-    def _ask_scene_node(self, input_key: str) -> None:
-        name, ok = QtWidgets.QInputDialog.getText(self, "Connect to scene node", f"Scene node for {input_key}:")
-        if ok and name.strip():
-            self.connect_input(input_key, name.strip())
+    def sever(self, key: str) -> None:
+        """Drop every connection into or out of the node ``key``."""
+
+        def run():
+            for item in self.guides.connections():
+                source_key, _output = split_source(item["source"])
+                if item["input"].startswith(f"{key}.") or item["source"] == key or source_key == key:
+                    self.guides.disconnect(item["input"])
+
+        self._apply(run)
+
+    def add_scene_node(self, name: str) -> None:
+        name = (name or "").strip()
+        if not name:
+            return
+        self.externals.add(name)
+        self.rebuild()
+
+    def remove_scene_node(self, name: str) -> None:
+        self.externals.discard(name)
+        self.sever(name)
+
+    def ask_scene_node(self) -> None:
+        default = getattr(self.guides.backend, "selected_node_name", lambda: "")() or ""
+        name, ok = QtWidgets.QInputDialog.getText(self, "Add scene node", "Scene node modules may connect to:", text=default)
+        if ok:
+            self.add_scene_node(name)
+
+    def delete_selected(self) -> bool:
+        return self.graph.delete_selected()
 
     def select_key(self, key: Optional[str]) -> None:
         self.graph.select_key(key)
 
-    def resizeEvent(self, event) -> None:  # noqa: N802
-        super().resizeEvent(event)
-        self.fit()
-
+    # ---------------------------------------------------------- navigation
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
         QtCore.QTimer.singleShot(0, self.fit)
@@ -419,8 +542,66 @@ class GraphView(QtWidgets.QGraphicsView):
         if event.key() == QtCore.Qt.Key_F:
             self.fit()
             return
+        if event.key() in (QtCore.Qt.Key_Delete, QtCore.Qt.Key_Backspace):
+            self.delete_selected()
+            return
         super().keyPressEvent(event)
 
     def wheelEvent(self, event) -> None:  # noqa: N802
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
         self.scale(factor, factor)
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        alt = bool(event.modifiers() & QtCore.Qt.AltModifier)
+        if event.button() == QtCore.Qt.MiddleButton or (alt and event.button() == QtCore.Qt.LeftButton):
+            self._nav = "pan"
+        elif alt and event.button() == QtCore.Qt.RightButton:
+            self._nav = "zoom"
+        if self._nav:
+            self._nav_last = event.pos()
+            self.setCursor(QtCore.Qt.ClosedHandCursor if self._nav == "pan" else QtCore.Qt.SizeHorCursor)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self._nav:
+            delta = event.pos() - self._nav_last
+            self._nav_last = event.pos()
+            if self._nav == "pan":
+                self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - delta.x())
+                self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta.y())
+            else:
+                factor = 1.0 + (delta.x() - delta.y()) * 0.01
+                factor = min(max(factor, 0.5), 2.0)
+                self.scale(factor, factor)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if self._nav:
+            self._nav = None
+            self.unsetCursor()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802
+        if event.modifiers() & QtCore.Qt.AltModifier:
+            return
+        item = self.itemAt(event.pos())
+        while item is not None and not isinstance(item, (NodeItem, WireItem)):
+            item = item.parentItem()
+        menu = QtWidgets.QMenu(self)
+        if isinstance(item, WireItem):
+            menu.addAction("Disconnect", lambda key=item.target_key: self.disconnect_input(key))
+        elif isinstance(item, NodeItem):
+            menu.addAction("Sever all connections", lambda key=item.key: self.sever(key))
+            if item.external:
+                menu.addAction("Remove scene node", lambda key=item.key: self.remove_scene_node(key))
+        else:
+            menu.addAction("Add scene node…", self.ask_scene_node)
+        menu.addSeparator()
+        menu.addAction("Fit view\tF", self.fit)
+        menu.exec_(event.globalPos())

@@ -111,11 +111,18 @@ def test_create_prefills_primary_input_and_tree_graph_agree(designer):
     assert set(graph.nodes) == {"toy_root", "L_toy_chain", "R_toy_chain"}
     assert len(graph.wires) == 2 and all(wire.primary for wire in graph.wires)
     assert designer.status.text("connections").startswith("2 connection(s)")
-    # creating with a selected guide joint in the scene parents under THAT joint's role
-    designer.backend.selection = ParentRef(chains[0].instance_id, "segment", 1)
+    # the scene selection is ignored; the current tree/graph module is the parent
+    designer.backend.selection = ParentRef(body.instance_id, "root")
+    designer.tree.setCurrentItem(designer.item_for(chains[0].instance_id))
     designer.set_side("L")
     child = designer.create_guides("toy_chain")[0]
-    assert child.inputs == {"root": "L_toy_chain.root"}  # 'segment' is not an output -> first output
+    assert child.inputs == {"root": "L_toy_chain.root"}
+    assert all(call[0] != "reparent" for call in designer.backend.calls)  # joints are never parented
+    # nothing selected -> no connection at all
+    designer.tree.clearSelection()
+    designer._set_current(None)
+    loose = designer.create_guides("toy_chain")[0]
+    assert loose.inputs == {}
     designer.backend.selection = None
 
 
@@ -182,17 +189,69 @@ def test_tree_drag_sets_primary_and_scene_sync(designer):
     chain = designer.create_guides("toy_chain")[0]
     designer.reparent(chain.instance_id, body.instance_id)
     assert designer.guides.get(chain.instance_id).inputs == {"root": "toy_root.root"}
-    assert ("reparent", chain.instance_id, body.instance_id) in designer.backend.calls
+    assert all(call[0] != "reparent" for call in designer.backend.calls)  # data only, no scene parenting
     designer.reparent(chain.instance_id, None)
     assert designer.guides.get(chain.instance_id).inputs == {}
-    # scene selection -> tree/graph selection (debounced watcher)
+    # scene selection does NOT drive the UI selection any more; structure events refresh
     designer.backend.selection = ParentRef(body.instance_id, "root")
     designer.backend.fire("SelectionChanged")
     designer.watcher.flush()
-    assert designer.current.instance_id == body.instance_id
+    assert designer.current.instance_id == chain.instance_id  # unchanged
+    assert all(call[0] != "select" for call in designer.backend.calls)
     designer.backend.fire("DagObjectCreated")
     designer.watcher.flush()
     assert designer.status.text("modules") == "2 module(s)"
+
+
+def test_pick_up_wire_delete_and_shake(designer):
+    designer.set_side("C")
+    body = designer.create_guides("toy_root")[0]
+    designer.set_side("L")
+    chain = designer.create_guides("toy_chain")[0]
+    graph = designer.graph.graph
+    assert designer.guides.get(chain.instance_id).inputs == {"root": "toy_root.root"}
+    # pick the wire up from its input end and drop it on empty space -> disconnected
+    wire = graph.wires[0]
+    graph.pick_up_wire(wire, QtCore.QPointF(0, 0))
+    assert graph._detached == "L_toy_chain.root" and graph.wires == []
+    graph.finish_wire(None)
+    assert designer.guides.get(chain.instance_id).inputs == {}
+    # reconnect, select the wire, Delete in the graph disconnects (and does not delete modules)
+    designer.guides.connect("L_toy_chain.root", "toy_root.root")
+    designer.refresh()
+    graph = designer.graph.graph
+    graph.wires[0].setSelected(True)
+    designer.graph.setFocus()
+    assert designer.graph.delete_selected()
+    assert designer.guides.get(chain.instance_id).inputs == {}
+    assert len(designer.guides.instances()) == 2
+    # shake the node -> sever everything touching it
+    designer.guides.connect("L_toy_chain.root", "toy_root.root")
+    designer.refresh()
+    node = designer.graph.graph.nodes["toy_root"]
+    xs = [0, 30, 0, 30, 0, 30, 0]
+    fired = [node.track_shake(x, now=0.05 * index) for index, x in enumerate(xs)]
+    assert True in fired
+    assert designer.guides.get(chain.instance_id).inputs == {}
+
+
+def test_manual_scene_node_and_side_combo(designer):
+    designer.set_side("L")
+    chain = designer.create_guides("toy_chain")[0]
+    designer.graph.add_scene_node("hip_jnt")
+    assert "hip_jnt" in designer.graph.graph.nodes and designer.graph.graph.nodes["hip_jnt"].external
+    designer.refresh()  # survives a refresh even while unconnected
+    assert "hip_jnt" in designer.graph.graph.nodes
+    graph = designer.graph.graph
+    graph.start_wire(graph.nodes["hip_jnt"].outputs["node"], QtCore.QPointF(0, 0))
+    graph.finish_wire(graph.nodes["L_toy_chain"].inputs["space"])
+    assert designer.guides.get(chain.instance_id).inputs == {"space": "hip_jnt"}
+    designer.graph.remove_scene_node("hip_jnt")
+    assert designer.guides.get(chain.instance_id).inputs == {} and "hip_jnt" not in designer.graph.graph.nodes
+    assert designer.side == "L"
+    designer.set_side("Both")
+    assert designer.side_combo.currentText() == "Both"
+    assert [item.side.value for item in designer.create_guides("toy_chain")] == ["L", "R"]
 
 
 def test_properties_binding_rename_mirror_delete(designer):
@@ -225,3 +284,5 @@ def test_export_import_and_test_build(designer, tmp_path, monkeypatch):
     assert calls[-1] == ("import", str(tmp_path / "g.trg"), True)
     report = designer.test_build(all_modules=True)
     assert report.count == 1 and ("rig_root", "test") in designer.backend.calls
+    designer.build_all_button.click()
+    assert designer.build_all_button.text() == "Build all" and designer.test_button.text() == "Build selected"

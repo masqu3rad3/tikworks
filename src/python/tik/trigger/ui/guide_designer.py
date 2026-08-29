@@ -1,8 +1,11 @@
 """Guide Designer: dockable tool window — modules · tree · graph · properties.
 
 Tree and graph are two views of the same connections (see ``Guides``);
-the properties panel shows the module's Inputs first. Scene sync goes
-through a debounced ``SceneWatcher``; our own selection changes are muted.
+the properties panel shows the module's Inputs first. Connections are data
+only: the designer never parents guide joints into each other and never
+selects joints in Maya on its own — use *Select guides* for that. Scene
+structure changes (new/removed/undone guides) reach the UI through a
+debounced ``SceneWatcher``; our own edits are muted.
 """
 
 from __future__ import annotations
@@ -23,7 +26,6 @@ from tik.shared.ui.tile_grid import TileEntry, TileGrid
 from tik.trigger.core import registry
 from tik.trigger.core.builder import split_source
 from tik.trigger.core.exceptions import TriggerError
-from tik.trigger.core.schemas import ParentRef
 from tik.trigger.guides import EXTENSION as GUIDE_EXTENSION
 from tik.trigger.guides import GuideHandle, Guides
 
@@ -58,10 +60,11 @@ class GuideTree(QtWidgets.QTreeWidget):
         self.setObjectName("GuideTree")
         self.setHeaderLabels(["Module", "Type", "Side", "Primary input"])
         header = self.header()
-        header.setStretchLastSection(False)
+        header.setStretchLastSection(True)
         header.setMinimumSectionSize(30)
-        header.setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
-        for column in (1, 2, 3):
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.Interactive)
+        self.setColumnWidth(0, 150)
+        for column in (1, 2):
             header.setSectionResizeMode(column, QtWidgets.QHeaderView.ResizeToContents)
         self.setDragEnabled(True)
         self.setAcceptDrops(True)
@@ -80,8 +83,20 @@ class GuideTree(QtWidgets.QTreeWidget):
     def focusNextPrevChild(self, next_child: bool) -> bool:  # noqa: N802
         return False
 
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() != QtCore.Qt.LeftButton:
+            # middle/right must never start a drag (a middle drag crashed Maya)
+            self.setDragEnabled(False)
+            try:
+                super().mousePressEvent(event)
+            finally:
+                self.setDragEnabled(True)
+            return
+        super().mousePressEvent(event)
+
     def dropEvent(self, event) -> None:  # noqa: N802
-        target = self.itemAt(event.pos())
+        position = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        target = self.itemAt(position)
         moved = self.currentItem()
         event.setDropAction(QtCore.Qt.IgnoreAction)
         event.accept()
@@ -90,7 +105,8 @@ class GuideTree(QtWidgets.QTreeWidget):
         moved_id = moved.data(0, QtCore.Qt.UserRole)
         target_id = target.data(0, QtCore.Qt.UserRole) if target is not None else None
         if target_id != moved_id:
-            self.reparent_requested.emit(moved_id, target_id)
+            # rebuilding the tree while Qt is still inside the drop crashes; do it next tick
+            QtCore.QTimer.singleShot(0, lambda: self.reparent_requested.emit(moved_id, target_id))
 
 
 class InputRow(QtWidgets.QWidget):
@@ -176,19 +192,10 @@ class GuideDesigner(MayaToolWindow):
         header = QtWidgets.QLabel("SIDE")
         header.setObjectName("PaneHeader")
         left_layout.addWidget(header)
-        side_row = QtWidgets.QHBoxLayout()
-        side_row.setSpacing(2)
-        self.side_group = QtWidgets.QButtonGroup(self)
-        for value in SIDES:
-            button = QtWidgets.QToolButton()
-            button.setText(value)
-            button.setCheckable(True)
-            button.setProperty("side", value)
-            button.setChecked(value == "L")
-            self.side_group.addButton(button)
-            side_row.addWidget(button)
-        side_row.addStretch(1)
-        left_layout.addLayout(side_row)
+        self.side_combo = QtWidgets.QComboBox()
+        self.side_combo.addItems(SIDES)
+        self.side_combo.setToolTip("Side of the modules you add next (Both = L and R, Auto = follow the selected module)")
+        left_layout.addWidget(self.side_combo)
         modules_header = QtWidgets.QLabel("MODULES")
         modules_header.setObjectName("PaneHeader")
         left_layout.addWidget(modules_header)
@@ -243,9 +250,10 @@ class GuideDesigner(MayaToolWindow):
         buttons.addStretch(1)
         self.select_button = QtWidgets.QPushButton("Select guides")
         self.mirror_button = QtWidgets.QPushButton("Mirror")
-        self.test_button = QtWidgets.QPushButton("Test build")
-        self.test_button.setObjectName("PrimaryButton")
-        for button in (self.select_button, self.mirror_button, self.test_button):
+        self.test_button = QtWidgets.QPushButton("Build selected")
+        self.build_all_button = QtWidgets.QPushButton("Build all")
+        self.build_all_button.setObjectName("PrimaryButton")
+        for button in (self.select_button, self.mirror_button, self.test_button, self.build_all_button):
             buttons.addWidget(button)
         props.addLayout(buttons)
         self.splitter.addWidget(self.properties)
@@ -256,7 +264,7 @@ class GuideDesigner(MayaToolWindow):
         self.splitter.setCollapsible(1, True)
         self.splitter.setCollapsible(2, True)
         self.splitter.setCollapsible(3, False)
-        self.splitter.setSizes([170, 300, 470, 300])
+        self.splitter.setSizes([170, 280, 520, 270])
         self.setCentralWidget(self.splitter)
 
         self.palette = SearchPalette(palette_entries, self, colors=MODULE_COLORS)
@@ -269,7 +277,8 @@ class GuideDesigner(MayaToolWindow):
         self.graph.edited.connect(lambda: self.refresh(keep_graph=True))
         self.select_button.clicked.connect(self.select_current)
         self.mirror_button.clicked.connect(self.mirror_current)
-        self.test_button.clicked.connect(self.test_build)
+        self.test_button.clicked.connect(lambda: self.test_build())
+        self.build_all_button.clicked.connect(lambda: self.test_build(all_modules=True))
         self.name_edit.editingFinished.connect(self._rename_current)
         self.form.changed.connect(self._on_setting_changed)
         self.form.error.connect(lambda _name, message: self.events.log(message, level="warning"))
@@ -298,10 +307,12 @@ class GuideDesigner(MayaToolWindow):
         self._action(edit_menu, "Add Module…", self.show_palette, "Tab")
         self._action(edit_menu, "Mirror", self.mirror_current, "Ctrl+M")
         self._action(edit_menu, "Rename", lambda: self.name_edit.setFocus(), "F2")
-        self._action(edit_menu, "Delete", self.delete_current, "Del")
+        self._action(edit_menu, "Delete", self.delete_current)
         edit_menu.addSeparator()
+        self._action(edit_menu, "Add Scene Node…", self.graph.ask_scene_node, "Ctrl+N")
         self._action(edit_menu, "Connect Input…", self.connect_dialog)
         self._action(edit_menu, "Disconnect Primary Input", self.disconnect_primary)
+        self._action(edit_menu, "Sever Connections", self.sever_current, "Ctrl+D")
         view_menu = bar.addMenu("&View")
         self.tree_action = self._action(view_menu, "Tree", lambda: self.set_pane_visible(self.tree_pane, self.tree_action.isChecked()), checkable=True)
         self.graph_action = self._action(view_menu, "Graph", lambda: self.set_pane_visible(self.graph_pane, self.graph_action.isChecked()), checkable=True)
@@ -310,8 +321,8 @@ class GuideDesigner(MayaToolWindow):
         view_menu.addSeparator()
         self._action(view_menu, "Refresh", self.refresh, "F5")
         build_menu = bar.addMenu("&Build")
-        self._action(build_menu, "Test Build Selected", self.test_build, "Ctrl+B")
-        self._action(build_menu, "Test Build All", lambda: self.test_build(all_modules=True), "Ctrl+Shift+B")
+        self._action(build_menu, "Build Selected", lambda: self.test_build(), "Ctrl+B")
+        self._action(build_menu, "Build All", lambda: self.test_build(all_modules=True), "Ctrl+Shift+B")
         help_menu = bar.addMenu("&Help")
         self._action(help_menu, "About Guide Designer", lambda: QtWidgets.QMessageBox.about(self, "Guide Designer", "Author module guides and connections; export a .trg for the Kinematics action."))
 
@@ -322,13 +333,12 @@ class GuideDesigner(MayaToolWindow):
     # ------------------------------------------------------------ state
     @property
     def side(self) -> str:
-        button = self.side_group.checkedButton()
-        return button.property("side") if button else "L"
+        return self.side_combo.currentText() or "L"
 
     def set_side(self, side: str) -> None:
-        for button in self.side_group.buttons():
-            if button.property("side") == side:
-                button.setChecked(True)
+        index = self.side_combo.findText(side)
+        if index >= 0:
+            self.side_combo.setCurrentIndex(index)
 
     @property
     def current(self) -> Optional[GuideHandle]:
@@ -432,10 +442,6 @@ class GuideDesigner(MayaToolWindow):
         handles = self.selected_handles()
         self._set_current(handles[0] if handles else None)
         self.graph.select_key(handles[0].key if handles else None)
-        if handles and hasattr(self.backend, "select_guides"):
-            with self.watcher.mute():
-                for handle in handles:
-                    self.backend.select_guides(handle.instance_id)
 
     def _on_graph_selection(self, key: str) -> None:
         handle = self.guides.by_key(key)
@@ -449,25 +455,10 @@ class GuideDesigner(MayaToolWindow):
             finally:
                 self._syncing = False
         self._set_current(handle)
-        if hasattr(self.backend, "select_guides"):
-            with self.watcher.mute():
-                self.backend.select_guides(handle.instance_id)
 
     def _on_scene_event(self, name: str) -> None:
         if name == "SelectionChanged":
-            picked = self.backend.selected_guide()
-            if picked is None:
-                return
-            item = self.item_for(picked.instance_id)
-            if item is not None and not item.isSelected():
-                self._syncing = True
-                try:
-                    self.tree.setCurrentItem(item)
-                finally:
-                    self._syncing = False
-                self._set_current(self.guides.get(picked.instance_id))
-                self.graph.select_key(self._current.key if self._current else None)
-            return
+            return  # selection is not synced; structure changes are
         self.refresh()
 
     # ---------------------------------------------------------- properties
@@ -576,11 +567,11 @@ class GuideDesigner(MayaToolWindow):
 
     def create_guides(self, module_type: str) -> list[GuideHandle]:
         module_cls = registry.get_module(module_type)
-        picked = self.backend.selected_guide() if hasattr(self.backend, "selected_guide") else None
-        parent_ref = picked
-        if parent_ref is None and self._current is not None:
-            parent_ref = ParentRef(self._current.instance_id, self._current.module_class.guides.root)
-        parent_handle = self.guides.get(parent_ref.instance_id) if parent_ref else None
+        parent_handle = self._current  # tree/graph selection only; nothing selected = no connection
+        inputs = {}
+        primary = module_cls.primary_input()
+        if parent_handle is not None and primary is not None and parent_handle.outputs:
+            inputs = {primary.name: f"{parent_handle.key}.{parent_handle.outputs[0]}"}
         choice = self.side
         if not module_cls.sided:
             sides = [Side.CENTER]
@@ -594,7 +585,7 @@ class GuideDesigner(MayaToolWindow):
         try:
             with self.watcher.mute():
                 for side in sides:
-                    created.append(self.guides.add(module_type, side=side.value, parent=parent_ref))
+                    created.append(self.guides.add(module_type, side=side.value, inputs=inputs))
         except TriggerError as error:
             self.events.log(str(error), level="warning")
         self.refresh()
@@ -610,15 +601,14 @@ class GuideDesigner(MayaToolWindow):
             return
         parent = self.guides.get(parent_id) if parent_id else None
         primary = handle.module_class.primary_input()
+        if primary is None:
+            return
         try:
             with self.watcher.mute():
-                self.guides.reparent(handle, parent)
-                if primary is not None:
-                    if parent is not None:
-                        output = parent.module_class.output_for_role(parent.module_class.guides.root)
-                        self.guides.connect(f"{handle.key}.{primary.name}", f"{parent.key}.{output}")
-                    else:
-                        self.guides.disconnect(f"{handle.key}.{primary.name}")
+                if parent is not None:
+                    self.guides.connect(f"{handle.key}.{primary.name}", f"{parent.key}.{parent.outputs[0]}")
+                else:
+                    self.guides.disconnect(f"{handle.key}.{primary.name}")
         except TriggerError as error:
             self.events.log(str(error), level="warning")
         self.refresh()
@@ -630,6 +620,10 @@ class GuideDesigner(MayaToolWindow):
         if ok and "=" in text:
             input_name, _eq, source = text.partition("=")
             self._on_input_changed(input_name.strip(), source.strip())
+
+    def sever_current(self) -> None:
+        if self._current is not None:
+            self.graph.sever(self._current.key)
 
     def disconnect_primary(self) -> None:
         if self._current is None:
@@ -653,6 +647,8 @@ class GuideDesigner(MayaToolWindow):
         self.refresh()
 
     def delete_current(self) -> None:
+        if self.graph.hasFocus() and self.graph.delete_selected():
+            return  # Delete in the graph disconnects wires / removes scene nodes
         with self.watcher.mute():
             for handle in self.selected_handles():
                 self.guides.remove(handle)

@@ -13,7 +13,12 @@ class FkChain(Module):
     label = "FK Chain"
     guides = Guides("root", multi="segment", min=1, max=50)
     inputs = (Input("root", primary=True, help="Where the chain hangs"),)
-    outputs = ("root", "end")
+    outputs = ("root", "end")  # plus one "segment<N>" output per joint after the root
+
+    @classmethod
+    def output_names(cls, settings=None):
+        count = int((settings or {}).get("segments", cls.segments.default))
+        return ("root", *(f"segment{index + 1}" for index in range(count)), "end")
     legacy_types = {"root": "FkikRoot", "segment": "Fkik"}
 
     segments = IntField(3, min=1, max=50, help="Number of joints after the root")
@@ -54,4 +59,6 @@ class FkChain(Module):
         for joint in joints:
             ctx.deform_joint(joint)
         ctx.output("root", joints[0])
+        for index, joint in enumerate(joints[1:]):
+            ctx.output(f"segment{index + 1}", joint)
         ctx.output("end", joints[-1])

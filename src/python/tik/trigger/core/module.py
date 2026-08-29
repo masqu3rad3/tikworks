@@ -76,6 +76,11 @@ class Module(Schema):
         return next((item for item in cls.inputs if item.name == name), None)
 
     @classmethod
+    def output_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Outputs an instance exposes; override when a setting adds outputs (e.g. chain segments)."""
+        return tuple(cls.outputs)
+
+    @classmethod
     def output_for_role(cls, role: str) -> Optional[str]:
         """Output matching a guide role (legacy derivation), else the first output."""
         if role in cls.outputs:

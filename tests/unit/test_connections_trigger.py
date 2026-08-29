@@ -111,3 +111,10 @@ def test_legacy_file_derives_primary_inputs():
     assert instances["arm"].inputs == {"root": "body.root"}          # hangs under the base root
     assert instances["fkchain"].inputs == {"root": "L_collar.hand"}  # hangs under the arm's hand joint
     assert instances["base"].inputs == {}
+
+
+def test_fkchain_exposes_every_segment_as_output():
+    from tik.trigger.modules.fkchain.fkchain import FkChain
+
+    assert FkChain.output_names({"segments": 2}) == ("root", "segment1", "segment2", "end")
+    assert FkChain.output_names() == ("root", "segment1", "segment2", "segment3", "end")
