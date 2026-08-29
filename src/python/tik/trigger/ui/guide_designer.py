@@ -21,6 +21,7 @@ from tik.core.side import Side
 from tik.shared.ui import theme
 from tik.shared.ui.binding import BindingManager, bind
 from tik.shared.ui.fields import FormBuilder
+from tik.shared.ui.filter_bar import FilterBar
 from tik.shared.ui.icons import glyph_icon, initials
 from tik.shared.ui.maya_window import MayaToolWindow
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
@@ -335,7 +336,14 @@ class GuideDesigner(MayaToolWindow):
         self.splitter.addWidget(left)
 
         self.tree = GuideTree()
-        self.tree_pane = pane("Tree", self.tree)
+        self.tree_filter = FilterBar(placeholder="Filter modules…  (Enter to keep a keyword)")
+        tree_holder = QtWidgets.QWidget()
+        tree_layout = QtWidgets.QVBoxLayout(tree_holder)
+        tree_layout.setContentsMargins(0, 0, 0, 0)
+        tree_layout.setSpacing(6)
+        tree_layout.addWidget(self.tree_filter)
+        tree_layout.addWidget(self.tree, 1)
+        self.tree_pane = pane("Tree", tree_holder)
         self.splitter.addWidget(self.tree_pane)
 
         self.graph = GraphView(self.guides, events=self.events)
@@ -407,6 +415,7 @@ class GuideDesigner(MayaToolWindow):
         self.palette = SearchPalette(palette_entries, self, colors=MODULE_COLORS)
         self.palette.chosen.connect(lambda key, _child: self.create_guides(key))
 
+        self.tree_filter.filter_changed.connect(self.apply_tree_filter)
         self.tree.itemSelectionChanged.connect(self._on_tree_selection)
         self.tree.reparent_requested.connect(self.reparent)
         self.tree.palette_requested.connect(self.show_palette)
@@ -466,6 +475,8 @@ class GuideDesigner(MayaToolWindow):
         view_menu.addSeparator()
         self.grid_action = self._action(view_menu, "Grid", lambda: self.graph.set_grid(self.grid_action.isChecked()), "G", checkable=True)
         self.snap_action = self._action(view_menu, "Snap to Grid", lambda: self.graph.set_snap(self.snap_action.isChecked()), "Shift+G", checkable=True)
+        self.grid_action.setChecked(True)
+        self.snap_action.setChecked(True)
         self._action(view_menu, "Auto Layout", self.graph.auto_layout, "Ctrl+L")
         self._action(view_menu, "Fit Graph", self.graph.fit, "F")
         view_menu.addSeparator()
@@ -596,6 +607,7 @@ class GuideDesigner(MayaToolWindow):
                     break
                 pending = remaining
             self.tree.expandAll()
+            self.apply_tree_filter()
             self.graph.rebuild()
             connections = self.guides.connections()
             externals = [item["source"] for item in connections if split_source(item["source"])[0] not in by_key]
@@ -604,9 +616,9 @@ class GuideDesigner(MayaToolWindow):
             self.status.set("connections", f"{len(connections)} connection(s)" + (f" · {len(missing)} missing scene node(s)" if missing else ""))
             kept = [items[instance_id] for instance_id in keep if instance_id in items]
             if kept:
+                self.tree.setCurrentItem(kept[0], 0, QtCore.QItemSelectionModel.NoUpdate)
                 for item in kept:
                     item.setSelected(True)
-                self.tree.setCurrentItem(kept[0])
                 self._select_handles([self.guides.get(item.data(0, QtCore.Qt.UserRole)) for item in kept])
             elif self._external is not None and self._external in self.graph.graph.nodes:
                 self.graph.select_key(self._external)
@@ -629,6 +641,28 @@ class GuideDesigner(MayaToolWindow):
         finally:
             tree.blockSignals(False)
 
+    def apply_tree_filter(self) -> None:
+        """Hide rows that match no keyword; a row stays when any descendant matches."""
+        model = self.tree_filter.model
+
+        def visit(item) -> bool:
+            text = " ".join(item.text(column) for column in range(item.columnCount()))
+            shown = model.matches(text)
+            for index in range(item.childCount()):
+                shown = visit(item.child(index)) or shown
+            item.setHidden(not shown)
+            return shown
+
+        for index in range(self.tree.topLevelItemCount()):
+            visit(self.tree.topLevelItem(index))
+        hidden = 0
+        iterator = QtWidgets.QTreeWidgetItemIterator(self.tree)
+        while iterator.value():
+            hidden += iterator.value().isHidden()
+            iterator += 1
+        total = len(self.guides.instances())
+        self.status.set("modules", f"{total - hidden} of {total} module(s)" if model.is_active else f"{total} module(s)")
+
     def item_for(self, instance_id: str) -> Optional[QtWidgets.QTreeWidgetItem]:
         iterator = QtWidgets.QTreeWidgetItemIterator(self.tree)
         while iterator.value():
@@ -639,10 +673,11 @@ class GuideDesigner(MayaToolWindow):
         return None
 
     # ----------------------------------------------------------- selection
-    def _select_handles(self, handles: list[GuideHandle]) -> None:
+    def _select_handles(self, handles: list[GuideHandle], sync_graph: bool = True) -> None:
         """Properties for one module, or for several of the same type (edited together)."""
         handles = [handle for handle in handles if handle is not None]
-        self.graph.select_keys([handle.key for handle in handles])
+        if sync_graph:
+            self.graph.select_keys([handle.key for handle in handles])
         if len(handles) <= 1:
             self._set_current(handles[0] if handles else None)
             return
@@ -699,11 +734,11 @@ class GuideDesigner(MayaToolWindow):
                         item.setSelected(True)
                         first = first or item
             if first is not None:
-                self.tree.setCurrentItem(first)
+                self.tree.setCurrentItem(first, 0, QtCore.QItemSelectionModel.NoUpdate)  # keep the others selected
         finally:
             self._syncing = False
         handles = self.selected_handles() or [handle]
-        self._select_handles(handles)
+        self._select_handles(handles, sync_graph=False)  # never fight a rubber band in progress
 
     def _on_scene_event(self, name: str) -> None:
         if name == "SelectionChanged":

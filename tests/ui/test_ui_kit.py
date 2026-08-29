@@ -107,3 +107,22 @@ def test_tool_window_headless(qapp):
     assert not HAS_MAYA
     window.close()
     assert window._script_jobs == []
+
+
+def test_filter_bar_keywords_or_together(qapp):
+    from tik.shared.ui.filter_bar import FilterBar
+
+    bar = FilterBar()
+    assert bar.matches("anything")
+    bar.set_text("arm")
+    assert bar.matches("L_arm") and not bar.matches("spine")
+    bar.commit()
+    bar.set_text("spi")
+    assert bar.keywords == ["arm"] and bar.matches("spine") and bar.matches("R_arm")
+    bar.commit()
+    bar.commit()  # duplicate/empty commits are absorbed
+    assert bar.keywords == ["arm", "spi"]
+    bar._remove_last()
+    assert bar.keywords == ["arm"]
+    bar.clear()
+    assert bar.keywords == [] and bar.matches("zzz")

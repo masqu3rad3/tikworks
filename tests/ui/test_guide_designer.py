@@ -342,6 +342,9 @@ def test_unique_names_layout_persistence_and_slice(designer, tmp_path):
     assert set(designer.guides.layout["positions"]) >= {"L_toy_chain", "L_tail", "world"}
     designer.grid_action.trigger()
     designer.snap_action.trigger()
+    assert not designer.graph.graph.show_grid and not designer.graph.graph.snap  # on by default, toggled off
+    designer.grid_action.trigger()
+    designer.snap_action.trigger()
     assert designer.graph.graph.show_grid and designer.graph.graph.snap
     designer.graph.graph.nodes["L_tail"].setPos(33, 47)
     assert designer.graph.graph.nodes["L_tail"].pos() == QtCore.QPointF(40, 40)
@@ -424,3 +427,56 @@ def test_export_import_and_test_build(designer, tmp_path, monkeypatch):
     assert report.count == 1 and ("rig_root", "test") in designer.backend.calls
     designer.build_all_button.click()
     assert designer.build_all_button.text() == "Build all" and designer.test_button.text() == "Build selected"
+
+
+def test_grid_snap_default_and_free_placement(designer):
+    assert designer.grid_action.isChecked() and designer.snap_action.isChecked()
+    assert designer.graph.graph.show_grid and designer.graph.graph.snap
+    designer.set_side("C")
+    body = designer.create_guides("toy_root")[0]
+    # park the body where the next auto-placed node would land
+    designer.tree.clearSelection()
+    designer._set_current(None)
+    designer.set_side("L")
+    chain = designer.create_guides("toy_chain")[0]
+    auto = designer.graph.graph.nodes[chain.key].pos()
+    designer.graph.graph.nodes[body.key].setPos(auto)
+    designer.graph.graph.nodes_moved.emit()
+    designer.tree.clearSelection()
+    designer._set_current(None)
+    designer.set_side("R")
+    other = designer.create_guides("toy_chain")[0]
+    nodes = designer.graph.graph.nodes
+    rect = lambda key: nodes[key].sceneBoundingRect()  # noqa: E731
+    assert not rect(other.key).intersects(rect(body.key)) and not rect(other.key).intersects(rect(chain.key))
+    assert nodes[other.key].pos().x() % 20 == 0 and nodes[other.key].pos().y() % 20 == 0  # snapped
+
+
+def test_tree_filter_and_ctrl_click_toggle(designer):
+    designer.set_side("C")
+    body = designer.create_guides("toy_root")[0]
+    designer.set_side("Both")
+    chains = designer.create_guides("toy_chain")
+    designer.tree_filter.set_text("R_")
+    assert designer.item_for(chains[1].instance_id).isHidden() is False
+    assert designer.item_for(chains[0].instance_id).isHidden()
+    assert not designer.item_for(body.instance_id).isHidden()  # parent of a match stays
+    assert designer.status.text("modules").startswith("2 of 3")
+    designer.tree_filter.commit()
+    assert designer.tree_filter.keywords == ["r_"]  # keywords are lower-cased
+    designer.tree_filter.set_text("L_")  # OR: widens
+    assert not designer.item_for(chains[0].instance_id).isHidden()
+    designer.tree_filter.clear()
+    assert designer.status.text("modules") == "3 module(s)"
+    designer.refresh()
+    assert all(not designer.item_for(h.instance_id).isHidden() for h in chains)
+    # Ctrl+click toggles selection without slicing; the graph selection is not echoed back by the tree
+    view = designer.graph
+    view.graph.select_keys([])
+    view.toggle_node_at(view.mapFromScene(view.graph.nodes["L_toy_chain"].sceneBoundingRect().center()))
+    view.toggle_node_at(view.mapFromScene(view.graph.nodes["R_toy_chain"].sceneBoundingRect().center()))
+    assert {n.key for n in view.graph.selected_nodes()} == {"L_toy_chain", "R_toy_chain"}
+    assert len(designer.selected_handles()) == 2 and designer.multi_label.isVisible()
+    view.toggle_node_at(view.mapFromScene(view.graph.nodes["L_toy_chain"].sceneBoundingRect().center()))
+    assert {n.key for n in view.graph.selected_nodes()} == {"R_toy_chain"}
+    assert len(view.graph.wires) == 2  # nothing sliced

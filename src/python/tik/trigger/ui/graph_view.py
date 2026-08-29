@@ -263,8 +263,8 @@ class GraphScene(QtWidgets.QGraphicsScene):
         self.nodes: dict[str, NodeItem] = {}
         self.wires: list[WireItem] = []
         self.moved: set[str] = set()
-        self.show_grid = False
-        self.snap = False
+        self.show_grid = True
+        self.snap = True
         self._drag_from: Optional[Port] = None
         self._drag_line: Optional[QtWidgets.QGraphicsPathItem] = None
         self._detached: Optional[str] = None  # input key of a picked-up wire
@@ -491,6 +491,7 @@ class GraphView(QtWidgets.QGraphicsView):
         self._zoom_anchor = QtCore.QPointF()
         self._zoom_origin = QtCore.QPoint()
         self._slice_item: Optional[QtWidgets.QGraphicsLineItem] = None
+        self._ctrl_press: Optional[QtCore.QPoint] = None  # Ctrl+LMB pressed, not yet a drag
         self.graph.connect_requested.connect(self.connect_input)
         self.graph.disconnect_requested.connect(self.disconnect_input)
         self.graph.remove_group_requested.connect(self.remove_scene_group)
@@ -518,15 +519,39 @@ class GraphView(QtWidgets.QGraphicsView):
                     grouped.add(source)
         depth = self._depths(handles, by_key)
         auto = self._auto_positions(handles, groups, depth)
+        placed: list[QtCore.QRectF] = []  # rects of nodes with a stored position; new nodes avoid them
+
+        def rect_at(pos, height):
+            return QtCore.QRectF(pos[0], pos[1], NODE_WIDTH + PORT_RADIUS * 2, height)
+
+        def free_pos(key, height):
+            stored = positions.get(key)
+            if stored:
+                placed.append(rect_at(stored, height))
+                return stored
+            pos = list(auto[key])
+            candidate = rect_at(pos, height)
+            for _ in range(200):
+                hit = next((r for r in placed if r.intersects(candidate.adjusted(-8, -8, 8, 8))), None)
+                if hit is None:
+                    break
+                pos[1] = hit.bottom() + ROW_GAP
+                candidate = rect_at(pos, height)
+            if self.graph.snap:
+                pos = [round(pos[0] / GRID) * GRID, round(pos[1] / GRID) * GRID]
+            placed.append(rect_at(pos, height))
+            return tuple(pos)
+
         for name in sorted(groups):
-            pos = positions.get(name) or auto[name]
+            pos = free_pos(name, HEADER + len(groups[name]) * ROW + 8)
             node = self.graph.add_node(name, name, "scene", [], groups[name], "", external=True, pos=pos, mode=collapse.get(name, MODE_FULL))
             exists = getattr(self.guides.backend, "scene_node", lambda _n: True)
             missing = [item for item in groups[name] if exists(item) is None]
             node.subtitle = "scene ✗ missing" if missing else "scene ✓"
         for handle in sorted(handles, key=lambda item: (depth.get(item.key, 1), item.key)):
             module_cls = handle.module_class
-            pos = positions.get(handle.key) or auto[handle.key]
+            rows = max(len(module_cls.inputs), len(handle.outputs), 1)
+            pos = free_pos(handle.key, HEADER + rows * ROW + 8)
             primary = module_cls.primary_input()
             self.graph.add_node(
                 handle.key, handle.key, module_cls.display_label(), module_cls.input_names(), list(handle.outputs),
@@ -768,12 +793,10 @@ class GraphView(QtWidgets.QGraphicsView):
             self._zoom_origin = event.pos()
             self._zoom_anchor = self.mapToScene(event.pos())
         elif ctrl and event.button() == QtCore.Qt.LeftButton:
-            self._nav = "slice"
-            start = self.mapToScene(event.pos())
-            self._slice_item = QtWidgets.QGraphicsLineItem(QtCore.QLineF(start, start))
-            self._slice_item.setPen(QtGui.QPen(QtGui.QColor("#e05555"), 1.5, QtCore.Qt.DashLine))
-            self._slice_item.setZValue(5)
-            self.graph.addItem(self._slice_item)
+            # click = toggle the node under the cursor; drag = slice (decided on move)
+            self._ctrl_press = event.pos()
+            event.accept()
+            return
         if self._nav:
             self._navigated = self._navigated or self._nav != "slice"
             self._nav_last = event.pos()
@@ -782,7 +805,30 @@ class GraphView(QtWidgets.QGraphicsView):
             return
         super().mousePressEvent(event)
 
+    def _begin_slice(self, origin: QtCore.QPoint) -> None:
+        self._nav = "slice"
+        self._nav_last = origin
+        start = self.mapToScene(origin)
+        self._slice_item = QtWidgets.QGraphicsLineItem(QtCore.QLineF(start, start))
+        self._slice_item.setPen(QtGui.QPen(QtGui.QColor("#e05555"), 1.5, QtCore.Qt.DashLine))
+        self._slice_item.setZValue(5)
+        self.graph.addItem(self._slice_item)
+        self.setCursor(QtCore.Qt.CrossCursor)
+
+    def toggle_node_at(self, pos: QtCore.QPoint) -> None:
+        item = self.itemAt(pos)
+        while item is not None and not isinstance(item, NodeItem):
+            item = item.parentItem()
+        if item is not None:
+            item.setSelected(not item.isSelected())
+
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self._ctrl_press is not None:
+            if (event.pos() - self._ctrl_press).manhattanLength() < 6:
+                event.accept()
+                return
+            origin, self._ctrl_press = self._ctrl_press, None
+            self._begin_slice(origin)
         if self._nav:
             delta = event.pos() - self._nav_last
             self._nav_last = event.pos()
@@ -801,6 +847,11 @@ class GraphView(QtWidgets.QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if self._ctrl_press is not None:
+            self._ctrl_press = None
+            self.toggle_node_at(event.pos())
+            event.accept()
+            return
         if self._nav:
             if self._nav == "slice" and self._slice_item is not None:
                 line = self._slice_item.line()
