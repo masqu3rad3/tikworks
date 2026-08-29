@@ -77,6 +77,7 @@ class FakeBackend:
         self.afterlife_mode: Optional[str] = None
         self.fail_on: Optional[str] = None
         self.selection = None  # ParentRef returned by selected_guide()
+        self.layout: dict = {}
 
     def new_scene(self):
         self.calls.append(("new_scene",))
@@ -112,6 +113,13 @@ class FakeBackend:
         self.instances.append(instance)
         self.calls.append(("create_guides", instance.instance_id))
         return instance
+
+    def read_layout(self):
+        return dict(self.layout)
+
+    def write_layout(self, layout):
+        self.layout = dict(layout)
+        self.calls.append(("write_layout",))
 
     def delete_guides(self, instance_id):
         self.instances = [item for item in self.instances if item.instance_id != instance_id]
@@ -173,6 +181,12 @@ class FakeBackend:
 
     def select_guides(self, instance_id):
         self.calls.append(("select", instance_id))
+
+    def selected_node_names(self):
+        return list(getattr(self, "selected_names", []))
+
+    def select_nodes(self, nodes):
+        self.calls.append(("select_nodes", [str(n) for n in nodes]))
 
     def selected_node_name(self):
         return "picked_node"

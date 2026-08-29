@@ -74,15 +74,28 @@ group in the properties, two-way scene binding, debounced scene sync.
 Connections are data only — guide joints are never parented into each other
 and the designer never touches the Maya selection (use *Select guides*).
 Graph: Alt+MMB pans, Alt+RMB zooms around the press point, wheel zooms under
-the pointer, F fits; drag output → input to connect, drag a plugged input away
-to unplug, Delete disconnects selected wires, node menu → *Sever all
-connections*. A **Scene Node** entry in the shelf / Tab palette adds a
-placeholder for any Maya node (rename it in the properties; connections
-follow). Right-click an input field for a menu of every other module → its
-outputs, plus the scene nodes. Modules may declare any number of inputs and
-outputs (or none); the "primary" input only drives the tree layout.
-*Build selected* / *Build all* test-build from the live scene; the Kinematics
-action has an *Open Guide Designer* button.
+the pointer, F fits, View ▸ Grid / Snap to Grid, View ▸ Auto Layout (one
+undo step). Drag output → input to connect, drag a plugged input away to
+unplug, Delete disconnects selected wires, **Ctrl+drag slices** every wire
+the line crosses, node menu → *Sever all connections*. Nodes collapse like
+Maya's node editor: click the ≡ glyph or press 1 / 2 / 3 (header only /
+connected plugs / everything). **Scene Nodes** (shelf / Tab) is a group of
+arbitrary Maya nodes exposed as outputs — one group with ten outputs or ten
+groups with one, your call; rows are picked from the Maya selection.
+Right-click an input field for a menu of every other module → its outputs,
+plus the scene nodes by group. Right-click a module (tree or graph): Select
+root, Select all guides, Mirror, Build, Sever, Rename, Delete. Selecting
+several modules of one type edits them together (the panel says so); mixed
+types show nothing. Module names are unique per side (``arm``, ``arm1``…)
+and renaming onto an existing name is refused. Modules may declare any
+number of inputs and outputs (or none); the "primary" input only drives the
+tree layout. *Build selected* / *Build all* test-build from the live scene;
+the Kinematics action has an *Open Guide Designer* button.
+
+Everything the designer authors — connections, scene-node groups, node
+positions, collapse modes — is stored with the guides (``Guides.layout``,
+on the guide holder in Maya, so it undoes) and written to the ``.trg`` under
+``"designer"``; window size, pane ratios and selection are not.
 
 ``Guides`` caches one scene scan per edit; every write through the API
 invalidates it. After moving or deleting guide joints by hand in Maya, call

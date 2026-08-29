@@ -10,6 +10,7 @@ from tik.trigger.core import registry
 from tik.trigger.core.builder import Builder
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import GuideError
+from tik.trigger.core.manifest import instance_key
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 
 from .format import GuideFile, GuideInstance, legacy_type, make_record
@@ -56,8 +57,19 @@ class GuideHandle:
 
     @name.setter
     def name(self, value: str) -> None:
+        value = (value or "").strip()
+        if not value:
+            raise GuideError("A module needs a name.")
+        key = instance_key(value, self.side.value)
+        taken = self._guides.by_key(key)
+        if taken is not None and taken.instance_id != self.instance_id:
+            raise GuideError(f"A module named '{key}' already exists.")
+        if key in self._guides.layout.get("scene_nodes", {}):
+            raise GuideError(f"'{key}' is already a scene-nodes group.")
+        old_key = self.key
         self._guides.backend.rename_instance(self.instance_id, value)
         self._touch()
+        self._guides._rename_key(old_key, self.key)
 
     @property
     def module_type(self) -> str:
@@ -217,6 +229,7 @@ class Guides:
         scene parenting (what the Guide Designer does)."""
         module_cls = registry.get_module(module_type)
         module = module_cls(name=name, side=side, settings=settings)
+        module.name = self.unique_name(module.name, module.side.value)
         parent_ref = parent
         if isinstance(parent, GuideHandle):
             parent_ref = ParentRef(parent.instance_id, parent.module_class.guides.root)
@@ -224,9 +237,124 @@ class Guides:
         self.invalidate()
         return GuideHandle(self, instance)
 
+    def unique_name(self, name: str, side: str) -> str:
+        """``arm`` -> ``arm``, ``arm1``, ``arm2``... until ``<side>_<name>`` is free."""
+        taken = {handle.key for handle in self.instances()} | set(self.layout.get("scene_nodes", {}))
+        base = name.rstrip("0123456789") or name
+        candidate, index = name, 1
+        while instance_key(candidate, side) in taken:
+            candidate = f"{base}{index}"
+            index += 1
+        return candidate
+
     def remove(self, handle: GuideHandle) -> None:
+        key = handle.key
         self.backend.delete_guides(handle.instance_id)
         self.invalidate()
+        self._forget_key(key)
+
+    # ------------------------------------------------------------ layout
+    @property
+    def layout(self) -> dict:
+        """Designer state stored with the guides: scene-node groups, node positions, collapse modes.
+
+        ``{"scene_nodes": {group: [node, ...]}, "positions": {key: [x, y]}, "collapse": {key: 0|1|2}}``
+        """
+        reader = getattr(self.backend, "read_layout", None)
+        return dict(reader() if reader else {})
+
+    def set_layout(self, layout: dict) -> None:
+        writer = getattr(self.backend, "write_layout", None)
+        if writer is not None:
+            writer(dict(layout))
+
+    def update_layout(self, **sections) -> dict:
+        """Replace whole sections (``positions=``, ``scene_nodes=``, ``collapse=``)."""
+        layout = self.layout
+        for name, value in sections.items():
+            layout[name] = value
+        self.set_layout(layout)
+        return layout
+
+    def _rename_key(self, old: str, new: str) -> None:
+        layout = self.layout
+        changed = False
+        for section in ("positions", "collapse"):
+            table = layout.get(section, {})
+            if old in table:
+                table[new] = table.pop(old)
+                changed = True
+        if changed:
+            self.set_layout(layout)
+
+    def _forget_key(self, key: str) -> None:
+        layout = self.layout
+        changed = False
+        for section in ("positions", "collapse"):
+            if key in layout.get(section, {}):
+                del layout[section][key]
+                changed = True
+        if changed:
+            self.set_layout(layout)
+
+    # ------------------------------------------------------ scene nodes
+    def scene_groups(self) -> dict[str, list[str]]:
+        """``{group name: [scene node, ...]}`` — arbitrary Maya nodes modules connect to."""
+        return {name: list(nodes) for name, nodes in self.layout.get("scene_nodes", {}).items()}
+
+    def add_scene_group(self, name: str = "", nodes: Optional[list[str]] = None) -> str:
+        groups = self.scene_groups()
+        taken = set(groups) | {handle.key for handle in self.instances()}
+        if not name:
+            index = 1
+            while f"sceneNodes{index}" in taken:
+                index += 1
+            name = f"sceneNodes{index}"
+        elif name in taken:
+            raise GuideError(f"'{name}' is already used.")
+        groups[name] = list(nodes or [])
+        self.update_layout(scene_nodes=groups)
+        return name
+
+    def set_scene_group(self, name: str, nodes: list[str]) -> None:
+        groups = self.scene_groups()
+        if name not in groups:
+            raise GuideError(f"No scene-nodes group '{name}'.")
+        removed = set(groups[name]) - set(nodes)
+        groups[name] = [node for node in nodes if node]
+        self.update_layout(scene_nodes=groups)
+        for item in self.connections():
+            if item["source"] in removed and not self.scene_node_group(item["source"]):
+                self.disconnect(item["input"])
+
+    def rename_scene_group(self, old: str, new: str) -> None:
+        new = (new or "").strip()
+        groups = self.scene_groups()
+        if old not in groups:
+            raise GuideError(f"No scene-nodes group '{old}'.")
+        if not new or new == old:
+            return
+        if new in groups or self.by_key(new) is not None:
+            raise GuideError(f"'{new}' is already used.")
+        groups[new] = groups.pop(old)
+        self.update_layout(scene_nodes=groups)
+        self._rename_key(old, new)
+
+    def remove_scene_group(self, name: str) -> None:
+        groups = self.scene_groups()
+        nodes = set(groups.pop(name, []))
+        self.update_layout(scene_nodes=groups)
+        for item in self.connections():
+            if item["source"] in nodes and not self.scene_node_group(item["source"]):
+                self.disconnect(item["input"])
+        self._forget_key(name)
+
+    def scene_node_group(self, node: str) -> Optional[str]:
+        """The group that lists scene node ``node`` (first match)."""
+        for name, nodes in self.scene_groups().items():
+            if node in nodes:
+                return name
+        return None
 
     # -------------------------------------------------------- connections
     def by_key(self, key: str) -> Optional[GuideHandle]:
@@ -313,7 +441,18 @@ class Guides:
         records = self.backend.export_guide_records(wanted)
         keys = {handle.key for handle in (handles or self.instances())}
         connections = [item for item in self.connections() if item["input"].split(".")[0] in keys]
-        return GuideFile(records, connections).save(file_path)
+        layout = self.layout
+        sources = {item["source"] for item in connections}
+        groups = {name: nodes for name, nodes in layout.get("scene_nodes", {}).items()
+                  if not handles or set(nodes) & sources}
+        wanted = keys | set(groups)
+        designer = {
+            "scene_nodes": groups,
+            "positions": {key: value for key, value in layout.get("positions", {}).items() if key in wanted},
+            "collapse": {key: value for key, value in layout.get("collapse", {}).items() if key in wanted},
+        }
+        designer = {name: value for name, value in designer.items() if value}
+        return GuideFile(records, connections, designer=designer).save(file_path)
 
     def import_(self, file_path, reset: bool = False) -> list[GuideHandle]:
         guide_file = GuideFile.load(file_path)
@@ -322,8 +461,17 @@ class Guides:
             self.events.log(f"Guide file has unknown module types: {guide_file.unknown}", level="warning")
         if reset:
             self.clear()
+            self.set_layout({})
         created = self.backend.import_guide_instances(instances)
         self.invalidate()
+        if guide_file.designer:
+            layout = {} if reset else self.layout
+            for section in ("scene_nodes", "positions", "collapse"):
+                merged = dict(layout.get(section, {}))
+                merged.update(guide_file.designer.get(section, {}))
+                if merged:
+                    layout[section] = merged
+            self.set_layout(layout)
         return [GuideHandle(self, item) for item in created]
 
     load = import_

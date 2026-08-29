@@ -144,7 +144,8 @@ def test_inputs_panel_edits_connections(designer):
     space.line.editingFinished.emit()
     assert designer.guides.get(chain.instance_id).inputs == {"root": "toy_root.root", "space": "some_jnt"}
     assert "missing scene node" in designer.status.text("connections")
-    assert "some_jnt" in designer.graph.graph.nodes and designer.graph.graph.nodes["some_jnt"].external
+    scene = designer.graph.graph.nodes["scene"]  # ungrouped scene sources show under an implicit group
+    assert scene.external and "some_jnt" in scene.outputs
     designer.backend.scene_nodes.add("some_jnt")
     designer.refresh()
     assert "missing" not in designer.status.text("connections")
@@ -232,36 +233,42 @@ def test_pick_up_wire_delete_and_sever(designer):
     assert designer.guides.get(chain.instance_id).inputs == {}
 
 
-def test_manual_scene_node_and_side_combo(designer):
+def test_scene_node_groups_and_side_combo(designer):
     designer.set_side("L")
     chain = designer.create_guides("toy_chain")[0]
-    designer.graph.add_scene_node("hip_jnt")
-    assert "hip_jnt" in designer.graph.graph.nodes and designer.graph.graph.nodes["hip_jnt"].external
-    designer.refresh()  # survives a refresh even while unconnected
-    assert "hip_jnt" in designer.graph.graph.nodes
+    # a group of scene nodes = one dashed node with one output per scene node
+    designer.graph.add_scene_group("world", ["hip_jnt", "chest_jnt"])
+    assert designer.graph.graph.nodes["world"].external
+    assert list(designer.graph.graph.nodes["world"].outputs) == ["hip_jnt", "chest_jnt"]
+    designer.refresh()  # persisted in the layout, survives a refresh while unconnected
+    assert "world" in designer.graph.graph.nodes and designer.guides.scene_groups() == {"world": ["hip_jnt", "chest_jnt"]}
     graph = designer.graph.graph
-    graph.start_wire(graph.nodes["hip_jnt"].outputs["node"], QtCore.QPointF(0, 0))
+    graph.start_wire(graph.nodes["world"].outputs["hip_jnt"], QtCore.QPointF(0, 0))
     graph.finish_wire(graph.nodes["L_toy_chain"].inputs["space"])
-    assert designer.guides.get(chain.instance_id).inputs == {"space": "hip_jnt"}
-    designer.graph.remove_scene_node("hip_jnt")
-    assert designer.guides.get(chain.instance_id).inputs == {} and "hip_jnt" not in designer.graph.graph.nodes
-    # Scene Node from the shelf/palette: placeholder, rename via the properties name field
+    assert designer.guides.get(chain.instance_id).inputs == {"space": "hip_jnt"}  # plain scene node name
+    # Scene Nodes from the shelf/palette: group named in the properties, rows pre-filled from the selection
+    designer.backend.selected_names = ["pelvis_jnt"]
     designer.create_guides("__scene_node__")
-    assert designer._external == "sceneNode1" and designer.name_edit.text() == "sceneNode1"
-    graph = designer.graph.graph
-    graph.start_wire(graph.nodes["sceneNode1"].outputs["node"], QtCore.QPointF(0, 0))
-    graph.finish_wire(graph.nodes["L_toy_chain"].inputs["space"])
-    assert designer.guides.get(chain.instance_id).inputs == {"space": "sceneNode1"}
-    designer.graph.select_key("sceneNode1")
-    designer._on_external_selection("sceneNode1")
-    designer.name_edit.setText("pelvis_jnt")
+    assert designer._external == "sceneNodes1" and designer.name_edit.text() == "sceneNodes1"
+    assert designer.scene_panel.isVisible() and designer.scene_panel.nodes() == ["pelvis_jnt"]
+    designer.name_edit.setText("anchors")
     designer.name_edit.editingFinished.emit()
-    assert designer.guides.get(chain.instance_id).inputs == {"space": "pelvis_jnt"}
-    assert "pelvis_jnt" in designer.graph.graph.nodes and "sceneNode1" not in designer.graph.graph.nodes
-    # right-click menu on an input field lists other modules -> outputs, and scene nodes
+    assert designer._external == "anchors" and "anchors" in designer.graph.graph.nodes and "sceneNodes1" not in designer.guides.scene_groups()
+    designer.backend.selected_names = []
+    designer.scene_panel.add_button.click()
+    designer.scene_panel.rows[-1].setText("neck_jnt")
+    designer.scene_panel.rows[-1].editingFinished.emit()
+    assert designer.guides.scene_groups()["anchors"] == ["pelvis_jnt", "neck_jnt"]
+    # removing a scene node from the group drops connections that used it
+    designer.guides.connect("L_toy_chain.root", "neck_jnt")
+    designer.guides.set_scene_group("anchors", ["pelvis_jnt"])
+    assert designer.guides.get(chain.instance_id).inputs == {"space": "hip_jnt"}
+    designer.graph.remove_scene_group("world")
+    assert designer.guides.get(chain.instance_id).inputs == {} and "world" not in designer.graph.graph.nodes
+    # right-click menu on an input field lists other modules -> outputs, and scene nodes by group
     designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
     modules, scene_nodes = designer._input_rows["root"].sources()
-    assert [m[0] for m in modules] == [] and scene_nodes == ["pelvis_jnt"]
+    assert [m[0] for m in modules] == [] and scene_nodes == [("anchors", "pelvis_jnt")]
     designer.set_side("C")
     designer.create_guides("toy_root")
     designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
@@ -292,6 +299,89 @@ def test_properties_binding_rename_mirror_delete(designer):
     designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
     designer.delete_current()
     assert [handle.key for handle in designer.guides.instances()] == ["R_tail"]
+
+
+def test_unique_names_layout_persistence_and_slice(designer, tmp_path):
+    designer.set_side("L")
+    first = designer.create_guides("toy_chain")[0]
+    second = designer.create_guides("toy_chain")[0]  # connected to first, and uniquely named
+    assert (first.key, second.key) == ("L_toy_chain", "L_toy_chain1")
+    designer.tree.setCurrentItem(designer.item_for(second.instance_id))
+    designer.name_edit.setText("toy_chain")
+    designer.name_edit.editingFinished.emit()  # refused: reverts
+    assert designer.guides.get(second.instance_id).key == "L_toy_chain1" and designer.name_edit.text() == "toy_chain1"
+    # positions / collapse are layout data
+    node = designer.graph.graph.nodes["L_toy_chain1"]
+    node.setPos(300, 40)
+    designer.graph.graph.nodes_moved.emit()
+    assert designer.guides.layout["positions"]["L_toy_chain1"] == [300.0, 40.0]
+    designer.graph.set_mode("L_toy_chain1", 1)
+    assert designer.guides.layout["collapse"]["L_toy_chain1"] == 1
+    designer.refresh()
+    node = designer.graph.graph.nodes["L_toy_chain1"]
+    assert node.pos() == QtCore.QPointF(300, 40) and node.mode == 1
+    assert node.inputs["root"].isVisible() and not node.inputs["space"].isVisible()  # connected plugs only
+    designer.graph.select_keys(["L_toy_chain1"])
+    designer.graph.set_selected_mode(0)
+    assert not node.inputs["root"].isVisible() and node.boundingRect().height() < 40
+    # renaming keeps the layout entry
+    designer.name_edit.setText("tail")
+    designer.name_edit.editingFinished.emit()
+    assert designer.guides.layout["positions"]["L_tail"] == [300.0, 40.0] and "L_toy_chain1" not in designer.guides.layout["positions"]
+    designer.graph.add_scene_group("world", ["hip_jnt"])
+    designer.guides.connect("L_toy_chain.space", "hip_jnt")
+    designer.refresh()
+    # Ctrl+drag slice: every wire crossing the line is disconnected
+    graph = designer.graph.graph
+    wire = graph.wires[0]
+    middle = wire.path().pointAtPercent(0.5)
+    cut = graph.slice_wires(QtCore.QLineF(middle.x(), middle.y() - 50, middle.x(), middle.y() + 50))
+    assert cut and all(designer.guides.by_key(key.rsplit(".", 1)[0]).inputs.get(key.rsplit(".", 1)[1]) is None for key in cut)
+    # auto layout writes positions (undoable via the backend) and grid/snap toggles
+    designer.graph.auto_layout()
+    assert set(designer.guides.layout["positions"]) >= {"L_toy_chain", "L_tail", "world"}
+    designer.grid_action.trigger()
+    designer.snap_action.trigger()
+    assert designer.graph.graph.show_grid and designer.graph.graph.snap
+    designer.graph.graph.nodes["L_tail"].setPos(33, 47)
+    assert designer.graph.graph.nodes["L_tail"].pos() == QtCore.QPointF(40, 40)
+    designer.graph.graph.nodes_moved.emit()
+    # export / import round-trips everything the designer authored (joint records are the backend's job)
+    designer.backend.export_guide_records = lambda wanted=None: []
+    designer.backend.import_guide_instances = lambda instances: []
+    path = designer.export_file(str(tmp_path / "g.trg"))
+    import json
+    data = json.loads(path.read_text())
+    assert data["designer"]["scene_nodes"] == {"world": ["hip_jnt"]}
+    assert data["designer"]["positions"]["L_tail"] == [40.0, 40.0] and data["designer"]["collapse"]["L_tail"] == 0
+    designer.clear_guides()
+    assert designer.guides.layout == {}
+    designer.import_file(str(path))
+    assert designer.guides.scene_groups() == {"world": ["hip_jnt"]}
+    assert designer.guides.layout["positions"]["L_tail"] == [40.0, 40.0]
+
+
+def test_multi_selection_edits_same_type_together(designer):
+    designer.set_side("Both")
+    chains = designer.create_guides("toy_chain")
+    designer.set_side("C")
+    body = designer.create_guides("toy_root")[0]
+    designer.tree.clearSelection()
+    for chain in chains:
+        designer.item_for(chain.instance_id).setSelected(True)
+    assert designer.multi_label.isVisible() and "2 Toy Chain" in designer.multi_label.text()
+    assert not designer.name_edit.isEnabled()
+    designer.form.widget("segments").setValue(5)
+    assert all(designer.backend.settings[chain.instance_id]["segments"] == 5 for chain in chains)
+    designer.item_for(body.instance_id).setSelected(True)
+    assert designer.current is None and "different types" in designer.multi_label.text()
+    assert "segments" not in designer.form._widgets
+    # the shared context menu works from the tree and the graph
+    menu = designer.module_menu()
+    labels = [action.text() for action in menu.actions() if not action.isSeparator()]
+    assert labels[:4] == ["Select root", "Select all guides", "Mirror", "Build"]
+    designer.select_root()
+    assert designer.backend.calls[-1][0] == "select_nodes"
 
 
 def test_handles_share_one_scene_scan(designer):

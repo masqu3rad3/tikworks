@@ -6,6 +6,10 @@ only: the designer never parents guide joints into each other and never
 selects joints in Maya on its own — use *Select guides* for that. Scene
 structure changes (new/removed/undone guides) reach the UI through a
 debounced ``SceneWatcher``; our own edits are muted.
+
+Everything the designer authors (connections, scene-node groups, node
+positions, collapse modes) lives in ``Guides`` / ``Guides.layout`` and is
+exported with the ``.trg``; only window geometry and selection are transient.
 """
 
 from __future__ import annotations
@@ -35,7 +39,7 @@ from .session_view import pane
 
 MIME_MODULE = "application/x-trigger-module-type"
 SIDES = ("L", "R", "C", "Both", "Auto")
-SCENE_NODE = "__scene_node__"  # pseudo module: an arbitrary scene node modules can connect to
+SCENE_NODE = "__scene_node__"  # pseudo module: a group of arbitrary scene nodes modules can connect to
 MODULE_COLORS = {"body": "#c9a24a", "limbs": "#5b8fd0", "generic": "#7fa86a", "face": "#b86b9a", "scene": "#8a93a0"}
 MODULE_CATEGORY = {"base": "body", "spine": "body", "head": "body", "arm": "limbs", "leg": "limbs",
                    "finger": "limbs", "fkchain": "generic", "tail": "generic", "surface": "generic"}
@@ -48,12 +52,12 @@ def module_entries():
         tiles.append(TileEntry(module_cls.module_type, module_cls.display_label(), category))
         palette.append(PaletteEntry(module_cls.module_type, module_cls.display_label(), category))
     tiles.append(TileEntry(SCENE_NODE, "Scene", "scene"))
-    palette.append(PaletteEntry(SCENE_NODE, "Scene Node", "scene"))
+    palette.append(PaletteEntry(SCENE_NODE, "Scene Nodes", "scene"))
     return tiles, palette
 
 
 class GuideTree(QtWidgets.QTreeWidget):
-    """Instances tree; dragging a row onto another sets its primary input (and reparents the guides)."""
+    """Instances tree; dragging a row onto another sets its primary input."""
 
     reparent_requested = QtCore.Signal(str, object)  # instance_id, parent instance_id or None
     palette_requested = QtCore.Signal()
@@ -76,6 +80,7 @@ class GuideTree(QtWidgets.QTreeWidget):
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setAlternatingRowColors(True)
         self.setUniformRowHeights(True)
+        self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         if event.key() == QtCore.Qt.Key_Tab:
@@ -116,7 +121,7 @@ class InputRow(QtWidgets.QWidget):
     """One input: source editor + "from selection" + clear.
 
     Right-click the field for a menu of every other module (submenu = its
-    outputs) and the scene nodes in the graph.
+    outputs) and the scene nodes of every group.
     """
 
     changed = QtCore.Signal(str, str)  # input name, source ("" = disconnect)
@@ -125,7 +130,7 @@ class InputRow(QtWidgets.QWidget):
         super().__init__(parent)
         self.input = input_decl
         self.picker = picker
-        self.sources = sources  # callable -> (modules: [(key, label, [outputs])], scene_nodes: [name])
+        self.sources = sources  # callable -> (modules: [(key, label, [outputs])], scene_nodes: [(group, node)])
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
@@ -163,8 +168,12 @@ class InputRow(QtWidgets.QWidget):
         if scene_nodes:
             if modules:
                 menu.addSeparator()
-            for name in scene_nodes:
-                menu.addAction(f"{name}  ·  scene", lambda source=name: self.choose(source))
+            groups: dict[str, QtWidgets.QMenu] = {}
+            for group, node in scene_nodes:
+                sub = groups.get(group)
+                if sub is None:
+                    sub = groups[group] = menu.addMenu(f"{group}  ·  scene nodes")
+                sub.addAction(node, lambda source=node: self.choose(source))
         if not modules and not scene_nodes:
             menu.addAction("No other modules or scene nodes").setEnabled(False)
         menu.addSeparator()
@@ -183,6 +192,90 @@ class InputRow(QtWidgets.QWidget):
             self.changed.emit(self.input.name, source)
 
 
+class SceneNodesPanel(QtWidgets.QWidget):
+    """Outputs of a scene-nodes group: one scene node per row, pickable from the Maya selection."""
+
+    changed = QtCore.Signal(list)  # new node list
+
+    def __init__(self, parent=None, picker=None) -> None:
+        super().__init__(parent)
+        self.picker = picker  # callable -> [selected scene node names]
+        self.rows: list[QtWidgets.QLineEdit] = []
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        caption = QtWidgets.QLabel("SCENE NODES")
+        caption.setObjectName("FieldCaption")
+        layout.addWidget(caption)
+        self.rows_layout = QtWidgets.QVBoxLayout()
+        self.rows_layout.setSpacing(4)
+        layout.addLayout(self.rows_layout)
+        buttons = QtWidgets.QHBoxLayout()
+        self.add_button = QtWidgets.QPushButton("+ Add")
+        self.add_button.setToolTip("Add a row (pre-filled from the Maya selection)")
+        self.add_selected_button = QtWidgets.QPushButton("< Add selected")
+        self.add_selected_button.setToolTip("One row per selected Maya node")
+        buttons.addWidget(self.add_button)
+        buttons.addWidget(self.add_selected_button)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
+        layout.addStretch(1)
+        self.add_button.clicked.connect(lambda: self._add_rows([self._picked()[:1] or [""]][0] or [""]))
+        self.add_selected_button.clicked.connect(lambda: self._add_rows(self._picked() or [""]))
+
+    def _picked(self) -> list[str]:
+        return list(self.picker() or []) if self.picker else []
+
+    def set_nodes(self, nodes: list[str]) -> None:
+        while self.rows_layout.count():
+            item = self.rows_layout.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+        self.rows = []
+        for node in nodes:
+            self._append_row(node)
+
+    def nodes(self) -> list[str]:
+        return [row.text().strip() for row in self.rows if row.text().strip()]
+
+    def _append_row(self, node: str) -> QtWidgets.QLineEdit:
+        holder = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        line = QtWidgets.QLineEdit(node)
+        line.setPlaceholderText("scene node name")
+        pick = QtWidgets.QToolButton()
+        pick.setText("<")
+        pick.setToolTip("Use the selected Maya node")
+        remove = QtWidgets.QToolButton()
+        remove.setText("×")
+        row.addWidget(line, 1)
+        row.addWidget(pick)
+        row.addWidget(remove)
+        self.rows_layout.addWidget(holder)
+        self.rows.append(line)
+        line.editingFinished.connect(self._emit)
+        pick.clicked.connect(lambda: (line.setText((self._picked() or [line.text()])[0]), self._emit()))
+        remove.clicked.connect(lambda: self._remove(line, holder))
+        return line
+
+    def _add_rows(self, names: list[str]) -> None:
+        for name in names:
+            self._append_row(name)
+        if names and not names[-1]:
+            self.rows[-1].setFocus()
+        self._emit()
+
+    def _remove(self, line, holder) -> None:
+        self.rows.remove(line)
+        holder.deleteLater()
+        self._emit()
+
+    def _emit(self) -> None:
+        self.changed.emit(self.nodes())
+
+
 class GuideDesigner(MayaToolWindow):
     WINDOW_NAME = "TriggerGuideDesigner"
 
@@ -196,7 +289,8 @@ class GuideDesigner(MayaToolWindow):
         self.file_path: str = ""
         self.bindings = BindingManager()
         self._current: Optional[GuideHandle] = None
-        self._external: Optional[str] = None  # selected scene-node placeholder (graph only)
+        self._multi: list[GuideHandle] = []  # every selected module when they share a type
+        self._external: Optional[str] = None  # selected scene-nodes group (graph only)
         self._module_obj = None
         self._input_rows: dict[str, InputRow] = {}
         self._syncing = False
@@ -262,26 +356,33 @@ class GuideDesigner(MayaToolWindow):
         head.addWidget(self.name_edit, 1)
         head.addWidget(self.type_label)
         props.addLayout(head)
+        self.multi_label = QtWidgets.QLabel("")
+        self.multi_label.setObjectName("LinkedNote")
+        self.multi_label.setVisible(False)
+        props.addWidget(self.multi_label)
         self.inputs_caption = QtWidgets.QLabel("INPUTS")
         self.inputs_caption.setObjectName("FieldCaption")
         props.addWidget(self.inputs_caption)
         self.inputs_form = QtWidgets.QFormLayout()
         self.inputs_form.setContentsMargins(4, 0, 4, 4)
         props.addLayout(self.inputs_form)
-        guides_caption = QtWidgets.QLabel("GUIDES")
-        guides_caption.setObjectName("FieldCaption")
-        props.addWidget(guides_caption)
+        self.guides_caption = QtWidgets.QLabel("GUIDES")
+        self.guides_caption.setObjectName("FieldCaption")
+        props.addWidget(self.guides_caption)
         self.inherit_orientation = QtWidgets.QCheckBox("Inherit orientation from guides")
         props.addWidget(self.inherit_orientation)
         self.module_caption = QtWidgets.QLabel("MODULE")
         self.module_caption.setObjectName("FieldCaption")
         props.addWidget(self.module_caption)
         self.form = FormBuilder()
-        scroll = QtWidgets.QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
-        scroll.setWidget(self.form)
-        props.addWidget(scroll, 1)
+        self.form_scroll = QtWidgets.QScrollArea()
+        self.form_scroll.setWidgetResizable(True)
+        self.form_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self.form_scroll.setWidget(self.form)
+        props.addWidget(self.form_scroll, 1)
+        self.scene_panel = SceneNodesPanel(picker=self._selected_scene_nodes)
+        self.scene_panel.setVisible(False)
+        props.addWidget(self.scene_panel, 1)
         buttons = QtWidgets.QHBoxLayout()
         buttons.addStretch(1)
         self.select_button = QtWidgets.QPushButton("Select guides")
@@ -309,9 +410,11 @@ class GuideDesigner(MayaToolWindow):
         self.tree.itemSelectionChanged.connect(self._on_tree_selection)
         self.tree.reparent_requested.connect(self.reparent)
         self.tree.palette_requested.connect(self.show_palette)
+        self.tree.customContextMenuRequested.connect(self._tree_menu)
         self.graph.palette_requested.connect(self.show_palette)
         self.graph.selection_changed.connect(self._on_graph_selection)
         self.graph.external_selection_changed.connect(self._on_external_selection)
+        self.graph.node_menu_requested.connect(lambda _key, pos: self.module_menu().exec(pos))
         self.graph.edited.connect(lambda: self.refresh(keep_graph=True))
         self.select_button.clicked.connect(self.select_current)
         self.mirror_button.clicked.connect(self.mirror_current)
@@ -320,6 +423,7 @@ class GuideDesigner(MayaToolWindow):
         self.name_edit.editingFinished.connect(self._rename_current)
         self.form.changed.connect(self._on_setting_changed)
         self.form.error.connect(lambda _name, message: self.events.log(message, level="warning"))
+        self.scene_panel.changed.connect(self._on_scene_nodes_changed)
         QtWidgets.QShortcut(QtGui.QKeySequence("Delete"), self.tree, self.delete_current)
 
     def _action(self, menu, text, slot, shortcut=None, checkable=False):
@@ -343,11 +447,14 @@ class GuideDesigner(MayaToolWindow):
         self._action(file_menu, "Close", self.close, "Ctrl+W")
         edit_menu = bar.addMenu("&Edit")
         self._action(edit_menu, "Add Module…", self.show_palette, "Tab")
+        self._action(edit_menu, "Add Scene Nodes", lambda: self.create_guides(SCENE_NODE), "Ctrl+N")
+        edit_menu.addSeparator()
+        self._action(edit_menu, "Select Root", self.select_root)
+        self._action(edit_menu, "Select All Guides", self.select_current)
         self._action(edit_menu, "Mirror", self.mirror_current, "Ctrl+M")
         self._action(edit_menu, "Rename", lambda: self.name_edit.setFocus(), "F2")
         self._action(edit_menu, "Delete", self.delete_current)
         edit_menu.addSeparator()
-        self._action(edit_menu, "Add Scene Node…", self.graph.ask_scene_node, "Ctrl+N")
         self._action(edit_menu, "Connect Input…", self.connect_dialog)
         self._action(edit_menu, "Disconnect Primary Input", self.disconnect_primary)
         self._action(edit_menu, "Sever Connections", self.sever_current, "Ctrl+D")
@@ -357,12 +464,50 @@ class GuideDesigner(MayaToolWindow):
         self.tree_action.setChecked(True)
         self.graph_action.setChecked(True)
         view_menu.addSeparator()
+        self.grid_action = self._action(view_menu, "Grid", lambda: self.graph.set_grid(self.grid_action.isChecked()), "G", checkable=True)
+        self.snap_action = self._action(view_menu, "Snap to Grid", lambda: self.graph.set_snap(self.snap_action.isChecked()), "Shift+G", checkable=True)
+        self._action(view_menu, "Auto Layout", self.graph.auto_layout, "Ctrl+L")
+        self._action(view_menu, "Fit Graph", self.graph.fit, "F")
+        view_menu.addSeparator()
+        self._action(view_menu, "Collapse: Header Only", lambda: self.graph.set_selected_mode(0), "1")
+        self._action(view_menu, "Collapse: Connected Plugs", lambda: self.graph.set_selected_mode(1), "2")
+        self._action(view_menu, "Collapse: Everything", lambda: self.graph.set_selected_mode(2), "3")
+        view_menu.addSeparator()
         self._action(view_menu, "Refresh", self.refresh, "F5")
         build_menu = bar.addMenu("&Build")
         self._action(build_menu, "Build Selected", lambda: self.test_build(), "Ctrl+B")
         self._action(build_menu, "Build All", lambda: self.test_build(all_modules=True), "Ctrl+Shift+B")
         help_menu = bar.addMenu("&Help")
         self._action(help_menu, "About Guide Designer", lambda: QtWidgets.QMessageBox.about(self, "Guide Designer", "Author module guides and connections; export a .trg for the Kinematics action."))
+        for action in (self.grid_action, self.snap_action):
+            action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
+            self.graph.addAction(action)
+
+    def module_menu(self) -> QtWidgets.QMenu:
+        """Right-click menu for the selected module(s); shared by the tree and the graph."""
+        menu = QtWidgets.QMenu(self)
+        handles = self.selected_handles()
+        menu.addAction("Select root", self.select_root)
+        menu.addAction("Select all guides", self.select_current)
+        menu.addSeparator()
+        menu.addAction("Mirror", self.mirror_current)
+        menu.addAction("Build", lambda: self.test_build())
+        menu.addSeparator()
+        menu.addAction("Sever connections", self.sever_current)
+        menu.addAction("Disconnect primary input", self.disconnect_primary)
+        menu.addSeparator()
+        menu.addAction("Rename", lambda: (self.name_edit.setFocus(), self.name_edit.selectAll()))
+        menu.addAction("Delete", self.delete_current)
+        for action in menu.actions():
+            if not action.isSeparator():
+                action.setEnabled(bool(handles))
+        return menu
+
+    def _tree_menu(self, point) -> None:
+        item = self.tree.itemAt(point)
+        if item is not None and not item.isSelected():
+            self.tree.setCurrentItem(item)
+        self.module_menu().exec(self.tree.viewport().mapToGlobal(point))
 
     def _build_status(self) -> None:
         self.status = StatusFields(self.statusBar(), ("modules", "connections", "file"))
@@ -404,7 +549,7 @@ class GuideDesigner(MayaToolWindow):
             return
         self._syncing = True
         try:
-            keep = self._current.instance_id if self._current else None
+            keep = [handle.instance_id for handle in (self._multi or ([self._current] if self._current else []))]
             self.guides.invalidate()  # one scene scan per refresh; handles share it
             handles = self.guides.instances()
             by_key = {handle.key: handle for handle in handles}
@@ -457,9 +602,12 @@ class GuideDesigner(MayaToolWindow):
             missing = [name for name in externals if getattr(self.backend, "scene_node", lambda _n: True)(name) is None]
             self.status.set("modules", f"{len(handles)} module(s)")
             self.status.set("connections", f"{len(connections)} connection(s)" + (f" · {len(missing)} missing scene node(s)" if missing else ""))
-            if keep in items:
-                self.tree.setCurrentItem(items[keep])
-                self._set_current(self.guides.get(keep))
+            kept = [items[instance_id] for instance_id in keep if instance_id in items]
+            if kept:
+                for item in kept:
+                    item.setSelected(True)
+                self.tree.setCurrentItem(kept[0])
+                self._select_handles([self.guides.get(item.data(0, QtCore.Qt.UserRole)) for item in kept])
             elif self._external is not None and self._external in self.graph.graph.nodes:
                 self.graph.select_key(self._external)
                 self._set_current_external(self._external)
@@ -478,12 +626,26 @@ class GuideDesigner(MayaToolWindow):
         return None
 
     # ----------------------------------------------------------- selection
+    def _select_handles(self, handles: list[GuideHandle]) -> None:
+        """Properties for one module, or for several of the same type (edited together)."""
+        handles = [handle for handle in handles if handle is not None]
+        self.graph.select_keys([handle.key for handle in handles])
+        if len(handles) <= 1:
+            self._set_current(handles[0] if handles else None)
+            return
+        types = {handle.module_type for handle in handles}
+        if len(types) == 1:
+            self._set_current(handles[0], group=handles)
+        else:
+            self._set_current(None)
+            self.multi_label.setText(f"{len(handles)} modules of {len(types)} different types — nothing to edit together.")
+            self.multi_label.setVisible(True)
+            self.status.set_activity(f"{len(handles)} modules selected (mixed types)")
+
     def _on_tree_selection(self) -> None:
         if self._syncing:
             return
-        handles = self.selected_handles()
-        self._set_current(handles[0] if handles else None)
-        self.graph.select_key(handles[0].key if handles else None)
+        self._select_handles(self.selected_handles())
 
     def _on_external_selection(self, name: str) -> None:
         self._syncing = True
@@ -494,27 +656,41 @@ class GuideDesigner(MayaToolWindow):
         self._set_current_external(name)
 
     def _set_current_external(self, name: str) -> None:
-        """Properties for a scene-node placeholder: just its name."""
+        """Properties for a scene-nodes group: its name and the scene nodes it exposes."""
         self._set_current(None)
         self._external = name
         self.name_edit.setText(name)
-        self.name_edit.setPlaceholderText("scene node name")
-        self.type_label.setText("Scene node")
+        self.name_edit.setEnabled(True)
+        self.name_edit.setPlaceholderText("scene nodes group name")
+        self.type_label.setText("Scene nodes")
         self.icon.setPixmap(glyph_icon("SN", MODULE_COLORS["scene"], 24).pixmap(24, 24))
-        self.status.set_activity(f"{name} — scene node (rename it here; Delete removes it)")
+        for widget in (self.inputs_caption, self.guides_caption, self.inherit_orientation, self.module_caption, self.form_scroll):
+            widget.setVisible(False)
+        self.scene_panel.set_nodes(self.guides.scene_groups().get(name, []))
+        self.scene_panel.setVisible(True)
+        self.status.set_activity(f"{name} — scene nodes (each row is an output; Delete removes the group)")
 
     def _on_graph_selection(self, key: str) -> None:
         handle = self.guides.by_key(key)
         if handle is None:
             return
-        item = self.item_for(handle.instance_id)
-        if item is not None:
-            self._syncing = True
-            try:
-                self.tree.setCurrentItem(item)
-            finally:
-                self._syncing = False
-        self._set_current(handle)
+        selected = {node.key for node in self.graph.graph.selected_nodes()}
+        self._syncing = True
+        try:
+            self.tree.clearSelection()
+            first = None
+            for item_handle in self.guides.instances():
+                if item_handle.key in selected:
+                    item = self.item_for(item_handle.instance_id)
+                    if item is not None:
+                        item.setSelected(True)
+                        first = first or item
+            if first is not None:
+                self.tree.setCurrentItem(first)
+        finally:
+            self._syncing = False
+        handles = self.selected_handles() or [handle]
+        self._select_handles(handles)
 
     def _on_scene_event(self, name: str) -> None:
         if name == "SelectionChanged":
@@ -522,8 +698,9 @@ class GuideDesigner(MayaToolWindow):
         self.refresh()
 
     # ---------------------------------------------------------- properties
-    def _set_current(self, handle: Optional[GuideHandle]) -> None:
+    def _set_current(self, handle: Optional[GuideHandle], group: Optional[list[GuideHandle]] = None) -> None:
         self._current = handle
+        self._multi = list(group or [])
         self._external = None
         self.bindings.clear()
         while self.inputs_form.count():
@@ -532,12 +709,19 @@ class GuideDesigner(MayaToolWindow):
                 item.widget().setParent(None)
                 item.widget().deleteLater()
         self._input_rows.clear()
+        self.scene_panel.setVisible(False)
+        for widget in (self.guides_caption, self.inherit_orientation, self.module_caption, self.form_scroll):
+            widget.setVisible(True)
+        self.multi_label.setVisible(False)
+        self.name_edit.setEnabled(True)
+        self.name_edit.setPlaceholderText("instance name")
         if handle is None:
             self._module_obj = None
             self.form.set_target(None)
             self.name_edit.setText("")
             self.type_label.setText("")
             self.icon.clear()
+            self.inputs_caption.setVisible(False)
             self.inherit_orientation.setEnabled(False)
             self.status.set_activity("Select a module, or add one from the shelf (Tab to search).")
             return
@@ -547,18 +731,29 @@ class GuideDesigner(MayaToolWindow):
         self.name_edit.setText(instance.name)
         self.type_label.setText(f"{module_cls.display_label()} · {instance.side}")
         self.icon.setPixmap(glyph_icon(initials(module_cls.display_label()), theme.SIDE.get(instance.side, theme.SIDE["C"]), 24).pixmap(24, 24))
-        for declared in module_cls.inputs:
-            row = InputRow(declared, picker=self._pick_source, sources=self._source_choices)
-            row.set_source(handle.inputs.get(declared.name, ""))
-            row.changed.connect(self._on_input_changed)
-            label = declared.name + (" ●" if declared.primary else "")
-            self.inputs_form.addRow(label, row)
-            self._input_rows[declared.name] = row
-        self.inputs_caption.setVisible(bool(module_cls.inputs))
+        multi = len(self._multi) > 1
+        if multi:
+            self.name_edit.setEnabled(False)
+            self.name_edit.setText(", ".join(item.key for item in self._multi))
+            self.multi_label.setText(f"Editing {len(self._multi)} {module_cls.display_label()} modules together — every change applies to all of them.")
+            self.multi_label.setVisible(True)
+            self.inputs_caption.setVisible(False)
+        else:
+            for declared in module_cls.inputs:
+                row = InputRow(declared, picker=self._pick_source, sources=self._source_choices)
+                row.set_source(handle.inputs.get(declared.name, ""))
+                row.changed.connect(self._on_input_changed)
+                label = declared.name + (" ●" if declared.primary else "")
+                self.inputs_form.addRow(label, row)
+                self._input_rows[declared.name] = row
+            self.inputs_caption.setVisible(bool(module_cls.inputs))
         self.form.set_target(self._module_obj)
         self.inherit_orientation.setEnabled(True)
-        self._bind_properties(handle)
-        self.status.set_activity(f"{handle.key} — {module_cls.display_label()}")
+        if not multi:
+            self._bind_properties(handle)
+            self.status.set_activity(f"{handle.key} — {module_cls.display_label()}")
+        else:
+            self.status.set_activity(f"{len(self._multi)} × {module_cls.display_label()} selected")
 
     def _bind_properties(self, handle: GuideHandle) -> None:
         plug_factory = getattr(self.backend, "settings_plug", None)
@@ -584,7 +779,7 @@ class GuideDesigner(MayaToolWindow):
             pass
 
     def _source_choices(self):
-        """Every other module (with its outputs) and the scene nodes in the graph."""
+        """Every other module (with its outputs) and the scene nodes of every group."""
         current = self._current.instance_id if self._current else None
         modules = [
             (handle.key, handle.module_class.display_label(), list(handle.outputs))
@@ -592,6 +787,13 @@ class GuideDesigner(MayaToolWindow):
             if handle.instance_id != current and handle.outputs
         ]
         return modules, self.graph.scene_nodes()
+
+    def _selected_scene_nodes(self) -> list[str]:
+        picker = getattr(self.backend, "selected_node_names", None)
+        if picker is not None:
+            return list(picker() or [])
+        name = getattr(self.backend, "selected_node_name", lambda: "")()
+        return [name] if name else []
 
     def _pick_source(self) -> str:
         picked = self.backend.selected_guide() if hasattr(self.backend, "selected_guide") else None
@@ -620,24 +822,50 @@ class GuideDesigner(MayaToolWindow):
     def _on_setting_changed(self, name: str, _value) -> None:
         if self._current is None or self._module_obj is None:
             return
-        setattr(self._current, name, getattr(self._module_obj, name))
+        value = getattr(self._module_obj, name)
+        targets = self._multi or [self._current]
+        with self.watcher.mute():
+            for handle in targets:
+                setattr(handle, name, value)
         if name in ("segments",):
             self.refresh()
 
+    def _on_scene_nodes_changed(self, nodes: list) -> None:
+        if self._external is None:
+            return
+        try:
+            self.guides.set_scene_group(self._external, list(nodes))
+        except TriggerError as error:
+            self.events.log(str(error), level="warning")
+            return
+        self.graph.rebuild()  # keep the rows the user is typing in; only the graph/tree change
+        self.graph.select_key(self._external)
+        connections = self.guides.connections()
+        self.status.set("connections", f"{len(connections)} connection(s)")
+
     def _rename_current(self) -> None:
+        new_name = self.name_edit.text().strip()
         if self._current is None and self._external is not None:
-            new_name = self.name_edit.text().strip()
             if new_name and new_name != self._external:
                 old = self._external
-                if self.graph.rename_scene_node(old, new_name):
-                    self._external = new_name
-                    self.refresh()
+                try:
+                    self.guides.rename_scene_group(old, new_name)
+                except TriggerError as error:
+                    self.events.log(str(error), level="warning")
+                    self.name_edit.setText(old)
+                    return
+                self._external = new_name
+                self.refresh()
             return
-        if self._current is None:
+        if self._current is None or self._multi:
             return
-        new_name = self.name_edit.text().strip()
         if new_name and new_name != self._current.name:
-            self._current.name = new_name
+            try:
+                self._current.name = new_name
+            except TriggerError as error:
+                self.events.log(str(error), level="warning")
+                self.name_edit.setText(self._current.name)
+                return
             self.refresh()
 
     # ------------------------------------------------------------ actions
@@ -646,7 +874,7 @@ class GuideDesigner(MayaToolWindow):
 
     def create_guides(self, module_type: str) -> list[GuideHandle]:
         if module_type == SCENE_NODE:
-            name = self.graph.add_scene_node()
+            name = self.graph.add_scene_group(nodes=self._selected_scene_nodes())
             self._on_external_selection(name)
             self.name_edit.setFocus()
             self.name_edit.selectAll()
@@ -707,8 +935,8 @@ class GuideDesigner(MayaToolWindow):
             self._on_input_changed(input_name.strip(), source.strip())
 
     def sever_current(self) -> None:
-        if self._current is not None:
-            self.graph.sever(self._current.key)
+        for handle in self.selected_handles() or ([self._current] if self._current else []):
+            self.graph.sever(handle.key)
 
     def disconnect_primary(self) -> None:
         if self._current is None:
@@ -716,6 +944,17 @@ class GuideDesigner(MayaToolWindow):
         primary = self._current.module_class.primary_input()
         if primary is not None:
             self._on_input_changed(primary.name, "")
+
+    def select_root(self) -> None:
+        """Select the root guide joint(s) of the selected module(s) in the viewport."""
+        select = getattr(self.backend, "select_nodes", None)
+        with self.watcher.mute():
+            roots = [handle.root for handle in self.selected_handles() if handle.root is not None]
+            if select is not None:
+                select(roots)
+            else:
+                for root in roots:
+                    getattr(root, "select", lambda: None)()
 
     def select_current(self) -> None:
         with self.watcher.mute():
@@ -733,9 +972,9 @@ class GuideDesigner(MayaToolWindow):
 
     def delete_current(self) -> None:
         if self.graph.hasFocus() and self.graph.delete_selected():
-            return  # Delete in the graph disconnects wires / removes scene nodes
+            return  # Delete in the graph disconnects wires / removes scene-node groups
         if self._current is None and self._external is not None:
-            self.graph.remove_scene_node(self._external)
+            self.graph.remove_scene_group(self._external)
             self._external = None
             self.refresh()
             return
@@ -743,12 +982,16 @@ class GuideDesigner(MayaToolWindow):
             for handle in self.selected_handles():
                 self.guides.remove(handle)
         self._current = None
+        self._multi = []
         self.refresh()
 
     def clear_guides(self) -> None:
         with self.watcher.mute():
             self.guides.clear()
+            self.guides.set_layout({})
         self._current = None
+        self._multi = []
+        self._external = None
         self.refresh()
 
     def test_build(self, all_modules: bool = False):

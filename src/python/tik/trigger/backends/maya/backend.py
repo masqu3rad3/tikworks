@@ -60,6 +60,18 @@ class MayaBackend:
         holder.meta[tags.KIND] = "guide_holder"
         return holder
 
+    # ------------------------------------------------------------- layout
+    def read_layout(self) -> dict:
+        """Designer state stored on the guide holder (scene-node groups, node positions, collapse modes)."""
+        if not cmds.objExists(tags.GUIDE_HOLDER):
+            return {}
+        return dict(tm.Transform(tags.GUIDE_HOLDER).meta.get(tags.DESIGNER, {}) or {})
+
+    def write_layout(self, layout: dict) -> None:
+        """Store designer state; one undo chunk so 'auto layout' and node moves undo in Maya."""
+        with self.undo_chunk("Trigger designer layout"):
+            self.holder().meta[tags.DESIGNER] = dict(layout)
+
     def guide_nodes(self, instance_id: str) -> dict[tuple[str, int], tm.Joint]:
         nodes = tm.find_by_meta(tags.INSTANCE, instance_id, node_type="joint")
         found: dict[tuple[str, int], tm.Joint] = {}
@@ -441,6 +453,15 @@ class MayaBackend:
     def selected_node_name() -> str:
         selected = cmds.ls(selection=True) or []
         return selected[0] if selected else ""
+
+    @staticmethod
+    def selected_node_names() -> list[str]:
+        return list(cmds.ls(selection=True) or [])
+
+    @staticmethod
+    def select_nodes(nodes) -> None:
+        names = [getattr(node, "long_name", node) for node in nodes]
+        cmds.select(names, replace=True)
 
     # ---------------------------------------------------------------- build
     def ensure_rig_root(self, rig_name: str) -> tm.Transform:

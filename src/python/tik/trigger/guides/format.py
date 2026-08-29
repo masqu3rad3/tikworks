@@ -73,10 +73,14 @@ class GuideInstance:
 class GuideFile:
     """Load/save ``.trg`` files and group their joints into module instances."""
 
-    def __init__(self, records: Optional[list[dict]] = None, connections: Optional[list[dict]] = None, meta: Optional[dict] = None) -> None:
+    def __init__(self, records: Optional[list[dict]] = None, connections: Optional[list[dict]] = None, meta: Optional[dict] = None,
+                 designer: Optional[dict] = None) -> None:
         self.records: list[dict] = list(records or [])
         self.connections: list[dict] = list(connections or [])  # {"input": "L_arm.root", "source": "body.root"}
         self.meta: dict = dict(meta or {})
+        # Guide Designer state that belongs to the asset, not the window:
+        # {"scene_nodes": {group: [scene node, ...]}, "positions": {key: [x, y]}, "collapse": {key: 0|1|2}}
+        self.designer: dict = dict(designer or {})
         self.unknown: list[str] = []  # legacy types no module claims
 
     # ------------------------------------------------------------- file io
@@ -90,7 +94,7 @@ class GuideFile:
         if isinstance(data, list):  # legacy: bare joint list
             return cls(data)
         if isinstance(data, dict) and isinstance(data.get("joints"), list):
-            return cls(data["joints"], data.get("connections", []), data.get("meta", {}))
+            return cls(data["joints"], data.get("connections", []), data.get("meta", {}), data.get("designer", {}))
         raise GuideError(f"'{path}' is not a Trigger guide file.")
 
     def save(self, file_path) -> Path:
@@ -99,6 +103,8 @@ class GuideFile:
             path = path.with_suffix(EXTENSION)
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = {"joints": self.records, "connections": self.connections, "meta": self.meta}
+        if self.designer:
+            payload["designer"] = self.designer
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         return path
 
