@@ -15,6 +15,7 @@ if "%1"=="tests-cov" goto tests_cov
 if "%1"=="tests-cov-unit" goto tests_cov_unit
 if "%1"=="tests-cov-integration" goto tests_cov_integration
 
+<<<<<<< HEAD
 if "%1"=="cmake-build" goto cmake_build
 if "%1"=="cmake-release" goto cmake_release
 
@@ -23,6 +24,8 @@ if "%1"=="dev" goto dev
 if "%1"=="release" goto release
 if "%1"=="add-plugin" goto add_plugin
 
+=======
+>>>>>>> TW-4-deformer-and-weights-workflows
 echo Unknown command: %1
 echo Run: make help
 exit /b 1
@@ -30,6 +33,7 @@ exit /b 1
 :help
 echo.
 echo Available commands:
+<<<<<<< HEAD
 echo   cmake-build ^<VERSION^>       Configure and build Debug via CMake
 echo   cmake-release ^<VERSION^>     Configure and build Release via CMake
 echo   build ^<VERSION^>             Build using package script
@@ -44,6 +48,16 @@ echo   tests-integration             Run integration tests
 echo   tests-cov                     Run all tests with coverage
 echo   tests-cov-unit                Run unit tests with coverage
 echo   tests-cov-integration         Run integration tests with coverage
+=======
+echo   docs
+echo   show-doc
+echo   tests
+echo   tests-unit
+echo   tests-integration
+echo   tests-cov
+echo   tests-cov-unit
+echo   tests-cov-integration
+>>>>>>> TW-4-deformer-and-weights-workflows
 exit /b 0
 
 :docs
@@ -61,12 +75,20 @@ call make.bat tests-integration
 exit /b 0
 
 :tests_unit
+<<<<<<< HEAD
 set PYTHONPATH=%CD%\src\python;%PYTHONPATH%
+=======
+set PYTHONPATH=%CD%\src;%PYTHONPATH%
+>>>>>>> TW-4-deformer-and-weights-workflows
 mayapy tests\unit\invoke.py
 exit /b 0
 
 :tests_integration
+<<<<<<< HEAD
 set PYTHONPATH=%CD%\src\python;%PYTHONPATH%
+=======
+set PYTHONPATH=%CD%\src;%PYTHONPATH%
+>>>>>>> TW-4-deformer-and-weights-workflows
 mayapy tests\integration\invoke.py
 exit /b 0
 
@@ -78,11 +100,16 @@ mayapy -m coverage report
 exit /b 0
 
 :tests_cov_unit
+<<<<<<< HEAD
 set PYTHONPATH=%CD%\src\python;%PYTHONPATH%
+=======
+set PYTHONPATH=%CD%\src;%PYTHONPATH%
+>>>>>>> TW-4-deformer-and-weights-workflows
 mayapy -m coverage run tests\unit\invoke.py
 exit /b 0
 
 :tests_cov_integration
+<<<<<<< HEAD
 set PYTHONPATH=%CD%\src\python;%PYTHONPATH%
 mayapy -m coverage run tests\integration\invoke.py
 exit /b 0
@@ -136,3 +163,8 @@ echo ERROR: Plugin name is required.
 echo Usage:
 echo   make.bat add-plugin myPlugin
 exit /b 1
+=======
+set PYTHONPATH=%CD%\src;%PYTHONPATH%
+mayapy -m coverage run tests\integration\invoke.py
+exit /b 0
+>>>>>>> TW-4-deformer-and-weights-workflows
