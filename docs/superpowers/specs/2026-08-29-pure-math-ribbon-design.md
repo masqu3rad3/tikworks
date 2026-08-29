@@ -60,7 +60,8 @@ nodes, valid for any joint/controller count.
 
 | Decision | Choice |
 |---|---|
-| Joint driving | Final deformer/bind joints: decompose to TRS channels (channel-box visible, export-safe). Everything upstream: `offsetParentMatrix` with zeroed TRS. This is a repo-wide policy, not ribbon-specific. |
+| Joint driving | Final deformer/bind joints are **flat** (no parent transform, no `offsetParentMatrix`) with **live TRS channels**: translate/scale decomposed, swing decomposed, twist *added as a float* onto `rotateX`. Everything upstream: `offsetParentMatrix` with zeroed TRS. This is a repo-wide policy, not ribbon-specific. |
+| Twist purity | Twist never enters a matrix before it reaches the joint's `rotateX`. Verified live (2026-08-29): `decomposeMatrix` wraps 270° → −90°, a float channel does not; 270°+ is a hard requirement. |
 | Interpolation | Selectable `degree` (simple API knob), default 3 = exact cubic B-spline basis via de Boor. |
 | Twist source | Karoly method: controller rotations *are* the twist interface, wired in as floats. Channel-box attrs only as offsets/multipliers layered on top. Mid controllers twist via their own rotation. |
 | Pinning | Pins drive translate/scale only by default; orientation is aim + float twist. Per-end `orient=True` mode takes full rotation from the pinned matrix (±180° twist caveat). |
@@ -81,24 +82,27 @@ creates one internal output transform driven by:
   Boor in pure Python at build time. Output passes through `pickMatrix`
   (translate + scale only) into the output transform's `offsetParentMatrix`;
   TRS stays zero.
-- **Orientation:** one `aimMatrix` aiming at the next output along the strip
-  (the last output aims backward with a negated aim vector). The up input is
-  the twist-interpolated up axis derived from the neighbouring drivers, so the
-  node stays well conditioned; the degenerate case (aim ∥ up) has the same
-  envelope as the old aimConstraints.
-- **Twist:** twistᵢ = Σⱼ Nⱼ(uᵢ)·θⱼ as pure float math through the Plug
-  operators (a few multiply/add nodes). θⱼ is driver j's twist Plug. Reusing
-  the same basis weights makes twist fall off along the strip exactly like
-  position, and generalises Karoly's two-end linear lerp to include mid
-  controllers. The result is composed as a rotation about the aim axis after
-  the aim.
+- **Orientation (swing only):** one `aimMatrix` aiming at the next output
+  along the strip (the last output aims backward with a negated aim vector).
+  The up input is a **twist-free** axis taken from the spline's own frame (the
+  ribbon group / plug transforms, which carry no axial rotation because pins
+  skip rotation), so no twist can ever leak into this matrix. The degenerate
+  case (aim ∥ up) has the same envelope as the old aimConstraints.
+- **Twist (float only):** twistᵢ = Σⱼ Nⱼ(uᵢ)·θⱼ as pure float math through
+  the Plug operators (a few multiply/add nodes). θⱼ is driver j's twist Plug.
+  Reusing the same basis weights makes twist fall off along the strip exactly
+  like position, and generalises Karoly's two-end linear lerp to include mid
+  controllers. The result is exposed as a per-output float Plug
+  (`outputs[i].twist`) — it is **not** composed into the output transform's
+  matrix; the consumer of the output applies it as a channel value.
 
 Node budget per output: 1 `parentMatrix` + 1 `pickMatrix` + 1 `aimMatrix` +
 ~2–3 float math nodes. No shape nodes.
 
 Public surface (indicative): `MatrixSpline.create(drivers, parameters, *,
-name, degree=3, twists=None, parent=None)`, `outputs: list[Transform]`,
-`basis_weights(u) -> list[float]` (pure Python, also used by tests).
+name, degree=3, twists=None, parent=None)`, `outputs: list[SplineOutput]`
+(each with `.transform` — swing-only, matrix-driven — and `.twist` float
+Plug), `basis_weights(u) -> list[float]` (pure Python, also used by tests).
 
 ### 4.2 `Ribbon` (rewritten, thin)
 
@@ -119,13 +123,27 @@ Internals:
 - Builds start/end plug transforms and `controller_count` mid controllers
   (`Controller`, circle shape) between them; these are the spline drivers.
 - Mid controllers ride the spline: their offset groups are driven via
-  `offsetParentMatrix` from a two-driver (start/end) blend so they inherit
-  bend/twist and add local translate/scale/rotation on top. Their rotation
-  about the ribbon axis is their twist contribution.
+  `offsetParentMatrix` from a two-driver (start/end) swing-only blend so they
+  inherit the bend and add local translate/scale/rotation on top. Their
+  `rotateX` (rotate order `xyz`) is their twist contribution — a float, wired
+  into the spline as that driver's twist Plug together with the interpolated
+  end twist at their parameter.
 - Hands drivers + parameters uᵢ = (i + 0.5) / joint_count (matching the old
   follicle placement) to `MatrixSpline`.
-- Creates `joint_count` deformer joints, each driven from its spline output by
-  the existing `MatrixConstraint` decompose-to-TRS path.
+- Creates `joint_count` deformer joints, **flat** under the ribbon's joint
+  group (no per-joint parent transform, no `offsetParentMatrix`), rotate order
+  `xyz`, each wired from its spline output as live channel values:
+  - `translate` ← `decomposeMatrix(output.transform.worldMatrix).outputTranslate`
+  - `rotateY`, `rotateZ` ← the same decomposition (swing only — bounded by
+    nature, a direction does not wind up)
+  - `rotateX` ← decomposed `outputRotateX` **+ `output.twist`** (float add).
+    With `xyz` order X is the innermost axis, so this addition is a rotation
+    about the joint's own aim axis. Verified live 2026-08-29 against a
+    parented reference at 0°/90°/135°/270°/450° twist: max matrix error
+    ~1e-16, `rotateX` reads the unbounded value.
+  - `scale` ← stretch/volume floats (below).
+  Cost per joint: one `decomposeMatrix` + one add. The 5-node jointOrient
+  strand of `MatrixConstraint` is not needed (jointOrient stays zero).
 - Stretch: `Measure` between the plugs; `scaleX` on each deformer joint =
   `(ratio − 1.0) * scale_switch + 1.0` (carried over verbatim). Optional volume
   preservation: `scaleY = scaleZ = ratio ** -0.5`, gated by the same switch.
@@ -143,18 +161,25 @@ non-scale group and its `inheritsTransform` trick.
 
 ## 5. Twist wiring contract (consumer side)
 
-Rotating a controller is twisting the ribbon. A consumer wires controller
-rotation floats straight into the twist Plugs with the operator idiom; for an
-IK/FK arm:
+Rotating a controller is twisting the ribbon. Because the spline's aim frame
+is twist-free, **all axial rotation of a segment — the roll of the whole
+segment as well as differential twist — must arrive as floats** through
+`start_twist` / `end_twist`. The consumer accumulates controller `rotateX`
+floats (rotate order `xyz`, so `rotateX` is each control's own axial rotation)
+along the chain with the operator idiom; for an IK/FK arm's lower segment:
 
 ```python
-twist = switch * fk_wrist_ctrl["rotateX"] + (1 - switch) * ik_hand_ctrl["rotateX"]
-twist >> ribbon.end_twist
+fk_start = fk_shoulder_ctrl["rotateX"] + fk_elbow_ctrl["rotateX"]
+fk_end = fk_start + fk_wrist_ctrl["rotateX"]
+ik_start, ik_end = ik_joints[1]["rotateX"], ik_joints[1]["rotateX"] + ik_joints[2]["rotateX"]
+(switch * fk_start + (1 - switch) * ik_start) >> lower.start_twist
+(switch * fk_end + (1 - switch) * ik_end) >> lower.end_twist
 ```
 
-The blend is float-pure (never passes through a matrix), so twist stays
-unbounded end to end. A `twistOffset` attr on a controller is `+` into the same
-wire; the ribbon adds no attrs to consumer controllers.
+IK joints' `rotateX` channels are solver-written floats, so both branches and
+the blend are float-pure (nothing passes through a matrix) and twist stays
+unbounded end to end. A `twistOffset` attr on a controller is `+` into the
+same wire; the ribbon adds no attrs to consumer controllers.
 
 ## 6. Error handling
 
@@ -178,9 +203,12 @@ wire; the ribbon adds no attrs to consumer controllers.
   drivers at known positions and assert each spline output's world position
   equals `basis_weights(u)` applied to those positions in Python (one source of
   truth for graph and reference). Also: twist values at sample parameters,
-  twist past ±180° does not flip, stretch ratio and volume preservation,
-  pin translate-only default vs `orient=True`, deformer joint count and
-  channel-box-visible TRS, `degree` clamping, undo of `create`.
+  twist past ±180° does not flip and `rotateX` on the deformer joint reads
+  the unbounded value (e.g. 270, 450), flat-joint hookup matches a parented
+  swing+twist reference matrix to ~1e-12, stretch ratio and volume
+  preservation, pin translate-only default vs `orient=True`, deformer joint
+  count, flatness and channel-box-visible TRS, `degree` clamping, undo of
+  `create`.
 - **Integration:** arm e2e tests in `tests/integration/trigger/` will break and
   are rewritten with `arm.py` in the follow-up task.
 - **Live sandboxing:** a running Maya session is reachable through the Maya
@@ -196,3 +224,10 @@ wire; the ribbon adds no attrs to consumer controllers.
   parallel evaluation (source profiling).
 - Matrix-derived twist (`orient=True` mode) flips past ±180° — inherent to
   stock nodes; documented.
+- Swing Euler gimbal: `rotateY/Z` of a direction has one singular direction
+  (segment aiming along the joint group's Z for `xyz` order). There the
+  channel *numbers* jump; orientation and deformation stay correct (same as the
+  old follicle `outRotate`). Cosmetic unless baking without an Euler filter.
+- Consumer discipline: any axial rotation fed as a matrix (rather than through
+  the twist floats) is silently absent from the ribbon's twist. The wiring
+  contract in §5 is mandatory for consumers.
