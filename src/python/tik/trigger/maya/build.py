@@ -21,7 +21,7 @@ from tik.trigger.core.schemas import (
 from tik.trigger.guides import nodes as guide_nodes
 
 from . import tags
-from .rig import MayaBuildContext
+from .rig import ModuleRig
 
 
 @dataclass
@@ -40,9 +40,9 @@ class BuildReport:
 
 
 # ------------------------------------------------------------------- scene
-def build_context(module, instance, rig_root, bind_parent=None) -> MayaBuildContext:
+def build_context(module, instance, rig_root, bind_parent=None) -> ModuleRig:
     """The object a module builds through, wired to its guides."""
-    return MayaBuildContext(
+    return ModuleRig(
         module, instance, rig_root, guide_nodes.guide_nodes(instance.instance_id), bind_parent
     )
 

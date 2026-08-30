@@ -102,12 +102,15 @@ def test_build_pipeline_creates_groups_controllers_and_attaches(scene):
     assert cmds.objExists("L_tail_fk0_ctrl") and not cmds.objExists("L_tail_fk2_ctrl")
     assert not cmds.objExists(tags.GUIDE_HOLDER)
 
-    # attachment: moving the body controller moves the tail socket
+    # attachment: moving the body controller moves the tail socket.
+    # The controller's offset group carries the guide position, so the
+    # controller itself is zeroed at rest and its channels are deltas.
     body_ctrl = tm.Transform("C_body_root_ctrl")
     socket = tm.Transform("L_tail_root_socket")
+    assert tuple(body_ctrl.translate) == pytest.approx((0, 0, 0))
     before = socket.world_position
     body_ctrl.translate = (0, 15, 0)
-    assert socket.world_position.y == pytest.approx(before.y + 5)
+    assert socket.world_position.y == pytest.approx(before.y + 15)
 
     # tags on outputs
     assert tm.Joint("L_tail_0_jnt").meta[tags.KIND] == tags.DEFORM

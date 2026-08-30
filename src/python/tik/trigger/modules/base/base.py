@@ -18,18 +18,18 @@ class Base(Module):
 
     controller_size = FloatField(10.0, min=0.01, label="Controller Size")
 
-    def draw_guides(self, ctx) -> None:
-        ctx.joint("root", (0, 0, 0), radius=2.0)
+    def draw_guides(self, guides) -> None:
+        guides.joint("root", (0, 0, 0), radius=2.0)
 
-    def build(self, ctx) -> None:
-        root_guide = ctx.guide("root")
-        controller = ctx.controller(
+    def build(self, rig) -> None:
+        root_guide = rig.guide("root")
+        controller = rig.controller(
             "root",
             shape="Circle",
             size=self.controller_size,
             match=root_guide,
             mirror="world",
         )
-        joint = ctx.bind_joint("root", match=root_guide)
-        tm.MatrixConstraint.create(controller.transform, joint, maintain_offset=True)
-        ctx.output("root", joint)
+        joint = rig.bind_joint("root", match=root_guide)
+        tm.MatrixConstraint.create(controller, joint, maintain_offset=True)
+        rig.output("root", joint)

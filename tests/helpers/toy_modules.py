@@ -16,12 +16,12 @@ class ToyRoot(Module):
     outputs = ("root",)
     space_controls = ("root",)
 
-    def draw_guides(self, ctx):
-        ctx.joint("root", (0, 0, 0))
+    def draw_guides(self, guides):
+        guides.joint("root", (0, 0, 0))
 
-    def build(self, ctx):
-        ctx.controller("root")
-        ctx.output("root", ctx.name("root", suffix="jnt"))
+    def build(self, rig):
+        rig.controller("root")
+        rig.output("root", rig.name("root", suffix="jnt"))
 
 
 class ToyChain(Module):
@@ -34,15 +34,15 @@ class ToyChain(Module):
     def guide_count(self):
         return self.segments
 
-    def draw_guides(self, ctx):
-        ctx.joint("root", (0, 0, 0))
+    def draw_guides(self, guides):
+        guides.joint("root", (0, 0, 0))
         for index in range(self.segments):
-            ctx.joint("segment", (index + 1, 0, 0), index=index)
+            guides.joint("segment", (index + 1, 0, 0), index=index)
 
-    def build(self, ctx):
-        ctx.attach("root", ctx.name("root", suffix="grp"))
-        ctx.attach("space", ctx.name("space", suffix="grp"))
-        ctx.output("root", ctx.guide("root"))
-        ctx.output("end", ctx.guides("segment")[-1])
-        for joint in ctx.guides("segment"):
-            ctx.deform_joint(joint)
+    def build(self, rig):
+        rig.attach("root", rig.name("root", suffix="grp"))
+        rig.attach("space", rig.name("space", suffix="grp"))
+        rig.output("root", rig.guide("root"))
+        rig.output("end", rig.chain("segment")[-1])
+        for joint in rig.chain("segment"):
+            rig.deform_joint(joint)

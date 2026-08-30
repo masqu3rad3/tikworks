@@ -64,32 +64,27 @@ class Arm(Module):
         return problems
 
     # --------------------------------------------------------------- guides
-    def draw_guides(self, ctx) -> None:
-        mult = ctx.side_mult
-        collar = ctx.joint("collar", (2 * mult, 0, 0), radius=1.5)
-        shoulder = ctx.joint("shoulder", (5 * mult, 0, 0), parent=collar)
-        elbow = ctx.joint("elbow", (9 * mult, 0, -1), parent=shoulder)
-        ctx.joint("hand", (14 * mult, 0, 0), parent=elbow)
+    def draw_guides(self, guides) -> None:
+        mult = guides.side_mult
+        collar = guides.joint("collar", (2 * mult, 0, 0), radius=1.5)
+        shoulder = guides.joint("shoulder", (5 * mult, 0, 0), parent=collar)
+        elbow = guides.joint("elbow", (9 * mult, 0, -1), parent=shoulder)
+        guides.joint("hand", (14 * mult, 0, 0), parent=elbow)
 
     # ---------------------------------------------------------------- build
-    def build(self, ctx) -> None:
-        collar_guide = ctx.guide("collar")
-        limb_guides = [ctx.guide("shoulder"), ctx.guide("elbow"), ctx.guide("hand")]
+    def build(self, rig) -> None:
+        collar_guide = rig.guide("collar")
+        limb_guides = rig.guides("shoulder", "elbow", "hand")
         size = _derive_size(limb_guides)
 
-        # socket -------------------------------------------------------------
-        socket = tm.Transform.create(
-            name=ctx.name("root", suffix="socket"), parent=ctx.groups.socket.long_name
-        )
-        socket.align_to(collar_guide)
-        ctx.attach("root", socket)
+        socket = rig.socket("root", match=collar_guide)
 
         # deform skeleton — created in final position, never reparented -------
-        collar_jnt = ctx.bind_joint("collar", match=collar_guide)
+        collar_jnt = rig.bind_joint("collar", match=collar_guide)
         bind_joints = []
         parent_joint = collar_jnt
         for label, guide_node in zip(("upperarm", "lowerarm", "hand"), limb_guides):
-            joint = ctx.bind_joint(label, parent=parent_joint, match=guide_node)
+            joint = rig.bind_joint(label, parent=parent_joint, match=guide_node)
             bind_joints.append(joint)
             parent_joint = joint
 
@@ -97,25 +92,22 @@ class Arm(Module):
         # The controller lives in control_grp and is driven by the socket rather
         # than parented under it: control_grp holds nothing but controllers and
         # their offset groups.
-        collar_ctrl = ctx.controller(
+        collar_ctrl = rig.controller(
             "collar",
             shape="CurvedCircle",
             size=size,
             match=collar_jnt,
             mirror="behaviour",
         )
-        collar_offset = collar_ctrl.transform.create_offset_group(
-            name=ctx.name("collar", suffix="offset")
-        )
-        tm.MatrixConstraint.create(socket, collar_offset, maintain_offset=True)
-        tm.MatrixConstraint.create(collar_ctrl.transform, collar_jnt, maintain_offset=True)
-        attribute.lock_and_hide(collar_ctrl.transform, ("sx", "sy", "sz", "v"))
+        tm.MatrixConstraint.create(socket, collar_ctrl.offset, maintain_offset=True)
+        tm.MatrixConstraint.create(collar_ctrl, collar_jnt, maintain_offset=True)
+        attribute.lock_and_hide(collar_ctrl, ("sx", "sy", "sz", "v"))
 
         # the limb -------------------------------------------------------------
         limb = build_ikfk_limb(
-            ctx,
+            rig,
             limb_guides,
-            parent=collar_ctrl.transform,
+            parent=collar_ctrl,
             bind_joints=bind_joints,
             soft_ik=True,  # never optional for an IK solution
             stretch=self.stretch,
@@ -124,15 +116,12 @@ class Arm(Module):
             labels=("upper", "lower", "hand"),
         )
         if self.auto_collar:
-            auto_grp = tm.Transform.create(
-                name=ctx.name("collar", "auto", suffix="grp"),
-                parent=collar_offset.long_name,
-            )
+            auto_grp = rig.group("collar", "auto", under=collar_ctrl.offset)
             auto_grp.snap_to(collar_ctrl.transform)
             # Relative, so set_parent writes no compensation into the channels.
             collar_ctrl.transform.set_parent(auto_grp, relative=True)
             build_reach(
-                ctx,
+                rig,
                 auto_grp,
                 socket,
                 limb.ik_tweak.transform,
@@ -144,7 +133,7 @@ class Arm(Module):
                 name="collar",
             )
 
-        ctx.output("collar", collar_jnt)
-        ctx.output("upperarm", bind_joints[0])
-        ctx.output("lowerarm", bind_joints[1])
-        ctx.output("hand", bind_joints[2])
+        rig.output("collar", collar_jnt)
+        rig.output("upperarm", bind_joints[0])
+        rig.output("lowerarm", bind_joints[1])
+        rig.output("hand", bind_joints[2])

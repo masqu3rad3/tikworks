@@ -1,4 +1,10 @@
-"""Maya implementations of the guide and build contexts."""
+"""What a module draws guides with, and what it builds through.
+
+``GuideDraft`` and ``ModuleRig`` own naming, tagging, group placement and
+registration. tik.maya owns the mechanism: a helper lives here only when it
+removes naming, tagging, placement or registration boilerplate, so
+``tm.MatrixConstraint.create(...)`` and friends stay visible in module code.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +22,16 @@ from tik.trigger.core.schemas import ModuleInstance
 from . import tags
 
 SIDE_COLORS = {Side.LEFT: 6, Side.RIGHT: 13, Side.CENTER: 17}
+
+
+def node_of(value):
+    """The Transform behind a role (a Controller), or ``value`` unchanged.
+
+    Roles proxy attribute reads to their transform but are not Transform
+    instances, so tik.maya APIs that type-check or assign reject them. The rig
+    normalises its own arguments so module code can pass either.
+    """
+    return getattr(value, "transform", value)
 
 
 @dataclass
@@ -36,7 +52,7 @@ class RigGroups:
     bind: Any = None
 
 
-class MayaGuideContext:
+class GuideDraft:
     """Creates tagged guide joints for ``Module.draw_guides``."""
 
     def __init__(self, module, holder, parent_node=None) -> None:
@@ -91,7 +107,7 @@ class MayaGuideContext:
         return joint
 
 
-class MayaBuildContext:
+class ModuleRig:
     """Everything a module needs while building in Maya."""
 
     def __init__(
@@ -116,6 +132,27 @@ class MayaBuildContext:
         # Resolved by the builder from the connected input's producer, so bind
         # joints are created in their final hierarchy position.
         self.bind_parent = bind_parent if bind_parent is not None else self.groups.bind
+        self._create_sockets()
+
+    def _create_sockets(self) -> None:
+        """One transform per declared input, in ``socket_grp``.
+
+        Declaring an input is what creates its socket, so a module cannot
+        forget to. Space inputs are skipped: they feed a ``SpaceSwitch`` on a
+        controller, not a matrix attach, so they have nothing to receive.
+
+        A socket is a transform, not a joint: its whole job is receiving a
+        matrix from the producer's output. Joints in ``socket_grp`` would be a
+        third joint set beside the puppet and the deform skeleton, and would
+        turn up in every skin-bind dialog and joint scan for no gain.
+        """
+        for declared in self.module.inputs:
+            if declared.kind == "space":
+                continue
+            self.attachments[declared.name] = tm.Transform.create(
+                name=self.name(declared.name, suffix="socket"),
+                parent=self.groups.socket.long_name,
+            )
 
     # ------------------------------------------------------------- groups
     def _create_groups(self) -> RigGroups:
@@ -152,7 +189,12 @@ class MayaBuildContext:
                 f"'{self.instance.name}' has no guide '{role}' [{index}]."
             ) from None
 
-    def guides(self, role: str) -> list[tm.Joint]:
+    def guides(self, *roles: str) -> list[tm.Joint]:
+        """One guide node per named role, in the order given."""
+        return [self.guide(role) for role in roles]
+
+    def chain(self, role: str) -> list[tm.Joint]:
+        """Every guide of a multi role, ordered by index."""
         pairs = sorted(key for key in self._guides if key[0] == role)
         return [self._guides[key] for key in pairs]
 
@@ -161,6 +203,26 @@ class MayaBuildContext:
         return naming.format_name(
             *tokens, side=self.side.value, prefix=self.instance.name, suffix=suffix
         )
+
+    def group(self, *tokens, under="rig") -> tm.Transform:
+        """A named group placed under one of the module's groups (or a node)."""
+        parent = getattr(self.groups, under) if isinstance(under, str) else node_of(under)
+        return tm.Transform.create(
+            name=self.name(*tokens, suffix="grp"),
+            parent=parent.long_name if hasattr(parent, "long_name") else parent,
+        )
+
+    def socket(self, input_name: str, *, match=None) -> tm.Transform:
+        """This module's socket for a declared input, optionally aligned to ``match``."""
+        try:
+            node = self.attachments[input_name]
+        except KeyError:
+            raise GuideError(
+                f"'{self.module.module_type}' does not declare input '{input_name}'."
+            ) from None
+        if match is not None:
+            node.align_to(node_of(match))
+        return node
 
     # ------------------------------------------------------------ outputs
     def controller(
@@ -173,17 +235,25 @@ class MayaBuildContext:
         color: Any = None,
         match: Any = None,
         mirror: str = "world",
+        offset: bool = True,
     ) -> Controller:
+        """A tagged controller with its offset group.
+
+        ``match`` snaps it to a node; ``mirror`` is ``"behaviour"`` (FK-like,
+        follows its joint) or ``"world"`` (IK/world-aligned), recorded for a
+        pose-mirror tool. ``offset=False`` skips the offset group, for a
+        controller that hangs under another one (a tweak).
+        """
         parent = parent if parent is not None else self.groups.control
         controller = Controller.create(
             name=self.name(name, suffix="ctrl"),
             shape=shape,
             size=size,
             color=color if color is not None else SIDE_COLORS[self.side],
-            parent=parent.long_name,
+            parent=node_of(parent).long_name if hasattr(node_of(parent), "long_name") else parent,
         )
         if match is not None:
-            controller.transform.align_to(match)
+            controller.transform.align_to(node_of(match))
         tags.tag(
             controller.transform,
             **{
@@ -192,6 +262,11 @@ class MayaBuildContext:
                 tags.ROLE: name,
                 tags.MIRROR: mirror,
             },
+        )
+        controller.offset = (
+            controller.create_offset_group(name=self.name(name, suffix="offset"))
+            if offset
+            else None
         )
         self.controllers.append(controller)
         return controller
@@ -210,9 +285,10 @@ class MayaBuildContext:
             f"{role}_tweak",
             shape=shape,
             size=size if size is not None else 1.0,
-            parent=main.transform,
-            match=main.transform,
-            mirror=main.transform.meta.get(tags.MIRROR, tags.WORLD),
+            parent=main,
+            match=main,
+            mirror=main.meta.get(tags.MIRROR, tags.WORLD),
+            offset=False,
         )
         visible = attribute.add_bool(
             main.transform, "tweakVis", default=False, keyable=False
@@ -258,7 +334,7 @@ class MayaBuildContext:
             radius=radius,
         )
         if match is not None:
-            joint.align_to(match)
+            joint.align_to(node_of(match))
         return self.deform_joint(joint)
 
     def deform_joint(self, node) -> tm.Joint:
@@ -272,6 +348,7 @@ class MayaBuildContext:
         self.outputs[name] = node
 
     def attach(self, input_name: str, node) -> None:
+        """Re-point an input at a node you built yourself, instead of its socket."""
         if self.module.get_input(input_name) is None:
             raise GuideError(f"'{self.module.module_type}' does not declare input '{input_name}'.")
         self.attachments[input_name] = node

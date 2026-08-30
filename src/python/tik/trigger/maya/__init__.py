@@ -21,8 +21,8 @@ _LAZY = {
     "connect_space": ".build",
     "ensure_rig_root": ".build",
     "finalize": ".build",
-    "MayaBuildContext": ".rig",
-    "MayaGuideContext": ".rig",
+    "ModuleRig": ".rig",
+    "GuideDraft": ".rig",
     "RigGroups": ".rig",
 }
 

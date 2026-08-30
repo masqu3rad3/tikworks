@@ -35,14 +35,14 @@ class ToyRoot(Module):
     outputs = ("root",)
     space_controls = ("root",)
 
-    def draw_guides(self, ctx) -> None:
-        ctx.joint("root", (0, 0, 0))
+    def draw_guides(self, guides) -> None:
+        guides.joint("root", (0, 0, 0))
 
-    def build(self, ctx) -> None:
-        joint = ctx.bind_joint("root", match=ctx.guide("root"))
-        control = ctx.controller("root", match=joint)
+    def build(self, rig) -> None:
+        joint = rig.bind_joint("root", match=rig.guide("root"))
+        control = rig.controller("root", match=joint)
         tm.MatrixConstraint.create(control.transform, joint, maintain_offset=True)
-        ctx.output("root", joint)
+        rig.output("root", joint)
 
 
 class ToyChain(Module):
@@ -58,28 +58,24 @@ class ToyChain(Module):
     def guide_count(self) -> int:
         return self.segments
 
-    def draw_guides(self, ctx) -> None:
-        previous = ctx.joint("root", (0, 0, 0))
+    def draw_guides(self, guides) -> None:
+        previous = guides.joint("root", (0, 0, 0))
         for index in range(self.segments):
-            previous = ctx.joint("segment", (index + 1, 0, 0), index=index, parent=previous)
+            previous = guides.joint("segment", (index + 1, 0, 0), index=index, parent=previous)
 
-    def build(self, ctx) -> None:
-        guide_nodes = [ctx.guide("root"), *ctx.guides("segment")]
-        for name in ("root", "space"):
-            socket = tm.Transform.create(
-                name=ctx.name(name, suffix="socket"), parent=ctx.groups.socket.long_name
-            )
-            socket.align_to(guide_nodes[0])
-            ctx.attach(name, socket)
+    def build(self, rig) -> None:
+        guide_nodes = [rig.guide("root"), *rig.chain("segment")]
+        rig.socket("root", match=guide_nodes[0])
+        rig.socket("space", match=guide_nodes[0])
 
         joints, parent_joint = [], None
         for index, guide_node in enumerate(guide_nodes):
-            joint = ctx.bind_joint(str(index), parent=parent_joint, match=guide_node)
+            joint = rig.bind_joint(str(index), parent=parent_joint, match=guide_node)
             joints.append(joint)
             parent_joint = joint
-        ctx.controller("fk", match=joints[0])
-        ctx.output("root", joints[0])
-        ctx.output("end", joints[-1])
+        rig.controller("fk", match=joints[0])
+        rig.output("root", joints[0])
+        rig.output("end", joints[-1])
 
 
 class ToyBoom(Module):
@@ -90,10 +86,10 @@ class ToyBoom(Module):
     inputs = ()
     outputs = ("root",)
 
-    def draw_guides(self, ctx) -> None:
-        ctx.joint("root", (0, 0, 0))
+    def draw_guides(self, guides) -> None:
+        guides.joint("root", (0, 0, 0))
 
-    def build(self, ctx) -> None:
+    def build(self, rig) -> None:
         raise RuntimeError("boom")
 
 

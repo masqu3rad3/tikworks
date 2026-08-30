@@ -27,28 +27,23 @@ class FkChain(Module):
     def guide_count(self) -> int:
         return self.segments
 
-    def draw_guides(self, ctx) -> None:
-        previous = ctx.joint("root", (0, 0, 0))
+    def draw_guides(self, guides) -> None:
+        previous = guides.joint("root", (0, 0, 0))
         for index in range(self.segments):
-            offset = self.spacing * (index + 1) * ctx.side_mult
-            previous = ctx.joint("segment", (offset, 0, 0), index=index, parent=previous)
+            offset = self.spacing * (index + 1) * guides.side_mult
+            previous = guides.joint("segment", (offset, 0, 0), index=index, parent=previous)
 
-    def build(self, ctx) -> None:
-        guide_nodes = [ctx.guide("root"), *ctx.guides("segment")]
-
-        socket = tm.Transform.create(
-            name=ctx.name("root", suffix="socket"), parent=ctx.groups.socket.long_name
-        )
-        socket.align_to(guide_nodes[0])
-        ctx.attach("root", socket)
+    def build(self, rig) -> None:
+        guide_nodes = [rig.guide("root"), *rig.chain("segment")]
+        socket = rig.socket("root", match=guide_nodes[0])
 
         # Bind joints are created in their final hierarchy position: the root
-        # falls back to ctx.bind_parent, which is the connected producer's bind
+        # falls back to rig.bind_parent, which is the connected producer's bind
         # joint when this chain is attached to another module.
         joints = []
         parent_joint = None
         for index, guide_node in enumerate(guide_nodes):
-            joint = ctx.bind_joint(str(index), parent=parent_joint, match=guide_node)
+            joint = rig.bind_joint(str(index), parent=parent_joint, match=guide_node)
             joints.append(joint)
             parent_joint = joint
 
@@ -57,22 +52,19 @@ class FkChain(Module):
         # offset groups.
         parent = None
         for index, joint in enumerate(joints[:-1]):
-            controller = ctx.controller(
+            controller = rig.controller(
                 f"fk{index}",
                 size=self.controller_size,
-                parent=parent if parent is not None else ctx.groups.control,
+                parent=parent,
                 match=joint,
                 mirror="behaviour",
             )
-            offset = controller.transform.create_offset_group(
-                name=ctx.name(f"fk{index}", suffix="offset")
-            )
             if parent is None:
-                tm.MatrixConstraint.create(socket, offset, maintain_offset=True)
-            tm.MatrixConstraint.create(controller.transform, joint, maintain_offset=True)
-            parent = controller.transform
+                tm.MatrixConstraint.create(socket, controller.offset, maintain_offset=True)
+            tm.MatrixConstraint.create(controller, joint, maintain_offset=True)
+            parent = controller
 
-        ctx.output("root", joints[0])
+        rig.output("root", joints[0])
         for index, joint in enumerate(joints[1:]):
-            ctx.output(f"segment{index + 1}", joint)
-        ctx.output("end", joints[-1])
+            rig.output(f"segment{index + 1}", joint)
+        rig.output("end", joints[-1])

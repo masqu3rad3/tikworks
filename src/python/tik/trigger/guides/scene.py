@@ -19,7 +19,7 @@ from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import instance_key
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 from tik.trigger.maya import tags
-from tik.trigger.maya.rig import MayaGuideContext
+from tik.trigger.maya.rig import GuideDraft
 
 from . import nodes
 from .format import GuideFile, GuideInstance, make_record
@@ -78,7 +78,7 @@ class GuideScene:
         if parent is not None:
             parent_node = nodes.guide_node(parent.instance_id, parent.role, parent.index)
         with nodes.undo_chunk(f"Trigger guides: {module.name}"):
-            draft = MayaGuideContext(module, nodes.holder(), parent_node)
+            draft = GuideDraft(module, nodes.holder(), parent_node)
             module.draw_guides(draft)
             if draft.root is None:
                 raise GuideError(f"'{module.module_type}' drew no guides.")

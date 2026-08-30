@@ -24,7 +24,7 @@ def scene():
 
 @pytest.fixture
 def build_context(scene):
-    """Build a real MayaBuildContext for any module type.
+    """Build a real ModuleRig for any module type.
 
     The module is not built — only its groups and context exist — so a system
     or module body can be driven directly.

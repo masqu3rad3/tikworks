@@ -356,3 +356,19 @@ class Controller:
             The attribute value from the transform node.
         """
         return getattr(self.node, item)
+
+    def __getitem__(self, item):
+        """Pass plug access through to the underlying transform node.
+
+        ``__getattr__`` does not cover this: Python looks dunder methods up on
+        the type, so without it a controller cannot be indexed, connected, or
+        handed to a construct that reads a plug off its driver.
+
+        Args:
+            item: Attribute (plug) name.
+
+        Returns:
+            Plug: The plug on the transform node.
+        """
+        return self.node[item]
+

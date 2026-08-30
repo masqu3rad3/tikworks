@@ -9,6 +9,7 @@ import pytest
 from maya import cmds
 
 import tik.maya as tm
+from tik.maya.roles.controller import Controller
 import tik.trigger as trigger
 from tik.trigger.guides import GuideScene
 from tik.trigger.maya import tags
@@ -168,3 +169,60 @@ def test_module_parents_everything_it_creates(module_type):
 
     stray = set(cmds.ls(assemblies=True, long=True)) - before - {"|rules_rig"}
     assert not stray, f"'{module_type}' left {sorted(stray)} at the world root"
+
+
+# ------------------------------------------------- sockets from declarations
+@pytest.mark.parametrize("module_type", MODULE_TYPES)
+def test_every_declared_input_gets_a_socket(module_type):
+    """Declaring an input is what creates its socket; a module cannot forget."""
+    rig = _solo(module_type)
+    module_cls = get_module(module_type)
+    structural = [item.name for item in module_cls.inputs if item.kind != "space"]
+
+    for name in structural:
+        socket = rig.socket(name)
+        assert cmds.nodeType(socket.long_name) == "transform"
+        assert socket.parent.long_name == rig.groups.socket.long_name
+        assert socket.meta.get(tags.KIND) == tags.INPUT
+        assert socket.meta.get(tags.ROLE) == name
+
+
+def test_space_inputs_get_no_socket():
+    """Anim-space inputs feed a SpaceSwitch on a control, not a matrix attach."""
+    cmds.file(new=True, force=True)
+    scene = GuideScene()
+    body = scene.create_guides(get_module("base")(name="body"))
+    arm = scene.create_guides(
+        get_module("arm")(name="arm", side="L", settings={
+            "anim_spaces": [{"control": "ik", "mode": "parent", "label": "world"}]
+        }),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    report = Builder().build(rig_name="rules", afterlife="keep")
+    rig = report.rigs[arm.instance_id]
+
+    assert "root" in rig.attachments
+    assert "ik_world" not in rig.attachments
+
+
+@pytest.mark.parametrize("module_type", MODULE_TYPES)
+def test_every_top_level_controller_has_an_offset_group(module_type):
+    """A control that hangs from control_grp gets its offset group for free.
+
+    A tweak is the exception on purpose: it is a child of the control it
+    refines, so it rides along and needs no offset of its own.
+    """
+    rig = _solo(module_type)
+    assert rig.controllers
+    tweaks = {control.transform.long_name for control in rig.controllers
+              if control.offset is None}
+    for control in rig.controllers:
+        if control.transform.long_name in tweaks:
+            parent = control.transform.parent
+            assert parent is not None and Controller.is_controller(parent), (
+                f"{control.transform.name} has no offset group and no parent control"
+            )
+            continue
+        # the offset is above the control; a module may insert its own group
+        # between them (the arm's auto-collar does)
+        assert control.transform.long_name.startswith(control.offset.long_name + "|")
