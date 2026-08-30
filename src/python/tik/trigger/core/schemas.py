@@ -62,7 +62,6 @@ class ModuleInstance:
     settings: dict = field(default_factory=dict)
     guides: list[GuidePose] = field(default_factory=list)
     parent: Optional[ParentRef] = None
-    attach: Optional[str] = None  # legacy: output name override on the parent
     inputs: dict = field(default_factory=dict)  # input name -> "<key>.<output>" | scene node
 
     @property
@@ -88,7 +87,6 @@ class ModuleInstance:
             settings=dict(data.get("settings", {})),
             guides=[GuidePose.from_dict(item) for item in data.get("guides", [])],
             parent=ParentRef.from_dict(data.get("parent")),
-            attach=data.get("attach"),
             inputs=dict(data.get("inputs", {}) or {}),
         )
 

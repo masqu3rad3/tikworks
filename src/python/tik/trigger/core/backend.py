@@ -25,7 +25,6 @@ class Backend(Protocol):
         module: Any,
         parent: Optional[ParentRef] = None,
         poses: Optional[Sequence[GuidePose]] = None,
-        attach: Optional[str] = None,
     ) -> ModuleInstance: ...
 
     def delete_guides(self, instance_id: str) -> None: ...

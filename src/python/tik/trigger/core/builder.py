@@ -28,24 +28,6 @@ class BuildReport:
         return len(self.built)
 
 
-def derive_inputs(instance: ModuleInstance, by_id: dict) -> dict:
-    """Legacy: derive the primary input from the guide DAG parent, if any."""
-    if instance.inputs:
-        return dict(instance.inputs)
-    module_cls = registry.get_module(instance.module_type)
-    primary = module_cls.primary_input()
-    if primary is None or instance.parent is None:
-        return {}
-    parent = by_id.get(instance.parent.instance_id)
-    if parent is None:
-        return {}
-    parent_cls = registry.get_module(parent.module_type)
-    output = instance.attach or parent_cls.output_at_role(instance.parent.role)
-    if output is None:
-        return {}
-    return {primary.name: f"{parent.key}.{output}"}
-
-
 def split_source(source: str) -> tuple[Optional[str], str]:
     """``"L_arm.hand"`` -> ("L_arm", "hand"); ``"some_jnt"`` -> (None, "some_jnt")."""
     if "." in source:
@@ -88,8 +70,7 @@ class Builder:
 
         with self.backend.undo_chunk(f"Trigger build: {rig_name}"):
             report.rig_root = self.backend.ensure_rig_root(rig_name)
-            by_id = {instance.instance_id: instance for instance in instances}
-            # Producers must be built before consumers: ctx.bind_parent is
+            # Producers must be built before consumers: rig.bind_parent is
             # resolved from the producer's output, so bind joints can be created
             # in their final hierarchy position instead of reparented later.
             def structural_inputs(item):
@@ -97,7 +78,7 @@ class Builder:
                 skip = space_input_names(module_cls, item.settings)
                 return {
                     name: source
-                    for name, source in derive_inputs(item, by_id).items()
+                    for name, source in item.inputs.items()
                     if name not in skip
                 }
 
@@ -109,7 +90,7 @@ class Builder:
             for number, instance in enumerate(instances, start=1):
                 self.events.progress(number, total, f"Building {instance.name}")
                 module_cls = registry.get_module(instance.module_type)
-                inputs = derive_inputs(instance, by_id)
+                inputs = dict(instance.inputs)
                 bind_parent = self._bind_parent_for(
                     instance, module_cls, inputs, by_key, report
                 )
@@ -182,13 +163,12 @@ class Builder:
         not affect the bind hierarchy, and spaces are legitimately mutually
         referential, which would be a false cycle in the topological sort.
         """
-        by_id = {instance.instance_id: instance for instance in instances}
         for instance in instances:
             module_cls = registry.get_module(instance.module_type)
             ctx = report.contexts.get(instance.instance_id)
             if ctx is None:
                 continue
-            inputs = derive_inputs(instance, by_id)
+            inputs = dict(instance.inputs)
             groups: dict = {}
             for row in module_cls.space_rows(instance.settings):
                 control, mode = row.get("control", ""), row.get("mode", "parent")

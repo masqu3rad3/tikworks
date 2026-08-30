@@ -426,7 +426,7 @@ class Guides:
             return existing
         module = handle.module_class(name=instance.name, side=target_side, settings=instance.settings)
         mirrored_inputs = {name: _mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()}
-        created = self.backend.create_guides(module, parent=instance.parent, poses=poses, attach=instance.attach, inputs=mirrored_inputs)
+        created = self.backend.create_guides(module, parent=instance.parent, poses=poses, inputs=mirrored_inputs)
         self.invalidate()
         return GuideHandle(self, created)
 
@@ -436,7 +436,7 @@ class Guides:
         instance = handle.instance
         module = handle.module_class(name=name or instance.name, side=instance.side, settings=instance.settings)
         module.name = self.unique_name(module.name, module.side.value)
-        created = self.backend.create_guides(module, poses=list(instance.guides), attach=instance.attach, inputs=dict(instance.inputs))
+        created = self.backend.create_guides(module, poses=list(instance.guides), inputs=dict(instance.inputs))
         self.invalidate()
         layout = self.layout
         collapse = layout.get("collapse", {})

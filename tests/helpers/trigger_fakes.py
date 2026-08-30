@@ -114,7 +114,7 @@ class FakeBackend:
             return list(self.instances)
         return [item for item in self.instances if item.instance_id in scope]
 
-    def create_guides(self, module, parent=None, poses: Optional[Sequence[GuidePose]] = None, attach=None, inputs=None):
+    def create_guides(self, module, parent=None, poses: Optional[Sequence[GuidePose]] = None, inputs=None):
         ctx = FakeGuideContext(module, self)
         module.draw_guides(ctx)
         guides = list(poses) if poses else [
@@ -126,10 +126,10 @@ class FakeBackend:
             if parent_instance is not None:
                 from tik.trigger.core import registry as _registry
 
-                output = attach or _registry.get_module(parent_instance.module_type).output_at_role(parent.role)
+                output = _registry.get_module(parent_instance.module_type).output_at_role(parent.role)
                 if output:
                     resolved = {module.primary_input().name: f"{parent_instance.key}.{output}"}
-        instance = module.to_instance(guides=guides, parent=parent, attach=attach, inputs=resolved)
+        instance = module.to_instance(guides=guides, parent=parent, inputs=resolved)
         self.instances.append(instance)
         self.calls.append(("create_guides", instance.instance_id))
         return instance

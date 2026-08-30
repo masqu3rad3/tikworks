@@ -181,7 +181,6 @@ class Module(Schema):
         self,
         guides: Optional[list[GuidePose]] = None,
         parent: Optional[ParentRef] = None,
-        attach: Optional[str] = None,
         inputs: Optional[dict] = None,
     ) -> ModuleInstance:
         """Serialize this module into a ``ModuleInstance``."""
@@ -193,7 +192,6 @@ class Module(Schema):
             settings=self.values(),
             guides=list(guides or []),
             parent=parent,
-            attach=attach,
             inputs=dict(inputs or {}),
         )
 

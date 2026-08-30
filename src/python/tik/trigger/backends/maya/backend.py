@@ -137,7 +137,6 @@ class MayaBackend:
             settings=root_meta.get(tags.SETTINGS, {}) or {},
             guides=poses,
             parent=self._parent_ref(root),
-            attach=root_meta.get(tags.ATTACH),
             inputs=dict(root_meta.get(INPUTS, {}) or {}),
         )
 
@@ -180,7 +179,6 @@ class MayaBackend:
         module,
         parent: Optional[ParentRef] = None,
         poses: Optional[Sequence[GuidePose]] = None,
-        attach: Optional[str] = None,
         inputs: Optional[dict] = None,
     ) -> ModuleInstance:
         if self.guide_nodes(module.instance_id):
@@ -193,7 +191,7 @@ class MayaBackend:
             module.draw_guides(ctx)
             if ctx.root is None:
                 raise GuideError(f"'{module.module_type}' drew no guides.")
-            self._write_root_meta(ctx.root, module, attach)
+            self._write_root_meta(ctx.root, module)
             if poses:
                 self._apply_poses(ctx.created, poses)
             resolved_inputs = dict(inputs or {})
@@ -202,7 +200,7 @@ class MayaBackend:
                 parent_instance = self.find_instances([parent.instance_id])
                 if parent_instance:
                     parent_cls = registry.get_module(parent_instance[0].module_type)
-                    output = attach or parent_cls.output_at_role(parent.role)
+                    output = parent_cls.output_at_role(parent.role)
                     if output:
                         resolved_inputs = {module.primary_input().name: f"{parent_instance[0].key}.{output}"}
             ctx.root.meta[INPUTS] = resolved_inputs
@@ -223,11 +221,9 @@ class MayaBackend:
         return tm.resolve(name)
 
     @staticmethod
-    def _write_root_meta(root, module, attach) -> None:
+    def _write_root_meta(root, module) -> None:
         root.meta[tags.NAME] = module.name
         root.meta[tags.SETTINGS] = module.values()
-        if attach:
-            root.meta[tags.ATTACH] = attach
         MayaBackend._write_guide_attrs(root, module)
 
     @staticmethod
@@ -377,7 +373,7 @@ class MayaBackend:
                     nodes[(role, index)] = joint
                     created_nodes[record["name"]] = joint
                 root = nodes[(module_cls.guides.root, 0)]
-                self._write_root_meta(root, module, None)
+                self._write_root_meta(root, module)
                 root.meta[INPUTS] = dict(guide_instance.inputs)
                 built.append((guide_instance, module, nodes))
             for guide_instance, module, nodes in built:

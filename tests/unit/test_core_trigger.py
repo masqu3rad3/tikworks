@@ -80,7 +80,7 @@ def test_module_instance_roundtrip():
     instance = module.to_instance(
         guides=[GuidePose("root"), GuidePose("segment", 0, (1, 0, 0))],
         parent=ParentRef("abc", "root"),
-        attach="end",
+        inputs={"root": "body.root"},
     )
     data = json.loads(json.dumps(instance.to_dict()))
     restored = ModuleInstance.from_dict(data)
@@ -88,7 +88,7 @@ def test_module_instance_roundtrip():
     assert restored.settings == {"segments": 3, "anim_spaces": []}
     assert restored.side == "R"
     assert restored.parent == ParentRef("abc", "root")
-    assert restored.attach == "end"
+    assert restored.inputs == {"root": "body.root"}
     module2 = ToyChain.from_instance(restored)
     assert module2.segments == 3 and module2.instance_id == module.instance_id
     assert module2.guide_pairs == [("root", 0), ("segment", 0)]

@@ -95,3 +95,22 @@ def test_fkchain_exposes_every_segment_as_output():
 
     assert FkChain.output_names({"segments": 2}) == ("root", "segment1", "segment2", "end")
     assert FkChain.output_names() == ("root", "segment1", "segment2", "segment3", "end")
+
+
+def test_guide_parenting_writes_a_real_input(guides):
+    """Parenting pre-fills inputs; nothing is derived from the DAG at build time."""
+    body = guides.add("base", name="body")
+    arm = guides.add("arm", side="L", name="arm", parent=body)
+
+    assert arm.inputs == {"root": "body.root"}
+
+
+def test_cleared_input_is_not_re_derived_from_the_parent(guides):
+    """Clearing an input means unconnected, even while the guides stay parented."""
+    body = guides.add("base", name="body")
+    arm = guides.add("arm", side="L", name="arm", parent=body)
+    arm.set_input("root", "")
+
+    assert arm.inputs == {}
+    with pytest.raises(AttachError):
+        Builder(guides.backend).build(afterlife="keep")
