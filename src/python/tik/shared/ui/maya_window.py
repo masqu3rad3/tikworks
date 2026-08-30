@@ -102,7 +102,9 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
     @classmethod
     def teardown_workspace_control(cls) -> None:
         """Delete a leftover workspaceControl so relaunching does not dock twice."""
-        if not HAS_MAYA:
+        # workspace controls only exist in an interactive session: importable
+        # maya.cmds is not enough (mayapy without standalone has no such command)
+        if not cls.has_maya_ui():
             return
         from maya import cmds
 

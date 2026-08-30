@@ -1,4 +1,12 @@
-"""Trigger main window: dockable tool window with menus, tabs of sessions, status bar."""
+"""Trigger main window: a dockable host for modes — Trigger and Guide Designer.
+
+Each mode is a bundle of three plain widgets (a ``QMenuBar``, a content
+widget, a status strip) held in three parallel stacks. The mode tab bar and
+the menu stack go in together through ``setMenuWidget``, which is what puts
+the tabs *above* the menus. Nothing is installed with ``setMenuBar`` or
+``setStatusBar``, so Qt never takes ownership of a bundle widget and the
+Guide Designer can be torn off into ``DesignerShell`` and handed back.
+"""
 
 from __future__ import annotations
 
@@ -19,43 +27,150 @@ from .widgets import LogWidget
 FILE_FILTER = f"Trigger session (*{EXTENSION})"
 VERSION = "0.2.0"
 MAX_RECENT = 8
+TRIGGER_MODE = 0
+DESIGNER_MODE = 1
+
+
+def _iter_actions(bar):
+    """Every action on a menu bar and in its menus, submenus included.
+
+    Two traps this avoids. It never names ``QAction`` — the Qt shim moves that
+    class between QtWidgets and QtGui depending on the binding. And it finds
+    menus with ``findChildren`` rather than ``QAction.menu()``: in PySide6 that
+    getter hands ownership of the returned ``QMenu`` to Python, so the C++ menu
+    is destroyed along with the temporary wrapper, taking its actions with it.
+    """
+    for action in bar.actions():
+        yield action
+    for menu in bar.findChildren(QtWidgets.QMenu):
+        for action in menu.actions():
+            yield action
+
+
+def _holder() -> QtWidgets.QWidget:
+    """An empty widget whose zero-margin layout a mode bundle drops into."""
+    widget = QtWidgets.QWidget()
+    layout = QtWidgets.QVBoxLayout(widget)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+    return widget
 
 
 class TriggerWindow(MayaToolWindow):
     WINDOW_NAME = "TriggerWindow"
 
-    def __init__(self, parent=None, file_browser=None) -> None:
+    def __init__(self, parent=None, file_browser=None, designer_factory=None) -> None:
         super().__init__(parent)
         self.file_browser = file_browser
         self.events = EventBus()
+        self.designer_factory = designer_factory
         self._guide_designer = None
+        self._shell = None
         self.recent_files: list[str] = []
         self.setWindowTitle(f"Trigger {VERSION}")
         self.resize(1180, 720)
         self.setMinimumWidth(900)
-        self._build_central()
-        self._build_menus()
-        self._build_status()
+        self._build_shell()
+        self._build_trigger_mode()
+        self._build_designer_mode()
+        self.mode_bar.currentChanged.connect(self._activate_mode)
         theme.apply(self)
         self.events.subscribe(LOG, self._on_log)
         self.events.subscribe(ERROR, self._on_error)
         self.new_session()
 
     # ------------------------------------------------------------------ ui
-    def _build_central(self) -> None:
-        self.tabs = QtWidgets.QTabWidget()
-        self.tabs.setTabsClosable(True)
-        self.tabs.setMovable(True)
-        self.tabs.setDocumentMode(True)
-        self.tabs.tabCloseRequested.connect(self.close_tab)
-        self.tabs.currentChanged.connect(lambda _index: self._update_title())
-        self.setCentralWidget(self.tabs)
+    def _build_shell(self) -> None:
+        self.mode_bar = QtWidgets.QTabBar()
+        self.mode_bar.setDrawBase(False)
+        self.mode_bar.setExpanding(False)
+        self.menu_stack = QtWidgets.QStackedWidget()
+        header = QtWidgets.QWidget()
+        header_layout = QtWidgets.QVBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(0)
+        header_layout.addWidget(self.mode_bar)
+        header_layout.addWidget(self.menu_stack)
+        self.setMenuWidget(header)  # the tabs sit above the menus
+        self.pages = QtWidgets.QStackedWidget()
+        self.setCentralWidget(self.pages)
+        self.status_stack = QtWidgets.QStackedWidget()
+        self.statusBar().addWidget(self.status_stack, 1)
+        self._mode_menus: dict[int, QtWidgets.QMenuBar] = {}
+        self._active_mode = TRIGGER_MODE
         self.log = LogWidget()
         self.log_dock = QtWidgets.QDockWidget("Log", self)
         self.log_dock.setObjectName("TriggerLogDock")
         self.log_dock.setWidget(self.log)
         self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.log_dock)
         self.log_dock.hide()
+
+    def add_mode(self, title: str, menu_widget, content, status_widget) -> int:
+        """Register one mode; the three stacks stay index-aligned."""
+        index = self.mode_bar.addTab(title)
+        self.menu_stack.insertWidget(index, menu_widget)
+        self.pages.insertWidget(index, content)
+        self.status_stack.insertWidget(index, status_widget)
+        return index
+
+    @property
+    def menu_bar(self) -> Optional[QtWidgets.QMenuBar]:
+        return self._mode_menus.get(self._active_mode)
+
+    def _build_trigger_mode(self) -> None:
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.setTabsClosable(True)
+        self.tabs.setMovable(True)
+        self.tabs.setDocumentMode(True)
+        self.tabs.tabCloseRequested.connect(self.close_tab)
+        self.tabs.currentChanged.connect(lambda _index: self._update_title())
+        self.trigger_menus = QtWidgets.QMenuBar()
+        self._build_menus(self.trigger_menus)
+        self.trigger_status_strip = QtWidgets.QWidget()
+        self._build_status(self.trigger_status_strip)
+        self._mode_menus[TRIGGER_MODE] = self.trigger_menus
+        self.add_mode("Trigger", self.trigger_menus, self.tabs, self.trigger_status_strip)
+
+    def _build_designer_mode(self) -> None:
+        """Register the tab now, build the Designer on first use.
+
+        ``GuideDesigner`` constructs a ``GuideScene``, which imports Maya, so it
+        cannot be built at window startup — the UI tests run without Maya.
+        """
+        self.designer_menu_holder = _holder()
+        self.designer_page_holder = _holder()
+        self.designer_status_holder = _holder()
+        self.add_mode("Guide Designer", self.designer_menu_holder,
+                      self.designer_page_holder, self.designer_status_holder)
+
+    def _activate_mode(self, index: int) -> None:
+        if index == DESIGNER_MODE:
+            self._ensure_designer()
+            if self._shell is not None:
+                self._shell.raise_()
+                self.mode_bar.setCurrentIndex(self._active_mode)
+                return
+        self._active_mode = index
+        self.menu_stack.setCurrentIndex(index)
+        self.pages.setCurrentIndex(index)
+        self.status_stack.setCurrentIndex(index)
+        self._apply_shortcut_rule()
+        self._update_title()
+
+    def _apply_shortcut_rule(self) -> None:
+        """Only the active mode's actions are enabled.
+
+        Not cosmetic: the two menu bars collide on Ctrl+B/S/O/N/D/L, Tab and F2,
+        and Qt answers an ambiguous WindowShortcut by firing neither. The rule
+        costs one constraint — no mode may disable an individual menu action for
+        its own reasons, because switching modes re-enables everything.
+        """
+        for mode, bar in self._mode_menus.items():
+            enabled = mode == self._active_mode
+            if mode == DESIGNER_MODE and self._shell is not None:
+                enabled = True  # its own window: nothing left to collide with
+            for action in _iter_actions(bar):
+                action.setEnabled(enabled)
 
     def _action(self, menu, text, slot, shortcut: Optional[str] = None, checkable: bool = False):
         action = menu.addAction(text)
@@ -66,8 +181,7 @@ class TriggerWindow(MayaToolWindow):
             action.setCheckable(True)
         return action
 
-    def _build_menus(self) -> None:
-        bar = self.menuBar()
+    def _build_menus(self, bar) -> None:
         file_menu = bar.addMenu("&File")
         self._action(file_menu, "New Session", self.new_session, "Ctrl+N")
         self._action(file_menu, "Open…", self.open_session, "Ctrl+O")
@@ -116,8 +230,8 @@ class TriggerWindow(MayaToolWindow):
         self._action(help_menu, "About Trigger", self.about)
         self._update_recent_menu()
 
-    def _build_status(self) -> None:
-        self.status = StatusFields(self.statusBar(), ("references", "maya", "version"))
+    def _build_status(self, strip) -> None:
+        self.status = StatusFields(strip, ("references", "maya", "version"))
         maya_text = "Maya"
         if HAS_MAYA:
             try:
@@ -323,6 +437,9 @@ class TriggerWindow(MayaToolWindow):
     def _update_title(self) -> None:
         for index, view in enumerate(self.views):
             self.tabs.setTabText(index, view.session.name + ("*" if view.session.is_modified else ""))
+        if self._active_mode == DESIGNER_MODE and self._guide_designer is not None:
+            self.setWindowTitle(f"Trigger {VERSION} — {self._guide_designer.title}")
+            return
         session = self.session
         if session is None:
             self.setWindowTitle(f"Trigger {VERSION}")
@@ -339,16 +456,66 @@ class TriggerWindow(MayaToolWindow):
         self.status.set("references", f"{references} reference(s)" + (f" · {state}" if state else ""))
 
     # ------------------------------------------------------------ guides
-    def open_guide_designer(self, guides_path: str = ""):
-        from .designer import GuideDesigner
-
+    def _ensure_designer(self):
+        """Build the Guide Designer on first use and host it in the mode."""
         if self._guide_designer is None:
-            self._guide_designer = GuideDesigner(parent=self, events=self.events, file_browser=self.file_browser)
-        if guides_path:
-            self._guide_designer.set_file(guides_path)
-        self._guide_designer.show_tool()
-        self._guide_designer.raise_()
+            if self.designer_factory is not None:
+                designer = self.designer_factory()
+            else:
+                from .designer import GuideDesigner
+
+                designer = GuideDesigner(events=self.events, file_browser=self.file_browser)
+            self._guide_designer = designer
+            designer.title_changed.connect(self._on_designer_title)
+            designer.detach_requested.connect(self.set_designer_detached)
+            self._mode_menus[DESIGNER_MODE] = designer.menu_bar
+            self._host_designer()
         return self._guide_designer
+
+    def _host_designer(self) -> None:
+        """Put the Designer's three widgets back into the mode holders."""
+        designer = self._guide_designer
+        self.designer_menu_holder.layout().addWidget(designer.menu_bar)
+        self.designer_page_holder.layout().addWidget(designer)
+        self.designer_status_holder.layout().addWidget(designer.status_strip)
+
+    def _on_designer_title(self, title: str) -> None:
+        self.mode_bar.setTabText(DESIGNER_MODE, title)
+        if self._shell is not None:
+            self._shell.setWindowTitle(title)
+        self._update_title()
+
+    def set_designer_detached(self, detached: bool) -> None:
+        """Move the Designer bundle between the mode holders and a floating shell."""
+        designer = self._ensure_designer()
+        if detached == (self._shell is not None):
+            return
+        if detached:
+            from .shell import DesignerShell
+
+            DesignerShell.teardown_workspace_control()
+            self._shell = DesignerShell(self, designer)
+            self._shell.show_tool()
+            self.mode_bar.setCurrentIndex(TRIGGER_MODE)
+        else:
+            shell, self._shell = self._shell, None  # cleared first, so the
+            shell.release()                        # shell's closeEvent no-ops
+            self._host_designer()
+            shell.close()
+            self.mode_bar.setCurrentIndex(DESIGNER_MODE)
+        designer.detach_action.setChecked(detached)
+        self._apply_shortcut_rule()
+
+    def open_guide_designer(self, guides_path: str = ""):
+        designer = self._ensure_designer()
+        if guides_path:
+            designer.set_file(guides_path)
+        if self._shell is not None:
+            self._shell.show_tool()
+            self._shell.raise_()
+        else:
+            self.mode_bar.setCurrentIndex(DESIGNER_MODE)
+        return designer
 
     # -------------------------------------------------------------- events
     def _on_log(self, level: str = "info", message: str = "", **_kw) -> None:
@@ -366,6 +533,10 @@ class TriggerWindow(MayaToolWindow):
             if view.session.is_modified and not self.ask_discard(view.session):
                 event.ignore()
                 return
+        if self._shell is not None:
+            self.set_designer_detached(False)
+        if self._guide_designer is not None:
+            self._guide_designer.teardown()
         super().closeEvent(event)
 
 
