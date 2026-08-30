@@ -274,3 +274,61 @@ def test_point_space_moves_without_rotating(backend):
     assert (pole.world_translation - before_position).length() > 1.0
     for first, second in zip(before_axis, tuple(pole.world_axis("x"))):
         assert abs(first - second) < 1e-3
+
+
+# --------------------------------------------------------------- auto-collar
+def _collar_control(ctx):
+    return next(
+        item.transform
+        for item in ctx.controllers
+        if item.transform.name.endswith("_collar_ctrl")
+    )
+
+
+def test_auto_collar_defaults_to_off(backend):
+    control = _ik_control(_arm_ctx(backend))
+    assert control.has_attr("autoCollar")
+    assert abs(control["autoCollar"].value) < 1e-6
+
+
+def test_auto_collar_off_is_inert(backend):
+    """At 0 the collar must not move, however far the hand goes."""
+    ctx = _arm_ctx(backend)
+    collar = _collar_control(ctx)
+    control = _ik_control(ctx)
+    before = list(collar["worldMatrix[0]"].value)
+    control.translate = (0, 20, 10)
+    after = list(collar["worldMatrix[0]"].value)
+    for first, second in zip(before, after):
+        assert abs(first - second) < 1e-4
+
+
+def test_auto_collar_on_follows_the_hand(backend):
+    ctx = _arm_ctx(backend)
+    collar = _collar_control(ctx)
+    control = _ik_control(ctx)
+    control["autoCollar"].value = 1.0
+    before = tuple(collar.world_axis("x"))
+    control.translate = (0, 20, 0)
+    after = tuple(collar.world_axis("x"))
+    assert max(abs(a - b) for a, b in zip(before, after)) > 0.05
+
+
+def test_wrist_roll_does_not_spin_the_collar(backend):
+    """Up comes from the socket, so rolling the wrist leaves the collar alone."""
+    ctx = _arm_ctx(backend)
+    collar = _collar_control(ctx)
+    control = _ik_control(ctx)
+    control["autoCollar"].value = 1.0
+    before = list(collar["worldMatrix[0]"].value)
+    control.rotate = (90, 0, 0)
+    after = list(collar["worldMatrix[0]"].value)
+    for first, second in zip(before, after):
+        assert abs(first - second) < 1e-3
+
+
+def test_auto_collar_does_not_cycle(backend):
+    ctx = _arm_ctx(backend)
+    _ik_control(ctx)["autoCollar"].value = 1.0
+    cmds.dgdirty(allPlugs=True)
+    assert not (cmds.cycleCheck(all=True) or [])
