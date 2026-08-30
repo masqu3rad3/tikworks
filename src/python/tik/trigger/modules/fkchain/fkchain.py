@@ -19,7 +19,6 @@ class FkChain(Module):
     def output_names(cls, settings=None):
         count = int((settings or {}).get("segments", cls.segments.default))
         return ("root", *(f"segment{index + 1}" for index in range(count)), "end")
-    legacy_types = {"root": "FkikRoot", "segment": "Fkik"}
 
     segments = IntField(3, min=1, max=50, help="Number of joints after the root")
     spacing = FloatField(5.0, min=0.01, help="Default distance between guides")

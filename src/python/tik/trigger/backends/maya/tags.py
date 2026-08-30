@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-KIND = "trg_kind"  # "guide" | "rig" | "deform" | "controller" | "plug" | "socket" | "rig_root"
+KIND = "trg_kind"  # "guide" | "rig" | "deform" | "controller" | "output" | "input" | "rig_root"
 MODULE = "trg_module"  # module type name
 INSTANCE = "trg_instance"  # instance uuid
-ROLE = "trg_role"  # guide role / plug name / socket name
+ROLE = "trg_role"  # guide role / output name / input name
 INDEX = "trg_index"  # guide index for multi roles
 SIDE = "trg_side"
 NAME = "trg_name"  # user facing instance name (root guide only)
@@ -22,8 +22,6 @@ DEFORM = "deform"
 CONTROLLER = "controller"
 OUTPUT = "output"
 INPUT = "input"
-PLUG = OUTPUT  # legacy aliases
-SOCKET = INPUT
 
 BEHAVIOUR = "behaviour"  # FK-like: follows its joint, equal values mirror
 WORLD = "world"  # IK/world: world-aligned, mirroring is tool logic

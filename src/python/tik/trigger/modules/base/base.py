@@ -15,7 +15,6 @@ class Base(Module):
     guides = Guides("root")
     inputs = ()
     outputs = ("root",)
-    legacy_types = {"root": "Base"}
 
     controller_size = FloatField(10.0, min=0.01, label="Controller Size")
 

@@ -1,20 +1,20 @@
-"""``.trg`` guide files — the old Trigger joint-list format, kept compatible.
+"""``.trg`` guide files.
 
-A file is a JSON list of joint records::
+A file is a JSON object with a ``joints`` list, a ``connections`` list and
+optional ``meta`` / ``designer`` dicts. Each joint record is::
 
-    {"name", "position", "rotation", "joint_orient", "scale", "parent", "side",
-     "type", "color", "radius", "user_attributes": [...]}
+    {"name", "position", "rotation", "joint_orient", "scale", "parent",
+     "side", "color", "radius", "module", "role", "index", "instance"}
 
-New files add optional keys (``module``, ``role``, ``index``, ``instance``,
-``settings``) that old readers ignore. When they are missing, modules are
-recovered from the legacy ``type`` names through the module registry.
+Root records carry ``settings`` and ``module_name``. A record without a
+``module``/``role`` pair belongs to no registered module and is reported in
+``GuideFile.unknown``.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -25,26 +25,6 @@ from tik.trigger.core.exceptions import GuideError
 logger = logging.getLogger(__name__)
 
 EXTENSION = ".trg"
-ROOT_TYPE_ATTRS = ("moduleName", "upAxisX", "upAxisY", "upAxisZ", "mirrorAxisX",
-                   "mirrorAxisY", "mirrorAxisZ", "lookAxisX", "lookAxisY", "lookAxisZ",
-                   "useRefOri")
-
-
-def legacy_type(module_cls, role: str) -> str:
-    """Legacy ``type`` name for a module role (old files use capitalised names)."""
-    mapping = getattr(module_cls, "legacy_types", {}) or {}
-    return mapping.get(role) or role[:1].upper() + role[1:]
-
-
-def legacy_table() -> dict[str, tuple[str, str, bool]]:
-    """``legacy type -> (module_type, role, is_root)`` for every registered module."""
-    table: dict[str, tuple[str, str, bool]] = {}
-    for module_cls in registry.iter_modules():
-        guides = module_cls.guides
-        for role in guides.all_roles:
-            key = legacy_type(module_cls, role)
-            table.setdefault(key, (module_cls.module_type, role, role == guides.root))
-    return table
 
 
 @dataclass
@@ -81,7 +61,7 @@ class GuideFile:
         # Guide Designer state that belongs to the asset, not the window:
         # {"scene_nodes": {group: [scene node, ...]}, "positions": {key: [x, y]}, "collapse": {key: 0|1|2}}
         self.designer: dict = dict(designer or {})
-        self.unknown: list[str] = []  # legacy types no module claims
+        self.unknown: list[str] = []  # module types no registered module claims
 
     # ------------------------------------------------------------- file io
     @classmethod
@@ -91,8 +71,6 @@ class GuideFile:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as error:
             raise GuideError(f"Cannot read guides '{path}': {error}") from error
-        if isinstance(data, list):  # legacy: bare joint list
-            return cls(data)
         if isinstance(data, dict) and isinstance(data.get("joints"), list):
             return cls(data["joints"], data.get("connections", []), data.get("meta", {}), data.get("designer", {}))
         raise GuideError(f"'{path}' is not a Trigger guide file.")
@@ -126,13 +104,10 @@ class GuideFile:
 
     def classify(self, record: dict) -> Optional[tuple[str, str, bool]]:
         """``(module_type, role, is_root)`` for a record, or None when unknown."""
-        if record.get("module") and record.get("role"):
-            module_type, role = record["module"], record["role"]
-            if not registry.is_module_registered(module_type):
-                return None
-            is_root = registry.get_module(module_type).guides.root == role
-            return module_type, role, is_root
-        return legacy_table().get(record.get("type", ""))
+        module_type, role = record.get("module"), record.get("role")
+        if not module_type or not role or not registry.is_module_registered(module_type):
+            return None
+        return module_type, role, registry.get_module(module_type).guides.root == role
 
     def roots(self) -> list[dict]:
         found = []
@@ -146,11 +121,11 @@ class GuideFile:
         return [record["name"] for record in self.roots()]
 
     def instances(self) -> list[GuideInstance]:
-        """Group records into module instances (explicit keys or legacy walk)."""
+        """Group records into module instances."""
         self.unknown = sorted({
-            record.get("type", "") for record in self.records if self.classify(record) is None
+            record.get("module", "") for record in self.records if self.classify(record) is None
         })
-        instances = self._instances_explicit() if any(record.get("instance") for record in self.records) else self._instances_legacy()
+        instances = self._instances_explicit()
         self._resolve_inputs(instances)
         return instances
 
@@ -171,7 +146,7 @@ class GuideFile:
             module_cls = registry.get_module(instance.module_type)
             parent_cls = registry.get_module(parent.module_type)
             primary = module_cls.primary_input()
-            output = parent_cls.output_for_role(role)
+            output = parent_cls.output_at_role(role)
             if primary is not None and output is not None:
                 instance.inputs = {primary.name: f"{parent.key}.{output}"}
 
@@ -191,57 +166,12 @@ class GuideFile:
             instance.joints[(role, int(record.get("index", 0)))] = record
             if is_root:
                 instance.root = record
-                instance.name = _module_name(record)
+                instance.name = record.get("module_name") or record.get("name", "")
                 instance.side = record.get("side", "C")
-                instance.settings = dict(record.get("settings") or _settings_from_attrs(record))
+                instance.settings = dict(record.get("settings") or {})
                 parent = by_name.get(record.get("parent") or "")
                 instance.parent_joint = parent["name"] if parent and parent.get("instance") != instance_id else None
         return list(grouped.values())
-
-    def _instances_legacy(self) -> list[GuideInstance]:
-        instances: list[GuideInstance] = []
-        for root in self.roots():
-            module_type, root_role, _is_root = self.classify(root)
-            instance = GuideInstance(
-                module_type, uuid.uuid4().hex, _module_name(root), root.get("side", "C"), root,
-                settings=_settings_from_attrs(root),
-            )
-            instance.joints[(root_role, 0)] = root
-            parent = self.by_name().get(root.get("parent") or "")
-            instance.parent_joint = parent["name"] if parent else None
-            counters: dict[str, int] = {}
-            self._walk_members(root, module_type, instance, counters)
-            instances.append(instance)
-        return instances
-
-    def _walk_members(self, record: dict, module_type: str, instance: GuideInstance, counters: dict) -> None:
-        for child in self.children_of(record["name"]):
-            info = self.classify(child)
-            if not info or info[2] or info[0] != module_type:
-                continue  # another instance's root, or unknown
-            role = info[1]
-            index = counters.get(role, 0)
-            counters[role] = index + 1
-            instance.joints[(role, index)] = child
-            self._walk_members(child, module_type, instance, counters)
-
-
-def _module_name(record: dict) -> str:
-    for attr in record.get("user_attributes", []) or []:
-        if attr.get("attr_name") == "moduleName":
-            return str(attr.get("default_value") or record["name"])
-    return record.get("name", "")
-
-
-def _settings_from_attrs(record: dict) -> dict:
-    """Module properties = user attributes that are not the global joint attrs."""
-    settings = {}
-    for attr in record.get("user_attributes", []) or []:
-        name = attr.get("attr_name")
-        if name in ROOT_TYPE_ATTRS or not name:
-            continue
-        settings[name] = attr.get("default_value")
-    return settings
 
 
 def make_record(
@@ -252,7 +182,6 @@ def make_record(
     joint_orient,
     parent: Optional[str],
     side: str,
-    legacy: str,
     module: str,
     role: str,
     index: int,
@@ -261,10 +190,8 @@ def make_record(
     color: int = 17,
     settings: Optional[dict] = None,
     module_name: Optional[str] = None,
-    axes: Optional[dict] = None,
-    inherit_orientation: bool = True,
 ) -> dict:
-    """Build a record in the legacy layout plus the new explicit keys."""
+    """One joint record in the ``.trg`` layout."""
     record = {
         "name": name,
         "position": [float(value) for value in position],
@@ -273,38 +200,14 @@ def make_record(
         "scale": [1, 1, 1],
         "parent": parent,
         "side": side,
-        "type": legacy,
         "color": int(color),
         "radius": float(radius),
-        "user_attributes": [],
         "module": module,
         "role": role,
         "index": int(index),
         "instance": instance,
     }
     if settings is not None:  # root joint
-        axes = axes or {"upAxis": (0, 1, 0), "mirrorAxis": (1, 0, 0), "lookAxis": (0, 0, 1)}
-        attrs = [{"attr_name": "moduleName", "attr_type": "string", "nice_name": "Module Name",
-                  "default_value": module_name or name}]
-        for axis_name, vector in axes.items():
-            for component, value in zip("XYZ", vector):
-                attrs.append({"attr_name": f"{axis_name}{component}", "attr_type": "float",
-                              "nice_name": f"{axis_name} {component}", "default_value": float(value)})
-        attrs.append({"attr_name": "useRefOri", "attr_type": "bool", "nice_name": "Inherit Orientation",
-                      "default_value": bool(inherit_orientation)})
-        for key, value in settings.items():
-            attrs.append({"attr_name": key, "attr_type": _attr_type(value), "nice_name": key.replace("_", " ").title(),
-                          "default_value": value})
-        record["user_attributes"] = attrs
         record["settings"] = dict(settings)
+        record["module_name"] = module_name or name
     return record
-
-
-def _attr_type(value) -> str:
-    if isinstance(value, bool):
-        return "bool"
-    if isinstance(value, int):
-        return "long"
-    if isinstance(value, float):
-        return "double"
-    return "string"

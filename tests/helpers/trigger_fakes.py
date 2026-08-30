@@ -126,7 +126,7 @@ class FakeBackend:
             if parent_instance is not None:
                 from tik.trigger.core import registry as _registry
 
-                output = attach or _registry.get_module(parent_instance.module_type).output_for_role(parent.role)
+                output = attach or _registry.get_module(parent_instance.module_type).output_at_role(parent.role)
                 if output:
                     resolved = {module.primary_input().name: f"{parent_instance.key}.{output}"}
         instance = module.to_instance(guides=guides, parent=parent, attach=attach, inputs=resolved)

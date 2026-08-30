@@ -40,7 +40,6 @@ class Module(Schema):
     space_controls: tuple[str, ...] = ()  # controller roles that accept spaces
     outputs: tuple[str, ...] = ("root",)
     module_type: str = ""  # stamped by @register_module
-    legacy_types: dict = {}  # role -> old .trg "type" name (default: capitalised role)
     anim_spaces = TableField(
         [],
         label="Anim Spaces",
@@ -119,8 +118,12 @@ class Module(Schema):
         return tuple(cls.outputs)
 
     @classmethod
-    def output_for_role(cls, role: str) -> Optional[str]:
-        """Output matching a guide role (legacy derivation), else the first output."""
+    def output_at_role(cls, role: str) -> Optional[str]:
+        """Output a child's primary input is pre-filled with when drawn under ``role``.
+
+        The output whose name matches the parent's guide role if there is one,
+        else the parent's first output.
+        """
         if role in cls.outputs:
             return role
         return cls.outputs[0] if cls.outputs else None

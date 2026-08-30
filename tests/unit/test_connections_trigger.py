@@ -22,7 +22,7 @@ def test_manifest_inputs_outputs():
     arm = get_module("arm")
     assert arm.input_names() == ["root"] and arm.primary_input().name == "root"
     assert arm.outputs == ("collar", "upperarm", "lowerarm", "hand")
-    assert arm.output_for_role("hand") == "hand" and arm.output_for_role("nope") == "collar"
+    assert arm.output_at_role("hand") == "hand" and arm.output_at_role("nope") == "collar"
     base = get_module("base")
     assert base.inputs == () and base.outputs == ("root",)
 
@@ -88,29 +88,6 @@ def test_export_import_keeps_connections_and_mirror_maps_sides(guides, tmp_path)
     subset = guides.export(tmp_path / "subset", guides.by_key("tail"))
     subset_data = json.loads(subset.read_text())
     assert [item["input"] for item in subset_data["connections"]] == ["tail.root"]
-
-
-def test_legacy_file_derives_primary_inputs():
-    trigger.load_plugins()
-
-    def record(name, legacy, parent=None, side="C"):
-        return {"name": name, "position": [0, 0, 0], "rotation": [0, 0, 0], "joint_orient": [0, 0, 0],
-                "scale": [1, 1, 1], "parent": parent, "side": side, "type": legacy, "color": 17, "radius": 1,
-                "user_attributes": [{"attr_name": "moduleName", "attr_type": "string", "nice_name": "", "default_value": name.split("_")[-1]}]}
-
-    legacy = GuideFile([
-        record("body", "Base"),
-        record("L_collar", "Collar", parent="body", side="L"),
-        record("L_shoulder", "Shoulder", parent="L_collar", side="L"),
-        record("L_elbow", "Elbow", parent="L_shoulder", side="L"),
-        record("L_hand", "Hand", parent="L_elbow", side="L"),
-        record("tail_root", "FkikRoot", parent="L_hand"),
-        record("tail_1", "Fkik", parent="tail_root"),
-    ])
-    instances = {item.module_type: item for item in legacy.instances()}
-    assert instances["arm"].inputs == {"root": "body.root"}          # hangs under the base root
-    assert instances["fkchain"].inputs == {"root": "L_collar.hand"}  # hangs under the arm's hand joint
-    assert instances["base"].inputs == {}
 
 
 def test_fkchain_exposes_every_segment_as_output():

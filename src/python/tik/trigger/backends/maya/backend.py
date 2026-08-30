@@ -14,15 +14,12 @@ from tik.trigger.core.exceptions import AttachError, GuideError
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 
 from tik.maya import attribute
-from tik.trigger.guides.format import legacy_type, make_record
+from tik.trigger.guides.format import make_record
 
 from . import tags
 from .context import MayaBuildContext, MayaGuideContext
 
 INPUTS = "trg_inputs"
-
-_JOINT_SIDES = {"C": 0, "L": 1, "R": 2}
-_AXES = {"upAxis": (0.0, 1.0, 0.0), "mirrorAxis": (1.0, 0.0, 0.0), "lookAxis": (0.0, 0.0, 1.0)}
 
 logger = logging.getLogger(__name__)
 
@@ -197,8 +194,6 @@ class MayaBackend:
             if ctx.root is None:
                 raise GuideError(f"'{module.module_type}' drew no guides.")
             self._write_root_meta(ctx.root, module, attach)
-            for (role, _index), node in ctx.created.items():
-                self._tag_legacy_joint(node, type(module), role, module.side.value)
             if poses:
                 self._apply_poses(ctx.created, poses)
             resolved_inputs = dict(inputs or {})
@@ -207,7 +202,7 @@ class MayaBackend:
                 parent_instance = self.find_instances([parent.instance_id])
                 if parent_instance:
                     parent_cls = registry.get_module(parent_instance[0].module_type)
-                    output = attach or parent_cls.output_for_role(parent.role)
+                    output = attach or parent_cls.output_at_role(parent.role)
                     if output:
                         resolved_inputs = {module.primary_input().name: f"{parent_instance[0].key}.{output}"}
             ctx.root.meta[INPUTS] = resolved_inputs
@@ -233,28 +228,30 @@ class MayaBackend:
         root.meta[tags.SETTINGS] = module.values()
         if attach:
             root.meta[tags.ATTACH] = attach
-        MayaBackend._write_legacy_attrs(root, module)
+        MayaBackend._write_guide_attrs(root, module)
 
     @staticmethod
-    def _write_legacy_attrs(root, module) -> None:
-        """Old-Trigger style attributes on the root guide (+ typed module properties)."""
-        if not root.has_attr("moduleName"):
-            attribute.add_string(root, "moduleName")
-        root["moduleName"].value = module.name
-        for axis_name, vector in _AXES.items():
-            if not root.has_attr(axis_name):
-                cmds.addAttr(root.long_name, longName=axis_name, attributeType="float3")
-                for component in "XYZ":
-                    cmds.addAttr(root.long_name, longName=f"{axis_name}{component}", attributeType="float", parent=axis_name)
-            for component, value in zip("XYZ", vector):
-                root[f"{axis_name}{component}"].value = value
+    def _write_guide_attrs(root, module) -> None:
+        """Guide-level attributes the Guide Designer edits, plus the module fields.
+
+        ``useRefOri`` ("Inherit Orientation") is a real attribute rather than a
+        module field because it is a property of the guide, not of the module
+        type: the designer binds its checkbox to this plug two-way, and writes
+        it across a multi-selection.
+        """
         if not root.has_attr("useRefOri"):
             attribute.add_bool(root, "useRefOri", default=True)
         MayaBackend._sync_setting_attrs(root, module)
 
     @staticmethod
     def _sync_setting_attrs(root, module) -> None:
-        """Mirror module fields as real attributes (for UI binding and old-style export)."""
+        """Mirror module fields as real Maya attributes on the root guide.
+
+        The Guide Designer binds its property widgets two-way to these plugs
+        through ``settings_plug()``. The authoritative storage is still the
+        ``trg_settings`` meta dict; non-scalar field kinds have no sensible
+        single attribute and live only there.
+        """
         for name, field_obj in module.fields().items():
             value = getattr(module, name)
             kind = field_obj.type_name
@@ -279,13 +276,6 @@ class MayaBackend:
                 root[name].value = str(value)
             else:
                 root[name].value = value
-
-    @staticmethod
-    def _tag_legacy_joint(node, module_cls, role: str, side: str) -> None:
-        """Old joint labelling: side + type 'Other' with the legacy type name."""
-        node["side"].value = _JOINT_SIDES.get(side, 0)
-        node["type"].value = 18  # Other
-        node["otherType"].value = legacy_type(module_cls, role)
 
     @staticmethod
     def _apply_poses(nodes: dict, poses: Sequence[GuidePose]) -> None:
@@ -334,7 +324,7 @@ class MayaBackend:
 
     # ------------------------------------------------------- .trg records
     def export_guide_records(self, instance_ids=None) -> list[dict]:
-        """Serialize scene guides in the legacy ``.trg`` layout (+ explicit keys)."""
+        """Serialize scene guides as ``.trg`` joint records."""
         instances = self.find_instances() if instance_ids is None else self.find_instances(list(instance_ids))
         records: list[dict] = []
         for instance in instances:
@@ -353,7 +343,6 @@ class MayaBackend:
                     joint_orient=node.joint_orient,
                     parent=parent_name,
                     side=instance.side,
-                    legacy=legacy_type(module_cls, role),
                     module=instance.module_type,
                     role=role,
                     index=index,
@@ -385,7 +374,6 @@ class MayaBackend:
                         tags.KIND: tags.GUIDE, tags.MODULE: module.module_type, tags.INSTANCE: module.instance_id,
                         tags.ROLE: role, tags.INDEX: index, tags.SIDE: module.side.value,
                     })
-                    self._tag_legacy_joint(joint, module_cls, role, module.side.value)
                     nodes[(role, index)] = joint
                     created_nodes[record["name"]] = joint
                 root = nodes[(module_cls.guides.root, 0)]

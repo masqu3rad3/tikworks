@@ -13,7 +13,7 @@ from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import instance_key
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 
-from .format import GuideFile, GuideInstance, legacy_type, make_record
+from .format import GuideFile, GuideInstance, make_record
 
 
 def _mirror_source(source: str, side: str, target_side: str) -> str:

@@ -905,7 +905,7 @@ class GuideDesigner(MayaToolWindow):
         if picked is not None:
             handle = self.guides.get(picked.instance_id)
             if handle is not None:
-                output = handle.module_class.output_for_role(picked.role)
+                output = handle.module_class.output_at_role(picked.role)
                 return f"{handle.key}.{output}" if output else ""
         name = getattr(self.backend, "selected_node_name", lambda: "")()
         return name or ""

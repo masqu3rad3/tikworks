@@ -40,7 +40,7 @@ def derive_inputs(instance: ModuleInstance, by_id: dict) -> dict:
     if parent is None:
         return {}
     parent_cls = registry.get_module(parent.module_type)
-    output = instance.attach or parent_cls.output_for_role(instance.parent.role)
+    output = instance.attach or parent_cls.output_at_role(instance.parent.role)
     if output is None:
         return {}
     return {primary.name: f"{parent.key}.{output}"}
