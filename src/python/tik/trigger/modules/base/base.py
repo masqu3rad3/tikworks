@@ -25,12 +25,12 @@ class Base(Module):
     def build(self, ctx) -> None:
         root_guide = ctx.guide("root")
         controller = ctx.controller(
-            "root", shape="Circle", size=self.controller_size, match=root_guide
+            "root",
+            shape="Circle",
+            size=self.controller_size,
+            match=root_guide,
+            mirror="world",
         )
-        joint = tm.Joint.create(
-            name=ctx.name("root", suffix="jnt"), parent=ctx.groups.bind.long_name
-        )
-        joint.align_to(root_guide)
+        joint = ctx.bind_joint("root", match=root_guide)
         tm.MatrixConstraint.create(controller.transform, joint, maintain_offset=True)
-        ctx.deform_joint(joint)
         ctx.output("root", joint)

@@ -36,28 +36,36 @@ class FkChain(Module):
 
     def build(self, ctx) -> None:
         guide_nodes = [ctx.guide("root"), *ctx.guides("segment")]
-        positions = [tuple(node.world_position) for node in guide_nodes]
-        joints = tm.Joint.chain(
-            positions, name_pattern=ctx.name("{index}", suffix="jnt"), parent=ctx.groups.bind
-        )
 
         socket = tm.Transform.create(
             name=ctx.name("root", suffix="socket"), parent=ctx.groups.socket.long_name
         )
-        socket.align_to(joints[0])
+        socket.align_to(guide_nodes[0])
         ctx.attach("root", socket)
+
+        # Bind joints are created in their final hierarchy position: the root
+        # falls back to ctx.bind_parent, which is the connected producer's bind
+        # joint when this chain is attached to another module.
+        joints = []
+        parent_joint = None
+        for index, guide_node in enumerate(guide_nodes):
+            joint = ctx.bind_joint(str(index), parent=parent_joint, match=guide_node)
+            joints.append(joint)
+            parent_joint = joint
 
         parent = socket
         for index, joint in enumerate(joints[:-1]):
             controller = ctx.controller(
-                f"fk{index}", size=self.controller_size, parent=parent, match=joint
+                f"fk{index}",
+                size=self.controller_size,
+                parent=parent,
+                match=joint,
+                mirror="behaviour",
             )
             controller.transform.create_offset_group(name=ctx.name(f"fk{index}", suffix="offset"))
             tm.MatrixConstraint.create(controller.transform, joint, maintain_offset=True)
             parent = controller.transform
 
-        for joint in joints:
-            ctx.deform_joint(joint)
         ctx.output("root", joints[0])
         for index, joint in enumerate(joints[1:]):
             ctx.output(f"segment{index + 1}", joint)

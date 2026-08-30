@@ -236,3 +236,41 @@ def test_controller_mirror_defaults_to_world(backend):
     ctx = _built(backend)
     controller = ctx.controller("default_probe")
     assert controller.transform.meta[tags.MIRROR] == tags.WORLD
+
+
+def test_base_puts_its_joint_in_the_bind_group(backend):
+    ctx = _built(backend, "base", name="body")
+    joint = ctx.outputs["root"]
+    assert joint.parent.name == ctx.groups.bind.name
+    assert joint in ctx.deform_joints
+
+
+def _connected(backend):
+    """A base with an fkchain attached; returns (parent_ctx, child_ctx)."""
+    root = backend.create_guides(get_module("base")(name="body"))
+    child = backend.create_guides(
+        get_module("fkchain")(name="tail", side="L", settings={"segments": 2}),
+        parent=ParentRef(root.instance_id, "root"),
+    )
+    report = Builder(backend).build(rig_name="single", afterlife="keep")
+    return report.contexts[root.instance_id], report.contexts[child.instance_id]
+
+
+def test_fkchain_socket_lives_in_the_socket_group(backend):
+    _parent_ctx, ctx = _connected(backend)
+    socket = ctx.attachments["root"]
+    assert socket.parent.name == ctx.groups.socket.name
+
+
+def test_fkchain_joints_stay_a_chain(backend):
+    _parent_ctx, ctx = _connected(backend)
+    root = ctx.outputs["root"]
+    assert ctx.outputs["segment1"].parent.name == root.name
+    assert ctx.outputs["end"].parent.name == ctx.outputs["segment1"].name
+
+
+def test_connected_module_builds_bind_joints_inside_the_parent(backend):
+    """The single-hierarchy rule, end to end: bind_grp is left empty."""
+    parent_ctx, child_ctx = _connected(backend)
+    assert child_ctx.outputs["root"].parent.name == parent_ctx.outputs["root"].name
+    assert not cmds.listRelatives(child_ctx.groups.bind.long_name, children=True)
