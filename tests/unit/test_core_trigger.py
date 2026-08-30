@@ -227,3 +227,59 @@ def test_builder_empty_scene_and_bad_afterlife():
     assert Builder(backend).build().count == 0
     with pytest.raises(ValueError):
         Builder(backend).build(afterlife="burn")
+
+
+# --------------------------------------------------- topological ordering
+def test_order_by_connections_puts_producers_first():
+    from tik.trigger.core.schemas import order_by_connections
+
+    a = ToyRoot(name="a").to_instance()
+    b = ToyChain(name="b").to_instance()
+    c = ToyChain(name="c").to_instance()
+    inputs = {"a": {}, "b": {"root": f"{a.key}.root"}, "c": {"root": f"{b.key}.root"}}
+    ordered = order_by_connections([c, b, a], lambda item: inputs[item.name])
+    assert [item.name for item in ordered] == ["a", "b", "c"]
+
+
+def test_order_by_connections_detects_a_cycle():
+    from tik.trigger.core.schemas import order_by_connections
+
+    a = ToyChain(name="a").to_instance()
+    b = ToyChain(name="b").to_instance()
+    inputs = {"a": {"root": f"{b.key}.root"}, "b": {"root": f"{a.key}.root"}}
+    with pytest.raises(ValueError, match="Cyclic"):
+        order_by_connections([a, b], lambda item: inputs[item.name])
+
+
+def test_order_by_connections_keeps_unconnected_order():
+    from tik.trigger.core.schemas import order_by_connections
+
+    a = ToyRoot(name="a").to_instance()
+    b = ToyChain(name="b").to_instance()
+    ordered = order_by_connections([b, a], lambda item: {})
+    assert [item.name for item in ordered] == ["b", "a"]
+
+
+def test_order_by_connections_ignores_bare_scene_sources():
+    from tik.trigger.core.schemas import order_by_connections
+
+    a = ToyChain(name="a").to_instance()
+    ordered = order_by_connections([a], lambda item: {"root": "some_jnt"})
+    assert [item.name for item in ordered] == ["a"]
+
+
+def test_builder_passes_bind_parent_from_the_producer():
+    """A connected module builds its bind joints inside the producer's."""
+    backend, root, chain = _scene()
+    report = Builder(backend).build(rig_name="rig", afterlife="keep")
+    producer_ctx = report.contexts[root.instance_id]
+    consumer_ctx = report.contexts[chain.instance_id]
+    assert consumer_ctx.bind_parent == producer_ctx.outputs["root"]
+
+
+def test_builder_bind_parent_defaults_when_unconnected():
+    backend = FakeBackend()
+    solo = backend.create_guides(ToyRoot(name="solo"))
+    report = Builder(backend).build(rig_name="rig", afterlife="keep")
+    ctx = report.contexts[solo.instance_id]
+    assert ctx.bind_parent == ctx.groups.bind

@@ -167,6 +167,51 @@ def order_instances(instances: list[ModuleInstance]) -> list[ModuleInstance]:
     return ordered
 
 
+def order_by_connections(instances: list[ModuleInstance], inputs_for) -> list[ModuleInstance]:
+    """Return instances with producers before consumers.
+
+    Bind joints must be created in their final hierarchy position, so a
+    module's producer has to be built before the module itself.
+
+    Args:
+        instances: The instances to order.
+        inputs_for: Callable returning ``{input_name: source}`` for an instance.
+            A source is ``"<module key>.<output>"`` or a bare scene node name;
+            bare names have no producer and are ignored.
+
+    Returns:
+        The instances, producers first, input order preserved otherwise.
+
+    Raises:
+        ValueError: On a cyclic connection, naming the instance.
+    """
+    by_key = {instance.key: instance for instance in instances}
+    ordered: list[ModuleInstance] = []
+    visiting: set[str] = set()
+    done: set[str] = set()
+
+    def visit(instance: ModuleInstance) -> None:
+        if instance.instance_id in done:
+            return
+        if instance.instance_id in visiting:
+            raise ValueError(f"Cyclic module connection at '{instance.name}'.")
+        visiting.add(instance.instance_id)
+        for source in (inputs_for(instance) or {}).values():
+            if not source or "." not in source:
+                continue
+            key, _dot, _output = source.rpartition(".")
+            producer = by_key.get(key)
+            if producer is not None and producer is not instance:
+                visit(producer)
+        visiting.discard(instance.instance_id)
+        done.add(instance.instance_id)
+        ordered.append(instance)
+
+    for instance in instances:
+        visit(instance)
+    return ordered
+
+
 __all__: list[Any] = [
     "SCHEMA_VERSION",
     "GuidePose",
@@ -175,4 +220,5 @@ __all__: list[Any] = [
     "ActionInstance",
     "RigDocument",
     "order_instances",
+    "order_by_connections",
 ]

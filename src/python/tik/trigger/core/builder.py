@@ -8,7 +8,7 @@ from typing import Any, Optional
 from . import registry
 from .events import EventBus
 from .exceptions import AttachError, BuildError
-from .schemas import ModuleInstance, order_instances
+from .schemas import ModuleInstance, order_by_connections, order_instances
 
 AFTERLIFE_MODES = ("keep", "hide", "delete")
 
@@ -82,49 +82,81 @@ class Builder:
 
         with self.backend.undo_chunk(f"Trigger build: {rig_name}"):
             report.rig_root = self.backend.ensure_rig_root(rig_name)
+            by_id = {instance.instance_id: instance for instance in instances}
+            # Producers must be built before consumers: ctx.bind_parent is
+            # resolved from the producer's output, so bind joints can be created
+            # in their final hierarchy position instead of reparented later.
+            instances = order_by_connections(
+                instances, lambda item: derive_inputs(item, by_id)
+            )
+            by_key: dict = {}
             for number, instance in enumerate(instances, start=1):
                 self.events.progress(number, total, f"Building {instance.name}")
-                ctx = self._build_one(instance, report.rig_root)
+                module_cls = registry.get_module(instance.module_type)
+                inputs = derive_inputs(instance, by_id)
+                bind_parent = self._bind_parent_for(
+                    instance, module_cls, inputs, by_key, report
+                )
+                ctx = self._build_one(instance, report.rig_root, bind_parent)
                 report.contexts[instance.instance_id] = ctx
                 report.built.append(instance.instance_id)
-            self._connect_all(instances, report, known_keys)
+                by_key[instance.key] = instance
+                self._connect_one(
+                    instance, module_cls, inputs, by_key, report, known_keys
+                )
             self.backend.afterlife(instances, afterlife)
         self.events.log(f"Built {total} module(s) into '{rig_name}'.")
         return report
 
     # ------------------------------------------------------------- connect
-    def _connect_all(self, instances, report: BuildReport, known_keys=frozenset()) -> None:
-        by_id = {instance.instance_id: instance for instance in instances}
-        by_key = {instance.key: instance for instance in instances}
-        for instance in instances:
-            module_cls = registry.get_module(instance.module_type)
-            ctx = report.contexts[instance.instance_id]
-            inputs = derive_inputs(instance, by_id)
-            for declared in module_cls.inputs:
-                source = inputs.get(declared.name)
-                if not source:
-                    if declared.optional:
-                        continue
-                    raise AttachError(
-                        f"{instance.key}.{declared.name}: required input has no source.",
-                        instance_id=instance.instance_id, module_type=instance.module_type,
-                    )
-                key, _output = split_source(source)
-                if key is not None and key in known_keys and key not in by_key:
-                    self.events.log(
-                        f"{instance.key}.{declared.name}: source '{source}' is outside the build scope; left unattached.",
-                        level="warning",
-                    )
+    def _bind_parent_for(self, instance, module_cls, inputs, by_key, report):
+        """Resolve the bind joint that this module's bind joints hang from.
+
+        Returns the primary input's producer output, or ``None`` when the module
+        is unconnected — the context then falls back to its own ``bind_grp``.
+        """
+        primary = module_cls.primary_input()
+        if primary is None:
+            return None
+        source = inputs.get(primary.name)
+        if not source:
+            return None
+        key, output = split_source(source)
+        if key is None or key not in by_key:
+            return None
+        producer_ctx = report.contexts.get(by_key[key].instance_id)
+        if producer_ctx is None:
+            return None
+        return producer_ctx.outputs.get(output)
+
+    def _connect_one(self, instance, module_cls, inputs, by_key, report, known_keys) -> None:
+        """Attach every declared input of one already-built instance."""
+        ctx = report.contexts[instance.instance_id]
+        for declared in module_cls.inputs:
+            source = inputs.get(declared.name)
+            if not source:
+                if declared.optional:
                     continue
-                node = self._resolve_source(instance, declared.name, source, by_key, report)
-                target = ctx.attachments.get(declared.name)
-                if target is None:
-                    raise AttachError(
-                        f"{instance.key}.{declared.name}: module did not call ctx.attach() for this input.",
-                        instance_id=instance.instance_id, module_type=instance.module_type,
-                    )
-                self.backend.connect(ctx, declared.name, node)
-                report.connections.append((f"{instance.key}.{declared.name}", source))
+                raise AttachError(
+                    f"{instance.key}.{declared.name}: required input has no source.",
+                    instance_id=instance.instance_id, module_type=instance.module_type,
+                )
+            key, _output = split_source(source)
+            if key is not None and key in known_keys and key not in by_key:
+                self.events.log(
+                    f"{instance.key}.{declared.name}: source '{source}' is outside the build scope; left unattached.",
+                    level="warning",
+                )
+                continue
+            node = self._resolve_source(instance, declared.name, source, by_key, report)
+            target = ctx.attachments.get(declared.name)
+            if target is None:
+                raise AttachError(
+                    f"{instance.key}.{declared.name}: module did not call ctx.attach() for this input.",
+                    instance_id=instance.instance_id, module_type=instance.module_type,
+                )
+            self.backend.connect(ctx, declared.name, node)
+            report.connections.append((f"{instance.key}.{declared.name}", source))
 
     def _resolve_source(self, instance, input_name, source, by_key, report):
         key, output = split_source(source)
@@ -147,7 +179,7 @@ class Builder:
         return node
 
     # --------------------------------------------------------------- build
-    def _build_one(self, instance: ModuleInstance, rig_root):
+    def _build_one(self, instance: ModuleInstance, rig_root, bind_parent=None):
         module_cls = registry.get_module(instance.module_type)
         module = module_cls.from_instance(instance)
         problems = module.validate()
@@ -157,7 +189,7 @@ class Builder:
                 instance_id=instance.instance_id, module_type=instance.module_type,
             )
         try:
-            ctx = self.backend.build_context(module, instance, rig_root)
+            ctx = self.backend.build_context(module, instance, rig_root, bind_parent)
             module.build(ctx)
             missing = [name for name in module_cls.output_names(instance.settings) if name not in ctx.outputs]
             if missing:
