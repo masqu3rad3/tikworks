@@ -3,11 +3,7 @@
 # --------------------------------------------------
 
 PROJECT_NAME := tikworks
-<<<<<<< HEAD
 SRC_DIR := src/python
-=======
-SRC_DIR := src
->>>>>>> TW-4-deformer-and-weights-workflows
 DOCS_DIR := docs
 DOCS_BUILD := docs/build/html
 TESTS_DIR := tests
@@ -23,11 +19,7 @@ ifeq ($(OS),Windows_NT)
     PLATFORM := windows
     PATH_SEP := ;
     OPEN_CMD := start
-<<<<<<< HEAD
     SET_PYTHONPATH = set PYTHONPATH=$(CURDIR)/$(SRC_DIR)$(PATH_SEP)%PYTHONPATH% &&
-=======
-    SET_PYTHONPATH = set PYTHONPATH=$(CURDIR)\$(SRC_DIR)$(PATH_SEP)%PYTHONPATH% &&
->>>>>>> TW-4-deformer-and-weights-workflows
 else
     PLATFORM := unix
     PATH_SEP := :
@@ -45,13 +37,8 @@ help: ## Show available commands
 	@echo "Usage: make <target>"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
-<<<<<<< HEAD
 	 | sort \
 	 | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
-=======
-		| sort \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
->>>>>>> TW-4-deformer-and-weights-workflows
 
 # --------------------------------------------------
 # Documentation
@@ -59,15 +46,7 @@ help: ## Show available commands
 
 .PHONY: docs
 docs: ## Build Sphinx documentation
-<<<<<<< HEAD
 	cd $(DOCS_DIR) && make html
-=======
-ifeq ($(PLATFORM),windows)
-	cd $(DOCS_DIR) && make html
-else
-	cd $(DOCS_DIR) && make html
-endif
->>>>>>> TW-4-deformer-and-weights-workflows
 
 .PHONY: show-doc
 show-doc: ## Open built documentation in browser
@@ -85,11 +64,12 @@ tests-unit: ## Run unit tests
 	$(SET_PYTHONPATH) $(MAYAPY) $(TESTS_DIR)/unit/invoke.py
 
 .PHONY: tests-integration
-tests-ui:
-	$(SET_PYTHONPATH) set TIK_TESTS_NO_MAYA=1 && set QT_QPA_PLATFORM=offscreen && $(MAYAPY) -m pytest tests/ui -q
-
 tests-integration: ## Run integration tests
 	$(SET_PYTHONPATH) $(MAYAPY) $(TESTS_DIR)/integration/invoke.py
+
+.PHONY: tests-ui
+tests-ui: ## Run Qt UI tests (no Maya standalone)
+	$(SET_PYTHONPATH) set TIK_TESTS_NO_MAYA=1 && set QT_QPA_PLATFORM=offscreen && $(MAYAPY) -m pytest tests/ui -q
 
 # --------------------------------------------------
 # Coverage
@@ -109,7 +89,6 @@ tests-cov-unit: ## Run unit tests with coverage
 .PHONY: tests-cov-integration
 tests-cov-integration: ## Run integration tests with coverage
 	$(SET_PYTHONPATH) $(MAYAPY) -m coverage run $(TESTS_DIR)/integration/invoke.py
-<<<<<<< HEAD
 
 # --------------------------------------------------
 # CMake Build
@@ -175,5 +154,3 @@ ifndef PLUGIN_NAME
 	$(error ERROR: PLUGIN_NAME is required. Usage: make add-plugin PLUGIN_NAME=myPlugin)
 endif
 	python package/package.py --add-plugin $(PLUGIN_NAME)
-=======
->>>>>>> TW-4-deformer-and-weights-workflows
