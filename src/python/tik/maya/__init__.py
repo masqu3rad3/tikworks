@@ -14,6 +14,7 @@ from .core.scene import proxy_wrapper
 from .core.shapenode import ShapeNode
 from .constructs import (
     IkFkChain,
+    MatrixBlend,
     MatrixConstraint,
     MatrixSpline,
     MatrixSwitch,
@@ -52,6 +53,7 @@ __all__ = [
     "find_by_meta",
     "attribute",
     "naming",
+    "MatrixBlend",
     "MatrixConstraint",
     "MatrixSpline",
     "MatrixSwitch",
