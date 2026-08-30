@@ -40,6 +40,114 @@ class _VectorEditor(QtWidgets.QWidget):
             spin.blockSignals(False)
 
 
+class _TableEditor(QtWidgets.QWidget):
+    """A table of typed rows with add/remove buttons."""
+
+    valueChanged = QtCore.Signal(object)  # noqa: N815 - matches the Qt widgets here
+
+    def __init__(self, columns, choices_resolver=None, parent=None) -> None:
+        super().__init__(parent)
+        self.columns = list(columns)
+        self._resolve = choices_resolver or (lambda _name: ())
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+
+        self.table = QtWidgets.QTableWidget(0, len(self.columns))
+        self.table.setHorizontalHeaderLabels([column.display() for column in self.columns])
+        self.table.verticalHeader().setVisible(False)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        layout.addWidget(self.table)
+
+        buttons = QtWidgets.QHBoxLayout()
+        buttons.setContentsMargins(0, 0, 0, 0)
+        self.add_button = QtWidgets.QPushButton("+")
+        self.remove_button = QtWidgets.QPushButton("-")
+        for button in (self.add_button, self.remove_button):
+            button.setFixedWidth(24)
+            buttons.addWidget(button)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
+
+        self.add_button.clicked.connect(lambda: self.add_row())
+        self.remove_button.clicked.connect(self._remove_selected)
+
+    # ------------------------------------------------------------- rows
+    def _choices(self, column):
+        if column.choices_from:
+            return list(self._resolve(column.choices_from))
+        return list(column.choices)
+
+    def _make_cell(self, column, value):
+        if column.kind == "choice":
+            widget = QtWidgets.QComboBox()
+            widget.addItems([str(item) for item in self._choices(column)])
+            if value:
+                index = widget.findText(str(value))
+                if index >= 0:
+                    widget.setCurrentIndex(index)
+            widget.currentIndexChanged.connect(self._emit)
+            return widget
+        widget = QtWidgets.QLineEdit(str(value or ""))
+        widget.editingFinished.connect(self._emit)
+        return widget
+
+    def add_row(self, row: Optional[dict] = None) -> None:
+        row = row or {}
+        index = self.table.rowCount()
+        self.table.insertRow(index)
+        for column_index, column in enumerate(self.columns):
+            self.table.setCellWidget(
+                index, column_index, self._make_cell(column, row.get(column.name, ""))
+            )
+        self._emit()
+
+    def remove_row(self, index: int) -> None:
+        if 0 <= index < self.table.rowCount():
+            self.table.removeRow(index)
+            self._emit()
+
+    def _remove_selected(self) -> None:
+        rows = sorted({item.row() for item in self.table.selectedIndexes()}, reverse=True)
+        if not rows and self.table.rowCount():
+            rows = [self.table.rowCount() - 1]
+        for index in rows:
+            if index >= 0:
+                self.table.removeRow(index)
+        self._emit()
+
+    def cell_widget(self, row: int, column: int):
+        return self.table.cellWidget(row, column)
+
+    # ------------------------------------------------------------ value
+    def value(self) -> list:
+        rows = []
+        for row_index in range(self.table.rowCount()):
+            row = {}
+            for column_index, column in enumerate(self.columns):
+                widget = self.table.cellWidget(row_index, column_index)
+                if isinstance(widget, QtWidgets.QComboBox):
+                    row[column.name] = widget.currentText()
+                else:
+                    row[column.name] = widget.text()
+            rows.append(row)
+        return rows
+
+    def setValue(self, rows) -> None:  # noqa: N802 - matches the Qt widgets here
+        self.table.setRowCount(0)
+        for row in rows or []:
+            index = self.table.rowCount()
+            self.table.insertRow(index)
+            for column_index, column in enumerate(self.columns):
+                self.table.setCellWidget(
+                    index, column_index, self._make_cell(column, row.get(column.name, ""))
+                )
+
+    def _emit(self, *_args) -> None:
+        self.valueChanged.emit(self.value())
+
+
 class _NodeEditor(QtWidgets.QWidget):
     """Line edit plus a "pick" button fed by ``picker``."""
 
@@ -274,6 +382,12 @@ class FormBuilder(QtWidgets.QWidget):
             widget = VersionedFileField(getattr(field, "extensions", ()), getattr(field, "mode", "open"),
                                         extra=extra, browser=self.file_browser, base_dir=self.base_dir)
             widget.changed.connect(lambda value, n=name: self._on_change(n, value))
+        elif kind == "table":
+            widget = _TableEditor(
+                getattr(field, "columns", ()),
+                choices_resolver=lambda attr: getattr(self._target, attr, ()),
+            )
+            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
         elif kind == "dict":
             widget = QtWidgets.QLabel("(edited in place)")
         else:  # string and unknown types

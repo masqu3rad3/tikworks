@@ -82,3 +82,50 @@ def test_set_target_none_clears(qapp):
     form.set_target(None)
     assert form._widgets == {}
     assert form.values() == {}
+
+
+# ------------------------------------------------------------ table field
+def test_table_widget_round_trips_rows():
+    from tik.core.fields import Column, TableField
+
+    class Holder(Schema):
+        rows = TableField(columns=(
+            Column("mode", "choice", choices=("parent", "point")),
+            Column("label", "string"),
+        ))
+
+    holder = Holder()
+    holder.rows = [{"mode": "point", "label": "chest"}]
+    builder = FormBuilder(holder)
+    widget = builder.widget("rows")
+    assert widget.value() == [{"mode": "point", "label": "chest"}]
+
+
+def test_table_widget_adds_and_removes_rows():
+    from tik.core.fields import Column, TableField
+
+    class Holder(Schema):
+        rows = TableField(columns=(Column("label", "string"),))
+
+    holder = Holder()
+    builder = FormBuilder(holder)
+    widget = builder.widget("rows")
+    widget.add_row()
+    assert len(holder.rows) == 1
+    widget.remove_row(0)
+    assert holder.rows == []
+
+
+def test_table_widget_resolves_choices_from_the_target():
+    """A column's options can come from the object being edited."""
+    from tik.core.fields import Column, TableField
+
+    class Holder(Schema):
+        controls = ("ik", "pole")
+        rows = TableField(columns=(Column("control", "choice", choices_from="controls"),))
+
+    builder = FormBuilder(Holder())
+    widget = builder.widget("rows")
+    widget.add_row()
+    combo = widget.cell_widget(0, 0)
+    assert [combo.itemText(index) for index in range(combo.count())] == ["ik", "pole"]
