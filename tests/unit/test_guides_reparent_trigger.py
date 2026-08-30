@@ -1,15 +1,16 @@
-"""Maya backend: reparenting guides from the Guides handler (drag-parenting in the Designer)."""
+"""Maya scene: reparenting guides from the Guides handler (drag-parenting in the Designer)."""
 
 import pytest
 from maya import cmds
 
 import tik.trigger as trigger
 from tik.trigger.core.exceptions import GuideError
-from tik.trigger.guides import Guides
+from tik.trigger.guides import GuideScene
 
 
 def test_reparent_moves_root_guide_and_updates_parent_ref():
-    guides = Guides(trigger.maya_backend())
+    trigger.load_plugins()
+    guides = GuideScene()
     body = guides.add("base", name="body")
     tail = guides.add("fkchain", name="tail")
     assert tail.parent is None

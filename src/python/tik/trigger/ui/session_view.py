@@ -9,7 +9,7 @@ from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.tile_grid import TileEntry, TileGrid
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import ActionExecutionError, SessionError, TriggerError
-from tik.trigger.core.runner import STEP_FAILED, STEP_FINISHED, STEP_STARTED
+from tik.trigger.core.steps import STEP_FAILED, STEP_FINISHED, STEP_STARTED
 from tik.trigger.handler import ActionHandle, Session
 
 from .delegates import PipelineDelegate
@@ -341,7 +341,7 @@ class SessionView(QtWidgets.QWidget):
         action = registry.get_action(handle.type)(settings=handle.settings)
         from tik.trigger.core.action import ActionContext
 
-        ctx = ActionContext(backend=self.session.backend, session=self.session, events=self.session.events,
+        ctx = ActionContext(session=self.session, events=self.session.events,
                             base_dir=self.session.directory, path=path)
         written = action.save_from_scene(ctx)
         self.session.events.log(f"{path}: saved {len(written)} file(s)")

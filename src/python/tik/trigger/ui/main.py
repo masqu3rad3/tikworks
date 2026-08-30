@@ -24,9 +24,8 @@ MAX_RECENT = 8
 class TriggerWindow(MayaToolWindow):
     WINDOW_NAME = "TriggerWindow"
 
-    def __init__(self, backend, parent=None, file_browser=None) -> None:
+    def __init__(self, parent=None, file_browser=None) -> None:
         super().__init__(parent)
-        self.backend = backend
         self.file_browser = file_browser
         self.events = EventBus()
         self._guide_designer = None
@@ -167,7 +166,7 @@ class TriggerWindow(MayaToolWindow):
         return view
 
     def new_session(self) -> SessionView:
-        return self.add_session(Session(self.backend, events=self.events))
+        return self.add_session(Session(events=self.events))
 
     def open_session(self, path: Optional[str] = None) -> Optional[SessionView]:
         if not path:
@@ -178,7 +177,7 @@ class TriggerWindow(MayaToolWindow):
             if view.session.file_path and Path(view.session.file_path) == Path(path):
                 self.tabs.setCurrentWidget(view)
                 return view
-        session = Session.open(path, backend=self.backend, events=self.events)
+        session = Session.open(path, events=self.events)
         view = self.add_session(session)
         for item in [v for v in self.views if v is not view and not v.session.actions and not v.session.file_path]:
             self.tabs.removeTab(self.tabs.indexOf(item))
@@ -344,7 +343,7 @@ class TriggerWindow(MayaToolWindow):
         from .guide_designer import GuideDesigner
 
         if self._guide_designer is None:
-            self._guide_designer = GuideDesigner(self.backend, parent=self, events=self.events, file_browser=self.file_browser)
+            self._guide_designer = GuideDesigner(parent=self, events=self.events, file_browser=self.file_browser)
         if guides_path:
             self._guide_designer.set_file(guides_path)
         self._guide_designer.show_tool()
@@ -370,12 +369,12 @@ class TriggerWindow(MayaToolWindow):
         super().closeEvent(event)
 
 
-def show(backend=None, dockable: bool = True) -> TriggerWindow:
+def show(dockable: bool = True) -> TriggerWindow:
     """Open (or re-open) the single Trigger window."""
     import tik.trigger as trigger
 
-    backend = backend or trigger.maya_backend()
+    trigger.load_plugins()
     TriggerWindow.teardown_workspace_control()
-    window = TriggerWindow(backend)
+    window = TriggerWindow()
     window.show_tool(dockable=dockable)
     return window

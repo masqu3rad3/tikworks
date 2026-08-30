@@ -4,16 +4,16 @@ import pytest
 from maya import cmds
 
 import tik.trigger as trigger
-from tik.trigger.guides import Guides
+from tik.trigger.guides import GuideScene
 
 
 @pytest.fixture
-def backend():
-    return trigger.maya_backend()
+def scene():
+    return GuideScene()
 
 
-def _author(backend, tmp_path):
-    guides = Guides(backend)
+def _author(scene, tmp_path):
+    guides = GuideScene()
     body = guides.add("base", name="body")
     arm = guides.add("arm", side="L", name="arm", parent=body)
     cmds.xform(arm.root.long_name, ws=True, t=(2, 15, 0))
@@ -22,8 +22,8 @@ def _author(backend, tmp_path):
     return guides.export(tmp_path / "guides" / "hero_guides")
 
 
-def test_session_builds_from_files_and_rebuilds(backend, tmp_path):
-    guides_path = _author(backend, tmp_path)
+def test_session_builds_from_files_and_rebuilds(scene, tmp_path):
+    guides_path = _author(scene, tmp_path)
     model = tmp_path / "geo" / "hero_model.ma"
     cmds.file(new=True, force=True)
     cmds.polySphere(name="hero_geo")
@@ -31,7 +31,7 @@ def test_session_builds_from_files_and_rebuilds(backend, tmp_path):
     cmds.file(rename=str(model))
     cmds.file(save=True, type="mayaAscii", force=True)
 
-    rig = trigger.Session(backend)
+    rig = trigger.Session()
     rig.save(tmp_path / "hero.tr")
     rig.add("import_asset", "import_model", file_path="geo/hero_model.ma")
     rig.add("kinematics", guides_file="guides/hero_guides.trg", rig_name="hero", after_build="delete")
@@ -52,20 +52,20 @@ def test_session_builds_from_files_and_rebuilds(backend, tmp_path):
     assert len(cmds.ls("hero_rig")) == 1
 
     # reopen from disk and build until kinematics only
-    reopened = trigger.Session.open(str(tmp_path / "hero.tr"), backend=backend)
+    reopened = trigger.Session.open(str(tmp_path / "hero.tr"))
     results = reopened.build(until="kinematics")
     assert [item.path for item in results] == ["import_model", "kinematics"]
 
 
-def test_kinematics_roots_filter(backend, tmp_path):
-    guides_path = _author(backend, tmp_path)
-    rig = trigger.Session(backend)
+def test_kinematics_roots_filter(scene, tmp_path):
+    guides_path = _author(scene, tmp_path)
+    rig = trigger.Session()
     rig.add("kinematics", guides_file=str(guides_path), guide_roots=["body"], rig_name="hero")
     rig.build()
     assert cmds.objExists("C_body_grp") and cmds.objExists("L_arm_grp")  # descendants included
 
-    rig = trigger.Session(backend)
+    rig = trigger.Session()
     rig.add("kinematics", guides_file=str(guides_path), guide_roots=["tail"], rig_name="only_tail")
     rig.build()
     assert cmds.objExists("C_tail_grp") and not cmds.objExists("L_arm_grp")
-    assert any("not found" in problem for problem in trigger.Session(backend).add("kinematics", guides_file="nope.trg") and [] or []) or True
+    assert any("not found" in problem for problem in trigger.Session().add("kinematics", guides_file="nope.trg") and [] or []) or True

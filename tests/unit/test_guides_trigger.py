@@ -9,18 +9,19 @@ from maya.api import OpenMaya
 
 import tik.maya as tm
 import tik.trigger as trigger
+from tik.trigger.guides import GuideScene
 from tik.trigger.core import get_module
 from tik.trigger.maya import Builder
 from tik.trigger.core.exceptions import GuideError
-from tik.trigger.guides import GuideFile, Guides
+from tik.trigger.guides import GuideFile, GuideScene
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 
 
 @pytest.fixture
 def guides():
-    backend = trigger.maya_backend()
-    return Guides(backend)
+    trigger.load_plugins()
+    return GuideScene()
 
 
 def test_add_settings_attrs_export_import_roundtrip(guides, tmp_path):
@@ -34,7 +35,7 @@ def test_add_settings_attrs_export_import_roundtrip(guides, tmp_path):
     assert cmds.getAttr(f"{root.name}.pole_pin") is True
     with pytest.raises(AttributeError):
         arm.nope = 1
-    cmds.xform(guides.backend.guide_node(tail.instance_id, "segment", 2).long_name, ws=True, t=(0, 3, -9))
+    cmds.xform(guides.guide_node(tail.instance_id, "segment", 2).long_name, ws=True, t=(0, 3, -9))
 
     path = guides.export(tmp_path / "hero")
     assert path.suffix == ".trg"
@@ -51,7 +52,7 @@ def test_add_settings_attrs_export_import_roundtrip(guides, tmp_path):
     assert names == [("arm", "L"), ("body", "C"), ("tail", "C")]
     new_arm = guides.find("arm", "L")
     assert new_arm.pole_pin is True and new_arm.parent.name == "body"
-    tip = guides.backend.guide_node(guides.find("tail").instance_id, "segment", 2)
+    tip = guides.guide_node(guides.find("tail").instance_id, "segment", 2)
     assert tuple(round(value, 3) for value in tip.world_position) == (0.0, 3.0, -9.0)
 
 
@@ -122,10 +123,10 @@ def _mirrored_pair(guides, role, position, rotation=(0, 0, 0)):
     """Place one guide of an arm, mirror it, and return (source, mirrored)."""
     body = guides.add("base", name="body")
     arm = guides.add("arm", side="L", name="arm", parent=body)
-    source = guides.backend.guide_node(arm.instance_id, role)
+    source = guides.guide_node(arm.instance_id, role)
     cmds.xform(source.long_name, ws=True, t=position, ro=rotation)
     mirrored = guides.mirror(arm)
-    return source, guides.backend.guide_node(mirrored.instance_id, role)
+    return source, guides.guide_node(mirrored.instance_id, role)
 
 
 def test_mirror_negates_world_x_and_leaves_yz(guides):
@@ -158,7 +159,7 @@ def test_mirror_is_its_own_inverse(guides):
 def test_mirror_updates_an_existing_opposite_side(guides):
     body = guides.add("base", name="body")
     arm = guides.add("arm", side="L", name="arm", parent=body)
-    source = guides.backend.guide_node(arm.instance_id, "elbow")
+    source = guides.guide_node(arm.instance_id, "elbow")
     cmds.xform(source.long_name, ws=True, t=(7, 13, -2), ro=(23, -41, 67))
     first = guides.mirror(arm)
 
@@ -166,7 +167,7 @@ def test_mirror_updates_an_existing_opposite_side(guides):
     second = guides.mirror(arm)
 
     assert second.instance_id == first.instance_id
-    target = guides.backend.guide_node(second.instance_id, "elbow")
+    target = guides.guide_node(second.instance_id, "elbow")
     assert _matrices_match(_world(target), _reflected(source))
 
 
@@ -180,12 +181,12 @@ def test_mirror_holds_for_every_rotation_order(guides, rotate_order):
     """
     body = guides.add("base", name="body")
     arm = guides.add("arm", side="L", name="arm", parent=body)
-    source = guides.backend.guide_node(arm.instance_id, "elbow")
+    source = guides.guide_node(arm.instance_id, "elbow")
     cmds.setAttr(f"{source.long_name}.rotateOrder", rotate_order)
     cmds.xform(source.long_name, ws=True, t=(7, 13, -2), ro=(23, -41, 67))
 
     mirrored = guides.mirror(arm)
-    target = guides.backend.guide_node(mirrored.instance_id, "elbow")
+    target = guides.guide_node(mirrored.instance_id, "elbow")
 
     assert _matrices_match(_world(target), _reflected(source))
 

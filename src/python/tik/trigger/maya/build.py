@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+import tik.maya as tm
+from maya import cmds
 from tik.trigger.core import registry
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import AttachError, BuildError
@@ -16,13 +18,18 @@ from tik.trigger.core.schemas import (
     split_source,
 )
 
+from tik.trigger.guides import nodes as guide_nodes
+
+from . import tags
+from .rig import MayaBuildContext
+
 
 @dataclass
 class BuildReport:
     """What happened during a build."""
 
     built: list[str] = field(default_factory=list)  # instance ids in build order
-    contexts: dict = field(default_factory=dict)  # instance id -> ModuleRig
+    rigs: dict = field(default_factory=dict)  # instance id -> ModuleRig
     connections: list[tuple[str, str]] = field(default_factory=list)  # ("L_arm.root", "body.root")
     spaces: list[tuple[str, str]] = field(default_factory=list)  # ("L_arm.ik_chest", "body.root")
     rig_root: Any = None
@@ -32,16 +39,101 @@ class BuildReport:
         return len(self.built)
 
 
+# ------------------------------------------------------------------- scene
+def build_context(module, instance, rig_root, bind_parent=None) -> MayaBuildContext:
+    """The object a module builds through, wired to its guides."""
+    return MayaBuildContext(
+        module, instance, rig_root, guide_nodes.guide_nodes(instance.instance_id), bind_parent
+    )
+
+
+def ensure_rig_root(rig_name: str) -> tm.Transform:
+    """The tagged top group every module hangs under, created once per rig."""
+    for node in tm.find_by_meta(tags.KIND, tags.RIG_ROOT):
+        if node.meta.get(tags.NAME) == rig_name:
+            return node
+    root = tm.Transform.create(name=f"{rig_name}_rig")
+    root.meta.update({tags.KIND: tags.RIG_ROOT, tags.NAME: rig_name})
+    return root
+
+
+def finalize(rig) -> None:
+    """Tag a built module's outputs and sockets so tools can find them."""
+    for name, node in rig.outputs.items():
+        # Every output is a bind joint, so trg_kind must stay "deform" -
+        # overwriting it with "output" would erase the classification that
+        # skinning and export read. The output role gets its own key.
+        marks = {
+            tags.INSTANCE: rig.instance.instance_id,
+            tags.ROLE: name,
+            tags.OUTPUT_NAME: name,
+        }
+        if node.meta.get(tags.KIND) is None:
+            marks[tags.KIND] = tags.OUTPUT
+        tags.tag(node, **marks)
+    for name, node in rig.attachments.items():
+        tags.tag(node, **{tags.KIND: tags.INPUT,
+                          tags.INSTANCE: rig.instance.instance_id,
+                          tags.ROLE: name})
+
+
+def connect(rig, input_name: str, source_node) -> None:
+    """Drive a module's socket from the producer's output."""
+    tm.MatrixConstraint.create(
+        source_node, rig.attachments[input_name],
+        maintain_offset=True, name=rig.name("attach", input_name),
+    )
+
+
+def connect_space(rig, control, mode, targets, labels) -> None:
+    """Build one space switch on the controller with role ``control``.
+
+    ``world=False``: nothing appears in the enum that the rigger did not define.
+    """
+    controller = rig.controller_by_role(control)
+    if controller is None:
+        raise AttachError(
+            f"{rig.instance.key}: no controller with role '{control}'.",
+            instance_id=rig.instance.instance_id,
+            module_type=rig.module.module_type,
+        )
+    tm.SpaceSwitch.create(
+        controller.transform,
+        targets,
+        attr_name=f"{mode}Switch",
+        mode=mode,
+        labels=list(labels),
+        world=False,
+        name=rig.name(control, mode),
+    )
+
+
+def apply_afterlife(instances, mode: str) -> None:
+    """What happens to the guides once the rig is built."""
+    if mode == "keep" or not cmds.objExists(tags.GUIDE_HOLDER):
+        return
+    holder = guide_nodes.holder()
+    if mode == "hide":
+        holder.visibility = False
+    elif mode == "delete":
+        from tik.trigger.guides.scene import GuideScene
+
+        scene = GuideScene()
+        for instance in instances:
+            scene.delete_guides(instance.instance_id)
+        if not holder.children:
+            holder.delete()
+
+
 def space_input_names(module_cls, settings) -> set:
     """Names of the inputs derived from anim-space rows."""
     return {item.name for item in module_cls.space_inputs(settings)}
 
 
 class Builder:
-    """Turn the guide instances found by a backend into a rig."""
+    """Turn the guide instances in the scene into a rig."""
 
-    def __init__(self, backend, events: Optional[EventBus] = None) -> None:
-        self.backend = backend
+    def __init__(self, events: Optional[EventBus] = None) -> None:
         self.events = events or EventBus()
 
     @staticmethod
@@ -56,16 +148,16 @@ class Builder:
     ) -> BuildReport:
         if afterlife not in AFTERLIFE_MODES:
             raise ValueError(f"afterlife must be one of {AFTERLIFE_MODES}.")
-        instances = self.order(self.backend.find_instances(scope))
-        known_keys = {item.key for item in (instances if scope == "scene" else self.backend.find_instances("scene"))}
+        instances = self.order(guide_nodes.find_instances(scope))
+        known_keys = {item.key for item in (instances if scope == "scene" else guide_nodes.find_instances("scene"))}
         report = BuildReport()
         total = len(instances)
         if not total:
             self.events.log("No module guides found to build.", level="warning")
             return report
 
-        with self.backend.undo_chunk(f"Trigger build: {rig_name}"):
-            report.rig_root = self.backend.ensure_rig_root(rig_name)
+        with guide_nodes.undo_chunk(f"Trigger build: {rig_name}"):
+            report.rig_root = ensure_rig_root(rig_name)
             # Producers must be built before consumers: rig.bind_parent is
             # resolved from the producer's output, so bind joints can be created
             # in their final hierarchy position instead of reparented later.
@@ -91,14 +183,14 @@ class Builder:
                     instance, module_cls, inputs, by_key, report
                 )
                 ctx = self._build_one(instance, report.rig_root, bind_parent)
-                report.contexts[instance.instance_id] = ctx
+                report.rigs[instance.instance_id] = ctx
                 report.built.append(instance.instance_id)
                 by_key[instance.key] = instance
                 self._connect_one(
                     instance, module_cls, inputs, by_key, report, known_keys
                 )
             self._connect_spaces(instances, report, by_key)
-            self.backend.afterlife(instances, afterlife)
+            apply_afterlife(instances, afterlife)
         self.events.log(f"Built {total} module(s) into '{rig_name}'.")
         return report
 
@@ -118,14 +210,14 @@ class Builder:
         key, output = split_source(source)
         if key is None or key not in by_key:
             return None
-        producer_ctx = report.contexts.get(by_key[key].instance_id)
+        producer_ctx = report.rigs.get(by_key[key].instance_id)
         if producer_ctx is None:
             return None
         return producer_ctx.outputs.get(output)
 
     def _connect_one(self, instance, module_cls, inputs, by_key, report, known_keys) -> None:
         """Attach every declared input of one already-built instance."""
-        ctx = report.contexts[instance.instance_id]
+        ctx = report.rigs[instance.instance_id]
         for declared in module_cls.inputs:
             source = inputs.get(declared.name)
             if not source:
@@ -149,7 +241,7 @@ class Builder:
                     f"{instance.key}.{declared.name}: module did not call ctx.attach() for this input.",
                     instance_id=instance.instance_id, module_type=instance.module_type,
                 )
-            self.backend.connect(ctx, declared.name, node)
+            connect(ctx, declared.name, node)
             report.connections.append((f"{instance.key}.{declared.name}", source))
 
     def _connect_spaces(self, instances, report: BuildReport, by_key: dict) -> None:
@@ -161,7 +253,7 @@ class Builder:
         """
         for instance in instances:
             module_cls = registry.get_module(instance.module_type)
-            ctx = report.contexts.get(instance.instance_id)
+            ctx = report.rigs.get(instance.instance_id)
             if ctx is None:
                 continue
             inputs = dict(instance.inputs)
@@ -191,23 +283,23 @@ class Builder:
                 labels.append(label)
                 report.spaces.append((f"{instance.key}.{control}_{label}", source))
             for (control, mode), (targets, labels) in groups.items():
-                self.backend.connect_space(ctx, control, mode, targets, labels)
+                connect_space(ctx, control, mode, targets, labels)
 
     def _resolve_space_source(self, source: str, by_key: dict, report: BuildReport):
         """Return the node for a space source, or None when it cannot be found."""
         key, output = split_source(source)
         if key is not None and key in by_key:
-            producer_ctx = report.contexts.get(by_key[key].instance_id)
+            producer_ctx = report.rigs.get(by_key[key].instance_id)
             if producer_ctx is None:
                 return None
             return producer_ctx.outputs.get(output)
-        return self.backend.scene_node(source)
+        return guide_nodes.scene_node(source)
 
     def _resolve_source(self, instance, input_name, source, by_key, report):
         key, output = split_source(source)
         if key is not None and key in by_key:
             producer = by_key[key]
-            producer_ctx = report.contexts.get(producer.instance_id)
+            producer_ctx = report.rigs.get(producer.instance_id)
             if producer_ctx is None or output not in producer_ctx.outputs:
                 raise AttachError(
                     f"{instance.key}.{input_name}: source '{source}' was not built "
@@ -215,7 +307,7 @@ class Builder:
                     instance_id=instance.instance_id, module_type=instance.module_type,
                 )
             return producer_ctx.outputs[output]
-        node = self.backend.scene_node(source)
+        node = guide_nodes.scene_node(source)
         if node is None:
             raise AttachError(
                 f"{instance.key}.{input_name}: source '{source}' is neither a built module output nor an existing scene node.",
@@ -234,7 +326,7 @@ class Builder:
                 instance_id=instance.instance_id, module_type=instance.module_type,
             )
         try:
-            ctx = self.backend.build_context(module, instance, rig_root, bind_parent)
+            ctx = build_context(module, instance, rig_root, bind_parent)
             module.build(ctx)
             missing = [name for name in module_cls.output_names(instance.settings) if name not in ctx.outputs]
             if missing:
@@ -242,7 +334,7 @@ class Builder:
                     f"module '{instance.module_type}' did not produce output(s) {missing}",
                     instance_id=instance.instance_id, module_type=instance.module_type,
                 )
-            self.backend.finalize(ctx)
+            finalize(ctx)
         except BuildError:
             raise
         except Exception as error:  # noqa: BLE001 - wrap with context

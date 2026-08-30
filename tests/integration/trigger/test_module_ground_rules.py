@@ -10,6 +10,7 @@ from maya import cmds
 
 import tik.maya as tm
 import tik.trigger as trigger
+from tik.trigger.guides import GuideScene
 from tik.trigger.maya import tags
 from tik.trigger.core import ParentRef, get_module
 from tik.trigger.maya import Builder
@@ -20,33 +21,33 @@ MODULE_TYPES = ("base", "fkchain", "arm")
 def _solo(module_type):
     """Build one unconnected instance and return its context."""
     cmds.file(new=True, force=True)
-    backend = trigger.maya_backend()
+    scene = GuideScene()
     module = get_module(module_type)(name=module_type)
-    instance = backend.create_guides(module)
+    instance = scene.create_guides(module)
     if get_module(module_type).primary_input() is not None:
         # A module with a required input needs something to hang from.
         cmds.file(new=True, force=True)
-        backend = trigger.maya_backend()
-        body = backend.create_guides(get_module("base")(name="body"))
-        instance = backend.create_guides(
+        scene = GuideScene()
+        body = scene.create_guides(get_module("base")(name="body"))
+        instance = scene.create_guides(
             get_module(module_type)(name=module_type),
             parent=ParentRef(body.instance_id, "root"),
         )
-    report = Builder(backend).build(rig_name="rules", afterlife="keep")
-    return report.contexts[instance.instance_id]
+    report = Builder().build(rig_name="rules", afterlife="keep")
+    return report.rigs[instance.instance_id]
 
 
 @pytest.fixture
 def connected_rig():
     """A base with an arm attached: one hierarchy spanning two modules."""
     cmds.file(new=True, force=True)
-    backend = trigger.maya_backend()
-    body = backend.create_guides(get_module("base")(name="body"))
-    arm = backend.create_guides(
+    scene = GuideScene()
+    body = scene.create_guides(get_module("base")(name="body"))
+    arm = scene.create_guides(
         get_module("arm")(name="arm", side="L"),
         parent=ParentRef(body.instance_id, "root"),
     )
-    report = Builder(backend).build(rig_name="rules", afterlife="keep")
+    report = Builder().build(rig_name="rules", afterlife="keep")
     return report, body, arm
 
 
@@ -70,7 +71,7 @@ def test_exactly_one_bind_hierarchy_root(connected_rig):
 def test_connected_module_leaves_its_bind_group_empty(connected_rig):
     """Rule 1.3: bind_grp is empty once the module is connected."""
     report, _body, arm = connected_rig
-    arm_ctx = report.contexts[arm.instance_id]
+    arm_ctx = report.rigs[arm.instance_id]
     children = cmds.listRelatives(arm_ctx.groups.bind.long_name, children=True) or []
     assert children == [], f"bind_grp should be empty when connected, holds {children}"
 
@@ -152,18 +153,18 @@ def test_module_builds_without_a_cycle(module_type):
 def test_module_parents_everything_it_creates(module_type):
     """Rule 1.7: nothing a module builds is left at the world root."""
     cmds.file(new=True, force=True)
-    backend = trigger.maya_backend()
+    scene = GuideScene()
     before = set(cmds.ls(assemblies=True, long=True))
 
     if get_module(module_type).primary_input() is not None:
-        body = backend.create_guides(get_module("base")(name="body"))
-        backend.create_guides(
+        body = scene.create_guides(get_module("base")(name="body"))
+        scene.create_guides(
             get_module(module_type)(name=module_type),
             parent=ParentRef(body.instance_id, "root"),
         )
     else:
-        backend.create_guides(get_module(module_type)(name=module_type))
-    Builder(backend).build(rig_name="rules", afterlife="delete")
+        scene.create_guides(get_module(module_type)(name=module_type))
+    Builder().build(rig_name="rules", afterlife="delete")
 
     stray = set(cmds.ls(assemblies=True, long=True)) - before - {"|rules_rig"}
     assert not stray, f"'{module_type}' left {sorted(stray)} at the world root"

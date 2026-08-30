@@ -4,11 +4,13 @@ Quick start (Maya)::
 
     import tik.trigger as trigger
 
-    backend = trigger.maya_backend()
-    backend.create_guides(trigger.get_module("base")(name="body"))
-    trigger.Builder(backend).build()
+    trigger.load_plugins()
+    scene = trigger.GuideScene()
+    scene.add("base", name="body")
+    trigger.Builder().build()
 
-Importing this package does not import Maya; ``maya_backend()`` does.
+Importing this package does not import Maya; constructing a ``GuideScene``
+or a ``Builder`` does.
 """
 
 from tik.trigger.core import (  # noqa: F401 - public API
@@ -27,7 +29,6 @@ from tik.trigger.core import (  # noqa: F401 - public API
     register_action,
     register_module,
 )
-from tik.trigger.handler import ActionHandle, Session  # noqa: F401
 
 
 def load_plugins() -> None:
@@ -40,34 +41,41 @@ def load_plugins() -> None:
     discover(actions_pkg.__name__, actions_pkg.__path__)
 
 
-def maya_backend():
-    """Return a ``MayaBackend`` (imports Maya lazily) with plugins loaded."""
-    from tik.trigger.maya import MayaBackend
+_MAYA_NAMES = {
+    "Builder": "tik.trigger.maya.build",
+    "BuildReport": "tik.trigger.maya.build",
+    "AFTERLIFE_MODES": "tik.trigger.maya.build",
+    "GuideScene": "tik.trigger.guides",
+    "GuideHandle": "tik.trigger.guides",
+    "Session": "tik.trigger.handler",
+    "ActionHandle": "tik.trigger.handler",
+}
 
-    load_plugins()
-    return MayaBackend()
 
+def __getattr__(name: str):
+    """Resolve the Maya-touching names on first use, so importing is cheap."""
+    import importlib
 
-def __getattr__(name):
-    """``trigger.Builder`` / ``trigger.BuildReport`` import Maya on first use."""
-    if name in ("Builder", "BuildReport", "AFTERLIFE_MODES"):
-        from tik.trigger import maya as maya_layer
-
-        return getattr(maya_layer, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = _MAYA_NAMES.get(name)
+    if module is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return getattr(importlib.import_module(module), name)
 
 
 __all__ = [
     "Action",
     "ActionContext",
+    "ActionHandle",
+    "AFTERLIFE_MODES",
     "BuildError",
     "Builder",
     "BuildReport",
     "EventBus",
+    "GuideHandle",
+    "GuideScene",
     "Guides",
     "Module",
     "Session",
-    "ActionHandle",
     "Side",
     "TriggerError",
     "get_action",
@@ -75,7 +83,6 @@ __all__ = [
     "list_actions",
     "list_modules",
     "load_plugins",
-    "maya_backend",
     "register_action",
     "register_module",
 ]

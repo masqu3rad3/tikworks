@@ -15,7 +15,7 @@ exported with the ``.trg``; only window geometry and selection are transient.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from tik.core.side import Side
 from tik.shared.ui import theme
@@ -32,7 +32,9 @@ from tik.trigger.core import registry
 from tik.trigger.core.schemas import split_source
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.guides import EXTENSION as GUIDE_EXTENSION
-from tik.trigger.guides import GuideHandle, Guides
+
+if TYPE_CHECKING:  # the scene layer imports Maya; the UI only needs the name
+    from tik.trigger.guides import GuideHandle
 
 from .graph_view import GraphView
 from .palette import PaletteEntry, SearchPalette
@@ -296,10 +298,16 @@ class SceneNodesPanel(QtWidgets.QWidget):
 class GuideDesigner(MayaToolWindow):
     WINDOW_NAME = "TriggerGuideDesigner"
 
-    def __init__(self, backend, parent=None, events=None, file_browser=None, binding_adapter=None) -> None:
+    def __init__(self, parent=None, events=None, file_browser=None, binding_adapter=None,
+                 scene=None) -> None:
         super().__init__(parent)
-        self.backend = backend
-        self.guides = Guides(backend, events)
+        # ``scene`` is an injection point for tests; normally the designer owns
+        # the scene's guides.
+        if scene is None:
+            from tik.trigger.guides import GuideScene
+
+            scene = GuideScene(events)
+        self.guides = scene
         self.events = self.guides.events
         self.file_browser = file_browser
         self.binding_adapter = binding_adapter
@@ -320,8 +328,8 @@ class GuideDesigner(MayaToolWindow):
         self.watcher = SceneWatcher(
             self._on_scene_event,
             owner=self,
-            install_job=getattr(backend, "install_scene_job", None),
-            kill_job=getattr(backend, "kill_scene_job", None),
+            install_job=getattr(self.guides, "install_scene_job", None),
+            kill_job=getattr(self.guides, "kill_scene_job", None),
             parent=self,
         )
         self.watcher.install()
@@ -636,7 +644,7 @@ class GuideDesigner(MayaToolWindow):
             self.graph.rebuild()
             connections = self.guides.connections()
             externals = [item["source"] for item in connections if split_source(item["source"])[0] not in by_key]
-            missing = [name for name in externals if getattr(self.backend, "scene_node", lambda _n: True)(name) is None]
+            missing = [name for name in externals if getattr(self.guides, "scene_node", lambda _n: True)(name) is None]
             self.status.set("modules", f"{len(handles)} module(s)")
             self.status.set("connections", f"{len(connections)} connection(s)" + (f" · {len(missing)} missing scene node(s)" if missing else ""))
             kept = [items[instance_id] for instance_id in keep if instance_id in items]
@@ -840,7 +848,7 @@ class GuideDesigner(MayaToolWindow):
 
     def _plug_adapter(self, handle: GuideHandle, name: str):
         """Read/write adapter for a guide attribute (the same one the two-way bindings use)."""
-        plug_factory = getattr(self.backend, "settings_plug", None)
+        plug_factory = getattr(self.guides, "settings_plug", None)
         if plug_factory is None:
             return None
         try:
@@ -861,7 +869,7 @@ class GuideDesigner(MayaToolWindow):
                     adapter.set(bool(checked))
 
     def _bind_properties(self, handle: GuideHandle) -> None:
-        plug_factory = getattr(self.backend, "settings_plug", None)
+        plug_factory = getattr(self.guides, "settings_plug", None)
         if plug_factory is None:
             return
         for name in self._module_obj.fields():
@@ -894,20 +902,20 @@ class GuideDesigner(MayaToolWindow):
         return modules, self.graph.scene_nodes()
 
     def _selected_scene_nodes(self) -> list[str]:
-        picker = getattr(self.backend, "selected_node_names", None)
+        picker = getattr(self.guides, "selected_node_names", None)
         if picker is not None:
             return list(picker() or [])
-        name = getattr(self.backend, "selected_node_name", lambda: "")()
+        name = getattr(self.guides, "selected_node_name", lambda: "")()
         return [name] if name else []
 
     def _pick_source(self) -> str:
-        picked = self.backend.selected_guide() if hasattr(self.backend, "selected_guide") else None
+        picked = self.guides.selected_guide() if hasattr(self.guides, "selected_guide") else None
         if picked is not None:
             handle = self.guides.get(picked.instance_id)
             if handle is not None:
                 output = handle.module_class.output_at_role(picked.role)
                 return f"{handle.key}.{output}" if output else ""
-        name = getattr(self.backend, "selected_node_name", lambda: "")()
+        name = getattr(self.guides, "selected_node_name", lambda: "")()
         return name or ""
 
     def _on_input_changed(self, input_name: str, source: str) -> None:
@@ -1069,7 +1077,7 @@ class GuideDesigner(MayaToolWindow):
 
     def select_root(self) -> None:
         """Select the root guide joint(s) of the selected module(s) in the viewport."""
-        select = getattr(self.backend, "select_nodes", None)
+        select = getattr(self.guides, "select_nodes", None)
         with self.watcher.mute():
             roots = [handle.root for handle in self.selected_handles() if handle.root is not None]
             if select is not None:

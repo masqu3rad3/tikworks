@@ -7,15 +7,17 @@ from maya import cmds
 
 import tik.maya as tm
 import tik.trigger as trigger
+from tik.trigger.guides import GuideScene
 from tik.trigger.core import ParentRef, get_module
 from tik.trigger.maya import Builder
 from tik.trigger.core.exceptions import AttachError, GuideError
-from tik.trigger.guides import GuideFile, Guides
+from tik.trigger.guides import GuideFile, GuideScene
 
 
 @pytest.fixture
 def guides():
-    return Guides(trigger.maya_backend())
+    trigger.load_plugins()
+    return GuideScene()
 
 
 def test_manifest_inputs_outputs():
@@ -51,11 +53,11 @@ def test_build_connects_to_scene_node_and_errors(guides):
     tail = guides.add("fkchain", name="tail", parent=body, segments=2)
     guides.connect("tail.root", "anchor_jnt")
     with pytest.raises(AttachError) as info:
-        Builder(guides.backend).build(rig_name="a", afterlife="keep")
+        Builder().build(rig_name="a", afterlife="keep")
     assert "anchor_jnt" in str(info.value)
     anchor = tm.Joint.create(name="anchor_jnt")
     anchor.translate = (0, 20, 0)
-    report = Builder(guides.backend).build(rig_name="a", afterlife="keep")
+    report = Builder().build(rig_name="a", afterlife="keep")
     assert report.connections == [("tail.root", "anchor_jnt")]
     socket = tm.Transform("C_tail_root_socket")
     before = socket.world_position
@@ -83,7 +85,7 @@ def test_export_import_keeps_connections_and_mirror_maps_sides(guides, tmp_path)
     tail = guides.by_key("tail")
     assert tail.inputs == {"root": "L_arm.hand"}
     assert guides.by_key("R_arm").inputs == {"root": "body.root"}
-    report = Builder(guides.backend).build(rig_name="hero", afterlife="keep")
+    report = Builder().build(rig_name="hero", afterlife="keep")
     assert ("tail.root", "L_arm.hand") in report.connections
     # exporting a subset keeps only its connections
     subset = guides.export(tmp_path / "subset", guides.by_key("tail"))
@@ -114,4 +116,4 @@ def test_cleared_input_is_not_re_derived_from_the_parent(guides):
 
     assert arm.inputs == {}
     with pytest.raises(AttachError):
-        Builder(guides.backend).build(afterlife="keep")
+        Builder().build(afterlife="keep")

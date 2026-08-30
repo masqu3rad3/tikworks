@@ -9,7 +9,9 @@ from tik.trigger.handler import Session
 from tik.trigger.ui.main import TriggerWindow
 from tik.trigger.ui.model import MIME_PATH, MIME_TYPE, EnabledRole, LinkedRole, StatusRole
 from tik.trigger.ui.session_view import SessionView
-from trigger_fakes import FakeBackend
+
+
+CALLS: list = []
 
 
 class Mark(Action):
@@ -18,7 +20,7 @@ class Mark(Action):
     amount = IntField(1, min=0)
 
     def run(self, ctx):
-        ctx.backend.calls.append(("mark", ctx.path, self.tag))
+        CALLS.append(("mark", ctx.path, self.tag))
 
 
 class Boom(Action):
@@ -36,7 +38,7 @@ class Weights(Action):
         pass
 
     def save_from_scene(self, ctx):
-        ctx.backend.calls.append(("saved", ctx.path))
+        CALLS.append(("saved", ctx.path))
         return ["x.trw"]
 
 
@@ -55,8 +57,7 @@ def _registered():
 
 @pytest.fixture
 def view(qapp):
-    backend = FakeBackend()
-    session = Session(backend)
+    session = Session()
     view = SessionView(session)
     view.show()
     yield view
@@ -99,7 +100,7 @@ def test_settings_panel_edits_session(view):
     weights = view.add_action("weights")
     assert view.settings.save_button.isVisible()
     view.settings.save_button.click()
-    assert ("saved", "weights") in view.session.backend.calls
+    assert ("saved", "weights") in CALLS
 
 
 def test_drag_drop_nesting_and_reorder(view):
@@ -121,7 +122,7 @@ def test_drag_drop_nesting_and_reorder(view):
 
 
 def test_reference_rows_are_linked_and_checkable(view, tmp_path):
-    base = Session(FakeBackend())
+    base = Session()
     base.add("mark", "kin", tag="K")
     scripts = base.add("mark", "scripts")
     scripts.add("mark", "head")
@@ -152,6 +153,17 @@ def test_reference_rows_are_linked_and_checkable(view, tmp_path):
     assert not view.model.canDropMimeData(data, QtCore.Qt.MoveAction, -1, 0, head)
 
 
+@pytest.fixture(autouse=True)
+def _no_scene(monkeypatch):
+    """Qt tests have no Maya, so the runner's two scene calls are stubbed."""
+    import contextlib
+
+    from tik.trigger.maya import runner
+
+    monkeypatch.setattr(runner, "new_scene", lambda: CALLS.append(("new_scene",)))
+    monkeypatch.setattr(runner, "undo_chunk", lambda label: contextlib.nullcontext())
+
+
 def test_build_updates_statuses_and_log(view):
     view.add_action("mark")
     view.add_action("boom")
@@ -170,7 +182,7 @@ def test_build_updates_statuses_and_log(view):
 
 
 def test_main_window_tabs_and_files(qapp, tmp_path):
-    window = TriggerWindow(FakeBackend())
+    window = TriggerWindow()
     window.ask_discard = lambda session: True
     window.show()
     assert window.tabs.count() == 1
@@ -211,7 +223,7 @@ def test_session_undo_redo(view):
 
 
 def test_reference_children_appear_after_file_edit(view, tmp_path):
-    base = Session(FakeBackend())
+    base = Session()
     base.add("mark", "kin")
     (tmp_path / "rigs").mkdir()
     base.save(tmp_path / "rigs" / "base.tr")

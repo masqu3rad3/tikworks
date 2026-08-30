@@ -28,12 +28,12 @@ class Kinematics(Action):
     auto_switchers = BoolField(True, help="Create automatic space switchers")
 
     def run(self, ctx) -> None:
-        from tik.trigger.guides import Guides
+        from tik.trigger.guides import GuideScene
         from tik.trigger.maya.build import Builder
 
         if not self.guides_file:
             raise ActionExecutionError("kinematics: no guides file set.")
-        guides = Guides(ctx.backend, ctx.events)
+        guides = GuideScene(ctx.events)
         handles = guides.import_(ctx.resolve(self.guides_file))
         if self.guide_roots:
             wanted = set(self.guide_roots)
@@ -45,7 +45,7 @@ class Kinematics(Action):
             scope = _descendants(guides, roots)
         else:
             scope = [handle.instance_id for handle in handles]
-        report = Builder(ctx.backend, ctx.events).build(
+        report = Builder(ctx.events).build(
             scope=scope, rig_name=self.rig_name, afterlife=self.after_build
         )
         ctx.log(f"Kinematics built {report.count} module(s) from {self.guides_file}.")

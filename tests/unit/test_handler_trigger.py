@@ -1,12 +1,15 @@
 """Session / ActionHandle API (no Maya)."""
 
 import pytest
+from maya import cmds
 
-from trigger_fakes import FakeBackend
 from tik.core.fields import FieldValidationError, FileField
 from tik.trigger.core import Action, IntField, StringField, clear_registries, register_action
 from tik.trigger.core.exceptions import SessionError, SessionSaveError
 from tik.trigger.handler import Session
+
+
+CALLS: list = []
 
 
 class Mark(Action):
@@ -14,14 +17,14 @@ class Mark(Action):
     amount = IntField(1, min=0)
 
     def run(self, ctx):
-        ctx.backend.calls.append(("mark", ctx.path, self.tag, self.amount))
+        CALLS.append(("mark", ctx.path, self.tag, self.amount))
 
 
 class Weights(Action):
     file = FileField("", extensions=[".trw"])
 
     def run(self, ctx):
-        ctx.backend.calls.append(("weights", ctx.path, self.file))
+        CALLS.append(("weights", ctx.path, self.file))
 
 
 @pytest.fixture(autouse=True)
@@ -37,7 +40,7 @@ def _registered():
 
 
 def test_add_nest_after_and_attribute_settings():
-    rig = Session(FakeBackend())
+    rig = Session()
     imp = rig.add("mark", "import", tag="IMP")
     rig.add("mark", "rename", parent=imp, tag="REN")
     kin = rig.add("mark", "kinematics", tag="KIN")
@@ -57,8 +60,8 @@ def test_add_nest_after_and_attribute_settings():
 
 
 def test_tree_edits_and_run():
-    backend = FakeBackend()
-    rig = Session(backend)
+    CALLS.clear()
+    rig = Session()
     rig.add("mark", "a", tag="A")
     rig.add("mark", "b", tag="B")
     rig.add("mark", "c", tag="C")
@@ -74,19 +77,22 @@ def test_tree_edits_and_run():
     assert dup.path == "root1" and "root1/b" in rig
     rig.remove(dup)
     rig["root/b"].enabled = False
+    leftover = cmds.spaceLocator(name="stale_from_a_previous_build")[0]
     results = rig.build()
     assert [item.path for item in results] == ["root", "a"]
-    assert backend.calls[0] == ("new_scene",)
+    # build() starts from a fresh scene, so anything left over is gone
+    assert not cmds.objExists(leftover)
+    kept = cmds.spaceLocator(name="built_by_an_earlier_step")[0]
     rig.run("a")
-    marks = [call for call in backend.calls if call[0] == "mark"]
-    assert marks[-1][1] == "a" and backend.calls.count(("new_scene",)) == 1
+    marks = [call for call in CALLS if call[0] == "mark"]
+    # running one action is not a rebuild, so the scene survives
+    assert marks[-1][1] == "a" and cmds.objExists(kept)
     assert [step.path for step in rig.steps(until="root")] == ["root"]
-    with pytest.raises(SessionError):
-        Session().build()
+    assert Session().build() == []  # an empty session builds nothing
 
 
 def test_save_open_increment(tmp_path):
-    rig = Session(FakeBackend())
+    rig = Session()
     rig.add("mark", "a")
     with pytest.raises(SessionSaveError):
         rig.save()
@@ -96,14 +102,14 @@ def test_save_open_increment(tmp_path):
     inc = rig.increment()
     assert inc.name == "hero_v001.tr"
     assert rig.increment().name == "hero_v002.tr"
-    other = Session.open(str(inc), backend=FakeBackend())
+    other = Session.open(str(inc))
     assert other.paths() == ["a"] and other.name == "hero_v001.tr"
     other.new()
     assert other.file_path is None and other.actions == []
 
 
 def test_reference_handles_and_overrides(tmp_path):
-    base = Session(FakeBackend())
+    base = Session()
     base.add("mark", "kinematics", tag="KIN")
     scripts = base.add("mark", "scripts", tag="S")
     scripts.add("mark", "head_rotation", tag="HEAD")
@@ -111,8 +117,8 @@ def test_reference_handles_and_overrides(tmp_path):
     (tmp_path / "rigs").mkdir()
     base.save(tmp_path / "rigs" / "baseRig_v001.tr")
 
-    backend = FakeBackend()
-    rig = Session(backend)
+    CALLS.clear()
+    rig = Session()
     rig.save(tmp_path / "hero.tr")
     ref = rig.add("reference", "base", file="rigs/baseRig_v001.tr")
     linked = ref["scripts/head_rotation"]
@@ -133,7 +139,7 @@ def test_reference_handles_and_overrides(tmp_path):
     (tmp_path / "hero.trw").write_text("{}")
     rig.add("weights", "w", file="hero.trw")
     rig.build()
-    tags = [call[2] for call in backend.calls if call[0] == "mark"]
+    tags = [call[2] for call in CALLS if call[0] == "mark"]
     assert tags == ["KIN-OVERRIDE", "S", "FING"]
     ref["kinematics"].reset("tag")
     assert ref["kinematics"].tag == "KIN"

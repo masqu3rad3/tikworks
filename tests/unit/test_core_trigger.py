@@ -4,10 +4,8 @@ import json
 
 import pytest
 
-from trigger_fakes import FakeBackend, ToyChain, ToyRoot
+from toy_modules import ToyChain, ToyRoot
 from tik.trigger.core import (
-    AttachError,
-    BuildError,
     DuplicateRegistrationError,
     EventBus,
     Guides,
@@ -23,7 +21,6 @@ from tik.trigger.core import (
     unregister_module,
 )
 from tik.trigger.core.schemas import GuidePose, order_instances
-from tik.trigger.maya.build import Builder
 
 
 @pytest.fixture(autouse=True)
@@ -150,87 +147,6 @@ def test_order_instances_parents_first_and_cycle():
 
 
 # ----------------------------------------------------------------- builder
-def _scene():
-    backend = FakeBackend()
-    root = backend.create_guides(ToyRoot(name="body"))
-    chain = backend.create_guides(
-        ToyChain(name="tail", side="L", settings={"segments": 3}),
-        parent=ParentRef(root.instance_id, "root"),
-    )
-    return backend, root, chain
-
-
-def test_builder_builds_in_order_and_connects():
-    backend, root, chain = _scene()
-    events = EventBus()
-    seen = []
-    events.subscribe("progress", lambda **kw: seen.append(kw["label"]))
-    report = Builder(backend, events).build(rig_name="rig", afterlife="hide")
-    assert report.built == [root.instance_id, chain.instance_id]
-    assert seen == ["Building body", "Building tail"]
-    assert backend.connections == [("L_tail", "root", "C_body_root_jnt")]
-    assert report.connections == [("L_tail.root", "body.root")]
-    assert backend.afterlife_mode == "hide"
-    assert ("rig_root", "rig") in backend.calls
-    assert backend.calls.index(("undo_open", "Trigger build: rig")) < backend.calls.index(
-        ("rig_root", "rig")
-    )
-    ctx = report.contexts[chain.instance_id]
-    assert ctx.outputs["end"] == "tail_segment_2"
-    assert len(ctx.deform_joints) == 3
-    assert ctx.name("upper", suffix="jnt") == "L_tail_upper_jnt"
-
-
-def test_builder_inputs_scene_node_missing_and_optional():
-    backend, root, chain = _scene()
-    # explicit inputs win over the DAG-derived one; scene node sources must exist
-    chain.inputs = {"root": "body.root", "space": "some_jnt"}
-    with pytest.raises(AttachError) as info:
-        Builder(backend).build()
-    assert "some_jnt" in str(info.value) and "L_tail.space" in str(info.value)
-    backend.scene_nodes.add("some_jnt")
-    report = Builder(backend).build()
-    assert ("L_tail", "space", "some_jnt") in backend.connections
-    assert ("L_tail.space", "some_jnt") in report.connections
-    chain.inputs = {"root": "body.nope"}
-    with pytest.raises(AttachError) as info:
-        Builder(backend).build()
-    assert "not built" in str(info.value)
-    chain.inputs = {}
-    chain.parent = None  # nothing to derive from -> required input missing
-    with pytest.raises(AttachError) as info:
-        Builder(backend).build()
-    assert "required input" in str(info.value)
-
-
-def test_builder_wraps_failures():
-    backend, root, chain = _scene()
-    backend.fail_on = "tail"
-    errors = []
-    events = EventBus()
-    events.subscribe("error", lambda **kw: errors.append(kw["context"]))
-    with pytest.raises(BuildError) as info:
-        Builder(backend, events).build()
-    assert info.value.instance_id == chain.instance_id
-    assert errors == ["building tail"]
-
-
-def test_builder_validation_failure():
-    backend, root, chain = _scene()
-    chain.guides = [GuidePose("root")]  # scene lost its segments
-    with pytest.raises(BuildError) as info:
-        Builder(backend).build()
-    assert "needs at least" in str(info.value)
-
-
-def test_builder_empty_scene_and_bad_afterlife():
-    backend = FakeBackend()
-    assert Builder(backend).build().count == 0
-    with pytest.raises(ValueError):
-        Builder(backend).build(afterlife="burn")
-
-
-# --------------------------------------------------- topological ordering
 def test_order_by_connections_puts_producers_first():
     from tik.trigger.core.schemas import order_by_connections
 
@@ -267,23 +183,6 @@ def test_order_by_connections_ignores_bare_scene_sources():
     a = ToyChain(name="a").to_instance()
     ordered = order_by_connections([a], lambda item: {"root": "some_jnt"})
     assert [item.name for item in ordered] == ["a"]
-
-
-def test_builder_passes_bind_parent_from_the_producer():
-    """A connected module builds its bind joints inside the producer's."""
-    backend, root, chain = _scene()
-    report = Builder(backend).build(rig_name="rig", afterlife="keep")
-    producer_ctx = report.contexts[root.instance_id]
-    consumer_ctx = report.contexts[chain.instance_id]
-    assert consumer_ctx.bind_parent == producer_ctx.outputs["root"]
-
-
-def test_builder_bind_parent_defaults_when_unconnected():
-    backend = FakeBackend()
-    solo = backend.create_guides(ToyRoot(name="solo"))
-    report = Builder(backend).build(rig_name="rig", afterlife="keep")
-    ctx = report.contexts[solo.instance_id]
-    assert ctx.bind_parent == ctx.groups.bind
 
 
 # ------------------------------------------------------------------- spaces
@@ -346,53 +245,3 @@ def test_validate_rejects_duplicate_rows():
 def _with_space_rows(instance, rows):
     instance.settings["anim_spaces"] = rows
     return instance
-
-
-def test_space_inputs_do_not_feed_build_order():
-    """An arm in head space while the head is in arm space is a normal rig."""
-    backend = FakeBackend()
-    first = backend.create_guides(ToyRoot(name="a"))
-    second = backend.create_guides(ToyRoot(name="b"))
-    _with_space_rows(first, [{"control": "root", "mode": "parent", "label": "b"}])
-    _with_space_rows(second, [{"control": "root", "mode": "parent", "label": "a"}])
-    first.inputs = {"root_b": "b.root"}
-    second.inputs = {"root_a": "a.root"}
-    report = Builder(backend).build(rig_name="rig", afterlife="keep")
-    assert report.count == 2
-
-
-def test_space_connections_are_grouped_by_control_and_mode():
-    backend = FakeBackend()
-    backend.create_guides(ToyRoot(name="body"))
-    backend.create_guides(ToyRoot(name="head"))
-    arm = backend.create_guides(ToyRoot(name="arm"))
-    _with_space_rows(arm, [
-        {"control": "root", "mode": "parent", "label": "body"},
-        {"control": "root", "mode": "parent", "label": "head"},
-    ])
-    arm.inputs = {"root_body": "body.root", "root_head": "head.root"}
-    Builder(backend).build(rig_name="rig", afterlife="keep")
-    assert backend.space_connections == [("arm", "root", "parent", ["body", "head"])]
-
-
-def test_row_order_is_enum_order():
-    backend = FakeBackend()
-    backend.create_guides(ToyRoot(name="body"))
-    backend.create_guides(ToyRoot(name="head"))
-    arm = backend.create_guides(ToyRoot(name="arm"))
-    _with_space_rows(arm, [
-        {"control": "root", "mode": "parent", "label": "head"},
-        {"control": "root", "mode": "parent", "label": "body"},
-    ])
-    arm.inputs = {"root_body": "body.root", "root_head": "head.root"}
-    Builder(backend).build(rig_name="rig", afterlife="keep")
-    assert backend.space_connections[0][3] == ["head", "body"]
-
-
-def test_an_unconnected_space_row_is_skipped():
-    backend = FakeBackend()
-    arm = backend.create_guides(ToyRoot(name="arm"))
-    _with_space_rows(arm, [{"control": "root", "mode": "parent", "label": "ghost"}])
-    report = Builder(backend).build(rig_name="rig", afterlife="keep")
-    assert backend.space_connections == []
-    assert report.spaces == []

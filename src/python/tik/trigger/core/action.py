@@ -13,7 +13,6 @@ from tik.core.fields import Schema
 class ActionContext:
     """What an action gets when it runs."""
 
-    backend: Any
     session: Any = None
     events: Any = None
     paths: dict = field(default_factory=dict)

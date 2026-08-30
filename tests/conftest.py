@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-# shared test helpers (fake backends etc.)
+# shared test helpers (toy modules etc.)
 sys.path.insert(0, str(Path(__file__).parent / "helpers"))
 
 # IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"

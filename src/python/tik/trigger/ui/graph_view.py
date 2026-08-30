@@ -561,7 +561,7 @@ class GraphView(QtWidgets.QGraphicsView):
         for name in sorted(groups):
             pos = free_pos(name, HEADER + len(groups[name]) * ROW + 8)
             node = self.graph.add_node(name, name, "scene", [], groups[name], "", external=True, pos=pos, mode=collapse.get(name, MODE_FULL))
-            exists = getattr(self.guides.backend, "scene_node", lambda _n: True)
+            exists = getattr(self.guides, "scene_node", lambda _n: True)
             missing = [item for item in groups[name] if exists(item) is None]
             node.subtitle = "scene ✗ missing" if missing else "scene ✓"
         for handle in sorted(handles, key=lambda item: (depth.get(item.key, 1), item.key)):

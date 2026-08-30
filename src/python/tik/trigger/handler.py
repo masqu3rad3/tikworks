@@ -19,7 +19,7 @@ from tik.trigger.core import registry, versioning
 from tik.trigger.core.document import EXTENSION, ActionNode, Document, join_path, split_path
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import SessionError, SessionSaveError
-from tik.trigger.core.runner import REFERENCE_TYPE, Runner, StepResult
+from tik.trigger.core.steps import REFERENCE_TYPE, StepResult
 
 _SETTINGS_ONLY = {"_session", "_node", "_path", "_linked", "_ref_handle", "_ref_path"}
 
@@ -182,12 +182,11 @@ class ActionHandle:
 
 
 class Session:
-    """A ``.tr`` document with a backend to build it."""
+    """A ``.tr`` document and the runner that builds it."""
 
     EXTENSION = EXTENSION
 
-    def __init__(self, backend=None, file_path: Optional[str] = None, events: Optional[EventBus] = None) -> None:
-        self.backend = backend
+    def __init__(self, file_path: Optional[str] = None, events: Optional[EventBus] = None) -> None:
         self.events = events or EventBus()
         self.document = Document()
         self.file_path: Optional[Path] = None
@@ -200,8 +199,8 @@ class Session:
             self.load(file_path)
 
     @classmethod
-    def open(cls, file_path: str, backend=None, events: Optional[EventBus] = None) -> "Session":
-        return cls(backend=backend, file_path=file_path, events=events)
+    def open(cls, file_path: str, events: Optional[EventBus] = None) -> "Session":
+        return cls(file_path=file_path, events=events)
 
     # ------------------------------------------------------------ state
     UNDO_LIMIT = 50
@@ -389,14 +388,14 @@ class Session:
         return self._reference_cache[key]
 
     # ------------------------------------------------------------ running
-    def _runner(self) -> Runner:
-        if self.backend is None:
-            raise SessionError("This session has no backend to build with.")
-        return Runner(self.backend, self.events)
+    def _runner(self):
+        from tik.trigger.maya.runner import Runner
+
+        return Runner(self.events)
 
     def validate(self) -> list[str]:
         """Pre-flight problems for every runnable step (files missing, etc.)."""
-        runner = Runner(self.backend, self.events)
+        runner = self._runner()
         problems: list[str] = []
         try:
             plan = runner.plan(self.document, self.directory)
@@ -407,7 +406,7 @@ class Session:
             action = registry.get_action(step.node.type)(settings=step.node.settings)
             from tik.trigger.core.action import ActionContext
 
-            ctx = ActionContext(backend=self.backend, session=self, events=self.events,
+            ctx = ActionContext(session=self, events=self.events,
                                 base_dir=step.base_dir, path=step.path)
             problems.extend(f"{step.path}: {item}" for item in action.validate(ctx))
         return problems
@@ -425,7 +424,7 @@ class Session:
 
     def steps(self, until: Optional[str] = None):
         """The planned steps (what Build would run)."""
-        return Runner(self.backend, self.events).plan(self.document, self.directory, until=until).steps
+        return self._runner().plan(self.document, self.directory, until=until).steps
 
     def __repr__(self) -> str:
         return f"Session({self.name}, {len(self.document.actions)} actions)"

@@ -1,61 +1,48 @@
-"""Turn a document into ordered steps and run them."""
+"""Turn a document into ordered steps and run them.
+
+Planning is pure; running resets the scene and wraps each step in an undo
+chunk, which is why this lives in the Maya layer rather than in ``core``.
+"""
 
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import registry
-from .action import ActionContext
-from .document import ActionNode, Document, join_path
-from .events import EventBus
-from .exceptions import ActionExecutionError, SessionError
+from tik.trigger.core import registry
+from tik.trigger.core.action import ActionContext
+from tik.trigger.core.document import Document, join_path
+from tik.trigger.core.events import EventBus
+from tik.trigger.core.exceptions import ActionExecutionError, SessionError
+from tik.trigger.core.steps import (
+    REFERENCE_TYPE,
+    STEP_FAILED,
+    STEP_FINISHED,
+    STEP_SKIPPED,
+    STEP_STARTED,
+    Plan,
+    Step,
+    StepResult,
+)
 
-REFERENCE_TYPE = "reference"
+def new_scene() -> None:
+    """Start a build from an empty scene."""
+    from tik.trigger.guides import nodes
 
-STEP_STARTED = "step_started"
-STEP_FINISHED = "step_finished"
-STEP_FAILED = "step_failed"
-STEP_SKIPPED = "step_skipped"
-
-
-@dataclass
-class Step:
-    """A runnable action with its resolved context."""
-
-    path: str
-    node: ActionNode
-    base_dir: str
-    chain: tuple[str, ...] = ()  # referenced files leading here
-    depth: int = 0
-    linked: bool = False
-
-    @property
-    def display_chain(self) -> str:
-        return " > ".join([*(Path(item).name for item in self.chain), self.path])
+    nodes.new_scene()
 
 
-@dataclass
-class StepResult:
-    path: str
-    status: str  # "done" | "failed" | "skipped"
-    seconds: float = 0.0
-    error: Optional[str] = None
+def undo_chunk(label: str):
+    """One undo step per action, so a failed build rolls back cleanly."""
+    from tik.trigger.guides import nodes
 
-
-@dataclass
-class Plan:
-    steps: list[Step] = field(default_factory=list)
-    problems: list[str] = field(default_factory=list)
+    return nodes.undo_chunk(label)
 
 
 class Runner:
     """Plans and executes a document."""
 
-    def __init__(self, backend, events: Optional[EventBus] = None, loader: Optional[Callable] = None) -> None:
-        self.backend = backend
+    def __init__(self, events: Optional[EventBus] = None, loader: Optional[Callable] = None) -> None:
         self.events = events or EventBus()
         self.loader = loader or Document.load
 
@@ -121,7 +108,7 @@ class Runner:
     ) -> list[StepResult]:
         plan = self.plan(document, base_dir, until=until, only=only)
         if reset_scene and only is None:
-            self.backend.new_scene()
+            new_scene()
         results: list[StepResult] = []
         total = len(plan.steps)
         for number, step in enumerate(plan.steps, start=1):
@@ -133,7 +120,6 @@ class Runner:
         action_cls = registry.get_action(step.node.type)
         action = action_cls(settings=step.node.settings)
         ctx = ActionContext(
-            backend=self.backend,
             session=session,
             events=self.events,
             paths={"directory": step.base_dir},
@@ -149,7 +135,7 @@ class Runner:
             self.events.emit(STEP_FAILED, path=step.path, error=message)
             raise ActionExecutionError(f"{step.display_chain}: {message}", action_name=step.path)
         try:
-            with self.backend.undo_chunk(f"Trigger: {step.path}"):
+            with undo_chunk(f"Trigger: {step.path}"):
                 action.run(ctx)
         except Exception as error:  # noqa: BLE001 - report then wrap
             seconds = time.perf_counter() - started
