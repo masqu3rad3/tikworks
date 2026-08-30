@@ -480,7 +480,17 @@ class MayaBackend:
 
     def finalize(self, ctx: MayaBuildContext) -> None:
         for name, node in ctx.outputs.items():
-            tags.tag(node, **{tags.KIND: tags.OUTPUT, tags.INSTANCE: ctx.instance.instance_id, tags.ROLE: name})
+            # Every output is a bind joint, so trg_kind must stay "deform" -
+            # overwriting it with "output" would erase the classification that
+            # skinning and export read. The output role gets its own key.
+            marks = {
+                tags.INSTANCE: ctx.instance.instance_id,
+                tags.ROLE: name,
+                tags.OUTPUT_NAME: name,
+            }
+            if node.meta.get(tags.KIND) is None:
+                marks[tags.KIND] = tags.OUTPUT
+            tags.tag(node, **marks)
         for name, node in ctx.attachments.items():
             tags.tag(node, **{tags.KIND: tags.INPUT, tags.INSTANCE: ctx.instance.instance_id, tags.ROLE: name})
 

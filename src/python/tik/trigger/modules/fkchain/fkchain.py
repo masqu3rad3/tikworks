@@ -53,16 +53,23 @@ class FkChain(Module):
             joints.append(joint)
             parent_joint = joint
 
-        parent = socket
+        # Controllers live in control_grp and are *driven* by the socket, never
+        # parented under it: control_grp holds nothing but controllers and their
+        # offset groups.
+        parent = None
         for index, joint in enumerate(joints[:-1]):
             controller = ctx.controller(
                 f"fk{index}",
                 size=self.controller_size,
-                parent=parent,
+                parent=parent if parent is not None else ctx.groups.control,
                 match=joint,
                 mirror="behaviour",
             )
-            controller.transform.create_offset_group(name=ctx.name(f"fk{index}", suffix="offset"))
+            offset = controller.transform.create_offset_group(
+                name=ctx.name(f"fk{index}", suffix="offset")
+            )
+            if parent is None:
+                tm.MatrixConstraint.create(socket, offset, maintain_offset=True)
             tm.MatrixConstraint.create(controller.transform, joint, maintain_offset=True)
             parent = controller.transform
 

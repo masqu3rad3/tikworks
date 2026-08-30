@@ -105,7 +105,8 @@ def test_build_pipeline_creates_groups_controllers_and_attaches(backend):
     assert socket.world_position.y == pytest.approx(before.y + 5)
 
     # tags on outputs
-    assert tm.Joint("L_tail_0_jnt").meta[tags.KIND] == tags.OUTPUT
+    assert tm.Joint("L_tail_0_jnt").meta[tags.KIND] == tags.DEFORM
+    assert tm.Joint("L_tail_0_jnt").meta[tags.OUTPUT_NAME] == "root"
     assert socket.meta[tags.KIND] == tags.INPUT
     assert report.connections == [("L_tail.root", "body.root")]
     assert tm.Transform("L_tail_grp").meta[tags.INSTANCE] == child.instance_id
