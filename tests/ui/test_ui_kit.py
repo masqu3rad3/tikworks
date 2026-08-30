@@ -6,6 +6,7 @@ from tik.shared.ui.collapsible import CollapsibleGroup
 from tik.shared.ui.maya_window import HAS_MAYA, MayaToolWindow
 from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.shared.ui.scene_watcher import SceneWatcher
+from tik.shared.ui.status import StatusFields
 from tik.shared.ui.tile_grid import TileEntry, TileGrid
 from tik.shared.ui.versioned_field import VersionedFileField
 
@@ -126,3 +127,14 @@ def test_filter_bar_keywords_or_together(qapp):
     assert bar.keywords == ["arm"]
     bar.clear()
     assert bar.keywords == [] and bar.matches("zzz")
+
+
+def test_status_fields_on_a_plain_strip(qapp):
+    strip = QtWidgets.QWidget()
+    fields = StatusFields(strip, ("modules", "file"))
+    fields.set("modules", "3 module(s)")
+    fields.set_activity("Ready")
+    assert fields.text("modules") == "3 module(s)"
+    assert fields.activity.text() == "Ready"
+    # activity, separator and both field labels all live on the strip
+    assert len(strip.findChildren(QtWidgets.QLabel)) == 4
