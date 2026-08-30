@@ -3,7 +3,7 @@
 from maya import cmds
 
 import tik.maya as tm
-from tik.trigger.backends.maya import tags
+from tik.trigger.maya import tags
 from tik.trigger.systems.limb import build_ikfk_limb
 
 

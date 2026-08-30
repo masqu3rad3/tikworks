@@ -23,7 +23,7 @@ from typing import Optional
 
 from tik.shared.ui import theme
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
-from tik.trigger.core.builder import split_source
+from tik.trigger.core.schemas import split_source
 from tik.trigger.core.exceptions import TriggerError
 
 NODE_WIDTH = 150

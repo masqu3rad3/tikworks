@@ -7,7 +7,6 @@ from typing import Any, Optional
 
 from tik.core.side import Side
 from tik.trigger.core import registry
-from tik.trigger.core.builder import Builder
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import instance_key
@@ -450,6 +449,8 @@ class Guides:
         scope = [handle.instance_id for handle in handles] or "scene"
         self.invalidate()  # guides may have been moved by hand since the last read
         try:
+            from tik.trigger.maya.build import Builder
+
             return Builder(self.backend, self.events).build(scope=scope, rig_name=rig_name, afterlife="keep")
         finally:
             self.invalidate()

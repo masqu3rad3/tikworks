@@ -3,10 +3,22 @@
 from __future__ import annotations
 
 import contextlib
+from dataclasses import dataclass
 from typing import Optional, Sequence
 
-from tik.trigger.core import Guides, Input, IntField, Module, RigGroups
+from tik.trigger.core import Guides, Input, IntField, Module
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
+
+
+@dataclass
+class RigGroups:
+    """Stand-in for the four module groups (names only)."""
+
+    limb: object = None
+    socket: object = None
+    control: object = None
+    rig: object = None
+    bind: object = None
 
 
 class FakeGuideContext:

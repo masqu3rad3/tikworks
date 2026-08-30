@@ -21,9 +21,6 @@ from tik.core.side import Side
 from . import versioning
 from .action import Action, ActionContext
 from .document import ActionNode, Document
-from .backend import Backend
-from .builder import AFTERLIFE_MODES, Builder, BuildReport
-from .context import BuildContext, GuideContext, RigGroups
 from .events import ERROR, LOG, PROGRESS, EventBus
 from .exceptions import (
     ActionError,
@@ -59,6 +56,7 @@ from .registry import (
     unregister_module,
 )
 from .schemas import (
+    AFTERLIFE_MODES,
     SCHEMA_VERSION,
     ActionInstance,
     GuidePose,
@@ -66,6 +64,7 @@ from .schemas import (
     ParentRef,
     RigDocument,
     order_instances,
+    split_source,
 )
 
 __all__ = [
@@ -74,13 +73,6 @@ __all__ = [
     "ActionNode",
     "Document",
     "versioning",
-    "Backend",
-    "Builder",
-    "BuildReport",
-    "AFTERLIFE_MODES",
-    "BuildContext",
-    "GuideContext",
-    "RigGroups",
     "EventBus",
     "PROGRESS",
     "LOG",
@@ -115,12 +107,14 @@ __all__ = [
     "unregister_module",
     "clear_registries",
     "SCHEMA_VERSION",
+    "AFTERLIFE_MODES",
     "GuidePose",
     "ParentRef",
     "ModuleInstance",
     "ActionInstance",
     "RigDocument",
     "order_instances",
+    "split_source",
     "TriggerError",
     "RegistryError",
     "DuplicateRegistrationError",

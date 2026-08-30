@@ -29,7 +29,7 @@ from tik.shared.ui.scene_watcher import SceneWatcher
 from tik.shared.ui.status import StatusFields
 from tik.shared.ui.tile_grid import TileEntry, TileGrid
 from tik.trigger.core import registry
-from tik.trigger.core.builder import split_source
+from tik.trigger.core.schemas import split_source
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.guides import EXTENSION as GUIDE_EXTENSION
 from tik.trigger.guides import GuideHandle, Guides

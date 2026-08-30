@@ -7,7 +7,8 @@ from maya import cmds
 
 import tik.maya as tm
 import tik.trigger as trigger
-from tik.trigger.core import Builder, ParentRef, get_module
+from tik.trigger.core import ParentRef, get_module
+from tik.trigger.maya import Builder
 from tik.trigger.core.exceptions import AttachError, GuideError
 from tik.trigger.guides import GuideFile, Guides
 

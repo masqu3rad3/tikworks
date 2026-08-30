@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
 import tik.maya as tm
@@ -9,13 +10,30 @@ from maya import cmds
 from tik.core.side import Side
 from tik.maya import attribute, naming
 from tik.maya.roles.controller import Controller
-from tik.trigger.core.context import RigGroups
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.schemas import ModuleInstance
 
 from . import tags
 
 SIDE_COLORS = {Side.LEFT: 6, Side.RIGHT: 13, Side.CENTER: 17}
+
+
+@dataclass
+class RigGroups:
+    """The four groups created for every module instance, under ``limb``.
+
+    ``socket`` holds input attach transforms driven by parent module outputs.
+    ``control`` holds controllers and their offset/space groups, nothing else.
+    ``rig`` holds the puppet: IK/FK chains, handles, math, helpers.
+    ``bind`` holds deform/export joints only, and is empty when the module is
+    connected to a parent (its joints are created in the parent's hierarchy).
+    """
+
+    limb: Any = None  # top group of the module
+    socket: Any = None
+    control: Any = None
+    rig: Any = None
+    bind: Any = None
 
 
 class MayaGuideContext:

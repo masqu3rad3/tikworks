@@ -425,8 +425,16 @@ def test_export_import_and_test_build(designer, tmp_path, monkeypatch):
     assert designer.status.text("file") == "g.trg"
     designer.import_file(str(tmp_path / "g.trg"), reset=True)
     assert calls[-1] == ("import", str(tmp_path / "g.trg"), True)
+    # The build itself is proven by tests/integration; here we only check the
+    # designer delegates to it with the right scope.
+    class Report:
+        count = 1
+        connections = [("L_toy_chain.root", "toy_root.root")]
+
+    monkeypatch.setattr(designer.guides, "test_build",
+                        lambda *handles, **kwargs: calls.append(("build", len(handles))) or Report())
     report = designer.test_build(all_modules=True)
-    assert report.count == 1 and ("rig_root", "test") in designer.backend.calls
+    assert calls[-1] == ("build", 0) and report.count == 1
     designer.build_all_button.click()
     assert designer.build_all_button.text() == "Build all" and designer.test_button.text() == "Build selected"
 

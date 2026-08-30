@@ -15,8 +15,6 @@ from tik.trigger.core import (  # noqa: F401 - public API
     Action,
     ActionContext,
     BuildError,
-    Builder,
-    BuildReport,
     EventBus,
     Guides,
     Module,
@@ -44,10 +42,19 @@ def load_plugins() -> None:
 
 def maya_backend():
     """Return a ``MayaBackend`` (imports Maya lazily) with plugins loaded."""
-    from tik.trigger.backends.maya import MayaBackend
+    from tik.trigger.maya import MayaBackend
 
     load_plugins()
     return MayaBackend()
+
+
+def __getattr__(name):
+    """``trigger.Builder`` / ``trigger.BuildReport`` import Maya on first use."""
+    if name in ("Builder", "BuildReport", "AFTERLIFE_MODES"):
+        from tik.trigger import maya as maya_layer
+
+        return getattr(maya_layer, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [

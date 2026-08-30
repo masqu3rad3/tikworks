@@ -17,7 +17,7 @@ from tik.maya import attribute
 from tik.trigger.guides.format import make_record
 
 from . import tags
-from .context import MayaBuildContext, MayaGuideContext
+from .rig import MayaBuildContext, MayaGuideContext
 
 INPUTS = "trg_inputs"
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 class MayaBackend:
-    """Implements ``tik.trigger.core.backend.Backend`` for Maya."""
+    """The Maya scene: guides as tagged joints, rigs built on tik.maya."""
 
     name = "maya"
 

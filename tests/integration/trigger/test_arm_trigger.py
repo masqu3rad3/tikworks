@@ -5,8 +5,9 @@ from maya import cmds
 
 import tik.maya as tm
 import tik.trigger as trigger
-from tik.trigger.backends.maya import tags
-from tik.trigger.core import Builder, ParentRef, get_module
+from tik.trigger.maya import tags
+from tik.trigger.core import ParentRef, get_module
+from tik.trigger.maya import Builder
 
 
 @pytest.fixture

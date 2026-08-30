@@ -4,7 +4,7 @@ import pytest
 from maya import cmds
 
 import tik.trigger as trigger
-from tik.trigger.backends.maya import MayaBackend
+from tik.trigger.maya import MayaBackend
 from tik.trigger.core import get_module
 
 

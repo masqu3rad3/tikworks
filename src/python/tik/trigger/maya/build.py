@@ -5,12 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from . import registry
-from .events import EventBus
-from .exceptions import AttachError, BuildError
-from .schemas import ModuleInstance, order_by_connections, order_instances
-
-AFTERLIFE_MODES = ("keep", "hide", "delete")
+from tik.trigger.core import registry
+from tik.trigger.core.events import EventBus
+from tik.trigger.core.exceptions import AttachError, BuildError
+from tik.trigger.core.schemas import (
+    AFTERLIFE_MODES,
+    ModuleInstance,
+    order_by_connections,
+    order_instances,
+    split_source,
+)
 
 
 @dataclass
@@ -18,7 +22,7 @@ class BuildReport:
     """What happened during a build."""
 
     built: list[str] = field(default_factory=list)  # instance ids in build order
-    contexts: dict = field(default_factory=dict)  # instance id -> BuildContext
+    contexts: dict = field(default_factory=dict)  # instance id -> ModuleRig
     connections: list[tuple[str, str]] = field(default_factory=list)  # ("L_arm.root", "body.root")
     spaces: list[tuple[str, str]] = field(default_factory=list)  # ("L_arm.ik_chest", "body.root")
     rig_root: Any = None
@@ -26,14 +30,6 @@ class BuildReport:
     @property
     def count(self) -> int:
         return len(self.built)
-
-
-def split_source(source: str) -> tuple[Optional[str], str]:
-    """``"L_arm.hand"`` -> ("L_arm", "hand"); ``"some_jnt"`` -> (None, "some_jnt")."""
-    if "." in source:
-        key, _dot, output = source.rpartition(".")
-        return key, output
-    return None, source
 
 
 def space_input_names(module_cls, settings) -> set:

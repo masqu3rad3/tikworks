@@ -9,7 +9,8 @@ from maya.api import OpenMaya
 
 import tik.maya as tm
 import tik.trigger as trigger
-from tik.trigger.core import Builder, get_module
+from tik.trigger.core import get_module
+from tik.trigger.maya import Builder
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.guides import GuideFile, Guides
 

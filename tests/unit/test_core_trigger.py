@@ -8,7 +8,6 @@ from trigger_fakes import FakeBackend, ToyChain, ToyRoot
 from tik.trigger.core import (
     AttachError,
     BuildError,
-    Builder,
     DuplicateRegistrationError,
     EventBus,
     Guides,
@@ -24,6 +23,7 @@ from tik.trigger.core import (
     unregister_module,
 )
 from tik.trigger.core.schemas import GuidePose, order_instances
+from tik.trigger.maya.build import Builder
 
 
 @pytest.fixture(autouse=True)

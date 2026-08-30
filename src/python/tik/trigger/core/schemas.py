@@ -7,6 +7,9 @@ from typing import Any, Optional
 
 SCHEMA_VERSION = 3
 
+# What a build does with the guides once it is done.
+AFTERLIFE_MODES = ("keep", "hide", "delete")
+
 
 @dataclass
 class GuidePose:
@@ -145,6 +148,14 @@ class RigDocument:
         )
 
 
+def split_source(source: str) -> tuple[Optional[str], str]:
+    """``"L_arm.hand"`` -> ("L_arm", "hand"); ``"some_jnt"`` -> (None, "some_jnt")."""
+    if "." in source:
+        key, _dot, output = source.rpartition(".")
+        return key, output
+    return None, source
+
+
 def order_instances(instances: list[ModuleInstance]) -> list[ModuleInstance]:
     """Return instances parents-first, keeping the input order otherwise."""
     by_id = {instance.instance_id: instance for instance in instances}
@@ -217,6 +228,7 @@ def order_by_connections(instances: list[ModuleInstance], inputs_for) -> list[Mo
 
 __all__: list[Any] = [
     "SCHEMA_VERSION",
+    "AFTERLIFE_MODES",
     "GuidePose",
     "ParentRef",
     "ModuleInstance",
@@ -224,4 +236,5 @@ __all__: list[Any] = [
     "RigDocument",
     "order_instances",
     "order_by_connections",
+    "split_source",
 ]

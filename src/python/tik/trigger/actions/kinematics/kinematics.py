@@ -6,7 +6,6 @@ from tik.trigger.core import (
     AFTERLIFE_MODES,
     Action,
     BoolField,
-    Builder,
     ChoiceField,
     FileField,
     ListField,
@@ -30,6 +29,7 @@ class Kinematics(Action):
 
     def run(self, ctx) -> None:
         from tik.trigger.guides import Guides
+        from tik.trigger.maya.build import Builder
 
         if not self.guides_file:
             raise ActionExecutionError("kinematics: no guides file set.")

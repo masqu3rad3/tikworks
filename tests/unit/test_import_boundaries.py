@@ -1,7 +1,7 @@
 """Layering rules for tikworks packages.
 
-tik.core < tik.maya < tik.trigger. ``tik.trigger.core`` and
-``tik.trigger.session`` must stay DCC-agnostic (no Maya, no Qt).
+tik.core < tik.maya < tik.trigger. ``tik.trigger.core`` must stay pure
+Python (no Maya, no Qt); everything else in tik.trigger may use tik.maya.
 """
 
 import ast
@@ -17,7 +17,6 @@ FORBIDDEN = {
     "core": ("maya", "tik.maya", "tik.trigger", "tik.shared") + QT,
     "maya": ("tik.trigger", "tik.shared") + QT,
     "trigger/core": ("maya", "tik.maya") + QT,
-    "trigger/session": ("maya", "tik.maya") + QT,
 }
 
 
