@@ -91,18 +91,16 @@ class MayaBuildContext:
     # ------------------------------------------------------------- groups
     def _create_groups(self) -> RigGroups:
         limb = tm.Transform.create(name=self.name(suffix="grp"), parent=self.rig_root.long_name)
-        scale = tm.Transform.create(name=self.name("scale", suffix="grp"), parent=limb.long_name)
-        nonscale = tm.Transform.create(name=self.name("nonScale", suffix="grp"), parent=limb.long_name)
-        nonscale["inheritsTransform"].value = False
-        controllers = tm.Transform.create(name=self.name("controllers", suffix="grp"), parent=scale.long_name)
-        joints = tm.Transform.create(name=self.name("joints", suffix="grp"), parent=limb.long_name)
+        socket = tm.Transform.create(name=self.name("socket", suffix="grp"), parent=limb.long_name)
+        control = tm.Transform.create(name=self.name("control", suffix="grp"), parent=limb.long_name)
         rig = tm.Transform.create(name=self.name("rig", suffix="grp"), parent=limb.long_name)
+        bind = tm.Transform.create(name=self.name("bind", suffix="grp"), parent=limb.long_name)
 
         attribute.add_separator(limb, "visibility_")
-        attribute.add_bool(limb, "controlVisibility", default=True) >> controllers["visibility"]
-        attribute.add_bool(limb, "jointVisibility", default=True) >> joints["visibility"]
+        attribute.add_bool(limb, "controlVisibility", default=True) >> control["visibility"]
         attribute.add_bool(limb, "rigVisibility", default=False) >> rig["visibility"]
-        for group in (limb, scale, nonscale, controllers, joints, rig):
+        attribute.add_bool(limb, "bindVisibility", default=True) >> bind["visibility"]
+        for group in (limb, socket, control, rig, bind):
             attribute.lock_and_hide(group, attribute.TRANSFORM_ATTRS)
         tags.tag(
             limb,
@@ -114,7 +112,7 @@ class MayaBuildContext:
                 tags.SIDE: self.side.value,
             },
         )
-        return RigGroups(limb=limb, scale=scale, nonscale=nonscale, controllers=controllers, joints=joints, rig=rig)
+        return RigGroups(limb=limb, socket=socket, control=control, rig=rig, bind=bind)
 
     # ------------------------------------------------------------- guides
     def guide(self, role: str, index: int = 0) -> tm.Joint:
@@ -146,7 +144,7 @@ class MayaBuildContext:
         color: Any = None,
         match: Any = None,
     ) -> Controller:
-        parent = parent if parent is not None else self.groups.controllers
+        parent = parent if parent is not None else self.groups.control
         controller = Controller.create(
             name=self.name(name, suffix="ctrl"),
             shape=shape,

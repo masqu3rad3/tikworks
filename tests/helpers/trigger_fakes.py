@@ -28,7 +28,13 @@ class FakeBuildContext:
         self.instance = instance
         self.side = module.side
         self.side_mult = module.side.multiplier
-        self.groups = RigGroups(limb=f"{module.name}_grp")
+        self.groups = RigGroups(
+            limb=f"{module.name}_grp",
+            socket=f"{module.name}_socket_grp",
+            control=f"{module.name}_control_grp",
+            rig=f"{module.name}_rig_grp",
+            bind=f"{module.name}_bind_grp",
+        )
         self.rig_root = rig_root
         self.outputs: dict = {}
         self.attachments: dict = {}

@@ -92,7 +92,7 @@ def test_build_pipeline_creates_groups_controllers_and_attaches(backend):
     assert report.count == 2
     assert cmds.objExists("hero_rig")
     assert cmds.objExists("C_body_grp") and cmds.objExists("L_tail_grp")
-    assert cmds.objExists("L_tail_controllers_grp")
+    assert cmds.objExists("L_tail_control_grp")
     assert cmds.objExists("L_tail_0_jnt") and cmds.objExists("L_tail_2_jnt")
     assert cmds.objExists("L_tail_fk0_ctrl") and not cmds.objExists("L_tail_fk2_ctrl")
     assert not cmds.objExists(tags.GUIDE_HOLDER)
@@ -134,5 +134,57 @@ def test_visibility_attributes(backend):
     Builder(backend).build(afterlife="keep")
     limb = tm.Transform("C_body_grp")
     limb["controlVisibility"].value = False
-    assert not tm.Transform("C_body_controllers_grp").visibility
+    assert not tm.Transform("C_body_control_grp").visibility
     assert not tm.Transform("C_body_rig_grp").visibility
+
+
+# --------------------------------------------------------------- ground rules
+
+
+def _built(backend, module_type="base", name="body", settings=None):
+    """Build one instance and return its build context."""
+    module = get_module(module_type)(name=name, settings=settings or {})
+    instance = backend.create_guides(module)
+    report = Builder(backend).build(rig_name="rules", afterlife="keep")
+    return report.contexts[instance.instance_id]
+
+
+def test_module_has_exactly_four_groups(backend):
+    ctx = _built(backend)
+    children = {
+        path.split("|")[-1]
+        for path in cmds.listRelatives(ctx.groups.limb.long_name, children=True, fullPath=True) or []
+    }
+    assert len(children) == 4
+    assert ctx.groups.socket.name in children
+    assert ctx.groups.control.name in children
+    assert ctx.groups.rig.name in children
+    assert ctx.groups.bind.name in children
+
+
+def test_group_names_follow_the_convention(backend):
+    ctx = _built(backend)
+    assert ctx.groups.socket.name.endswith("_socket_grp")
+    assert ctx.groups.control.name.endswith("_control_grp")
+    assert ctx.groups.rig.name.endswith("_rig_grp")
+    assert ctx.groups.bind.name.endswith("_bind_grp")
+
+
+def test_old_scale_groups_are_gone(backend):
+    ctx = _built(backend)
+    for dropped in ("scale", "nonscale", "joints", "controllers"):
+        assert not hasattr(ctx.groups, dropped)
+    assert not cmds.objExists("C_body_scale_grp")
+    assert not cmds.objExists("C_body_nonScale_grp")
+    assert not cmds.objExists("C_body_joints_grp")
+
+
+def test_visibility_attributes_drive_the_new_groups(backend):
+    ctx = _built(backend)
+    limb = ctx.groups.limb
+    limb["controlVisibility"].value = False
+    assert not ctx.groups.control.visibility
+    limb["rigVisibility"].value = True
+    assert ctx.groups.rig.visibility
+    limb["bindVisibility"].value = False
+    assert not ctx.groups.bind.visibility

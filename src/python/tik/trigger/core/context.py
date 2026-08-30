@@ -12,14 +12,20 @@ from typing import Any, Optional, Protocol, Sequence
 
 @dataclass
 class RigGroups:
-    """Standard group nodes created for every module instance."""
+    """The four groups created for every module instance, under ``limb``.
+
+    ``socket`` holds input attach transforms driven by parent module outputs.
+    ``control`` holds controllers and their offset/space groups, nothing else.
+    ``rig`` holds the puppet: IK/FK chains, handles, math, helpers.
+    ``bind`` holds deform/export joints only, and is empty when the module is
+    connected to a parent (its joints are created in the parent's hierarchy).
+    """
 
     limb: Any = None  # top group of the module
-    scale: Any = None  # scaled with the rig, holds controllers/plugs
-    nonscale: Any = None  # non-inheriting, holds skinned helper geometry
-    controllers: Any = None
-    joints: Any = None  # deformation joints
-    rig: Any = None  # internal nodes (ik handles, helpers)
+    socket: Any = None
+    control: Any = None
+    rig: Any = None
+    bind: Any = None
 
 
 class GuideContext(Protocol):

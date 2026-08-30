@@ -28,7 +28,7 @@ class Base(Module):
             "root", shape="Circle", size=self.controller_size, match=root_guide
         )
         joint = tm.Joint.create(
-            name=ctx.name("root", suffix="jnt"), parent=ctx.groups.joints.long_name
+            name=ctx.name("root", suffix="jnt"), parent=ctx.groups.bind.long_name
         )
         joint.align_to(root_guide)
         tm.MatrixConstraint.create(controller.transform, joint, maintain_offset=True)

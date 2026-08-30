@@ -38,11 +38,11 @@ class FkChain(Module):
         guide_nodes = [ctx.guide("root"), *ctx.guides("segment")]
         positions = [tuple(node.world_position) for node in guide_nodes]
         joints = tm.Joint.chain(
-            positions, name_pattern=ctx.name("{index}", suffix="jnt"), parent=ctx.groups.joints
+            positions, name_pattern=ctx.name("{index}", suffix="jnt"), parent=ctx.groups.bind
         )
 
         socket = tm.Transform.create(
-            name=ctx.name("root", suffix="socket"), parent=ctx.groups.controllers.long_name
+            name=ctx.name("root", suffix="socket"), parent=ctx.groups.socket.long_name
         )
         socket.align_to(joints[0])
         ctx.attach("root", socket)
