@@ -7,6 +7,10 @@ selects joints in Maya on its own — use *Select guides* for that. Scene
 structure changes (new/removed/undone guides) reach the UI through a
 debounced ``SceneWatcher``; our own edits are muted.
 
+The designer is a page, not a window: it builds ``menu_bar`` and
+``status_strip`` and leaves the hosting to ``ui/main.py`` (a mode tab) or
+``ui/shell.py`` (torn off into its own window).
+
 Everything the designer authors (connections, scene-node groups, node
 positions, collapse modes) lives in ``GuideScene`` / ``GuideScene.layout`` and is
 exported with the ``.trg``; only window geometry and selection are transient.
