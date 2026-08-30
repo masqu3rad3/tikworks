@@ -83,6 +83,101 @@ Tikmaya is organized around three distinct concepts. Do not conflate them:
 
 ---
 
+## The tik.maya / tik.trigger Boundary
+
+### The Animator-Opinion Rule
+
+**If an average animator can understand it and might have an opinion about it,
+it belongs to `tik.trigger`, not `tik.maya`.**
+
+- `tik.maya` owns **mechanism** — which nodes exist and how they are wired. A
+  `blendMatrix` between two matrices. An exponential falloff on a distance.
+  Nobody has an opinion about `multMatrix` operand order.
+- `tik.trigger` owns **policy** — what the rig *is*. "The wrist control carries
+  the `ikFk` attribute." "The pole vector follows the shoulder by default."
+  "Stretch is limited to +50%."
+- **Practical test:** could you name the thing in a note to an animator without
+  explaining it first? Then it is trigger's.
+- **Corollary:** a `tik.maya` construct never creates a controller, never names
+  a user-facing attribute, and never encodes a side convention.
+
+### Layer Escalation
+
+```
+nodes -> types -> roles -> constructs -> systems -> modules
+         \____________ tik.maya ______/   \____ tik.trigger ____/
+```
+
+- `tik/trigger/systems/` holds policy-bearing sub-rigs that compose `tik.maya`
+  constructs *and* create controllers (e.g. `limb.py`, `twist.py`, `space.py`).
+- Modules compose systems.
+- **Modules never inherit from other modules.** Modules are declarative:
+  `guides`, `inputs`, `outputs` and `Field`s are class attributes read by the
+  registry and the UI `FormBuilder`. Shared behaviour goes in `systems/`.
+
+---
+
+## Module Ground Rules (all tik.trigger modules)
+
+Full rationale: `docs/superpowers/specs/2026-08-30-arm-module-and-module-ground-rules-design.md`
+
+### Group Taxonomy
+
+Exactly four children per module, created by the backend, never by the module:
+
+```
+<side>_<name>_grp
+├── ..._socket_grp    input attach transforms, driven by parent module outputs
+├── ..._control_grp   controllers and their offset/space groups — nothing else
+├── ..._rig_grp       the puppet: IK/FK chains, handles, math, helpers
+└── ..._bind_grp      deform/export joints only — empty when connected
+```
+
+`scale_grp`, `nonScale_grp` and `scaleHook_grp` are **removed**. Do not
+reintroduce them.
+
+### Two Skeletons
+
+| | Puppet (`rig_grp`) | Deform skeleton (`bind_grp`) |
+|---|---|---|
+| Orientation | mirrored behaviour — reversed aim/up on the right, negative `tx` | engine-neutral — identical orients both sides |
+| Negative scale | never needed | never permitted |
+| Exported | no | yes |
+| Driven by | controls and solvers | the puppet, via `MatrixConstraint` |
+
+**Bind joints must carry live TRS values.** `translate`, `rotate` and `scale`
+channels must be actually driven — never a transform parked in
+`offsetParentMatrix`. This is required for baking and for export to game engines
+and mocap workflows. `MatrixConstraint` satisfies this by decomposing to the
+three channels.
+
+`offsetParentMatrix` remains fine for rig helpers inside `rig_grp`, which are
+never exported.
+
+### Single Bind Hierarchy
+
+- Every rig has **exactly one** deform-joint hierarchy.
+- `ctx.bind_parent` resolves the connected input's bind joint **before**
+  `build()` runs. Bind joints are *created* in their final position and
+  **never reparented** — `MatrixConstraint` wires a live connection to
+  `driven.parent.worldInverseMatrix[0]` captured at build time, so a joint
+  reparented after being constrained keeps compensating for its old parent.
+- **Every module output resolves to a bind joint**, because that is what
+  `ctx.bind_parent` reads.
+
+### Control Mirror Metadata
+
+Tag every controller `trg_mirror`:
+
+- `behaviour` — FK-like (clavicle, fingers, spine): follows its joint, so equal
+  rotation values on both sides give a symmetric pose.
+- `world` — IK/world (wrist, foot, pole, COG): world-aligned, so dragging left
+  and right together moves them the same direction.
+
+The rig does not read this tag; a pose-mirror tool does.
+
+---
+
 ## Tool Development Guidelines (`src/tik/trigger`)
 
 These rules apply when writing tools that use tik.maya.

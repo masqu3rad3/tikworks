@@ -6,26 +6,8 @@ This file provides project-level context to Claude Code when working in this rep
 
 **TikWorks** is a multi-tool repository centered around Maya automation and rigging.
 
-- **Location:** `D:/dev/tikworks/`
 - **Primary DCC:** Autodesk Maya 2024+
 - **Python:** 3.10+
-
-## Project Structure
-
-```
-tikworks/
-├── src/python/
-│   ├── tik/
-│   │   ├── maya/              # tik.maya - Maya cmds/API wrapper
-│   │   ├── core/               # tik.core - Shared utilities
-│   │   ├── shared/             # tik.shared - Cross-DCC utilities
-│   │   ├── trigger/            # tik.trigger - Rigging framework (NEXT GEN)
-│   │   └── vendor/             # Vendored dependencies (Qt shim, etc.)
-│   └── tools/                  # Standalone tools
-├── tests/                      # pytest test suite
-├── docs/                       # Sphinx documentation
-└── .github/                    # GitHub config, agents, workflows
-```
 
 ## Key Projects
 
@@ -33,7 +15,6 @@ tikworks/
 Maya API wrapper that "feels like Python, behaves like Maya."
 - **Location:** `src/python/tik/maya/`
 - **Architecture:** Types / Roles / Constructs separation
-- **Key modules:** `core/`, `types/`, `roles/`, `constructs/`
 
 ### tik.trigger (IN DEVELOPMENT)
 Next-generation rigging framework built on tik.maya.
@@ -48,6 +29,21 @@ Next-generation rigging framework built on tik.maya.
 - **Types:** Describe what a node is (Transform, Mesh)
 - **Roles:** Describe what a node means (Controller, SpaceSwitcher)
 - **Constructs:** Orchestrate multiple nodes/roles
+
+### The Animator-Opinion Rule (governs the tik.maya / tik.trigger split)
+If an average animator can understand it and might have an opinion about it, it
+belongs to **tik.trigger**, not tik.maya. tik.maya owns *mechanism* (which nodes,
+wired how); tik.trigger owns *policy* (what the rig is). A tik.maya construct
+never creates a controller, names a user-facing attribute, or encodes a side
+convention. Layers: `nodes → types → roles → constructs → systems → modules`.
+**Modules never inherit from other modules** — shared behaviour goes in
+`tik/trigger/systems/`.
+
+### Module Ground Rules
+Four groups per module (`socket` / `control` / `rig` / `bind`); two skeletons
+(puppet in `rig_grp`, engine-neutral deform skeleton in `bind_grp` with **live
+TRS** for baking/export); one bind hierarchy per rig, built in final position via
+`ctx.bind_parent`, never reparented. Full text in `AI/coding_rules.md`.
 
 ### Decorators for Maya Context
 Maya-specific decorators (`@undo`, `@keepselection`, `@keepframe`) live in tik.maya, not in tik.trigger.
