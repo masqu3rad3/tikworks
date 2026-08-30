@@ -66,7 +66,11 @@ def test_declares_four_outputs():
 def test_has_only_the_behaviour_fields():
     """No ik_solver, no ribbon fields, no soft_ik, no size or limit knobs."""
     names = set(get_module("arm").fields())
-    assert names == {"stretch", "squash", "pole_pin", "anim_spaces"}
+    assert names == {
+        "stretch", "squash", "pole_pin", "anim_spaces",
+        "auto_collar", "auto_collar_start", "auto_collar_end",
+        "auto_collar_interpolation",
+    }
 
 
 def test_control_names_carry_one_module_token(backend):
@@ -234,6 +238,30 @@ def test_auto_collar_defaults_to_off(backend):
     control = _ik_control(_arm_ctx(backend))
     assert control.has_attr("autoCollar")
     assert abs(control["autoCollar"].value) < 1e-6
+
+
+def test_auto_collar_fields_exist():
+    names = set(get_module("arm").fields())
+    assert {"auto_collar", "auto_collar_start", "auto_collar_end",
+            "auto_collar_interpolation"} <= names
+
+
+def test_auto_collar_can_be_switched_off(backend):
+    control = _ik_control(_arm_ctx(backend, auto_collar=False))
+    assert not control.has_attr("autoCollar")
+
+
+def test_auto_collar_on_adds_the_multipliers(backend):
+    control = _ik_control(_arm_ctx(backend))
+    assert abs(control["autoCollarVertical"].value - 0.5) < 1e-6
+    assert abs(control["autoCollarHorizontal"].value - 0.5) < 1e-6
+
+
+def test_validate_rejects_a_degenerate_angle_range():
+    module = get_module("arm")(name="arm")
+    module.auto_collar_start = 90.0
+    module.auto_collar_end = 30.0
+    assert any("angle" in problem for problem in module.validate())
 
 
 def test_auto_collar_off_is_inert(backend):

@@ -16,12 +16,15 @@ import tik.maya as tm
 from tik.maya import attribute
 from tik.trigger.core import (
     BoolField,
+    ChoiceField,
+    FloatField,
     Guides,
     Input,
     Module,
     register_module,
 )
 from tik.trigger.systems.limb import _derive_size, build_ikfk_limb
+from tik.trigger.systems.reach import build_reach
 
 
 @register_module("arm")
@@ -37,6 +40,28 @@ class Arm(Module):
     stretch = BoolField(True, help="Build the stretch network")
     squash = BoolField(True, help="Build the compress-side network")
     pole_pin = BoolField(False, help="Lock the elbow to the pole control")
+    auto_collar = BoolField(True, help="Build the auto-collar network")
+    auto_collar_start = FloatField(
+        0.0, min=0.0, max=180.0, label="Auto Collar Start Angle",
+        help="Degrees below which the automation does nothing",
+    )
+    auto_collar_end = FloatField(
+        90.0, min=0.0, max=180.0, label="Auto Collar End Angle",
+        help="Degrees at or above which it is fully applied",
+    )
+    auto_collar_interpolation = ChoiceField(
+        "smooth", choices=("linear", "smooth", "spline"),
+        label="Auto Collar Interpolation",
+    )
+
+    def validate(self) -> list[str]:
+        problems = super().validate()
+        if self.auto_collar and self.auto_collar_start >= self.auto_collar_end:
+            problems.append(
+                "auto collar start angle must be below the end angle "
+                f"({self.auto_collar_start} >= {self.auto_collar_end})"
+            )
+        return problems
 
     # --------------------------------------------------------------- guides
     def draw_guides(self, ctx) -> None:
@@ -98,56 +123,28 @@ class Arm(Module):
             pole_pin=self.pole_pin,
             labels=("upper", "lower", "hand"),
         )
-        self._build_auto_collar(ctx, socket, collar_ctrl, limb)
+        if self.auto_collar:
+            auto_grp = tm.Transform.create(
+                name=ctx.name("collar", "auto", suffix="grp"),
+                parent=collar_offset.long_name,
+            )
+            auto_grp.snap_to(collar_ctrl.transform)
+            # Relative, so set_parent writes no compensation into the channels.
+            collar_ctrl.transform.set_parent(auto_grp, relative=True)
+            build_reach(
+                ctx,
+                auto_grp,
+                socket,
+                limb.ik_tweak.transform,
+                limb.ik_control.transform,
+                prefix="autoCollar",
+                start_angle=self.auto_collar_start,
+                end_angle=self.auto_collar_end,
+                interpolation=self.auto_collar_interpolation,
+                name="collar",
+            )
 
         ctx.output("collar", collar_jnt)
         ctx.output("upperarm", bind_joints[0])
         ctx.output("lowerarm", bind_joints[1])
         ctx.output("hand", bind_joints[2])
-
-    # ----------------------------------------------------------- auto-collar
-    @staticmethod
-    def _build_auto_collar(ctx, socket, collar_ctrl, limb) -> None:
-        """Aim the collar at the IK hand, weighted by one dial.
-
-        The up vector comes from the socket rather than the hand: aiming and
-        rolling from the same target would make a wrist roll spin the clavicle.
-        """
-        control = limb.ik_control.transform
-        attribute.add_separator(control, "auto_")
-        amount = attribute.add_float(
-            control, "autoCollar", default=0.0, min=0.0, max=1.0
-        )
-
-        # Created under the collar's offset group and snapped there, then the
-        # collar control is re-parented in *relatively*: set_parent would
-        # otherwise write compensation into the control's own channels.
-        offset = collar_ctrl.transform.parent
-        auto_grp = tm.Transform.create(
-            name=ctx.name("collar", "auto", suffix="grp"), parent=offset.long_name
-        )
-        auto_grp.snap_to(collar_ctrl.transform)
-        collar_ctrl.transform.set_parent(auto_grp, relative=True)
-
-        rest = tm.Transform.create(
-            name=ctx.name("collar", "rest"), parent=ctx.groups.rig.long_name
-        )
-        rest.snap_to(auto_grp)
-        tm.MatrixConstraint.create(socket, rest, maintain_offset=True)
-
-        # twist_axis="X" tracks the socket's Y (world up). The default "Y"
-        # would track the socket's X, which is the same direction the collar
-        # aims - a parallel up reference leaves aimMatrix's secondary undefined
-        # and the roll drifts.
-        frame = tm.AimFrame.create(
-            rest,
-            limb.ik_tweak.transform,
-            socket,
-            twist_axis="X",
-            parent=ctx.groups.rig,
-            name=ctx.name("collar", "auto"),
-        )
-        blend = tm.MatrixBlend.create(
-            rest, [frame.transform], [amount], name=ctx.name("collar", "autoBlend")
-        )
-        tm.MatrixConstraint.create(blend.output, auto_grp, maintain_offset=True)
