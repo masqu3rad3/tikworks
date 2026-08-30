@@ -1,0 +1,4 @@
+# Shell scripts must keep LF endings: sh chokes on a CRLF shebang line,
+# and core.autocrlf=true would otherwise convert them on checkout.
+.githooks/* text eol=lf
+*.sh text eol=lf
