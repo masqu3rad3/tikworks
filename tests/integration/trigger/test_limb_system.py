@@ -162,3 +162,52 @@ def test_empty_name_adds_no_token(build_context):
     result = build_ikfk_limb(ctx, guides, labels=("upper", "lower", "end"))
     assert result.ik_control.transform.name == "C_probe_ik_ctrl"
     assert result.pole_control.transform.name == "C_probe_pole_ctrl"
+
+
+# ------------------------------------------------------------- lock and hide
+def _locked(transform, attr):
+    return cmds.getAttr(f"{transform.long_name}.{attr}", lock=True)
+
+
+def test_ik_control_locks_scale_and_visibility(build_context):
+    result, _binds = _limb(build_context())
+    control = result.ik_control.transform
+    for attr in ("sx", "sy", "sz", "v"):
+        assert _locked(control, attr)
+    for attr in ("tx", "ty", "tz", "rx", "ry", "rz"):
+        assert not _locked(control, attr)
+
+
+def test_fk_controls_lock_translate(build_context):
+    result, _binds = _limb(build_context())
+    for control in (item.transform for item in result.fk_controls):
+        for attr in ("tx", "ty", "tz", "sx", "sy", "sz", "v"):
+            assert _locked(control, attr), f"{control.name}.{attr} should be locked"
+
+
+def test_middle_fk_control_keeps_only_the_hinge(build_context):
+    result, _binds = _limb(build_context())
+    assert result.hinge_axis == "y"  # elbow bends in the XZ plane
+    middle = result.fk_controls[1].transform
+    assert not _locked(middle, "ry")
+    assert _locked(middle, "rx") and _locked(middle, "rz")
+
+
+def test_root_and_end_fk_keep_every_rotation(build_context):
+    result, _binds = _limb(build_context())
+    for control in (result.fk_controls[0].transform, result.fk_controls[-1].transform):
+        for attr in ("rx", "ry", "rz"):
+            assert not _locked(control, attr)
+
+
+def test_straight_chain_locks_no_rotation(build_context):
+    """No bend plane means no derivable hinge; locking two axes would guess."""
+    ctx = build_context()
+    guides = tm.Joint.chain(
+        [(0, 0, 0), (4, 0, 0), (8, 0, 0)], name_pattern="straight_{index}"
+    )
+    result = build_ikfk_limb(ctx, guides, labels=("upper", "lower", "end"))
+    assert result.hinge_axis is None
+    middle = result.fk_controls[1].transform
+    for attr in ("rx", "ry", "rz"):
+        assert not _locked(middle, attr)

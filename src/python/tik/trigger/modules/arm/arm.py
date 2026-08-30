@@ -83,6 +83,7 @@ class Arm(Module):
         )
         tm.MatrixConstraint.create(socket, collar_offset, maintain_offset=True)
         tm.MatrixConstraint.create(collar_ctrl.transform, collar_jnt, maintain_offset=True)
+        attribute.lock_and_hide(collar_ctrl.transform, ("sx", "sy", "sz", "v"))
 
         # the limb -------------------------------------------------------------
         build_ikfk_limb(

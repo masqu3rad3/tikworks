@@ -210,3 +210,16 @@ def test_arm_does_not_cycle(backend):
 def test_right_arm_mirrors(backend):
     ctx = _arm_ctx(backend, side="R")
     assert ctx.outputs["hand"].world_position.x < 0
+
+
+def test_collar_locks_scale_and_visibility(backend):
+    ctx = _arm_ctx(backend)
+    collar = next(
+        item.transform
+        for item in ctx.controllers
+        if item.transform.name.endswith("_collar_ctrl")
+    )
+    for attr in ("sx", "sy", "sz", "v"):
+        assert cmds.getAttr(f"{collar.long_name}.{attr}", lock=True)
+    for attr in ("tx", "ty", "tz", "rx", "ry", "rz"):
+        assert not cmds.getAttr(f"{collar.long_name}.{attr}", lock=True)

@@ -46,6 +46,7 @@ class LimbResult:
     switch_control: object = None
     switch_plug: object = None
     size: float = 0.0
+    hinge_axis: Optional[str] = None
 
 
 def build_ikfk_limb(
@@ -198,6 +199,7 @@ def _build_controls(ctx, name, parent, size, labels, result) -> None:
     result.ik_control.transform.create_offset_group(
         name=ctx.name(name, "ik", suffix="offset")
     )
+    attribute.lock_and_hide(result.ik_control.transform, ("sx", "sy", "sz", "v"))
 
     result.switch_control = ctx.controller(
         _role(name, "switch"),
@@ -222,8 +224,10 @@ def _build_controls(ctx, name, parent, size, labels, result) -> None:
     # Controllers live in control_grp and are *driven* by the limb's parent,
     # never parented under it: the ground rules put nothing but controllers and
     # their offset groups in control_grp.
+    result.hinge_axis = _hinge_axis(result.fk_joints)
     fk_parent = None
-    for label, joint in zip(labels, result.fk_joints):
+    last = len(labels) - 1
+    for index, (label, joint) in enumerate(zip(labels, result.fk_joints)):
         fk_control = ctx.controller(
             _role(name, "fk", label),
             shape="Circle",
@@ -237,7 +241,11 @@ def _build_controls(ctx, name, parent, size, labels, result) -> None:
         )
         if fk_parent is None:
             tm.MatrixConstraint.create(parent, offset, maintain_offset=True)
-        attribute.lock_and_hide(fk_control.transform, ("sx", "sy", "sz", "v"))
+        locked = ["tx", "ty", "tz", "sx", "sy", "sz", "v"]
+        if 0 < index < last and result.hinge_axis is not None:
+            # An elbow or knee is a hinge: only the derived axis stays.
+            locked += [f"r{axis}" for axis in "xyz" if axis != result.hinge_axis]
+        attribute.lock_and_hide(fk_control.transform, locked)
         tm.MatrixConstraint.create(
             fk_control.transform, joint, maintain_offset=True, skip_scale="xyz"
         )
@@ -415,6 +423,38 @@ def _blend_to_bind(ctx, name, bind_joints, result) -> None:
             name=ctx.name(name, f"blend{index}"),
         )
         tm.MatrixConstraint.create(blend.output, bind_joint, maintain_offset=True)
+
+
+def _hinge_axis(joints: Sequence) -> Optional[str]:
+    """Which local axis of the middle joint the chain bends about.
+
+    The bend-plane normal is ``chain axis x bend direction``; the hinge is the
+    middle joint's local axis most parallel to it. Returns ``None`` for a
+    straight chain, which has no bend plane -- guessing two axes to lock would
+    be worse than locking none.
+    """
+    start = joints[0].world_position
+    middle = joints[len(joints) // 2]
+    mid = middle.world_position
+    end = joints[-1].world_position
+
+    axis = end - start
+    to_mid = mid - start
+    if axis.length() < 1e-6:
+        return None
+    projection = start + axis * ((to_mid * axis) / (axis * axis))
+    bend = mid - projection
+    if bend.length() < 1e-4:
+        return None
+
+    normal = axis ^ bend
+    normal.normalize()
+    best, best_dot = None, 0.0
+    for name in ("x", "y", "z"):
+        dot = abs(middle.world_axis(name) * normal)
+        if dot > best_dot:
+            best, best_dot = name, dot
+    return best
 
 
 def _role(*parts) -> str:
