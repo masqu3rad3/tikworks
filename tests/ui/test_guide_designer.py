@@ -91,12 +91,25 @@ def _keys(tree):
 
 
 def test_window_shell(designer):
-    assert [action.text() for action in designer.menuBar().actions()] == ["&File", "&Edit", "&View", "&Build", "&Help"]
+    assert [action.text() for action in designer.menu_bar.actions()] == ["&File", "&Edit", "&View", "&Build", "&Help"]
     assert designer.status.text("modules") == "0 module(s)"
     assert designer.tree_pane.isVisible() and designer.graph_pane.isVisible()
     designer.graph_action.setChecked(False)
     designer.set_pane_visible(designer.graph_pane, False)
     assert not designer.graph_pane.isVisible()
+
+
+def test_designer_is_a_page_not_a_window(designer):
+    assert not isinstance(designer, QtWidgets.QMainWindow)
+    assert designer.menu_bar.parent() is designer          # built, not installed
+    assert designer.status_strip is not None
+    assert designer.title == "Guide Designer"
+    seen = []
+    designer.title_changed.connect(seen.append)
+    designer.set_file("C:/tmp/biped.trg")
+    assert seen == ["Guide Designer — biped.trg"]
+    designer.teardown()
+    designer.teardown()                                     # idempotent
 
 
 def test_create_prefills_primary_input_and_tree_graph_agree(designer):

@@ -1,4 +1,4 @@
-"""Guide Designer: dockable tool window — modules · tree · graph · properties.
+"""Guide Designer: a mode of the Trigger window — modules · tree · graph · properties.
 
 Tree and graph are two views of the same connections (see ``GuideScene``);
 the properties panel shows the module's Inputs first. Connections are data
@@ -23,7 +23,6 @@ from tik.shared.ui.binding import BindingManager, MayaAttributeAdapter, bind
 from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.filter_bar import FilterBar
 from tik.shared.ui.icons import glyph_icon, initials
-from tik.shared.ui.maya_window import MayaToolWindow
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.scene_watcher import SceneWatcher
 from tik.shared.ui.status import StatusFields
@@ -54,8 +53,17 @@ from .widgets import (
 SIDES = ("L", "R", "C", "Both", "Auto")
 
 
-class GuideDesigner(DesignerCommands, DesignerProperties, MayaToolWindow):
-    WINDOW_NAME = "TriggerGuideDesigner"
+class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
+    """A plain widget on purpose.
+
+    The designer is hosted as a *mode* of the Trigger window (``ui/main.py``)
+    and can be reparented into ``DesignerShell`` to float. It builds
+    ``menu_bar`` and ``status_strip`` but installs neither, so the host decides
+    where they go.
+    """
+
+    title_changed = QtCore.Signal(str)
+    detach_requested = QtCore.Signal(bool)
 
     def __init__(self, parent=None, events=None, file_browser=None, binding_adapter=None,
                  scene=None) -> None:
@@ -78,7 +86,10 @@ class GuideDesigner(DesignerCommands, DesignerProperties, MayaToolWindow):
         self._module_obj = None
         self._input_rows: dict[str, InputRow] = {}
         self._syncing = False
-        self.setWindowTitle("Guide Designer")
+        self._torn_down = False
+        # SceneWatcher probes objectName() to notice a destroyed C++ object
+        self.setObjectName("TriggerGuideDesigner")
+        self.setWindowTitle(self.title)
         self.resize(1240, 680)
         self._build_central()
         self._build_menus()
@@ -199,7 +210,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, MayaToolWindow):
         self.splitter.setCollapsible(2, True)
         self.splitter.setCollapsible(3, False)
         self.splitter.setSizes([170, 280, 520, 270])
-        self.setCentralWidget(self.splitter)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.splitter)
 
         self.palette = SearchPalette(palette_entries, self, colors=MODULE_COLORS)
         self.palette.chosen.connect(lambda key, _child: self.create_guides(key))
@@ -235,15 +248,13 @@ class GuideDesigner(DesignerCommands, DesignerProperties, MayaToolWindow):
         return action
 
     def _build_menus(self) -> None:
-        bar = self.menuBar()
+        bar = self.menu_bar = QtWidgets.QMenuBar(self)
         file_menu = bar.addMenu("&File")
         self._action(file_menu, "Clear Scene Guides", self.clear_guides)
         file_menu.addSeparator()
         self._action(file_menu, "Import .trg…", lambda: self.import_file(), "Ctrl+O")
         self._action(file_menu, "Export .trg…", lambda: self.export_file(ask=True), "Ctrl+S")
         self._action(file_menu, "Export Selected…", lambda: self.export_file(ask=True, selected=True))
-        file_menu.addSeparator()
-        self._action(file_menu, "Close", self.close, "Ctrl+W")
         edit_menu = bar.addMenu("&Edit")
         self._action(edit_menu, "Add Module…", self.show_palette, "Tab")
         self._action(edit_menu, "Add Scene Nodes", lambda: self.create_guides(SCENE_NODE), "Ctrl+N")
@@ -276,6 +287,12 @@ class GuideDesigner(DesignerCommands, DesignerProperties, MayaToolWindow):
         self._action(view_menu, "Collapse: Everything", lambda: self.graph.set_selected_mode(2), "3")
         view_menu.addSeparator()
         self._action(view_menu, "Refresh", self.refresh, "F5")
+        view_menu.addSeparator()
+        self.detach_action = self._action(
+            view_menu, "Open in Window",
+            lambda: self.detach_requested.emit(self.detach_action.isChecked()),
+            checkable=True,
+        )
         build_menu = bar.addMenu("&Build")
         self._action(build_menu, "Build Selected", lambda: self.test_build(), "Ctrl+B")
         self._action(build_menu, "Build All", lambda: self.test_build(all_modules=True), "Ctrl+Shift+B")
@@ -313,7 +330,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, MayaToolWindow):
         self.module_menu().exec(self.tree.viewport().mapToGlobal(point))
 
     def _build_status(self) -> None:
-        self.status = StatusFields(self.statusBar(), ("modules", "connections", "file"))
+        self.status_strip = QtWidgets.QWidget()
+        self.status = StatusFields(self.status_strip, ("modules", "connections", "file"))
         self.status.set_activity("Ready")
 
     # ------------------------------------------------------------ state
@@ -341,10 +359,15 @@ class GuideDesigner(DesignerCommands, DesignerProperties, MayaToolWindow):
                 handles.append(handle)
         return handles
 
+    @property
+    def title(self) -> str:
+        return f"Guide Designer — {Path(self.file_path).name}" if self.file_path else "Guide Designer"
+
     def set_file(self, path: str) -> None:
         self.file_path = path
         self.status.set("file", Path(path).name if path else "")
-        self.setWindowTitle(f"Guide Designer — {Path(path).name}" if path else "Guide Designer")
+        self.setWindowTitle(self.title)
+        self.title_changed.emit(self.title)
 
     # --------------------------------------------------------------- refresh
     def refresh(self, *_args, keep_graph: bool = False) -> None:
@@ -606,16 +629,19 @@ class GuideDesigner(DesignerCommands, DesignerProperties, MayaToolWindow):
             self.status.set_activity(f"{len(self._multi)} × {module_cls.display_label()} selected")
 
 
-    @staticmethod
+    # -------------------------------------------------------------- teardown
+    def teardown(self) -> None:
+        """Release bindings and scene jobs. Safe to call more than once.
 
-
-    # ------------------------------------------------------------ actions
-
-
-    # --------------------------------------------------------------- files
-
-
-    def closeEvent(self, event) -> None:  # noqa: N802
+        A page never gets its own close event, so the host calls this; the
+        close event below still fires when the designer is shown as a window.
+        """
+        if self._torn_down:
+            return
+        self._torn_down = True
         self.bindings.clear()
         self.watcher.uninstall()
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self.teardown()
         super().closeEvent(event)
