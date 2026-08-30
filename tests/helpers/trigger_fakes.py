@@ -59,6 +59,11 @@ class FakeBuildContext:
         self.controllers.append(name)
         return name
 
+    def tweak_control(self, main, *, size=None, shape="Circle"):
+        name = f"{main}_tweak"
+        self.controllers.append(name)
+        return name
+
     def bind_joint(self, name, *, parent=None, match=None, radius=1.0):
         node = f"{self.module.name}_{name}_jnt"
         return self.deform_joint(node)

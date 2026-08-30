@@ -275,3 +275,39 @@ def test_connected_module_builds_bind_joints_inside_the_parent(backend):
     parent_ctx, child_ctx = _connected(backend)
     assert child_ctx.outputs["root"].parent.name == parent_ctx.outputs["root"].name
     assert not cmds.listRelatives(child_ctx.groups.bind.long_name, children=True)
+
+
+# ------------------------------------------------------------ tweak controls
+def test_tweak_control_is_a_child_of_its_main(backend):
+    ctx = _built(backend)
+    main = ctx.controller("hand", mirror="world")
+    tweak = ctx.tweak_control(main)
+    assert tweak.transform.parent.name == main.transform.name
+    assert tweak.transform.name.endswith("_hand_tweak_ctrl")
+    assert tweak in ctx.controllers
+
+
+def test_tweak_visibility_comes_from_the_main(backend):
+    ctx = _built(backend)
+    main = ctx.controller("hand", mirror="world")
+    tweak = ctx.tweak_control(main)
+    assert main.transform.has_attr("tweakVis")
+    assert not tweak.transform.visibility
+    main.transform["tweakVis"].value = True
+    assert tweak.transform.visibility
+
+
+def test_tweak_copies_the_mirror_rule(backend):
+    ctx = _built(backend)
+    main = ctx.controller("hand", mirror="world")
+    tweak = ctx.tweak_control(main)
+    assert tweak.transform.meta[tags.MIRROR] == tags.WORLD
+
+
+def test_tweak_inherits_locked_channels(backend):
+    ctx = _built(backend)
+    main = ctx.controller("hand", mirror="world")
+    tm.attribute.lock_and_hide(main.transform, ("sx", "sy", "sz", "v"))
+    tweak = ctx.tweak_control(main)
+    for attr in ("sx", "sy", "sz"):
+        assert cmds.getAttr(f"{tweak.transform.long_name}.{attr}", lock=True)

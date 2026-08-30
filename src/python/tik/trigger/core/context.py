@@ -88,6 +88,16 @@ class BuildContext(Protocol):
         ``"world"`` (IK/world-aligned), recorded for a pose-mirror tool.
         """
 
+    def tweak_control(
+        self, main: Any, *, size: Optional[float] = None, shape: str = "Circle"
+    ) -> Any:
+        """Create a secondary tweak controller under ``main``.
+
+        The tweak is a child of the main, so it rides along when the animator
+        moves the main control instead of being left behind. It is what the rig
+        reads downstream.
+        """
+
     def bind_joint(
         self,
         name: str,

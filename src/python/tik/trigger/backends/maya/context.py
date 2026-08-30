@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Optional, Sequence
 
 import tik.maya as tm
+from maya import cmds
 from tik.core.side import Side
 from tik.maya import attribute, naming
 from tik.maya.roles.controller import Controller
@@ -176,6 +177,38 @@ class MayaBuildContext:
         )
         self.controllers.append(controller)
         return controller
+
+    def tweak_control(
+        self, main: Controller, *, size: Optional[float] = None, shape: str = "Circle"
+    ) -> Controller:
+        """Create a secondary tweak controller under ``main``.
+
+        The tweak is a child of the main, so it rides along when the animator
+        moves the main control instead of being left behind. Downstream rig
+        connections read the tweak, not the main.
+        """
+        role = main.transform.meta.get(tags.ROLE, main.transform.name)
+        tweak = self.controller(
+            f"{role}_tweak",
+            shape=shape,
+            size=size if size is not None else 1.0,
+            parent=main.transform,
+            match=main.transform,
+            mirror=main.transform.meta.get(tags.MIRROR, tags.WORLD),
+        )
+        visible = attribute.add_bool(
+            main.transform, "tweakVis", default=False, keyable=False
+        )
+        cmds.setAttr(visible.path, channelBox=True)
+        visible >> tweak.transform["visibility"]
+        locked = [
+            attr
+            for attr in attribute.ALL_CHANNELS
+            if cmds.getAttr(f"{main.transform.long_name}.{attr}", lock=True)
+        ]
+        if locked:
+            attribute.lock_and_hide(tweak.transform, locked)
+        return tweak
 
     def bind_joint(
         self,
