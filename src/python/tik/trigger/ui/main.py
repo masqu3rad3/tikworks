@@ -6,6 +6,10 @@ the menu stack go in together through ``setMenuWidget``, which is what puts
 the tabs *above* the menus. Nothing is installed with ``setMenuBar`` or
 ``setStatusBar``, so Qt never takes ownership of a bundle widget and the
 Guide Designer can be torn off into ``DesignerShell`` and handed back.
+
+The two modes bind the same keys (Ctrl+B/S/O/N/D/L, Tab, F2) and never
+collide: a ``WindowShortcut`` only matches while its action's widget is
+visible, and the inactive mode's menu bar sits in a hidden stack page.
 """
 
 from __future__ import annotations
@@ -29,22 +33,6 @@ VERSION = "0.2.0"
 MAX_RECENT = 8
 TRIGGER_MODE = 0
 DESIGNER_MODE = 1
-
-
-def _iter_actions(bar):
-    """Every action on a menu bar and in its menus, submenus included.
-
-    Two traps this avoids. It never names ``QAction`` — the Qt shim moves that
-    class between QtWidgets and QtGui depending on the binding. And it finds
-    menus with ``findChildren`` rather than ``QAction.menu()``: in PySide6 that
-    getter hands ownership of the returned ``QMenu`` to Python, so the C++ menu
-    is destroyed along with the temporary wrapper, taking its actions with it.
-    """
-    for action in bar.actions():
-        yield action
-    for menu in bar.findChildren(QtWidgets.QMenu):
-        for action in menu.actions():
-            yield action
 
 
 def _holder() -> QtWidgets.QWidget:
@@ -74,6 +62,7 @@ class TriggerWindow(MayaToolWindow):
         self._build_trigger_mode()
         self._build_designer_mode()
         self.mode_bar.currentChanged.connect(self._activate_mode)
+        self.mode_bar.tabBarDoubleClicked.connect(self._on_mode_double_clicked)
         theme.apply(self)
         self.events.subscribe(LOG, self._on_log)
         self.events.subscribe(ERROR, self._on_error)
@@ -131,6 +120,11 @@ class TriggerWindow(MayaToolWindow):
         self._mode_menus[TRIGGER_MODE] = self.trigger_menus
         self.add_mode("Trigger", self.trigger_menus, self.tabs, self.trigger_status_strip)
 
+    def _on_mode_double_clicked(self, index: int) -> None:
+        """Double-click tears a mode off into its own window. The host stays."""
+        if index == DESIGNER_MODE and self._shell is None:
+            self.set_designer_detached(True)
+
     def _build_designer_mode(self) -> None:
         """Register the tab now, build the Designer on first use.
 
@@ -140,8 +134,9 @@ class TriggerWindow(MayaToolWindow):
         self.designer_menu_holder = _holder()
         self.designer_page_holder = _holder()
         self.designer_status_holder = _holder()
-        self.add_mode("Guide Designer", self.designer_menu_holder,
-                      self.designer_page_holder, self.designer_status_holder)
+        index = self.add_mode("Guide Designer", self.designer_menu_holder,
+                              self.designer_page_holder, self.designer_status_holder)
+        self.mode_bar.setTabToolTip(index, "Double-click to open in its own window")
 
     def _activate_mode(self, index: int) -> None:
         if index == DESIGNER_MODE:
@@ -154,23 +149,7 @@ class TriggerWindow(MayaToolWindow):
         self.menu_stack.setCurrentIndex(index)
         self.pages.setCurrentIndex(index)
         self.status_stack.setCurrentIndex(index)
-        self._apply_shortcut_rule()
         self._update_title()
-
-    def _apply_shortcut_rule(self) -> None:
-        """Only the active mode's actions are enabled.
-
-        Not cosmetic: the two menu bars collide on Ctrl+B/S/O/N/D/L, Tab and F2,
-        and Qt answers an ambiguous WindowShortcut by firing neither. The rule
-        costs one constraint — no mode may disable an individual menu action for
-        its own reasons, because switching modes re-enables everything.
-        """
-        for mode, bar in self._mode_menus.items():
-            enabled = mode == self._active_mode
-            if mode == DESIGNER_MODE and self._shell is not None:
-                enabled = True  # its own window: nothing left to collide with
-            for action in _iter_actions(bar):
-                action.setEnabled(enabled)
 
     def _action(self, menu, text, slot, shortcut: Optional[str] = None, checkable: bool = False):
         action = menu.addAction(text)
@@ -504,7 +483,6 @@ class TriggerWindow(MayaToolWindow):
             shell.close()
             self.mode_bar.setCurrentIndex(DESIGNER_MODE)
         designer.detach_action.setChecked(detached)
-        self._apply_shortcut_rule()
 
     def open_guide_designer(self, guides_path: str = ""):
         designer = self._ensure_designer()

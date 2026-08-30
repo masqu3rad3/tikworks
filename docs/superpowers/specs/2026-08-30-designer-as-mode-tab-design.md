@@ -50,9 +50,13 @@ bar — and that decision also decides how hard the tear-off is.
 Two approaches were rejected:
 
 - **Nested `QMainWindow`** (drop the Designer, unchanged, into the stack). Almost
-  no churn, but Trigger's menus would render on the host bar while the Designer's
-  render *inside* the page — two rows at two insets, and two status bars. It
-  defeats the one menu row that changes, which is the point.
+  no churn: each mode keeps its own menu bar and status bar, and popping one out
+  is `setParent(None); show()`. Rejected here because Trigger's menus would sit on
+  the host bar while the Designer's sat *inside* the page. **Weak reason, and
+  half wrong** (noted 2026-08-31): a nested menu bar spans the page, the page
+  spans the window, so the two rows land in the same place — which is what Arda's
+  hand-built version showed. This shape remains a legitimate alternative; the
+  chosen one differs only in owning one menu bar and one status bar centrally.
 - **Rebuild one shared bar per switch** (`bar.clear(); page.build_menus(bar)`).
   Smallest host, but the Designer keeps `QAction`s as attributes
   (`self.grid_action`, `self.snap_action`) and pushes them onto the graph widget
@@ -84,7 +88,7 @@ self.mode_bar.currentChanged.connect(self._activate_mode)
 
 `add_mode(title, menu_bar, content, status_strip) -> int` appends one entry to
 each stack so the indices stay in lockstep. `_activate_mode(index)` sets all
-three stacks, applies the shortcut rule (section 7), and refreshes the title.
+three stacks and refreshes the title.
 
 `setMenuWidget` and `menuBar()` are mutually exclusive, so `TriggerWindow` stops
 calling `self.menuBar()`: `_build_menus` builds into an explicit
@@ -140,7 +144,9 @@ they move to the shell in section 6.
 
 ## 6. Tear-off
 
-Default is the tab; `View > Open in Window` (checkable, no shortcut) detaches.
+Default is the tab. **Double-clicking the Designer's mode tab** tears it off —
+the gesture people expect from a tab — and `View > Open in Window` (checkable, no
+shortcut) is the discoverable menu route to the same thing.
 
 ```python
 class DesignerShell(MayaToolWindow):
@@ -165,17 +171,21 @@ becomes: ensure the Designer exists, `set_file(path)` when given, select the mod
 tab (or raise the shell). `self._guide_designer` stays the single instance it is
 today.
 
-**The shortcut rule: only the active mode's actions are enabled.**
-`_activate_mode` walks `menu_bar.findChildren(QAction)` for every registered mode
-and sets the enabled state. This is not cosmetic — the two bars collide on
-`Ctrl+B`, `Ctrl+S`, `Ctrl+O`, `Ctrl+N`, `Ctrl+D`, `Ctrl+L`, `Tab` and `F2`, and
-with both parented to one window Qt resolves an ambiguous `WindowShortcut` by
-firing *neither*.
+**Shortcuts need no rule at all — corrected 2026-08-31.** The two bars do bind
+the same keys (`Ctrl+B`, `Ctrl+S`, `Ctrl+O`, `Ctrl+N`, `Ctrl+D`, `Ctrl+L`, `Tab`,
+`F2`), and this spec originally called for disabling the inactive mode's actions
+on every switch to keep Qt from resolving an ambiguous `WindowShortcut` by firing
+*neither*. Measured in Maya, that ambiguity does not arise: a `WindowShortcut`
+only matches while its action's widget is **visible**, and the inactive mode's
+menu bar sits in a hidden stack page. `Ctrl+B` reaches the Trigger build in
+Trigger mode and the Designer build in Designer mode with nothing disabled.
 
-The constraint this imposes, recorded in the docstring: **no mode may disable an
-individual menu action for its own reasons**, because a mode switch re-enables
-everything. Nothing does today. The Designer's graph-scoped `Grid`/`Snap` actions
-(`WidgetWithChildrenShortcut`, added to the graph widget) are unaffected.
+The same holds for the shape this spec rejected in section 2 (each mode a nested
+`QMainWindow` in a `QTabWidget`) — measured too, same result. So the rule, its
+`_iter_actions` walker, and the constraint it imposed ("no mode may disable an
+individual menu action for its own reasons") are all gone. The Designer's
+graph-scoped `Grid`/`Snap` actions (`WidgetWithChildrenShortcut`, added to the
+graph widget) were never affected either way.
 
 ## 8. Testing
 
@@ -187,11 +197,15 @@ Everything here is Qt-only: `tests/ui`, `TIK_TESTS_NO_MAYA=1`, offscreen, via
   `designer.menu_bar`. That the other tests are untouched is the check that the
   refactor did not leak.
 - `tests/ui/test_pipeline_ui.py` — new coverage: the mode bar has two tabs and
-  starts on Trigger; activating a mode moves all three stacks together; the
-  Designer page stays empty until first activation; switching disables the
-  inactive bar's actions and enables the active one; detach then re-attach leaves
-  the menu bar in exactly one parent and the tree and graph intact;
-  `open_guide_designer(path)` selects the mode and sets the file.
+  starts on Trigger; activating a mode moves all three stacks together and leaves
+  every action enabled (the inactive bar is hidden, which is what keeps the
+  shortcuts apart); the Designer page stays empty until first activation;
+  double-clicking the tab detaches and re-attaching leaves the menu bar in
+  exactly one parent with the tree and graph intact; `open_guide_designer(path)`
+  selects the mode and sets the file.
+- `tests/ui/test_guide_designer.py` — `show_palette` opens the palette. `Tab` had
+  been raising `NameError` since the file split in `9beab14`: `commands.py` calls
+  `QtGui.QCursor.pos()` and imported only `QtWidgets`.
 
 ## 9. Documentation
 

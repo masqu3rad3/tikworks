@@ -6,7 +6,7 @@ from tik.core.fields import FileField
 from tik.shared.ui.Qt import QtCore
 from tik.trigger.core import Action, IntField, StringField, clear_registries, register_action
 from tik.trigger.session import Session
-from tik.trigger.ui.main import TriggerWindow, _iter_actions
+from tik.trigger.ui.main import TriggerWindow
 from tik.trigger.ui.model import MIME_PATH, MIME_TYPE, EnabledRole, LinkedRole, StatusRole
 from tik.trigger.ui.session_view import SessionView
 
@@ -201,12 +201,14 @@ def test_mode_bar_swaps_menus_status_and_shortcuts(qapp):
     assert window.menu_bar is not trigger_menus
     assert [action.text() for action in window.menu_bar.actions()][0] == "&File"
     assert window.pages.currentWidget() is not window.tabs
-    # the shortcut rule: only the active mode's leaf actions are enabled
-    assert not any(action.isEnabled() for action in _iter_actions(trigger_menus))
-    assert all(action.isEnabled() for action in _iter_actions(window.menu_bar))
+    # nothing is disabled to keep the modes apart: a WindowShortcut only
+    # matches while its widget is visible, and the inactive bar is in a
+    # hidden stack page (measured in Maya, both shapes)
+    assert all(action.isEnabled() for action in trigger_menus.actions())
+    assert not window.trigger_menus.isVisible()
 
     window.mode_bar.setCurrentIndex(0)
-    assert all(action.isEnabled() for action in _iter_actions(trigger_menus))
+    assert window.trigger_menus.isVisible()
     window.close()
 
 
@@ -238,14 +240,12 @@ def test_designer_detaches_and_reattaches(qapp):
     designer = window._ensure_designer()
     tree = designer.tree
 
-    window.set_designer_detached(True)
+    window.mode_bar.tabBarDoubleClicked.emit(1)   # the tear-off gesture
     assert window._shell is not None
     assert designer.parent() is not window.designer_page_holder
     assert window.designer_page_holder.layout().count() == 0
     assert window.mode_bar.count() == 2          # the tab stays
     assert window.mode_bar.currentIndex() == 0   # and we fall back to Trigger
-    # a detached menu bar is in its own window: its shortcuts stop colliding
-    assert all(action.isEnabled() for action in _iter_actions(designer.menu_bar))
     # selecting the Designer tab raises the shell, it does not show an empty page
     window.mode_bar.setCurrentIndex(1)
     assert window.mode_bar.currentIndex() == 0
