@@ -222,3 +222,46 @@ def test_reference_children_appear_after_file_edit(view, tmp_path):
     field.line.setText("rigs/base.tr")
     field.line.editingFinished.emit()
     assert _paths(view.model) == ["reference", "reference/kin"]
+
+
+# ------------------------------------------------- graph view: space ports
+def _graph_scene():
+    from tik.trigger.ui.graph_view import GraphScene
+
+    scene = GraphScene()
+    scene.add_node("body", "body", "Base", [], ["root"], "#888888")
+    scene.add_node("head", "head", "Base", [], ["root"], "#888888")
+    scene.add_node(
+        "L_arm", "L_arm", "Arm", ["root"], ["hand"], "#888888", spaces=["ik_hand"]
+    )
+    return scene
+
+
+def test_space_port_is_multi():
+    scene = _graph_scene()
+    node = scene.nodes["L_arm"]
+    assert node.inputs["root"].multi is False
+    assert node.inputs["ik_hand"].multi is True
+
+
+def test_space_port_accepts_several_wires():
+    scene = _graph_scene()
+    assert scene.add_wire("body.root", "L_arm.ik_hand", False) is not None
+    assert scene.add_wire("head.root", "L_arm.ik_hand", False) is not None
+    port = scene.nodes["L_arm"].inputs["ik_hand"]
+    assert len(scene.wires_for_input(port)) == 2
+
+
+def test_single_input_port_keeps_one_wire():
+    scene = _graph_scene()
+    scene.add_wire("body.root", "L_arm.root", True)
+    port = scene.nodes["L_arm"].inputs["root"]
+    assert len(scene.wires_for_input(port)) == 1
+
+
+def test_a_node_without_spaces_still_builds():
+    from tik.trigger.ui.graph_view import GraphScene
+
+    scene = GraphScene()
+    node = scene.add_node("body", "body", "Base", ["root"], ["root"], "#888888")
+    assert set(node.inputs) == {"root"}

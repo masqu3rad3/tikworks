@@ -33,6 +33,7 @@ PORT_RADIUS = 5
 GLYPH_WIDTH = 16
 WIRE_PRIMARY = QtGui.QColor(theme.ACCENT)
 WIRE_SECONDARY = QtGui.QColor("#8fa4c0")
+PORT_SPACE = "#c9a227"  # space ports read apart from input ports at a glance
 WORLD = 100000.0  # scene rect half-size: effectively infinite canvas so panning is never clamped
 GRID = 20
 MODE_MINIMAL, MODE_CONNECTED, MODE_FULL = 0, 1, 2
@@ -41,18 +42,20 @@ ROW_GAP = 24
 
 
 class Port(QtWidgets.QGraphicsEllipseItem):
-    def __init__(self, node: "NodeItem", name: str, is_output: bool, primary: bool = False) -> None:
+    def __init__(self, node: "NodeItem", name: str, is_output: bool, primary: bool = False,
+                 multi: bool = False) -> None:
         super().__init__(-PORT_RADIUS, -PORT_RADIUS, PORT_RADIUS * 2, PORT_RADIUS * 2, node)
         self.node = node
         self.name = name
         self.is_output = is_output
         self.primary = primary
+        self.multi = multi  # a space port: many wires in, not one
         self.connected = False
-        self.setBrush(QtGui.QColor("#7b7b7b"))
+        self.setBrush(QtGui.QColor(PORT_SPACE if multi else "#7b7b7b"))
         self.setPen(QtGui.QPen(QtGui.QColor("#111111"), 1))
         self.setZValue(3)
         self.setAcceptHoverEvents(True)
-        self.setToolTip(f"{node.key}.{name}")
+        self.setToolTip(f"{node.key}.{name}" + (" (space)" if multi else ""))
 
     @property
     def key(self) -> str:
@@ -60,6 +63,9 @@ class Port(QtWidgets.QGraphicsEllipseItem):
 
     def set_connected(self, connected: bool) -> None:
         self.connected = connected
+        if self.multi:
+            self.setBrush(QtGui.QColor(PORT_SPACE))
+            return
         self.setBrush(QtGui.QColor(theme.ACCENT if connected else "#7b7b7b"))
 
     def hoverEnterEvent(self, event) -> None:  # noqa: N802
@@ -73,7 +79,12 @@ class Port(QtWidgets.QGraphicsEllipseItem):
             event.ignore()
             return
         scene = self.scene()
-        wire = scene.wire_for_input(self) if not self.is_output else None
+        # A multi port has no single wire to pick up, so clicking starts a new
+        # one; its existing wires are removed by selecting the wire itself.
+        wire = None
+        if not self.is_output and not self.multi:
+            wires = scene.wires_for_input(self)
+            wire = wires[0] if wires else None
         if wire is not None:
             scene.pick_up_wire(wire, event.scenePos())  # unplug from the input end
         else:
@@ -83,7 +94,8 @@ class Port(QtWidgets.QGraphicsEllipseItem):
 
 class NodeItem(QtWidgets.QGraphicsItem):
     def __init__(self, key: str, title: str, subtitle: str, inputs: list, outputs: list, color: str,
-                 external: bool = False, primary_input: Optional[str] = None, mode: int = MODE_FULL) -> None:
+                 external: bool = False, primary_input: Optional[str] = None, mode: int = MODE_FULL,
+                 spaces: Optional[list] = None) -> None:
         super().__init__()
         self.key = key
         self.title = title
@@ -99,6 +111,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.setZValue(2)
         for name in inputs:
             self.inputs[name] = Port(self, name, False, primary=(name == primary_input))
+        for name in spaces or []:
+            self.inputs[name] = Port(self, name, False, multi=True)
         for name in outputs:
             self.outputs[name] = Port(self, name, True)
         self.relayout()
@@ -285,8 +299,8 @@ class GraphScene(QtWidgets.QGraphicsScene):
         self._drag_line = None
         self._detached = None
 
-    def add_node(self, key, title, subtitle, inputs, outputs, color, external=False, primary_input=None, pos=None, mode=MODE_FULL) -> NodeItem:
-        node = NodeItem(key, title, subtitle, inputs, outputs, color, external, primary_input, mode)
+    def add_node(self, key, title, subtitle, inputs, outputs, color, external=False, primary_input=None, pos=None, mode=MODE_FULL, spaces=None) -> NodeItem:
+        node = NodeItem(key, title, subtitle, inputs, outputs, color, external, primary_input, mode, spaces)
         if pos is not None:
             node.setPos(*pos)
         self.addItem(node)
@@ -315,8 +329,9 @@ class GraphScene(QtWidgets.QGraphicsScene):
         self.update_wires()
         self.moved = set()
 
-    def wire_for_input(self, port: Port) -> Optional[WireItem]:
-        return next((wire for wire in self.wires if wire.target is port), None)
+    def wires_for_input(self, port: Port) -> list[WireItem]:
+        """Every wire landing on ``port``; a multi port may have several."""
+        return [wire for wire in self.wires if wire.target is port]
 
     def update_wires(self) -> None:
         for wire in self.wires:
