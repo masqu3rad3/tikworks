@@ -202,3 +202,28 @@ def test_table_field_schema_carries_columns():
         {"name": "mode", "kind": "choice", "choices": ["a", "b"],
          "choices_from": "modes", "label": "Mode"}
     ]
+
+
+def test_last_fields_render_after_the_others():
+    """A trailing field is a property of its role, not of one UI."""
+    from tik.core.fields import Schema
+
+    class Base(Schema):
+        trailing = StringField("", last=True)
+        early = IntField(1)
+
+    class Child(Base):
+        own = BoolField(False)
+
+    assert list(Child.fields()) == ["early", "own", "trailing"]
+
+
+def test_field_order_is_otherwise_definition_order():
+    from tik.core.fields import Schema
+
+    class Ordered(Schema):
+        first = IntField(1)
+        second = IntField(2)
+        third = IntField(3)
+
+    assert list(Ordered.fields()) == ["first", "second", "third"]

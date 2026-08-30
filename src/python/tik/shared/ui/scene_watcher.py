@@ -30,9 +30,14 @@ class SceneWatcher(QtCore.QObject):
         parent=None,
         install_job: Optional[Callable[[str, Callable], int]] = None,
         kill_job: Optional[Callable[[int], None]] = None,
+        owner=None,
     ) -> None:
         super().__init__(parent)
         self._on_invalidate = on_invalidate
+        # The widget the callback ultimately touches. notify() schedules _fire
+        # through a zero-timer, so the owner can be torn down in between; firing
+        # into a dead Qt object raises from deep inside the callback.
+        self._owner = owner
         self.events = tuple(events)
         self._jobs: list[int] = []
         self._pending: Optional[str] = None
@@ -108,9 +113,26 @@ class SceneWatcher(QtCore.QObject):
         if self._pending is not None:
             self._fire()
 
+    def _owner_is_alive(self) -> bool:
+        """True unless the owner's C++ side has been destroyed.
+
+        Probed by touching a trivial attribute rather than importing a binding
+        module, so this works under PySide2, PySide6 and PyQt alike.
+        """
+        if self._owner is None:
+            return True
+        try:
+            self._owner.objectName()
+        except RuntimeError:
+            return False
+        return True
+
     def _fire(self) -> None:
         event, self._pending = self._pending, None
         if event is None or self._refreshing:
+            return
+        if not self._owner_is_alive():
+            self.uninstall()
             return
         self._refreshing = True
         try:

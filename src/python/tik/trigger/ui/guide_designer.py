@@ -319,11 +319,17 @@ class GuideDesigner(MayaToolWindow):
         theme.apply(self)
         self.watcher = SceneWatcher(
             self._on_scene_event,
+            owner=self,
             install_job=getattr(backend, "install_scene_job", None),
             kill_job=getattr(backend, "kill_scene_job", None),
             parent=self,
         )
         self.watcher.install()
+        # closeEvent is not the only teardown path; a destroyed dock leaves the
+        # jobs installed and the zero-timer firing into a dead widget. Captured
+        # in a closure so nothing touches self during destruction.
+        watcher = self.watcher
+        self.destroyed.connect(lambda *_args: watcher.uninstall())
         self.refresh()
 
     # ------------------------------------------------------------------ ui
@@ -809,14 +815,15 @@ class GuideDesigner(MayaToolWindow):
             self.multi_label.setVisible(True)
             self.inputs_caption.setVisible(False)
         else:
-            for declared in module_cls.inputs:
+            declared_inputs = list(module_cls.inputs) + module_cls.space_inputs(handle.settings)
+            for declared in declared_inputs:
                 row = InputRow(declared, picker=self._pick_source, sources=self._source_choices)
                 row.set_source(handle.inputs.get(declared.name, ""))
                 row.changed.connect(self._on_input_changed)
                 label = declared.name + (" ●" if declared.primary else "")
                 self.inputs_form.addRow(label, row)
                 self._input_rows[declared.name] = row
-            self.inputs_caption.setVisible(bool(module_cls.inputs))
+            self.inputs_caption.setVisible(bool(declared_inputs))
         self.form.set_target(self._module_obj)
         self.inherit_orientation.setEnabled(True)
         if not multi:
@@ -917,15 +924,32 @@ class GuideDesigner(MayaToolWindow):
             return
         self.refresh()
 
+    @staticmethod
+    def _topology(handle) -> tuple:
+        """What a settings change might alter: ports and guide count."""
+        module_cls = handle.module_class
+        settings = handle.settings
+        return (
+            tuple(module_cls.input_names(settings)),
+            tuple(module_cls.output_names(settings)),
+            len(handle.instance.guides),
+        )
+
     def _on_setting_changed(self, name: str, _value) -> None:
         if self._current is None or self._module_obj is None:
             return
         value = getattr(self._module_obj, name)
         targets = self._multi or [self._current]
+        before = [self._topology(handle) for handle in targets]
         with self.watcher.mute():
             for handle in targets:
                 setattr(handle, name, value)
-        if name in ("segments",):
+        # Refresh when the change moved a port or a guide, rather than keeping a
+        # hand-maintained list of which fields do that.
+        if any(
+            self._topology(handle) != snapshot
+            for handle, snapshot in zip(targets, before)
+        ):
             self.refresh()
 
     def _on_scene_nodes_changed(self, nodes: list) -> None:

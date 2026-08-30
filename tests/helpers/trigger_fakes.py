@@ -147,6 +147,11 @@ class FakeBackend:
 
     def write_settings(self, instance_id, settings):
         self.settings[instance_id] = dict(settings)
+        # find_instances hands back these objects, so they carry the settings
+        # too - the Maya backend writes to guide meta and re-reads it.
+        for item in self.instances:
+            if item.instance_id == instance_id:
+                item.settings = dict(settings)
 
     def read_settings(self, instance_id):
         return dict(self.settings.get(instance_id, {}))

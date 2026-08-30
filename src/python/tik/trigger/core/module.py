@@ -45,6 +45,7 @@ class Module(Schema):
         [],
         label="Anim Spaces",
         help="Each row adds one animation space and one input port.",
+        last=True,
         columns=(
             Column("control", "choice", choices_from="space_controls"),
             Column("mode", "choice", choices=("parent", "point", "orient")),

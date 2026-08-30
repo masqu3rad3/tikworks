@@ -48,6 +48,7 @@ class Field:
         choices: Optional[Sequence[Any]] = None,
         hidden: bool = False,
         group: Optional[str] = None,
+        last: bool = False,
     ) -> None:
         self.default = default
         self.label = label
@@ -57,6 +58,8 @@ class Field:
         self.choices = list(choices) if choices is not None else None
         self.hidden = hidden
         self.group = group
+        # Renders after every non-trailing field, whichever class declared it.
+        self.last = last
         self.name = ""
 
     # --- descriptor protocol -------------------------------------------------
@@ -108,6 +111,7 @@ class Field:
             "choices": list(self.choices) if self.choices is not None else None,
             "hidden": self.hidden,
             "group": self.group,
+            "last": self.last,
         }
 
     def __repr__(self) -> str:
@@ -386,13 +390,23 @@ class Schema:
 
     @classmethod
     def fields(cls) -> dict[str, Field]:
-        """Return fields in definition order, base classes first."""
+        """Return fields in definition order, base classes first.
+
+        Fields declared ``last=True`` move to the end, keeping their relative
+        order. A field on a base class would otherwise always precede the
+        subclass's own settings.
+        """
         collected: dict[str, Field] = {}
         for klass in reversed(cls.__mro__):
             for name, attr in vars(klass).items():
                 if isinstance(attr, Field):
                     collected[name] = attr
-        return collected
+        trailing = {name: item for name, item in collected.items() if item.last}
+        if not trailing:
+            return collected
+        ordered = {name: item for name, item in collected.items() if not item.last}
+        ordered.update(trailing)
+        return ordered
 
     @classmethod
     def schema(cls) -> dict:

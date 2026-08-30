@@ -510,3 +510,84 @@ def test_multi_inherit_orientation_and_duplicate(designer):
     assert designer.current.instance_id == copies[0].instance_id
     labels = [a.text() for a in designer.module_menu().actions() if not a.isSeparator()]
     assert "Duplicate\tCtrl+D" in labels
+
+
+# ---------------------------------------------------- teardown and dynamics
+def test_watcher_uninstalls_when_its_owner_dies():
+    """The zero-timer can fire after the widget's C++ side is gone."""
+    from tik.shared.ui.scene_watcher import SceneWatcher
+
+    class DeadOwner:
+        def objectName(self):  # noqa: N802 - mimics the Qt API
+            raise RuntimeError("Internal C++ object (GuideTree) already deleted.")
+
+    killed = []
+    fired = []
+    watcher = SceneWatcher(
+        lambda name: fired.append(name),
+        events=("SceneOpened",),
+        install_job=lambda event, callback: 1,
+        kill_job=killed.append,
+        owner=DeadOwner(),
+    )
+    watcher.install()
+    watcher.notify("SceneOpened")
+    watcher.flush()
+
+    assert fired == []
+    assert killed == [1]
+
+
+def test_watcher_fires_normally_for_a_live_owner():
+    from tik.shared.ui.scene_watcher import SceneWatcher
+
+    class LiveOwner:
+        def objectName(self):  # noqa: N802 - mimics the Qt API
+            return "alive"
+
+    fired = []
+    watcher = SceneWatcher(
+        lambda name: fired.append(name),
+        events=("SceneOpened",),
+        install_job=lambda event, callback: 1,
+        kill_job=lambda job: None,
+        owner=LiveOwner(),
+    )
+    watcher.install()
+    watcher.notify("SceneOpened")
+    watcher.flush()
+
+    assert fired == ["SceneOpened"]
+
+
+def test_a_new_space_row_creates_its_port_without_a_manual_refresh(designer):
+    """The port must appear as soon as the row is added, with no extra refresh."""
+    designer.set_side("C")
+    root = designer.create_guides("toy_root")[0]
+    designer._set_current(designer.guides.get(root.instance_id))
+    assert "root_chest" not in designer.graph.graph.nodes[root.key].inputs
+
+    rows = [{"control": "root", "mode": "parent", "label": "chest"}]
+    designer._module_obj.anim_spaces = rows
+    designer._on_setting_changed("anim_spaces", rows)
+
+    ports = designer.graph.graph.nodes[root.key].inputs
+    assert "root_chest" in ports
+    assert ports["root_chest"].space is True
+
+
+def test_space_inputs_get_rows_in_the_properties_panel(designer):
+    """A source must be settable without touching the graph."""
+    designer.set_side("C")
+    root = designer.create_guides("toy_root")[0]
+    root.anim_spaces = [{"control": "root", "mode": "parent", "label": "chest"}]
+    designer.refresh()
+    designer._set_current(designer.guides.get(root.instance_id))
+    assert "root_chest" in designer._input_rows
+
+
+def test_anim_spaces_renders_after_the_module_settings():
+    from tik.trigger.core import get_module
+
+    names = list(get_module("toy_chain").fields())
+    assert names[-1] == "anim_spaces"
