@@ -403,10 +403,22 @@ class Guides:
         handle.set_input(input_name, None)
 
     def connections(self) -> list[dict]:
+        """Every wire in the graph: inputs, plus spaces tagged ``kind``.
+
+        A space is a connection too, so it travels in the same list. Entries
+        without a ``kind`` are inputs, which keeps older ``.trg`` files valid.
+        """
         found = []
         for handle in self.instances():
             for input_name, source in handle.inputs.items():
                 found.append({"input": f"{handle.key}.{input_name}", "source": source})
+            for space_name, sources in handle.spaces.items():
+                for source in sources:
+                    found.append({
+                        "input": f"{handle.key}.{space_name}",
+                        "source": source,
+                        "kind": "space",
+                    })
         return found
 
     def reparent(self, handle: GuideHandle, parent: Optional[GuideHandle | ParentRef]) -> None:

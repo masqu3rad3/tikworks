@@ -60,6 +60,7 @@ class GuideInstance:
     settings: dict = field(default_factory=dict)
     parent_joint: Optional[str] = None  # joint name of another instance we hang under
     inputs: dict = field(default_factory=dict)  # input name -> source
+    spaces: dict = field(default_factory=dict)  # space name -> [sources]
 
     @property
     def key(self) -> str:
@@ -112,9 +113,22 @@ class GuideFile:
         """``{input name: source}`` for the instance ``key`` from the connections list."""
         found = {}
         for item in self.connections:
+            if item.get("kind") == "space":
+                continue
             target = str(item.get("input", ""))
             if target.startswith(key + "."):
                 found[target[len(key) + 1:]] = item.get("source", "")
+        return found
+
+    def spaces_for(self, key: str) -> dict:
+        """``{space name: [sources]}`` for the instance ``key``."""
+        found: dict = {}
+        for item in self.connections:
+            if item.get("kind") != "space":
+                continue
+            target = str(item.get("input", ""))
+            if target.startswith(key + "."):
+                found.setdefault(target[len(key) + 1:], []).append(item.get("source", ""))
         return found
 
     # ------------------------------------------------------------ queries
@@ -161,6 +175,7 @@ class GuideFile:
             for (role, _index), record in instance.joints.items():
                 by_joint[record["name"]] = (instance, role)
         for instance in instances:
+            instance.spaces = self.spaces_for(instance.key)
             explicit = self.inputs_for(instance.key)
             if explicit:
                 instance.inputs = explicit

@@ -332,3 +332,33 @@ def test_auto_collar_does_not_cycle(backend):
     _ik_control(ctx)["autoCollar"].value = 1.0
     cmds.dgdirty(allPlugs=True)
     assert not (cmds.cycleCheck(all=True) or [])
+
+
+# --------------------------------------------------------------- final sweep
+def test_trg_round_trip_keeps_spaces(backend, tmp_path):
+    from tik.trigger.guides import Guides
+
+    guides = Guides(backend)
+    body = guides.add("base", name="body")
+    arm = guides.add("arm", side="L", name="arm", parent=body)
+    arm.set_space("ik_hand", ["body.root"])
+
+    path = guides.export(tmp_path / "spaces")
+    guides.clear()
+    guides.import_(path)
+
+    assert guides.find("arm", "L").spaces == {"ik_hand": ["body.root"]}
+
+
+def test_arm_still_satisfies_every_ground_rule(backend):
+    ctx = _arm_ctx(backend)
+    control_group = ctx.groups.control.long_name
+    for controller in ctx.controllers:
+        assert control_group in controller.transform.long_name
+        assert controller.transform.meta[tags.MIRROR] in (tags.BEHAVIOUR, tags.WORLD)
+    for _name, node in ctx.outputs.items():
+        assert node.type == "joint" and node in ctx.deform_joints
+    for joint in ctx.deform_joints:
+        assert not cmds.listConnections(
+            f"{joint.long_name}.offsetParentMatrix", source=True, destination=False
+        )
