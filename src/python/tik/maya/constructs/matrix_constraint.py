@@ -57,6 +57,7 @@ class MatrixConstraint:
         skip_rotate: Iterable[str] = (),
         skip_scale: Iterable[str] = (),
         name: Optional[str] = None,
+        cutoff=None,
     ) -> "MatrixConstraint":
         """Constrain ``driven`` to ``driver``.
 
@@ -68,6 +69,10 @@ class MatrixConstraint:
             skip_rotate: Axes left unconnected.
             skip_scale: Axes left unconnected.
             name: Prefix for created nodes (defaults to the driven name).
+            cutoff: Node whose world transform (and everything above it) is
+                removed from the driver's contribution. Use when the driver
+                lives under groups that would otherwise double-transform the
+                driven.
         """
         driven = resolve(driven) if isinstance(driven, str) else driven
         name = name or driven.name
@@ -88,6 +93,13 @@ class MatrixConstraint:
             source_plug = average["matrixSum"]
         else:
             source_plug = driver_plugs[0]
+
+        if cutoff is not None:
+            cutoff = resolve(cutoff) if isinstance(cutoff, str) else cutoff
+            cutoff_mult = create_node("multMatrix", name=f"{name}_cutoffMultMatrix")
+            source_plug >> cutoff_mult["matrixIn[0]"]
+            cutoff["worldInverseMatrix[0]"] >> cutoff_mult["matrixIn[1]"]
+            source_plug = cutoff_mult["matrixSum"]
 
         mult_matrix = create_node("multMatrix", name=f"{name}_multMatrix")
         decompose = create_node("decomposeMatrix", name=f"{name}_decomposeMatrix")

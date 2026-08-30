@@ -103,3 +103,29 @@ def test_undoable():
     cmds.undoInfo(closeChunk=True)
     cmds.undo()
     assert not cmds.objExists("undo_me_multMatrix")
+
+
+def test_cutoff_ignores_transforms_at_or_above_it():
+    """A driver under a moved group should not drag the driven when cut off."""
+    cutoff_grp = tm.Transform.create(name="cutoff_grp")
+    driver = tm.Transform.create(name="cut_driver", parent=cutoff_grp.long_name)
+    driven = tm.Transform.create(name="cut_driven")
+
+    tm.MatrixConstraint.create(driver, driven, maintain_offset=True, cutoff=cutoff_grp)
+
+    cutoff_grp.translate = (0, 10, 0)
+    assert driven.world_translation.length() < 1e-4
+
+    driver.translate = (3, 0, 0)
+    assert abs(driven.world_translation.x - 3.0) < 1e-4
+
+
+def test_without_cutoff_the_group_still_drives():
+    parent_grp = tm.Transform.create(name="plain_grp")
+    driver = tm.Transform.create(name="plain_driver", parent=parent_grp.long_name)
+    driven = tm.Transform.create(name="plain_driven")
+
+    tm.MatrixConstraint.create(driver, driven, maintain_offset=True)
+
+    parent_grp.translate = (0, 10, 0)
+    assert abs(driven.world_translation.y - 10.0) < 1e-4
