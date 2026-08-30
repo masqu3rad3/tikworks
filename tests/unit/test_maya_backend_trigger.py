@@ -314,3 +314,16 @@ def test_tweak_inherits_locked_channels(backend):
     tweak = ctx.tweak_control(main)
     for attr in ("sx", "sy", "sz"):
         assert cmds.getAttr(f"{tweak.transform.long_name}.{attr}", lock=True)
+
+
+def test_connect_space_builds_a_named_switch(backend):
+    ctx = _built(backend)
+    main = ctx.controller("hand", mirror="world")
+    first = tm.Transform.create(name="space_a")
+    second = tm.Transform.create(name="space_b")
+    backend.connect_space(ctx, "hand", "parent", [first, second], ["chest", "head"])
+    assert main.transform.has_attr("parentSwitch")
+    listed = cmds.attributeQuery(
+        "parentSwitch", node=main.transform.long_name, listEnum=True
+    )[0]
+    assert listed.split(":") == ["chest", "head"]

@@ -504,6 +504,29 @@ class MayaBackend:
             source_node, target, maintain_offset=True, name=ctx.name("attach", input_name)
         )
 
+    def connect_space(self, ctx: MayaBuildContext, control, mode, targets, labels) -> None:
+        """Build one space switch on the controller with role ``control``.
+
+        ``world=False``: nothing appears in the enum that the rigger did not
+        define.
+        """
+        controller = ctx.controller_by_role(control)
+        if controller is None:
+            raise AttachError(
+                f"{ctx.instance.key}: no controller with role '{control}'.",
+                instance_id=ctx.instance.instance_id,
+                module_type=ctx.module.module_type,
+            )
+        tm.SpaceSwitch.create(
+            controller.transform,
+            targets,
+            attr_name=f"{mode}Switch",
+            mode=mode,
+            labels=list(labels),
+            world=False,
+            name=ctx.name(control, mode),
+        )
+
     def afterlife(self, instances: Sequence[ModuleInstance], mode: str) -> None:
         if mode == "keep" or not cmds.objExists(tags.GUIDE_HOLDER):
             return

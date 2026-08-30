@@ -93,3 +93,21 @@ def test_delete_restores_hierarchy():
     assert ctrl.parent is None
     assert not cmds.attributeQuery("space", node=ctrl.name, exists=True)
     assert not cmds.ls(type="blendMatrix")
+
+
+def test_world_can_be_excluded():
+    """Nothing should appear in the enum that was not defined."""
+    node = tm.Transform.create(name="switched_noworld")
+    first = tm.Transform.create(name="target_a")
+    second = tm.Transform.create(name="target_b")
+    switch = tm.SpaceSwitch.create(
+        node, [first, second], labels=["a", "b"], world=False, name="noworld"
+    )
+    assert switch.labels == ["a", "b"]
+
+
+def test_world_is_included_by_default():
+    node = tm.Transform.create(name="switched_default")
+    target = tm.Transform.create(name="target_default")
+    switch = tm.SpaceSwitch.create(node, [target], labels=["a"], name="withworld")
+    assert switch.labels == ["world", "a"]

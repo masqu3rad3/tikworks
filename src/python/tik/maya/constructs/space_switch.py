@@ -48,6 +48,7 @@ class SpaceSwitch:
         mode: str = "parent",
         labels: Optional[Sequence[str]] = None,
         default: int = 0,
+        world: bool = True,
         name: Optional[str] = None,
     ) -> "SpaceSwitch":
         """Create a space switch on ``node``.
@@ -60,6 +61,8 @@ class SpaceSwitch:
             mode: ``"parent"``, ``"point"`` or ``"orient"``.
             labels: Enum labels for ``spaces`` (defaults to node names).
             default: Default enum index.
+            world: Prepend a ``world`` entry at index 0. Set False when only
+                the given spaces should appear.
             name: Prefix for created nodes.
         """
         if mode not in _MODES:
@@ -71,9 +74,11 @@ class SpaceSwitch:
         name = name or f"{node.name}_space"
 
         offset = node.create_offset_group(name=f"{name}_grp")
-        attr = attribute.add_enum(control, attr_name, ["world", *labels], default=default)
+        entries = [WORLD, *spaces] if world else list(spaces)
+        names = ["world", *labels] if world else list(labels)
+        attr = attribute.add_enum(control, attr_name, names, default=default)
         switch = MatrixSwitch.create(
-            [WORLD, *spaces],
+            entries,
             offset,
             control=attr,
             maintain_offset=True,
