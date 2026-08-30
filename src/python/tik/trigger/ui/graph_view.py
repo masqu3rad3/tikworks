@@ -566,13 +566,18 @@ class GraphView(QtWidgets.QGraphicsView):
             node.subtitle = "scene ✗ missing" if missing else "scene ✓"
         for handle in sorted(handles, key=lambda item: (depth.get(item.key, 1), item.key)):
             module_cls = handle.module_class
-            rows = max(len(module_cls.inputs), len(handle.outputs), 1)
+            space_names = [item.name for item in module_cls.space_inputs(handle.settings)]
+            rows = max(
+                len(module_cls.inputs) + len(space_names), len(handle.outputs), 1
+            )
             pos = free_pos(handle.key, HEADER + rows * ROW + 8)
             primary = module_cls.primary_input()
             self.graph.add_node(
-                handle.key, handle.key, module_cls.display_label(), module_cls.input_names(), list(handle.outputs),
-                theme.SIDE.get(handle.side.value, theme.SIDE["C"]), primary_input=primary.name if primary else None, pos=pos,
-                mode=collapse.get(handle.key, MODE_FULL),
+                handle.key, handle.key, module_cls.display_label(),
+                [item.name for item in module_cls.inputs], list(handle.outputs),
+                theme.SIDE.get(handle.side.value, theme.SIDE["C"]),
+                primary_input=primary.name if primary else None, pos=pos,
+                mode=collapse.get(handle.key, MODE_FULL), spaces=space_names,
             )
         node_group = {node: name for name, nodes in groups.items() for node in nodes}
         for handle in handles:
@@ -601,7 +606,12 @@ class GraphView(QtWidgets.QGraphicsView):
         for name in sorted(groups):
             place(name, 0, HEADER + len(groups[name]) * ROW + 8)
         for handle in sorted(handles, key=lambda item: (depth.get(item.key, 1), item.key)):
-            rows = max(len(handle.module_class.inputs), len(handle.outputs), 1)
+            rows = max(
+                len(handle.module_class.inputs)
+                + len(handle.module_class.space_inputs(handle.settings)),
+                len(handle.outputs),
+                1,
+            )
             place(handle.key, depth.get(handle.key, 1), HEADER + rows * ROW + 8)
         return result
 

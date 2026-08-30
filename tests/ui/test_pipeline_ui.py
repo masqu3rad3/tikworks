@@ -258,3 +258,15 @@ def test_a_node_without_spaces_still_builds():
     node = scene.add_node("body", "body", "Base", ["root"], ["root"], "#888888")
     assert set(node.inputs) == {"root"}
 
+
+
+def test_space_rows_become_ports():
+    from tik.trigger.core import Input, Module
+
+    class Spaced(Module):
+        inputs = (Input("root", primary=True),)
+        space_controls = ("ik",)
+
+    settings = {"anim_spaces": [{"control": "ik", "mode": "parent", "label": "chest"}]}
+    assert Spaced.input_names(settings) == ["root", "ik_chest"]
+    assert [item.name for item in Spaced.space_inputs(settings)] == ["ik_chest"]
