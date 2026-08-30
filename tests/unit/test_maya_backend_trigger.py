@@ -188,3 +188,51 @@ def test_visibility_attributes_drive_the_new_groups(backend):
     assert ctx.groups.rig.visibility
     limb["bindVisibility"].value = False
     assert not ctx.groups.bind.visibility
+
+
+def test_bind_parent_defaults_to_the_bind_group(backend):
+    ctx = _built(backend)
+    assert ctx.bind_parent.name == ctx.groups.bind.name
+
+
+def test_bind_joint_lands_under_bind_parent(backend):
+    ctx = _built(backend)
+    joint = ctx.bind_joint("probe")
+    assert joint.parent.name == ctx.groups.bind.name
+    assert joint.name.endswith("_probe_jnt")
+    assert joint in ctx.deform_joints
+
+
+def test_bind_joint_is_tagged_as_deform(backend):
+    ctx = _built(backend)
+    joint = ctx.bind_joint("tagged")
+    assert joint.meta[tags.KIND] == tags.DEFORM
+
+
+def test_bind_joint_honours_an_explicit_parent(backend):
+    ctx = _built(backend)
+    first = ctx.bind_joint("first")
+    second = ctx.bind_joint("second", parent=first)
+    assert second.parent.name == first.name
+
+
+def test_bind_joint_matches_a_node(backend):
+    ctx = _built(backend)
+    target = tm.Transform.create(name="bind_match_target")
+    target.translate = (2, 5, 0)
+    joint = ctx.bind_joint("matched", match=target)
+    assert (joint.world_translation - target.world_translation).length() < 1e-4
+
+
+def test_controller_records_its_mirror_rule(backend):
+    ctx = _built(backend)
+    fk = ctx.controller("fk_probe", mirror="behaviour")
+    ik = ctx.controller("ik_probe", mirror="world")
+    assert fk.transform.meta[tags.MIRROR] == tags.BEHAVIOUR
+    assert ik.transform.meta[tags.MIRROR] == tags.WORLD
+
+
+def test_controller_mirror_defaults_to_world(backend):
+    ctx = _built(backend)
+    controller = ctx.controller("default_probe")
+    assert controller.transform.meta[tags.MIRROR] == tags.WORLD

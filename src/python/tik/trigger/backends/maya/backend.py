@@ -472,9 +472,11 @@ class MayaBackend:
         root.meta.update({tags.KIND: tags.RIG_ROOT, tags.NAME: rig_name})
         return root
 
-    def build_context(self, module, instance: ModuleInstance, rig_root) -> MayaBuildContext:
+    def build_context(
+        self, module, instance: ModuleInstance, rig_root, bind_parent=None
+    ) -> MayaBuildContext:
         guide_nodes = self.guide_nodes(instance.instance_id)
-        return MayaBuildContext(module, instance, rig_root, guide_nodes)
+        return MayaBuildContext(module, instance, rig_root, guide_nodes, bind_parent)
 
     def finalize(self, ctx: MayaBuildContext) -> None:
         for name, node in ctx.outputs.items():

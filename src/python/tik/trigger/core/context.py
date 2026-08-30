@@ -56,6 +56,7 @@ class BuildContext(Protocol):
     side_mult: int
     groups: RigGroups
     rig_root: Any
+    bind_parent: Any
     outputs: dict
     attachments: dict
     controllers: list
@@ -79,8 +80,23 @@ class BuildContext(Protocol):
         parent: Any = None,
         color: Any = None,
         match: Any = None,
+        mirror: str = "world",
     ) -> Any:
-        """Create a tagged controller; ``match`` snaps it to a node."""
+        """Create a tagged controller; ``match`` snaps it to a node.
+
+        ``mirror`` is ``"behaviour"`` (FK-like, follows its joint) or
+        ``"world"`` (IK/world-aligned), recorded for a pose-mirror tool.
+        """
+
+    def bind_joint(
+        self,
+        name: str,
+        *,
+        parent: Any = None,
+        match: Any = None,
+        radius: float = 1.0,
+    ) -> Any:
+        """Create a tagged bind joint under ``parent`` or ``bind_parent``."""
 
     def deform_joint(self, node: Any) -> Any:
         """Register (and tag) a deformation joint."""

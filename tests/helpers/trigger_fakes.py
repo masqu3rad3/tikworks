@@ -41,6 +41,7 @@ class FakeBuildContext:
         self.controllers: list = []
         self.deform_joints: list = []
         self.calls: list = []
+        self.bind_parent = self.groups.bind
 
     def guide(self, role, index=0):
         return f"{self.module.name}_{role}_{index}"
@@ -57,6 +58,10 @@ class FakeBuildContext:
     def controller(self, name, **kwargs):
         self.controllers.append(name)
         return name
+
+    def bind_joint(self, name, *, parent=None, match=None, radius=1.0):
+        node = f"{self.module.name}_{name}_jnt"
+        return self.deform_joint(node)
 
     def deform_joint(self, node):
         self.deform_joints.append(node)
@@ -201,10 +206,13 @@ class FakeBackend:
         self.calls.append(("rig_root", rig_name))
         return rig_name
 
-    def build_context(self, module, instance, rig_root):
+    def build_context(self, module, instance, rig_root, bind_parent=None):
         if self.fail_on == instance.name:
             raise RuntimeError("boom")
-        return FakeBuildContext(module, instance, rig_root)
+        ctx = FakeBuildContext(module, instance, rig_root)
+        if bind_parent is not None:
+            ctx.bind_parent = bind_parent
+        return ctx
 
     def finalize(self, ctx):
         self.calls.append(("finalize", ctx.instance.instance_id))

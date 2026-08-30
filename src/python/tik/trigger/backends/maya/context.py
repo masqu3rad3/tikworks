@@ -75,7 +75,14 @@ class MayaGuideContext:
 class MayaBuildContext:
     """Everything a module needs while building in Maya."""
 
-    def __init__(self, module, instance: ModuleInstance, rig_root, guide_nodes: dict) -> None:
+    def __init__(
+        self,
+        module,
+        instance: ModuleInstance,
+        rig_root,
+        guide_nodes: dict,
+        bind_parent=None,
+    ) -> None:
         self.module = module
         self.instance = instance
         self.side = module.side
@@ -87,6 +94,9 @@ class MayaBuildContext:
         self.controllers: list[Controller] = []
         self.deform_joints: list[tm.Joint] = []
         self.groups = self._create_groups()
+        # Resolved by the builder from the connected input's producer, so bind
+        # joints are created in their final hierarchy position.
+        self.bind_parent = bind_parent if bind_parent is not None else self.groups.bind
 
     # ------------------------------------------------------------- groups
     def _create_groups(self) -> RigGroups:
@@ -143,6 +153,7 @@ class MayaBuildContext:
         parent: Any = None,
         color: Any = None,
         match: Any = None,
+        mirror: str = "world",
     ) -> Controller:
         parent = parent if parent is not None else self.groups.control
         controller = Controller.create(
@@ -160,10 +171,37 @@ class MayaBuildContext:
                 tags.KIND: tags.CONTROLLER,
                 tags.INSTANCE: self.instance.instance_id,
                 tags.ROLE: name,
+                tags.MIRROR: mirror,
             },
         )
         self.controllers.append(controller)
         return controller
+
+    def bind_joint(
+        self,
+        name: str,
+        *,
+        parent: Any = None,
+        match: Any = None,
+        radius: float = 1.0,
+    ) -> tm.Joint:
+        """Create a bind/deform joint in the single rig-wide hierarchy.
+
+        Defaults to ``bind_parent``, which the builder resolves to the connected
+        input's bind joint before ``build()`` runs. Bind joints are created in
+        their final position and never reparented: ``MatrixConstraint`` wires a
+        live connection to the driven's parent inverse at build time, so a joint
+        moved afterwards keeps compensating for its old parent.
+        """
+        parent = parent if parent is not None else self.bind_parent
+        joint = tm.Joint.create(
+            name=self.name(name, suffix="jnt"),
+            parent=parent.long_name if hasattr(parent, "long_name") else parent,
+            radius=radius,
+        )
+        if match is not None:
+            joint.align_to(match)
+        return self.deform_joint(joint)
 
     def deform_joint(self, node) -> tm.Joint:
         tags.tag(node, **{tags.KIND: tags.DEFORM, tags.INSTANCE: self.instance.instance_id})
