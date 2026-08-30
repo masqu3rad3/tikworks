@@ -149,13 +149,25 @@ the gesture people expect from a tab — and `View > Open in Window` (checkable,
 shortcut) is the discoverable menu route to the same thing.
 
 ```python
-class DesignerShell(MayaToolWindow):
-    WINDOW_NAME = "TriggerGuideDesigner"   # inherits the old workspace control
+class DesignerShell(QtWidgets.QMainWindow):   # plain, floating, parented to the host
 ```
 
 Its central widget is a `QVBoxLayout` of `[page.menu_bar, page, page.status_strip]`
 — the same visual stack the host gives it, minus the mode bar. Detach reparents
 those three out of the host's stacks; re-attach puts them back.
+
+**Not a `MayaToolWindow`** (corrected 2026-08-31). It was one, and showing it
+handed the widget to a Maya workspace control, which reparents it — the bundle
+came apart into three top-level windows: one with the menus and status bar, one
+with the content, and the shell. A plain `QMainWindow` with the `Qt.Window` flag,
+parented to the Trigger window, holds the bundle correctly and follows its host.
+The cost is that a detached Designer floats above Maya instead of docking into
+Maya's layout, which is the right trade for a tear-off nobody uses daily.
+
+**Not drag-off.** Tearing a tab out by dragging it, the way Maya's own panels
+work, would mean making the modes `QDockWidget`s and tabifying them. Qt then owns
+the tab bar and puts it *inside* the central area — below the menu bar — which
+undoes the layout this whole spec exists to get. Double-click is the gesture.
 
 Two rules keep it honest: while detached the Designer **mode tab stays**, and
 selecting it raises the shell rather than switching to an empty page; and the

@@ -472,9 +472,8 @@ class TriggerWindow(MayaToolWindow):
         if detached:
             from .shell import DesignerShell
 
-            DesignerShell.teardown_workspace_control()
             self._shell = DesignerShell(self, designer)
-            self._shell.show_tool()
+            self._shell.open()
             self.mode_bar.setCurrentIndex(TRIGGER_MODE)
         else:
             shell, self._shell = self._shell, None  # cleared first, so the
@@ -489,8 +488,7 @@ class TriggerWindow(MayaToolWindow):
         if guides_path:
             designer.set_file(guides_path)
         if self._shell is not None:
-            self._shell.show_tool()
-            self._shell.raise_()
+            self._shell.open()
         else:
             self.mode_bar.setCurrentIndex(DESIGNER_MODE)
         return designer

@@ -4,20 +4,24 @@ The Designer is a page (``ui/designer/window.py``); this is the frame it lives
 in when you tear it off. The bundle — menu bar, page, status strip — is only
 ever *reparented*, never installed with ``setMenuBar`` / ``setStatusBar``, so Qt
 never takes ownership of a widget the host expects to get back.
+
+A plain floating window, deliberately not a ``MayaToolWindow``: showing one of
+those hands the widget to a Maya workspace control, which reparents it — and
+the bundle came apart into three separate windows. The shell is parented to the
+Trigger window, so it follows it and dies with it.
 """
 
 from __future__ import annotations
 
 from tik.shared.ui import theme
-from tik.shared.ui.maya_window import MayaToolWindow
-from tik.shared.ui.Qt import QtWidgets
+from tik.shared.ui.Qt import QtCore, QtWidgets
 
 
-class DesignerShell(MayaToolWindow):
-    WINDOW_NAME = "TriggerGuideDesigner"
-
+class DesignerShell(QtWidgets.QMainWindow):
     def __init__(self, host, designer) -> None:
         super().__init__(host)
+        self.setWindowFlag(QtCore.Qt.Window, True)
+        self.setObjectName("TriggerDesignerShell")
         self.host = host
         self.designer = designer
         body = QtWidgets.QWidget()
@@ -31,6 +35,10 @@ class DesignerShell(MayaToolWindow):
         self.setWindowTitle(designer.title)
         self.resize(1240, 680)
         theme.apply(self)
+
+    def open(self) -> None:
+        self.show()
+        self.raise_()
 
     def release(self) -> None:
         """Give the bundle back to the host before this window goes away."""
