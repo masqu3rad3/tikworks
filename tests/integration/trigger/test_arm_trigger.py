@@ -218,3 +218,59 @@ def test_collar_locks_scale_and_visibility(backend):
         assert cmds.getAttr(f"{collar.long_name}.{attr}", lock=True)
     for attr in ("tx", "ty", "tz", "rx", "ry", "rz"):
         assert not cmds.getAttr(f"{collar.long_name}.{attr}", lock=True)
+
+
+# -------------------------------------------------------------------- spaces
+def test_arm_declares_two_spaces():
+    module_cls = get_module("arm")
+    assert module_cls.space_names() == ["ik_hand", "pole"]
+    assert module_cls.get_space("ik_hand").mode == "parent"
+    assert module_cls.get_space("pole").mode == "point"
+
+
+def _arm_with_space(backend, space, sources):
+    body = backend.create_guides(get_module("base")(name="body"))
+    cmds.xform(
+        backend.guide_node(body.instance_id, "root").long_name, ws=True, t=(0, 15, 0)
+    )
+    arm = backend.create_guides(
+        get_module("arm")(name="arm", side="L"),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    backend.set_spaces(arm.instance_id, {space: sources})
+    report = Builder(backend).build(rig_name="hero", afterlife="keep")
+    return report, report.contexts[arm.instance_id]
+
+
+def test_ik_space_switch_is_built(backend):
+    report, ctx = _arm_with_space(backend, "ik_hand", ["body.root"])
+    control = _ik_control(ctx)
+    assert control.has_attr("ik_handSpace")
+    assert report.spaces == [("L_arm.ik_hand", "body.root")]
+
+
+def test_point_space_moves_without_rotating(backend):
+    """A point space translates its control and leaves orientation alone.
+
+    poleFollow is turned off first: at its default of 1 the pole follows the
+    arm's own aim frame, which would swamp what the space is doing.
+    """
+    _report, ctx = _arm_with_space(backend, "pole", ["body.root"])
+    control = _ik_control(ctx)
+    control["poleFollow"].value = 0.0
+    pole = next(
+        item.transform
+        for item in ctx.controllers
+        if item.transform.name.endswith("_pole_ctrl")
+    )
+    pole["poleSpace"].value = 1
+
+    body_ctrl = tm.Transform("C_body_root_ctrl")
+    before_axis = tuple(pole.world_axis("x"))
+    before_position = pole.world_translation
+    body_ctrl.translate = (0, 20, 0)
+    body_ctrl.rotate = (0, 45, 0)
+
+    assert (pole.world_translation - before_position).length() > 1.0
+    for first, second in zip(before_axis, tuple(pole.world_axis("x"))):
+        assert abs(first - second) < 1e-3

@@ -521,6 +521,26 @@ class MayaBackend:
             source_node, target, maintain_offset=True, name=ctx.name("attach", input_name)
         )
 
+    def connect_space(self, ctx: MayaBuildContext, space, source_nodes, labels) -> None:
+        """Build a SpaceSwitch on the controller the space names."""
+        controller = ctx.controller_by_role(space.control)
+        if controller is None:
+            raise AttachError(
+                f"{ctx.instance.key}.{space.name}: no controller with role "
+                f"'{space.control}'.",
+                instance_id=ctx.instance.instance_id,
+                module_type=ctx.module.module_type,
+            )
+        tm.SpaceSwitch.create(
+            controller.transform,
+            source_nodes,
+            attr_name=f"{space.name}Space",
+            mode=space.mode,
+            labels=[label.split(".")[0] for label in labels],
+            default=space.default,
+            name=ctx.name(space.name),
+        )
+
     def afterlife(self, instances: Sequence[ModuleInstance], mode: str) -> None:
         if mode == "keep" or not cmds.objExists(tags.GUIDE_HOLDER):
             return

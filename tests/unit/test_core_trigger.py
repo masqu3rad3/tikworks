@@ -305,8 +305,8 @@ def test_module_space_lookup():
 
 
 def test_module_has_no_spaces_by_default():
-    assert ToyRoot.spaces == ()
-    assert ToyRoot.space_names() == []
+    assert ToyChain.spaces == ()
+    assert ToyChain.space_names() == []
 
 
 def test_instance_spaces_round_trip():
@@ -325,3 +325,32 @@ def test_instance_spaces_default_to_empty():
         {"module_type": "toychain", "instance_id": "x", "name": "arm"}
     )
     assert restored.spaces == {}
+
+
+def test_builder_connects_spaces_after_every_module():
+    backend, root, chain = _scene()
+    backend.instances[0].spaces = {"follow": [f"{root.key}.root"]}
+    report = Builder(backend).build(rig_name="rig", afterlife="keep")
+    assert (f"{root.key}.follow", f"{root.key}.root") in report.spaces
+
+
+def test_space_sources_may_be_mutually_referential():
+    """An arm in head space while the head is in arm space is a normal rig."""
+    backend = FakeBackend()
+    first = backend.create_guides(ToyRoot(name="a"))
+    second = backend.create_guides(ToyRoot(name="b"))
+    first.spaces = {"follow": ["b.root"]}
+    second.spaces = {"follow": ["a.root"]}
+    report = Builder(backend).build(rig_name="rig", afterlife="keep")
+    assert len(report.spaces) == 2
+
+
+def test_unknown_space_source_is_skipped_with_a_warning():
+    backend, root, chain = _scene()
+    backend.instances[0].spaces = {"follow": ["ghost.root"]}
+    events = EventBus()
+    messages = []
+    events.subscribe("log", lambda **kw: messages.append(kw["message"]))
+    report = Builder(backend, events).build(rig_name="rig", afterlife="keep")
+    assert not report.spaces
+    assert any("ghost.root" in message for message in messages)

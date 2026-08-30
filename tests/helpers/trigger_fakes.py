@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 from typing import Optional, Sequence
 
-from tik.trigger.core import Guides, Input, IntField, Module, RigGroups
+from tik.trigger.core import Guides, Input, IntField, Module, RigGroups, Space
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 
 
@@ -68,6 +68,9 @@ class FakeBuildContext:
         node = f"{self.module.name}_{name}_jnt"
         return self.deform_joint(node)
 
+    def controller_by_role(self, role):
+        return next((item for item in self.controllers if item.endswith(role)), None)
+
     def deform_joint(self, node):
         self.deform_joints.append(node)
         return node
@@ -89,6 +92,7 @@ class FakeBackend:
         self.calls: list[tuple] = []
         self.settings: dict[str, dict] = {}
         self.connections: list[tuple[str, str, str]] = []
+        self.space_connections: list = []
         self.scene_nodes: set[str] = set()
         self.afterlife_mode: Optional[str] = None
         self.fail_on: Optional[str] = None
@@ -233,6 +237,9 @@ class FakeBackend:
             if item.instance_id == instance_id:
                 item.inputs = {key: value for key, value in inputs.items() if value}
 
+    def connect_space(self, ctx, space, source_nodes, labels):
+        self.space_connections.append((ctx.instance.key, space.name, list(labels)))
+
     def afterlife(self, instances, mode):
         self.afterlife_mode = mode
 
@@ -243,11 +250,13 @@ class ToyRoot(Module):
     guides = Guides("root")
     inputs = ()
     outputs = ("root",)
+    spaces = (Space("follow", control="root", mode="parent"),)
 
     def draw_guides(self, ctx):
         ctx.joint("root", (0, 0, 0))
 
     def build(self, ctx):
+        ctx.controller("root")
         ctx.output("root", ctx.name("root", suffix="jnt"))
 
 

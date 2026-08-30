@@ -210,6 +210,13 @@ class MayaBuildContext:
             attribute.lock_and_hide(tweak.transform, locked)
         return tweak
 
+    def controller_by_role(self, role: str) -> Optional[Controller]:
+        """Return the controller registered under ``role``, if any."""
+        for controller in self.controllers:
+            if controller.transform.meta.get(tags.ROLE) == role:
+                return controller
+        return None
+
     def bind_joint(
         self,
         name: str,

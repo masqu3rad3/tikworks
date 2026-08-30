@@ -98,6 +98,9 @@ class BuildContext(Protocol):
         reads downstream.
         """
 
+    def controller_by_role(self, role: str) -> Any:
+        """Return the controller registered under ``role``, or None."""
+
     def bind_joint(
         self,
         name: str,
