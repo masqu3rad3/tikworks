@@ -47,6 +47,8 @@ class LimbResult:
     switch_plug: object = None
     size: float = 0.0
     hinge_axis: Optional[str] = None
+    ik_tweak: object = None
+    pole_tweak: object = None
 
 
 def build_ikfk_limb(
@@ -104,7 +106,8 @@ def build_ikfk_limb(
     pole_rest = _pole_rest_position(result.ik_joints)
     _build_pole_base(ctx, name, parent, result)
     _build_controls(ctx, name, parent, controller_size, labels, result)
-    control = result.ik_control.transform
+    control = result.ik_control.transform  # animator-facing attributes
+    driver = result.ik_tweak.transform  # what the rig actually follows
 
     attribute.add_separator(control, "segments_")
     segment_scales = [
@@ -120,7 +123,7 @@ def build_ikfk_limb(
     )
     result.ik_handle.parent = ctx.groups.rig
     tm.MatrixConstraint.create(
-        control,
+        driver,
         result.ik_joints[-1],
         maintain_offset=True,
         skip_translate="xyz",
@@ -128,9 +131,9 @@ def build_ikfk_limb(
     )
 
     _build_lengths(ctx, name, side_sign, segment_scales, result)
-    _build_soft_ik(ctx, name, soft_ik, control, result)
-    _build_stretch(ctx, name, stretch, squash, stretch_limit_default, control, result)
-    _build_pole(ctx, name, controller_size, pole_pin, control, pole_rest, result)
+    _build_soft_ik(ctx, name, soft_ik, control, driver, result)
+    _build_stretch(ctx, name, stretch, squash, stretch_limit_default, control, driver, result)
+    _build_pole(ctx, name, controller_size, pole_pin, control, driver, pole_rest, result)
     _build_visibility(ctx, name, result)
     _blend_to_bind(ctx, name, bind_joints, result)
     return result
@@ -201,6 +204,9 @@ def _build_controls(ctx, name, parent, size, labels, result) -> None:
         name=ctx.name(name, "ik", suffix="offset")
     )
     attribute.lock_and_hide(result.ik_control.transform, ("sx", "sy", "sz", "v"))
+    # Created after the lock so it inherits the main's locked channels. The
+    # tweak is what the rig follows; the main carries the attributes.
+    result.ik_tweak = ctx.tweak_control(result.ik_control, size=size * 0.6)
 
     attribute.add_separator(result.ik_control.transform, "ikfk_")
     result.switch_plug = attribute.add_float(
@@ -268,12 +274,12 @@ def _build_lengths(ctx, name, side_sign, segment_scales, result) -> None:
         scaled >> result.fk_lengths.rest_plugs[index]
 
 
-def _build_soft_ik(ctx, name, enabled, control, result) -> None:
+def _build_soft_ik(ctx, name, enabled, control, driver, result) -> None:
     """Drive the IK handle, softly or directly."""
     if enabled:
         result.soft_ik = tm.SoftIk.create(
             result.pole_base,
-            control,
+            driver,
             result.ik_lengths.total_length,
             name=ctx.name(name),
             parent=ctx.groups.rig,
@@ -288,7 +294,7 @@ def _build_soft_ik(ctx, name, enabled, control, result) -> None:
         )
         return
     tm.MatrixConstraint.create(
-        control,
+        driver,
         result.ik_handle,
         maintain_offset=True,
         skip_rotate="xyz",
@@ -296,7 +302,7 @@ def _build_soft_ik(ctx, name, enabled, control, result) -> None:
     )
 
 
-def _build_stretch(ctx, name, stretch, squash, limit_default, control, result) -> None:
+def _build_stretch(ctx, name, stretch, squash, limit_default, control, driver, result) -> None:
     """Add the extend- and compress-side factors.
 
     They live on opposite sides of 1.0 and never overlap, so each is simply a
@@ -319,7 +325,7 @@ def _build_stretch(ctx, name, stretch, squash, limit_default, control, result) -
         else:
             measure = tm.Measure.create(
                 result.pole_base["worldMatrix[0]"],
-                control["worldMatrix[0]"],
+                driver["worldMatrix[0]"],
                 name=ctx.name(name, "stretch"),
             )
             gap = (measure.distance - total).maximum(0.0) * stretch_plug
@@ -332,7 +338,7 @@ def _build_stretch(ctx, name, stretch, squash, limit_default, control, result) -
         )
         measure = tm.Measure.create(
             result.pole_base["worldMatrix[0]"],
-            control["worldMatrix[0]"],
+            driver["worldMatrix[0]"],
             name=ctx.name(name, "squash"),
         )
         compress = (measure.distance / total).minimum(1.0)
@@ -340,7 +346,7 @@ def _build_stretch(ctx, name, stretch, squash, limit_default, control, result) -
 
 
 # ----------------------------------------------------------------------- pole
-def _build_pole(ctx, name, size, pole_pin, control, pole_rest, result) -> None:
+def _build_pole(ctx, name, size, pole_pin, control, driver, pole_rest, result) -> None:
     """Pole controller in a twist-aware auto space blended against a rest space."""
     attribute.add_separator(control, "pole_")
     pole_follow = attribute.add_float(
@@ -348,8 +354,8 @@ def _build_pole(ctx, name, size, pole_pin, control, pole_rest, result) -> None:
     )
     frame = tm.AimFrame.create(
         result.pole_base,
-        control,
-        control,
+        driver,
+        driver,
         twist_axis="X",
         parent=ctx.groups.rig,
         name=ctx.name(name, "pole"),
@@ -377,7 +383,8 @@ def _build_pole(ctx, name, size, pole_pin, control, pole_rest, result) -> None:
     attribute.lock_and_hide(
         result.pole_control.transform, ("rx", "ry", "rz", "sx", "sy", "sz", "v")
     )
-    result.ik_handle.pole_vector(result.pole_control.transform)
+    result.pole_tweak = ctx.tweak_control(result.pole_control, size=size * 0.3)
+    result.ik_handle.pole_vector(result.pole_tweak.transform)
 
     if pole_pin:
         pin_plug = attribute.add_float(control, "polePin", default=0.0, min=0.0, max=1.0)
@@ -388,7 +395,7 @@ def _build_pole(ctx, name, size, pole_pin, control, pole_rest, result) -> None:
         )
         lower = tm.Measure.create(
             result.pole_control.transform["worldMatrix[0]"],
-            control["worldMatrix[0]"],
+            driver["worldMatrix[0]"],
             name=ctx.name(name, "pinLower"),
         )
         result.ik_lengths.add_override([upper.distance, lower.distance], pin_plug)

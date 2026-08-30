@@ -244,3 +244,45 @@ def test_ik_control_has_separators(build_context):
     control = result.ik_control.transform
     for separator in ("ikfk_", "stretch_", "segments_", "pole_"):
         assert control.has_attr(separator), f"missing separator {separator}"
+
+
+# ------------------------------------------------------------ tweak controls
+def test_ik_and_pole_have_tweak_controls(build_context):
+    result, _binds = _limb(build_context())
+    assert result.ik_tweak.transform.parent.name == result.ik_control.transform.name
+    assert result.pole_tweak.transform.parent.name == result.pole_control.transform.name
+
+
+def test_the_tweak_drives_the_rig(build_context):
+    result, binds = _limb(build_context())
+    result.switch_plug.value = 1.0
+    before = binds[-1].world_translation
+    result.ik_tweak.transform.translate = (0, 3, 0)
+    assert (binds[-1].world_translation - before).length() > 1.0
+
+
+def test_the_tweak_rides_along_with_the_main(build_context):
+    result, _binds = _limb(build_context())
+    tweak = result.ik_tweak.transform
+    before = tweak.world_translation
+    result.ik_control.transform.translate = (0, 5, 0)
+    assert (tweak.world_translation - before).length() > 4.9
+
+
+def test_pole_tweak_is_the_pole_vector_target(build_context):
+    result, _binds = _limb(build_context())
+    targets = cmds.listConnections(
+        f"{result.ik_handle.long_name}.poleVector", source=True, destination=False
+    ) or []
+    connected = cmds.listConnections(
+        f"{result.pole_tweak.transform.long_name}.translate",
+        source=False,
+        destination=True,
+    ) or []
+    assert targets or connected
+
+
+def test_fk_controls_have_no_tweak(build_context):
+    result, _binds = _limb(build_context())
+    names = {item.transform.name for item in result.fk_controls}
+    assert not any("tweak" in name for name in names)
