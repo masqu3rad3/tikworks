@@ -13,6 +13,7 @@ from .core.scene import *  # noqa: F401, F403
 from .core.scene import proxy_wrapper
 from .core.shapenode import ShapeNode
 from .constructs import (
+    AimFrame,
     ChainLengths,
     IkFkChain,
     MatrixBlend,
@@ -55,6 +56,7 @@ __all__ = [
     "find_by_meta",
     "attribute",
     "naming",
+    "AimFrame",
     "ChainLengths",
     "MatrixBlend",
     "MatrixConstraint",

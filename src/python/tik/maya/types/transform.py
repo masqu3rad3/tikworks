@@ -225,6 +225,21 @@ class Transform(DagNode):
         other = resolve(other) if isinstance(other, str) else other
         return (self.world_position - other.world_position).length()
 
+    def world_axis(self, axis: str = "x"):
+        """Return the normalized world ``axis`` of this transform.
+
+        Args:
+            axis: ``"x"``, ``"y"`` or ``"z"``.
+
+        Returns:
+            MVector: The unit axis in world space.
+        """
+        row = {"x": 0, "y": 4, "z": 8}[axis.lower()]
+        matrix = self["worldMatrix[0]"].value
+        vector = OpenMaya.MVector(matrix[row], matrix[row + 1], matrix[row + 2])
+        vector.normalize()
+        return vector
+
     @staticmethod
     def between(first, second, ratio: float = 0.5):
         """Return the world position ``ratio`` of the way from first to second."""

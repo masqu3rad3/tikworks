@@ -1,5 +1,6 @@
 """Maya constructs: multi-node rig patterns and high-level utilities."""
 
+from .aim_frame import AimFrame
 from .chain_lengths import ChainLengths
 from .ikfk_chain import IkFkChain
 from .matrix_blend import MatrixBlend
@@ -13,6 +14,7 @@ from .soft_ik import SoftIk
 from .space_switch import SpaceSwitch
 
 __all__ = [
+    "AimFrame",
     "ChainLengths",
     "IkFkChain",
     "MatrixBlend",

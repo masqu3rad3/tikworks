@@ -48,7 +48,7 @@ def test_duplicate_chain_carries_preferred_angle_and_scale():
 def test_orient_chain_aims_x_down_the_chain():
     joints = _chain("plain")
     tm.Joint.orient_chain(joints)
-    axis = joints[0].world_matrix_axis_x()
+    axis = joints[0].world_axis("x")
     to_child = joints[1].world_translation - joints[0].world_translation
     to_child.normalize()
     assert axis * to_child > 0.99
@@ -57,7 +57,7 @@ def test_orient_chain_aims_x_down_the_chain():
 def test_reverse_aim_points_x_back_up_the_chain():
     joints = _chain("mirrored")
     tm.Joint.orient_chain(joints, reverse_aim=True, reverse_up=True)
-    axis = joints[0].world_matrix_axis_x()
+    axis = joints[0].world_axis("x")
     to_child = joints[1].world_translation - joints[0].world_translation
     to_child.normalize()
     assert axis * to_child < -0.99

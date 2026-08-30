@@ -240,13 +240,6 @@ class Joint(Transform):
     def preferred_angle(self, value):
         self["preferredAngle"].set((value[0], value[1], value[2]))
 
-    def world_matrix_axis_x(self):
-        """Return the normalized world X axis of this joint."""
-        matrix = self["worldMatrix[0]"].value
-        axis = OpenMaya.MVector(matrix[0], matrix[1], matrix[2])
-        axis.normalize()
-        return axis
-
     def orient(self, xyz=(0, 0, 0)):
         """Orient the joint using the provided XYZ values."""
         cmds.joint(self.long_name, edit=True, orientation=xyz)
