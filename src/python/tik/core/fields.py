@@ -18,6 +18,7 @@ Example:
 from __future__ import annotations
 
 import copy
+from dataclasses import dataclass
 from typing import Any, Iterable, Optional, Sequence
 
 
@@ -280,6 +281,85 @@ class FileField(Field):
         data["extensions"] = list(self.extensions)
         data["mode"] = self.mode
         return data
+
+
+@dataclass(frozen=True)
+class Column:
+    """One column of a :class:`TableField`.
+
+    ``choices_from`` names an attribute on the *target object* supplying the
+    options. A field is a class attribute and cannot know the subclass it will
+    be edited on, so a column whose options vary per module resolves them at
+    render time instead.
+    """
+
+    name: str
+    kind: str = "string"  # "string" | "choice"
+    choices: tuple = ()
+    choices_from: str = ""
+    label: str = ""
+
+    def display(self) -> str:
+        return self.label or self.name.replace("_", " ").title()
+
+
+class TableField(Field):
+    """A list of records, rendered as a table with add/remove rows.
+
+    The value is a list of plain dicts, so it serialises with no special
+    handling.
+    """
+
+    type_name = "table"
+
+    def __init__(self, default=None, *, columns: Sequence[Column] = (), **kwargs) -> None:
+        self.columns = tuple(columns)
+        super().__init__([dict(row) for row in default] if default else [], **kwargs)
+
+    def coerce(self, value):
+        if value is None:
+            return []
+        if isinstance(value, (str, bytes)) or not isinstance(value, Iterable):
+            raise FieldValidationError(self.name, value, "must be a list of rows")
+        known = {column.name for column in self.columns}
+        rows = []
+        for row in value:
+            if not isinstance(row, dict):
+                raise FieldValidationError(self.name, value, "each row must be a mapping")
+            unknown = set(row) - known
+            if unknown:
+                raise FieldValidationError(
+                    self.name, value, f"unknown column(s): {sorted(unknown)}"
+                )
+            filled = {}
+            for column in self.columns:
+                entry = row.get(column.name, "")
+                if column.kind == "choice" and column.choices and entry:
+                    if entry not in column.choices:
+                        raise FieldValidationError(
+                            self.name, value,
+                            f"'{column.name}' must be one of {list(column.choices)}",
+                        )
+                filled[column.name] = entry
+            rows.append(filled)
+        return rows
+
+    def validate(self, value):
+        return self.coerce(value)
+
+    def to_schema(self) -> dict:
+        schema = super().to_schema()
+        schema["columns"] = [
+            {
+                "name": column.name,
+                "kind": column.kind,
+                "choices": list(column.choices),
+                "choices_from": column.choices_from,
+                "label": column.display(),
+            }
+            for column in self.columns
+        ]
+        return schema
 
 
 class DictField(Field):

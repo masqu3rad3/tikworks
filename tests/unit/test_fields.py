@@ -126,3 +126,79 @@ def test_side():
     assert str(Side.LEFT) == "L"
     with pytest.raises(ValueError):
         Side.from_value("up")
+
+
+# ------------------------------------------------------------- TableField
+def test_table_field_defaults_to_empty():
+    from tik.core.fields import Column, TableField
+
+    field = TableField(columns=(Column("label"),))
+    assert field.default == []
+    assert field.type_name == "table"
+
+
+def test_table_field_coerces_rows_to_dicts():
+    from tik.core.fields import Column, Schema, TableField
+
+    class Holder(Schema):
+        rows = TableField(columns=(Column("label"), Column("mode", "choice", choices=("a", "b"))))
+
+    holder = Holder()
+    holder.rows = [{"label": "chest", "mode": "a"}]
+    assert holder.rows == [{"label": "chest", "mode": "a"}]
+
+
+def test_table_field_rejects_a_non_list():
+    from tik.core.fields import Column, FieldValidationError, Schema, TableField
+
+    class Holder(Schema):
+        rows = TableField(columns=(Column("label"),))
+
+    holder = Holder()
+    with pytest.raises(FieldValidationError):
+        holder.rows = "chest"
+
+
+def test_table_field_rejects_unknown_columns():
+    from tik.core.fields import Column, FieldValidationError, Schema, TableField
+
+    class Holder(Schema):
+        rows = TableField(columns=(Column("label"),))
+
+    holder = Holder()
+    with pytest.raises(FieldValidationError):
+        holder.rows = [{"label": "chest", "nope": 1}]
+
+
+def test_table_field_rejects_out_of_range_choices():
+    from tik.core.fields import Column, FieldValidationError, Schema, TableField
+
+    class Holder(Schema):
+        rows = TableField(columns=(Column("mode", "choice", choices=("a", "b")),))
+
+    holder = Holder()
+    with pytest.raises(FieldValidationError):
+        holder.rows = [{"mode": "z"}]
+
+
+def test_table_field_fills_missing_columns():
+    from tik.core.fields import Column, Schema, TableField
+
+    class Holder(Schema):
+        rows = TableField(columns=(Column("label"), Column("mode", "choice", choices=("a",))))
+
+    holder = Holder()
+    holder.rows = [{"label": "chest"}]
+    assert holder.rows == [{"label": "chest", "mode": ""}]
+
+
+def test_table_field_schema_carries_columns():
+    from tik.core.fields import Column, TableField
+
+    field = TableField(columns=(Column("mode", "choice", choices=("a", "b"), choices_from="modes"),))
+    schema = field.to_schema()
+    assert schema["type"] == "table"
+    assert schema["columns"] == [
+        {"name": "mode", "kind": "choice", "choices": ["a", "b"],
+         "choices_from": "modes", "label": "Mode"}
+    ]
