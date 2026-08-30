@@ -9,6 +9,7 @@ from .matrix_switch import MatrixSwitch
 from .measure import Measure
 from .panel import Panel
 from .ribbon import Ribbon
+from .soft_ik import SoftIk
 from .space_switch import SpaceSwitch
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "Measure",
     "Panel",
     "Ribbon",
+    "SoftIk",
     "SpaceSwitch",
 ]

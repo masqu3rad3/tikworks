@@ -21,6 +21,7 @@ from .constructs import (
     MatrixSwitch,
     Measure,
     Ribbon,
+    SoftIk,
     SpaceSwitch,
 )
 from .types.blendshape import BlendShape
@@ -62,6 +63,7 @@ __all__ = [
     "Measure",
     "SpaceSwitch",
     "Ribbon",
+    "SoftIk",
     "IkFkChain",
     "META_PREFIX",
 ]
