@@ -145,3 +145,24 @@ def test_module_builds_without_a_cycle(module_type):
     cmds.dgdirty(allPlugs=True)
     cycles = cmds.cycleCheck(all=True) or []
     assert not cycles, f"'{module_type}' evaluates with a cycle: {cycles}"
+
+
+@pytest.mark.parametrize("module_type", MODULE_TYPES)
+def test_module_parents_everything_it_creates(module_type):
+    """Rule 1.7: nothing a module builds is left at the world root."""
+    cmds.file(new=True, force=True)
+    backend = trigger.maya_backend()
+    before = set(cmds.ls(assemblies=True, long=True))
+
+    if get_module(module_type).primary_input() is not None:
+        body = backend.create_guides(get_module("base")(name="body"))
+        backend.create_guides(
+            get_module(module_type)(name=module_type),
+            parent=ParentRef(body.instance_id, "root"),
+        )
+    else:
+        backend.create_guides(get_module(module_type)(name=module_type))
+    Builder(backend).build(rig_name="rules", afterlife="delete")
+
+    stray = set(cmds.ls(assemblies=True, long=True)) - before - {"|rules_rig"}
+    assert not stray, f"'{module_type}' left {sorted(stray)} at the world root"

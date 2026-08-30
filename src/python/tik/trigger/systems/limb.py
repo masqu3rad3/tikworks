@@ -246,10 +246,16 @@ def _build_lengths(ctx, name, side_sign, segment_scales, result) -> None:
     initialDistance on the IK chains and was therefore IK-only.
     """
     result.ik_lengths = tm.ChainLengths.create(
-        result.ik_joints, side_sign=side_sign, name=ctx.name(name, "ik")
+        result.ik_joints,
+        side_sign=side_sign,
+        name=ctx.name(name, "ik"),
+        parent=ctx.groups.rig,
     )
     result.fk_lengths = tm.ChainLengths.create(
-        result.fk_joints, side_sign=side_sign, name=ctx.name(name, "fk")
+        result.fk_joints,
+        side_sign=side_sign,
+        name=ctx.name(name, "fk"),
+        parent=ctx.groups.rig,
     )
     for index, scale in enumerate(segment_scales):
         initial = result.ik_lengths.rest_plugs[index].value

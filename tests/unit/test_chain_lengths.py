@@ -122,3 +122,16 @@ def test_delete_removes_the_arithmetic_nodes_too():
 
     leaked = set(cmds.ls(long=True)) - before
     assert not leaked, f"ChainLengths.delete left {sorted(leaked)} behind"
+
+
+def test_holder_is_parented_when_asked():
+    joints = _chain("parented")
+    holder_parent = tm.Transform.create(name="lengths_home")
+    lengths = tm.ChainLengths.create(joints, name="parented", parent=holder_parent)
+    assert lengths.holder.parent.name == holder_parent.name
+
+
+def test_holder_defaults_to_the_world():
+    joints = _chain("rootlevel")
+    lengths = tm.ChainLengths.create(joints, name="rootlevel")
+    assert lengths.holder.parent is None

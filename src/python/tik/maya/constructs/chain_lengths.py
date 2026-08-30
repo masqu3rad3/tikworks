@@ -49,6 +49,7 @@ class ChainLengths:
         *,
         side_sign: int = 1,
         name: Optional[str] = None,
+        parent=None,
     ) -> "ChainLengths":
         """Build the length network for ``joints``.
 
@@ -57,6 +58,7 @@ class ChainLengths:
             side_sign: ``-1`` on a mirrored-behaviour side, where the aim axis
                 points back up the chain and ``translateX`` is negative.
             name: Prefix for created nodes.
+            parent: Optional parent for the construct's holder transform.
 
         Returns:
             The construct.
@@ -68,7 +70,10 @@ class ChainLengths:
         chain.joints = joints
         chain._side_sign = -1 if side_sign < 0 else 1
 
-        chain.holder = Transform.create(name=f"{chain.name}_lengths_grp")
+        chain.holder = Transform.create(
+            name=f"{chain.name}_lengths_grp",
+            parent=parent.long_name if hasattr(parent, "long_name") else parent,
+        )
         attribute.lock_and_hide(chain.holder, attribute.TRANSFORM_ATTRS)
 
         for index in range(len(joints) - 1):
