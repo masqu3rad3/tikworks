@@ -265,3 +265,31 @@ def test_a_node_without_spaces_still_builds():
     scene = GraphScene()
     node = scene.add_node("body", "body", "Base", ["root"], ["root"], "#888888")
     assert set(node.inputs) == {"root"}
+
+
+def test_connect_signal_reports_whether_the_port_is_a_space():
+    scene = _graph_scene()
+    seen = []
+    scene.connect_requested.connect(lambda *args: seen.append(args))
+
+    scene.start_wire(scene.nodes["body"].outputs["root"], QtCore.QPointF(0, 0))
+    scene.finish_wire(scene.nodes["L_arm"].inputs["ik_hand"])
+    assert seen and seen[-1][2] is True
+
+    scene.start_wire(scene.nodes["body"].outputs["root"], QtCore.QPointF(0, 0))
+    scene.finish_wire(scene.nodes["L_arm"].inputs["root"])
+    assert seen[-1][2] is False
+
+
+def test_disconnect_signal_carries_the_source_for_spaces():
+    scene = _graph_scene()
+    scene.add_wire("body.root", "L_arm.ik_hand", False)
+    scene.add_wire("head.root", "L_arm.ik_hand", False)
+    seen = []
+    scene.disconnect_requested.connect(lambda *args: seen.append(args))
+
+    wire = scene.wires_for_input(scene.nodes["L_arm"].inputs["ik_hand"])[0]
+    wire.setSelected(True)
+    scene.delete_selected()
+    assert seen and seen[-1][1] is True
+    assert seen[-1][2] in ("body.root", "head.root")

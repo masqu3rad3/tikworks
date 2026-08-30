@@ -176,7 +176,7 @@ def test_graph_wiring_and_disconnect(designer):
     assert len(graph.wires) == 1
     wire = graph.wires[0]
     assert isinstance(wire, WireItem)
-    graph.disconnect_requested.emit(wire.target_key)
+    graph.disconnect_requested.emit(wire.target_key, wire.target.multi, wire.source.key)
     assert designer.guides.get(chain.instance_id).inputs == {}
 
 
