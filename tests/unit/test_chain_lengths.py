@@ -102,3 +102,23 @@ def test_delete_releases_the_joints():
     assert not cmds.listConnections(
         f"{joints[1].name}.translateX", source=True, destination=False
     )
+
+
+def test_delete_removes_the_arithmetic_nodes_too():
+    """Factors and side-sign multiplies are created by plug arithmetic."""
+    joints = _chain("leak")
+    holder = tm.Transform.create(name="leak_holder")
+    factor = tm.attribute.add_float(holder, "factor", default=2.0)
+    weight = tm.attribute.add_float(holder, "pin", default=0.0)
+    upper = tm.attribute.add_float(holder, "upper", default=9.0)
+    lower = tm.attribute.add_float(holder, "lower", default=1.0)
+
+    before = set(cmds.ls(long=True))
+    lengths = tm.ChainLengths.create(joints, side_sign=-1, name="leak")
+    lengths.add_factor(factor)
+    lengths.add_override([upper, lower], weight)
+    lengths.total_length  # noqa: B018 - builds the sum network on access
+    lengths.delete()
+
+    leaked = set(cmds.ls(long=True)) - before
+    assert not leaked, f"ChainLengths.delete left {sorted(leaked)} behind"

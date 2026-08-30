@@ -129,3 +129,40 @@ def test_without_cutoff_the_group_still_drives():
 
     parent_grp.translate = (0, 10, 0)
     assert abs(driven.world_translation.y - 10.0) < 1e-4
+
+
+def test_maintain_offset_holds_a_joint_orientation():
+    """A joint must not snap to the driver's orientation at build time.
+
+    The rotation travels through the joint-orient strand, which has to carry
+    the maintained offset like the translate/scale strands do.
+    """
+    joint = tm.Joint.create(name="offset_jnt")
+    joint.joint_orient = (0.0, 35.0, 0.0)
+    joint.translate = (2, 0, 0)
+    driver = tm.Transform.create(name="offset_driver")
+    driver.translate = (2, 0, 0)
+
+    before_rotation = tuple(joint.world_axis("x"))
+    before_position = joint.world_translation
+
+    tm.MatrixConstraint.create(driver, joint, maintain_offset=True)
+
+    after_rotation = tuple(joint.world_axis("x"))
+    assert (joint.world_translation - before_position).length() < 1e-4
+    for axis_before, axis_after in zip(before_rotation, after_rotation):
+        assert abs(axis_before - axis_after) < 1e-4
+
+
+def test_maintain_offset_joint_follows_the_driver_rigidly():
+    """Once offset, the joint tracks the driver without snapping to it."""
+    joint = tm.Joint.create(name="rigid_jnt")
+    joint.joint_orient = (0.0, 35.0, 0.0)
+    driver = tm.Transform.create(name="rigid_driver")
+
+    tm.MatrixConstraint.create(driver, joint, maintain_offset=True)
+    driver.rotate = (0, 20, 0)
+
+    # The joint keeps its own 35 degrees and adds the driver's 20.
+    assert abs(joint.world_axis("x").angle(tm.Transform("rigid_driver").world_axis("x"))
+               - __import__("math").radians(35)) < 1e-3

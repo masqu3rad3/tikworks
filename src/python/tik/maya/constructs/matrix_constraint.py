@@ -106,6 +106,7 @@ class MatrixConstraint:
 
         parent = driven.parent
         index = 0
+        offset = None
         if maintain_offset:
             driven_world = OpenMaya.MMatrix(driven["worldMatrix[0]"].value)
             driver_world = OpenMaya.MMatrix(source_plug.value)
@@ -123,7 +124,7 @@ class MatrixConstraint:
         is_joint = driven.type == "joint"
         if is_joint and len(skip_rotate) < 3:
             rotate_source, rotate_nodes = cls._joint_rotation_strand(
-                name, driven, parent, source_plug
+                name, driven, parent, source_plug, offset
             )
 
         cls._connect_channels(decompose, "outputTranslate", driven, "translate", skip_translate)
@@ -133,8 +134,17 @@ class MatrixConstraint:
         return cls(driven, mult_matrix, decompose, average, rotate_nodes)
 
     @staticmethod
-    def _joint_rotation_strand(name, joint, parent, source_plug):
-        """Build the joint orient compensation network for a joint driven."""
+    def _joint_rotation_strand(name, joint, parent, source_plug, offset=None):
+        """Build the joint orient compensation network for a joint driven.
+
+        A joint's world orientation is ``rotate * jointOrient * parentWorld``,
+        so the rotation this drives is the target world matrix with
+        ``(jointOrient * parentWorld)`` divided out.
+
+        ``offset`` must be prepended exactly as the translate/scale strands do.
+        Without it a joint constrained with ``maintain_offset=True`` snaps to
+        the driver's orientation at build time, discarding its own.
+        """
         ensure_plugin("matrixNodes")
         compose = create_node("composeMatrix", name=f"{name}_rotateComposeMatrix")
         first_mult = create_node("multMatrix", name=f"{name}_firstRotateMultMatrix")
@@ -149,8 +159,14 @@ class MatrixConstraint:
         if parent is not None:
             parent["worldMatrix[0]"] >> first_mult["matrixIn[1]"]
         first_mult["matrixSum"] >> inverse["inputMatrix"]
-        source_plug >> second_mult["matrixIn[0]"]
-        inverse["outputMatrix"] >> second_mult["matrixIn[1]"]
+
+        index = 0
+        if offset is not None:
+            second_mult[f"matrixIn[{index}]"].value = list(offset)
+            index += 1
+        source_plug >> second_mult[f"matrixIn[{index}]"]
+        index += 1
+        inverse["outputMatrix"] >> second_mult[f"matrixIn[{index}]"]
         second_mult["matrixSum"] >> rotate_decompose["inputMatrix"]
         return rotate_decompose, [compose, first_mult, inverse, second_mult, rotate_decompose]
 

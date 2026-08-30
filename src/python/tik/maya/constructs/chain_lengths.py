@@ -37,6 +37,7 @@ class ChainLengths:
         self.rest_plugs: list[Plug] = []
         self._outputs: list[Plug] = []
         self._factors: list[Plug] = []
+        self._nodes: list = []  # plug-arithmetic nodes, for delete()
         self._side_sign = 1
         self._total: Optional[Plug] = None
 
@@ -79,6 +80,13 @@ class ChainLengths:
         return chain
 
     # ----------------------------------------------------------- internals
+    def _track(self, plug: Plug) -> Plug:
+        """Record a plug's node so ``delete`` can clean it up."""
+        node = getattr(plug, "node", None)
+        if node is not None and node not in self._nodes:
+            self._nodes.append(node)
+        return plug
+
     def _connect(self) -> None:
         """Drive each joint's ``translateX`` from its current output plug.
 
@@ -86,7 +94,7 @@ class ChainLengths:
         never flip the direction.
         """
         for index, plug in enumerate(self._outputs):
-            driver = plug if self._side_sign > 0 else plug * -1.0
+            driver = plug if self._side_sign > 0 else self._track(plug * -1.0)
             driver >> self.joints[index + 1]["translateX"]
 
     def _rebuild(self, outputs: list[Plug]) -> None:
@@ -106,7 +114,7 @@ class ChainLengths:
         if self._total is None:
             total = self.rest_plugs[0]
             for plug in self.rest_plugs[1:]:
-                total = total + plug
+                total = self._track(total + plug)
             self._total = total
         return self._total
 
@@ -114,7 +122,7 @@ class ChainLengths:
     def add_factor(self, plug: Plug) -> None:
         """Multiply every segment's output by ``plug``."""
         self._factors.append(plug)
-        self._rebuild([output * plug for output in self._outputs])
+        self._rebuild([self._track(output * plug) for output in self._outputs])
 
     @undo
     def add_override(self, lengths: Sequence, weight) -> None:
@@ -122,12 +130,14 @@ class ChainLengths:
         lengths = list(lengths)
         if len(lengths) != self.segment_count:
             raise ValueError("add_override needs one length per segment.")
-        self._rebuild(
-            [
-                output.lerp(target, weight)
-                for output, target in zip(self._outputs, lengths)
-            ]
-        )
+        # Expanded rather than calling Plug.lerp, so every intermediate node is
+        # tracked for delete(); lerp builds three and would only hand back one.
+        outputs = []
+        for output, target in zip(self._outputs, lengths):
+            difference = self._track(target - output)
+            scaled = self._track(difference * weight)
+            outputs.append(self._track(output + scaled))
+        self._rebuild(outputs)
 
     @undo
     def delete(self) -> None:
@@ -139,5 +149,8 @@ class ChainLengths:
                 or []
             ):
                 cmds.disconnectAttr(source, plug)
+        names = [node.long_name for node in self._nodes if node.exists()]
         if self.holder is not None and self.holder.exists():
-            cmds.delete(self.holder.long_name)
+            names.append(self.holder.long_name)
+        if names:
+            cmds.delete(names)
