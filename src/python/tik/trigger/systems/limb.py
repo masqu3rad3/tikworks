@@ -212,19 +212,24 @@ def _build_controls(ctx, name, parent, size, labels, result) -> None:
         result.switch_control.transform, "ikFk", default=1.0, min=0.0, max=1.0
     )
 
-    fk_parent = parent
+    # Controllers live in control_grp and are *driven* by the limb's parent,
+    # never parented under it: the ground rules put nothing but controllers and
+    # their offset groups in control_grp.
+    fk_parent = None
     for label, joint in zip(labels, result.fk_joints):
         fk_control = ctx.controller(
             f"{name}_fk_{label}",
             shape="Circle",
             size=size,
-            parent=fk_parent,
+            parent=fk_parent if fk_parent is not None else ctx.groups.control,
             match=joint,
             mirror="behaviour",
         )
-        fk_control.transform.create_offset_group(
+        offset = fk_control.transform.create_offset_group(
             name=ctx.name(name, "fk", label, suffix="offset")
         )
+        if fk_parent is None:
+            tm.MatrixConstraint.create(parent, offset, maintain_offset=True)
         attribute.lock_and_hide(fk_control.transform, ("sx", "sy", "sz", "v"))
         tm.MatrixConstraint.create(
             fk_control.transform, joint, maintain_offset=True, skip_scale="xyz"

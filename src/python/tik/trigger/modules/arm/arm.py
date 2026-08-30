@@ -1,24 +1,27 @@
-"""Arm module: collar + IK/FK arm with ribbon segments.
+"""Arm module: collar plus a single-IK-chain IK/FK arm.
 
-Composes tik.maya constructs: ``IkFkChain`` for the blend, two pure-math
-``Ribbon`` setups for the upper/lower arm (twist wired as floats),
-``MatrixConstraint`` for wiring.
+Three joint sets, not four. The bind joints *are* the IK/FK blend result, so
+no redundant blend chain exists, and there is no second IK chain for the pole
+— the pole gets a twist-aware auto space instead.
+
+Ribbons and twist live in their own modules. A twist module attached to the
+``upperarm`` output creates its joints as siblings of ``lowerarm_jnt``, which
+is exactly how engine twist bones are structured, so nothing here needs to
+anticipate them.
 """
 
 from __future__ import annotations
 
 import tik.maya as tm
-from tik.maya import attribute
 from tik.trigger.core import (
     BoolField,
-    ChoiceField,
     FloatField,
     Guides,
     Input,
-    IntField,
     Module,
     register_module,
 )
+from tik.trigger.systems.limb import build_ikfk_limb
 
 
 @register_module("arm")
@@ -28,13 +31,19 @@ class Arm(Module):
     label = "Arm"
     guides = Guides("collar", "shoulder", "elbow", "hand")
     inputs = (Input("root", primary=True, help="Where the collar hangs (chest/body)"),)
-    outputs = ("collar", "shoulder", "elbow", "hand")
+    outputs = ("collar", "upperarm", "lowerarm", "hand")
 
-    ribbon_joints = IntField(5, min=1, max=20, help="Deformer joints per ribbon segment")
-    ribbon_controllers = IntField(1, min=0, max=5, help="Mid controllers per ribbon segment")
+    stretch = BoolField(True, help="Build the stretch network")
+    squash = BoolField(True, help="Build the compress-side network")
+    stretch_limit = FloatField(
+        50.0,
+        min=0.0,
+        max=500.0,
+        label="Stretch Limit %",
+        help="Default cap on how far a segment may stretch, as a percentage",
+    )
+    pole_pin = BoolField(False, help="Lock the elbow to the pole control")
     controller_size = FloatField(3.0, min=0.01, label="Controller Size")
-    ik_solver = ChoiceField("ikRPsolver", choices=["ikRPsolver", "ikSCsolver"], label="IK Solver")
-    stretchy = BoolField(True, help="Ribbon joints scale with the segment length")
 
     # --------------------------------------------------------------- guides
     def draw_guides(self, ctx) -> None:
@@ -48,136 +57,58 @@ class Arm(Module):
     def build(self, ctx) -> None:
         size = self.controller_size
         collar_guide = ctx.guide("collar")
-        chain_guides = [ctx.guide("shoulder"), ctx.guide("elbow"), ctx.guide("hand")]
+        limb_guides = [ctx.guide("shoulder"), ctx.guide("elbow"), ctx.guide("hand")]
 
-        # joints ----------------------------------------------------------
-        collar_jnt = tm.Joint.create(
-            name=ctx.name("collar", suffix="jnt"), parent=ctx.groups.joints.long_name
-        )
-        collar_jnt.align_to(collar_guide)
-        rig_joints = tm.Joint.chain(
-            [tuple(guide.world_position) for guide in chain_guides],
-            name_pattern=ctx.name("arm{index}", suffix="rig"),
-            parent=collar_jnt,
-        )
-        shoulder_jnt, elbow_jnt, hand_rig_jnt = rig_joints
-        hand_jnt = tm.Joint.create(
-            name=ctx.name("hand", suffix="jnt"), parent=ctx.groups.joints.long_name
-        )
-        hand_jnt.align_to(hand_rig_jnt)
-        tm.MatrixConstraint.create(hand_rig_jnt, hand_jnt, maintain_offset=True)
-
-        # socket + collar controller ----------------------------------------
+        # socket -------------------------------------------------------------
         socket = tm.Transform.create(
-            name=ctx.name("root", suffix="socket"), parent=ctx.groups.controllers.long_name
+            name=ctx.name("root", suffix="socket"), parent=ctx.groups.socket.long_name
         )
-        socket.align_to(collar_jnt)
+        socket.align_to(collar_guide)
         ctx.attach("root", socket)
-        collar_ctrl = ctx.controller("collar", shape="CurvedCircle", size=size, parent=socket, match=collar_jnt)
-        collar_ctrl.transform.create_offset_group(name=ctx.name("collar", suffix="offset"))
+
+        # deform skeleton — created in final position, never reparented -------
+        collar_jnt = ctx.bind_joint("collar", match=collar_guide)
+        bind_joints = []
+        parent_joint = collar_jnt
+        for label, guide_node in zip(("upperarm", "lowerarm", "hand"), limb_guides):
+            joint = ctx.bind_joint(label, parent=parent_joint, match=guide_node)
+            bind_joints.append(joint)
+            parent_joint = joint
+
+        # collar ---------------------------------------------------------------
+        # The controller lives in control_grp and is driven by the socket rather
+        # than parented under it: control_grp holds nothing but controllers and
+        # their offset groups.
+        collar_ctrl = ctx.controller(
+            "collar",
+            shape="CurvedCircle",
+            size=size,
+            match=collar_jnt,
+            mirror="behaviour",
+        )
+        collar_offset = collar_ctrl.transform.create_offset_group(
+            name=ctx.name("collar", suffix="offset")
+        )
+        tm.MatrixConstraint.create(socket, collar_offset, maintain_offset=True)
         tm.MatrixConstraint.create(collar_ctrl.transform, collar_jnt, maintain_offset=True)
 
-        # ik/fk switch controller --------------------------------------------
-        switch_ctrl = ctx.controller("switch", shape="Cube", size=size * 0.4, parent=socket, match=hand_rig_jnt)
-        switch_offset = switch_ctrl.transform.create_offset_group(name=ctx.name("switch", suffix="offset"))
-        switch_offset.translate = tuple(
-            value + offset for value, offset in zip(switch_offset.translate, (0, size * 1.5, 0))
-        )
-        attribute.lock_and_hide(switch_ctrl.transform)
-        switch_plug = attribute.add_float(switch_ctrl.transform, "ikFk", default=1.0, min=0.0, max=1.0)
-        tm.MatrixConstraint.create(hand_rig_jnt, switch_offset, maintain_offset=True, skip_scale="xyz")
-
-        chain = tm.IkFkChain.create(
-            rig_joints, name=ctx.name("arm"), switch=switch_plug, solver=self.ik_solver, parent=ctx.groups.rig
-        )
-        tm.MatrixConstraint.create(collar_jnt, chain.group, maintain_offset=True)
-
-        # fk controllers -----------------------------------------------------
-        fk_parent = collar_ctrl.transform
-        fk_group = None
-        fk_controllers = []
-        for label, joint in zip(("upArm", "lowArm", "hand"), chain.fk_joints):
-            controller = ctx.controller(f"fk_{label}", shape="Circle", size=size, parent=fk_parent, match=joint)
-            offset = controller.transform.create_offset_group(name=ctx.name(f"fk_{label}", suffix="offset"))
-            attribute.lock_and_hide(controller.transform, ("sx", "sy", "sz", "v"))
-            tm.MatrixConstraint.create(controller.transform, joint, maintain_offset=True, skip_scale="xyz")
-            fk_group = fk_group or offset
-            fk_parent = controller.transform
-            fk_controllers.append(controller)
-        chain.fk_visibility >> fk_group["visibility"]
-
-        # ik controllers -----------------------------------------------------
-        ik_group = tm.Transform.create(name=ctx.name("ik", suffix="grp"), parent=socket.long_name)
-        chain.ik_visibility >> ik_group["visibility"]
-        hand_ik = ctx.controller("ik_hand", shape="Cube", size=size, parent=ik_group, match=hand_rig_jnt)
-        hand_ik.transform.create_offset_group(name=ctx.name("ik_hand", suffix="offset"))
-        tm.MatrixConstraint.create(
-            hand_ik.transform, chain.ik_handle, maintain_offset=True, skip_rotate="xyz", skip_scale="xyz"
-        )
-        tm.MatrixConstraint.create(
-            hand_ik.transform, chain.ik_joints[-1], maintain_offset=True, skip_translate="xyz", skip_scale="xyz"
+        # the limb -------------------------------------------------------------
+        build_ikfk_limb(
+            ctx,
+            limb_guides,
+            name="arm",
+            parent=collar_ctrl.transform,
+            bind_joints=bind_joints,
+            controller_size=size,
+            soft_ik=True,  # never optional for an IK solution
+            stretch=self.stretch,
+            squash=self.squash,
+            stretch_limit_default=self.stretch_limit,
+            pole_pin=self.pole_pin,
+            labels=("upper", "lower", "hand"),
         )
 
-        pole_position = self._pole_position(shoulder_jnt, elbow_jnt, hand_rig_jnt, size * 3)
-        pole = ctx.controller("ik_pole", shape="Diamond", size=size * 0.5, parent=ik_group)
-        pole.transform.world_position = pole_position
-        pole.transform.create_offset_group(name=ctx.name("ik_pole", suffix="offset"))
-        attribute.lock_and_hide(pole.transform, ("rx", "ry", "rz", "sx", "sy", "sz", "v"))
-        chain.pole_vector(pole.transform)
-
-        # ribbons ------------------------------------------------------------
-        # twist travels as floats only (never through a matrix): accumulate each
-        # control's own axial rotation along the chain per IK/FK branch, then
-        # blend the two float sums through the switch.
-        twists = []
-        fk_sum = ik_sum = None
-        for fk_ctrl, ik_joint in zip(fk_controllers, chain.ik_joints):
-            fk_roll, ik_roll = fk_ctrl.transform["rotateX"], ik_joint["rotateX"]
-            fk_sum = fk_roll if fk_sum is None else fk_sum + fk_roll
-            ik_sum = ik_roll if ik_sum is None else ik_sum + ik_roll
-            twists.append(fk_sum * (1.0 - switch_plug) + ik_sum * switch_plug)
-        shoulder_twist, elbow_twist, wrist_twist = twists
-
-        deform = [collar_jnt]
-        segments = (
-            ("upArm", shoulder_jnt, elbow_jnt, shoulder_twist, elbow_twist),
-            ("lowArm", elbow_jnt, hand_rig_jnt, elbow_twist, wrist_twist),
-        )
-        for label, start, end, start_twist, end_twist in segments:
-            ribbon = tm.Ribbon.create(
-                start,
-                end,
-                name=ctx.name(label),
-                joint_count=self.ribbon_joints,
-                controller_count=self.ribbon_controllers,
-                scaleable=self.stretchy,
-                parent=ctx.groups.scale,
-            )
-            ribbon.pin_start(start)
-            ribbon.pin_end(end)
-            start_twist >> ribbon.start_twist
-            end_twist >> ribbon.end_twist
-            for controller in ribbon.controllers:
-                ctx.controllers.append(controller)
-            deform.extend(ribbon.deformer_joints)
-        deform.append(hand_jnt)
-
-        for joint in deform:
-            ctx.deform_joint(joint)
         ctx.output("collar", collar_jnt)
-        ctx.output("shoulder", shoulder_jnt)
-        ctx.output("elbow", elbow_jnt)
-        ctx.output("hand", hand_jnt)
-
-    @staticmethod
-    def _pole_position(start, mid, end, distance: float):
-        """Point ``distance`` away from the chain, in the bend direction."""
-        start_pos, mid_pos, end_pos = start.world_position, mid.world_position, end.world_position
-        axis = end_pos - start_pos
-        to_mid = mid_pos - start_pos
-        projection = start_pos + axis * ((to_mid * axis) / (axis * axis)) if axis.length() else start_pos
-        direction = mid_pos - projection
-        if direction.length() < 1e-4:
-            direction = axis ^ tm.Transform.between(start, end) if False else type(axis)(0, 0, -1)
-        direction.normalize()
-        return mid_pos + direction * distance
+        ctx.output("upperarm", bind_joints[0])
+        ctx.output("lowerarm", bind_joints[1])
+        ctx.output("hand", bind_joints[2])

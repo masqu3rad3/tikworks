@@ -21,7 +21,7 @@ def test_manifest_inputs_outputs():
     trigger.load_plugins()
     arm = get_module("arm")
     assert arm.input_names() == ["root"] and arm.primary_input().name == "root"
-    assert arm.outputs == ("collar", "shoulder", "elbow", "hand")
+    assert arm.outputs == ("collar", "upperarm", "lowerarm", "hand")
     assert arm.output_for_role("hand") == "hand" and arm.output_for_role("nope") == "collar"
     base = get_module("base")
     assert base.inputs == () and base.outputs == ("root",)

@@ -52,13 +52,13 @@ def test_legacy_sample_groups_into_instances():
 
 def test_add_settings_attrs_export_import_roundtrip(guides, tmp_path):
     body = guides.add("base", name="body")
-    arm = guides.add("arm", side="L", name="arm", parent=body, ribbon_joints=4)
+    arm = guides.add("arm", side="L", name="arm", parent=body, stretch_limit=40.0)
     tail = guides.add("fkchain", name="tail", parent=body, segments=3)
-    assert arm.ribbon_joints == 4 and arm.parent.instance_id == body.instance_id
-    arm.ribbon_joints = 6
-    assert arm.ribbon_joints == 6
+    assert arm.stretch_limit == 40.0 and arm.parent.instance_id == body.instance_id
+    arm.stretch_limit = 60.0
+    assert arm.stretch_limit == 60.0
     root = arm.root
-    assert cmds.getAttr(f"{root.name}.ribbon_joints") == 6
+    assert cmds.getAttr(f"{root.name}.stretch_limit") == 60.0
     assert cmds.getAttr(f"{root.name}.moduleName") == "arm"
     assert cmds.getAttr(f"{root.name}.otherType") == "Collar"
     assert cmds.getAttr(f"{root.name}.side") == 1
@@ -72,8 +72,8 @@ def test_add_settings_attrs_export_import_roundtrip(guides, tmp_path):
     assert {record["type"] for record in records} >= {"Base", "Collar", "Hand", "FkikRoot", "Fkik"}
     root_record = next(record for record in records if record["name"] == root.name)
     assert root_record["parent"] == body.root.name
-    assert any(attr["attr_name"] == "ribbon_joints" and attr["default_value"] == 6 for attr in root_record["user_attributes"])
-    assert root_record["settings"]["ribbon_joints"] == 6
+    assert any(attr["attr_name"] == "stretch_limit" and attr["default_value"] == 60.0 for attr in root_record["user_attributes"])
+    assert root_record["settings"]["stretch_limit"] == 60.0
 
     guides.clear()
     assert guides.instances() == []
@@ -81,7 +81,7 @@ def test_add_settings_attrs_export_import_roundtrip(guides, tmp_path):
     names = sorted((handle.name, handle.side.value) for handle in handles)
     assert names == [("arm", "L"), ("body", "C"), ("tail", "C")]
     new_arm = guides.find("arm", "L")
-    assert new_arm.ribbon_joints == 6 and new_arm.parent.name == "body"
+    assert new_arm.stretch_limit == 60.0 and new_arm.parent.name == "body"
     tip = guides.backend.guide_node(guides.find("tail").instance_id, "segment", 2)
     assert tuple(round(value, 3) for value in tip.world_position) == (0.0, 3.0, -9.0)
 
@@ -119,7 +119,7 @@ def test_mirror_and_test_build(guides):
 
 def test_duplicate_copies_everything_with_a_unique_name(guides):
     body = guides.add("base", name="body")
-    arm = guides.add("arm", side="L", name="arm", ribbon_joints=6)
+    arm = guides.add("arm", side="L", name="arm", stretch_limit=60.0)
     guides.connect("L_arm.root", "body.root")
     cmds.xform(arm.root.long_name, ws=True, t=(3, 12, 1))
     copy = guides.duplicate(arm)

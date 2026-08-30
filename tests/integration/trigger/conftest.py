@@ -8,6 +8,12 @@ from tik.trigger.backends.maya import MayaBackend
 from tik.trigger.core import get_module
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _plugins():
+    """Modules must be registered before any test reads the registry."""
+    trigger.load_plugins()
+
+
 @pytest.fixture
 def backend():
     cmds.file(new=True, force=True)
