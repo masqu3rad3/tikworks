@@ -45,13 +45,12 @@ and nothing else.
 | content | `setCentralWidget(self.tabs)` (`main.py:52`) | `setCentralWidget(self.splitter)` (`designer/window.py:202`) |
 
 Hosting one inside the other means deciding who owns the menu bar and the status
-bar — and that decision also decides how hard the tear-off is.
+bar.
 
 Two approaches were rejected:
 
 - **Nested `QMainWindow`** (drop the Designer, unchanged, into the stack). Almost
-  no churn: each mode keeps its own menu bar and status bar, and popping one out
-  is `setParent(None); show()`. Rejected here because Trigger's menus would sit on
+  no churn: each mode keeps its own menu bar and status bar. Rejected here because Trigger's menus would sit on
   the host bar while the Designer's sat *inside* the page. **Weak reason, and
   half wrong** (noted 2026-08-31): a nested menu bar spans the page, the page
   spans the window, so the two rows land in the same place — which is what Arda's
@@ -68,8 +67,8 @@ Two approaches were rejected:
 Every mode is a triple of plain widgets — **a `QMenuBar`, a content widget, a
 status strip** — held in three parallel `QStackedWidget`s. Nothing is installed
 with `setMenuBar()` or `setStatusBar()`, so Qt never takes ownership of a bundle
-widget and never deletes one behind our back; that is what makes the tear-off in
-section 6 a matter of reparenting.
+widget and never deletes one behind our back, so any host can lay a bundle out
+(section 6).
 
 `TriggerWindow._build_shell()`:
 
@@ -128,9 +127,8 @@ same constructor signature. The mixins in `designer/commands.py` and
   `self.menu_bar = QtWidgets.QMenuBar(self)`. `File > Close` is dropped —
   closing is the host's `Ctrl+W`, and dropping it removes one collision.
 - `_build_status` (`:316`): `StatusFields(self.status_strip, …)`.
-- `set_file` (`:347`): stops calling `setWindowTitle`, emits `title_changed(str)`.
-  The host retitles the mode tab (`Guide Designer — biped.trg`) and, when
-  detached, the shell.
+- `set_file` (`:347`): stops calling `setWindowTitle`, emits `title_changed(str)`;
+  the host retitles the mode tab (`Guide Designer — biped.trg`).
 - Teardown: a non-top-level `QWidget` never receives `closeEvent`, so the
   bindings/watcher cleanup at `:618` moves into `teardown()`, called by the
   host's `closeEvent` and by the surviving `closeEvent` (which still fires when
@@ -139,40 +137,37 @@ same constructor signature. The mixins in `designer/commands.py` and
   is kept: `SceneWatcher` calls `objectName()` to detect a dead C++ object
   (`scene_watcher.py:125`).
 
-`WINDOW_NAME`, `show_tool` and the workspace-control teardown leave the class —
-they move to the shell in section 6.
+`WINDOW_NAME`, `show_tool` and the workspace-control teardown leave the class:
+the page is never a window, and the Trigger window is the only workspace control
+(section 6).
 
-## 6. Tear-off
+## 6. No tear-off — decided 2026-08-31
 
-Default is the tab. **Double-clicking the Designer's mode tab** tears it off —
-the gesture people expect from a tab — and `View > Open in Window` (checkable, no
-shortcut) is the discoverable menu route to the same thing.
+The Designer lives in its tab and nowhere else. Three shapes were tried and
+dropped, in this order:
 
-```python
-class DesignerShell(QtWidgets.QMainWindow):   # plain, floating, parented to the host
-```
+- **A dockable `DesignerShell(MayaToolWindow)`.** Showing one hands the widget to
+  a Maya workspace control, which reparents it — the bundle came apart into three
+  top-level windows (menus and status bar in one, content in another, the shell
+  in a third), and the mode tab was left with nothing to show.
+- **A plain floating `QMainWindow`.** This worked: verified docked in Maya across
+  repeated detach and re-attach rounds, one window each time, no strays, tree and
+  graph state intact. Dropped anyway — see below.
+- **Drag the tab off, the way Maya's own panels work.** That means making the
+  modes `QDockWidget`s and tabifying them, at which point Qt owns the tab bar and
+  puts it *inside* the central area — below the menu bar — which undoes the
+  layout in section 1 that this spec exists to get. The alternative is a custom
+  tab-drag handler, which is more machinery than a rarely-used tear-off deserves.
 
-Its central widget is a `QVBoxLayout` of `[page.menu_bar, page, page.status_strip]`
-— the same visual stack the host gives it, minus the mode bar. Detach reparents
-those three out of the host's stacks; re-attach puts them back.
+Arda's call: a working detach that isn't the gesture people expect is not worth
+the code. `shell.py`, `GuideDesigner.detach_requested`, `detach_action` and the
+double-click handler are gone; `set_designer_detached` and `_shell` with them.
+Should this come back, the plain-window version is the one that worked, and the
+`git log` for `src/python/tik/trigger/ui/shell.py` has it.
 
-**Not a `MayaToolWindow`** (corrected 2026-08-31). It was one, and showing it
-handed the widget to a Maya workspace control, which reparents it — the bundle
-came apart into three top-level windows: one with the menus and status bar, one
-with the content, and the shell. A plain `QMainWindow` with the `Qt.Window` flag,
-parented to the Trigger window, holds the bundle correctly and follows its host.
-The cost is that a detached Designer floats above Maya instead of docking into
-Maya's layout, which is the right trade for a tear-off nobody uses daily.
-
-**Not drag-off.** Tearing a tab out by dragging it, the way Maya's own panels
-work, would mean making the modes `QDockWidget`s and tabifying them. Qt then owns
-the tab bar and puts it *inside* the central area — below the menu bar — which
-undoes the layout this whole spec exists to get. Double-click is the gesture.
-
-Two rules keep it honest: while detached the Designer **mode tab stays**, and
-selecting it raises the shell rather than switching to an empty page; and the
-shell's `closeEvent` re-attaches rather than destroys, so the scene watcher,
-bindings and graph state survive.
+The design that makes it *possible* stays, and costs nothing: the Designer is a
+page that builds a menu bar and a status strip without installing either, so any
+host can lay the three out. That is what section 3 buys.
 
 ## 7. Entry points and the shortcut rule
 
@@ -180,8 +175,7 @@ bindings and graph state survive.
 callers are untouched — `Tools > Guide Designer` / `Ctrl+G` (`main.py:106`) and
 `view.open_guides_requested` from the settings panel (`main.py:161`). Its body
 becomes: ensure the Designer exists, `set_file(path)` when given, select the mode
-tab (or raise the shell). `self._guide_designer` stays the single instance it is
-today.
+tab. `self._guide_designer` stays the single instance it is today.
 
 **Shortcuts need no rule at all — corrected 2026-08-31.** The two bars do bind
 the same keys (`Ctrl+B`, `Ctrl+S`, `Ctrl+O`, `Ctrl+N`, `Ctrl+D`, `Ctrl+L`, `Tab`,
@@ -212,9 +206,7 @@ Everything here is Qt-only: `tests/ui`, `TIK_TESTS_NO_MAYA=1`, offscreen, via
   starts on Trigger; activating a mode moves all three stacks together and leaves
   every action enabled (the inactive bar is hidden, which is what keeps the
   shortcuts apart); the Designer page stays empty until first activation;
-  double-clicking the tab detaches and re-attaching leaves the menu bar in
-  exactly one parent with the tree and graph intact; `open_guide_designer(path)`
-  selects the mode and sets the file.
+  `open_guide_designer(path)` selects the mode and sets the file.
 - `tests/ui/test_guide_designer.py` — `show_palette` opens the palette. `Tab` had
   been raising `NameError` since the file split in `9beab14`: `commands.py` calls
   `QtGui.QCursor.pos()` and imported only `QtWidgets`.

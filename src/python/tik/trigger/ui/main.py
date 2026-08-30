@@ -4,8 +4,7 @@ Each mode is a bundle of three plain widgets (a ``QMenuBar``, a content
 widget, a status strip) held in three parallel stacks. The mode tab bar and
 the menu stack go in together through ``setMenuWidget``, which is what puts
 the tabs *above* the menus. Nothing is installed with ``setMenuBar`` or
-``setStatusBar``, so Qt never takes ownership of a bundle widget and the
-Guide Designer can be torn off into ``DesignerShell`` and handed back.
+``setStatusBar``, so Qt never takes ownership of a bundle widget.
 
 The two modes bind the same keys (Ctrl+B/S/O/N/D/L, Tab, F2) and never
 collide: a ``WindowShortcut`` only matches while its action's widget is
@@ -53,7 +52,6 @@ class TriggerWindow(MayaToolWindow):
         self.events = EventBus()
         self.designer_factory = designer_factory
         self._guide_designer = None
-        self._shell = None
         self.recent_files: list[str] = []
         self.setWindowTitle(f"Trigger {VERSION}")
         self.resize(1180, 720)
@@ -62,7 +60,6 @@ class TriggerWindow(MayaToolWindow):
         self._build_trigger_mode()
         self._build_designer_mode()
         self.mode_bar.currentChanged.connect(self._activate_mode)
-        self.mode_bar.tabBarDoubleClicked.connect(self._on_mode_double_clicked)
         theme.apply(self)
         self.events.subscribe(LOG, self._on_log)
         self.events.subscribe(ERROR, self._on_error)
@@ -120,11 +117,6 @@ class TriggerWindow(MayaToolWindow):
         self._mode_menus[TRIGGER_MODE] = self.trigger_menus
         self.add_mode("Trigger", self.trigger_menus, self.tabs, self.trigger_status_strip)
 
-    def _on_mode_double_clicked(self, index: int) -> None:
-        """Double-click tears a mode off into its own window. The host stays."""
-        if index == DESIGNER_MODE and self._shell is None:
-            self.set_designer_detached(True)
-
     def _build_designer_mode(self) -> None:
         """Register the tab now, build the Designer on first use.
 
@@ -134,17 +126,12 @@ class TriggerWindow(MayaToolWindow):
         self.designer_menu_holder = _holder()
         self.designer_page_holder = _holder()
         self.designer_status_holder = _holder()
-        index = self.add_mode("Guide Designer", self.designer_menu_holder,
-                              self.designer_page_holder, self.designer_status_holder)
-        self.mode_bar.setTabToolTip(index, "Double-click to open in its own window")
+        self.add_mode("Guide Designer", self.designer_menu_holder,
+                      self.designer_page_holder, self.designer_status_holder)
 
     def _activate_mode(self, index: int) -> None:
         if index == DESIGNER_MODE:
             self._ensure_designer()
-            if self._shell is not None:
-                self._shell.raise_()
-                self.mode_bar.setCurrentIndex(self._active_mode)
-                return
         self._active_mode = index
         self.menu_stack.setCurrentIndex(index)
         self.pages.setCurrentIndex(index)
@@ -446,7 +433,6 @@ class TriggerWindow(MayaToolWindow):
                 designer = GuideDesigner(events=self.events, file_browser=self.file_browser)
             self._guide_designer = designer
             designer.title_changed.connect(self._on_designer_title)
-            designer.detach_requested.connect(self.set_designer_detached)
             self._mode_menus[DESIGNER_MODE] = designer.menu_bar
             self._host_designer()
         return self._guide_designer
@@ -460,37 +446,13 @@ class TriggerWindow(MayaToolWindow):
 
     def _on_designer_title(self, title: str) -> None:
         self.mode_bar.setTabText(DESIGNER_MODE, title)
-        if self._shell is not None:
-            self._shell.setWindowTitle(title)
         self._update_title()
-
-    def set_designer_detached(self, detached: bool) -> None:
-        """Move the Designer bundle between the mode holders and a floating shell."""
-        designer = self._ensure_designer()
-        if detached == (self._shell is not None):
-            return
-        if detached:
-            from .shell import DesignerShell
-
-            self._shell = DesignerShell(self, designer)
-            self._shell.open()
-            self.mode_bar.setCurrentIndex(TRIGGER_MODE)
-        else:
-            shell, self._shell = self._shell, None  # cleared first, so the
-            shell.release()                        # shell's closeEvent no-ops
-            self._host_designer()
-            shell.close()
-            self.mode_bar.setCurrentIndex(DESIGNER_MODE)
-        designer.detach_action.setChecked(detached)
 
     def open_guide_designer(self, guides_path: str = ""):
         designer = self._ensure_designer()
         if guides_path:
             designer.set_file(guides_path)
-        if self._shell is not None:
-            self._shell.open()
-        else:
-            self.mode_bar.setCurrentIndex(DESIGNER_MODE)
+        self.mode_bar.setCurrentIndex(DESIGNER_MODE)
         return designer
 
     # -------------------------------------------------------------- events
@@ -509,8 +471,6 @@ class TriggerWindow(MayaToolWindow):
             if view.session.is_modified and not self.ask_discard(view.session):
                 event.ignore()
                 return
-        if self._shell is not None:
-            self.set_designer_detached(False)
         if self._guide_designer is not None:
             self._guide_designer.teardown()
         super().closeEvent(event)

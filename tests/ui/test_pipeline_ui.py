@@ -234,30 +234,6 @@ def test_open_guide_designer_selects_the_mode_and_sets_the_file(qapp, tmp_path):
     window.close()
 
 
-def test_designer_detaches_and_reattaches(qapp):
-    window = TriggerWindow(designer_factory=_stub_designer)
-    window.show()
-    designer = window._ensure_designer()
-    tree = designer.tree
-
-    window.mode_bar.tabBarDoubleClicked.emit(1)   # the tear-off gesture
-    assert window._shell is not None
-    assert designer.parent() is not window.designer_page_holder
-    assert window.designer_page_holder.layout().count() == 0
-    assert window.mode_bar.count() == 2          # the tab stays
-    assert window.mode_bar.currentIndex() == 0   # and we fall back to Trigger
-    # selecting the Designer tab raises the shell, it does not show an empty page
-    window.mode_bar.setCurrentIndex(1)
-    assert window.mode_bar.currentIndex() == 0
-
-    window.set_designer_detached(False)
-    assert window._shell is None
-    assert window.designer_page_holder.layout().count() == 1
-    assert designer.tree is tree                 # same page, state intact
-    assert window.mode_bar.currentIndex() == 1
-    window.close()
-
-
 def test_main_window_tabs_and_files(qapp, tmp_path):
     window = TriggerWindow()
     window.ask_discard = lambda session: True

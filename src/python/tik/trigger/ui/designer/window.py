@@ -8,8 +8,8 @@ structure changes (new/removed/undone guides) reach the UI through a
 debounced ``SceneWatcher``; our own edits are muted.
 
 The designer is a page, not a window: it builds ``menu_bar`` and
-``status_strip`` and leaves the hosting to ``ui/main.py`` (a mode tab) or
-``ui/shell.py`` (torn off into its own window).
+``status_strip`` and leaves the hosting to ``ui/main.py``, which shows it as a
+mode tab of the Trigger window.
 
 Everything the designer authors (connections, scene-node groups, node
 positions, collapse modes) lives in ``GuideScene`` / ``GuideScene.layout`` and is
@@ -60,14 +60,12 @@ SIDES = ("L", "R", "C", "Both", "Auto")
 class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
     """A plain widget on purpose.
 
-    The designer is hosted as a *mode* of the Trigger window (``ui/main.py``)
-    and can be reparented into ``DesignerShell`` to float. It builds
-    ``menu_bar`` and ``status_strip`` but installs neither, so the host decides
-    where they go.
+    The designer is hosted as a *mode* of the Trigger window (``ui/main.py``).
+    It builds ``menu_bar`` and ``status_strip`` but installs neither, so the
+    host decides where they go.
     """
 
     title_changed = QtCore.Signal(str)
-    detach_requested = QtCore.Signal(bool)
 
     def __init__(self, parent=None, events=None, file_browser=None, binding_adapter=None,
                  scene=None) -> None:
@@ -291,12 +289,6 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self._action(view_menu, "Collapse: Everything", lambda: self.graph.set_selected_mode(2), "3")
         view_menu.addSeparator()
         self._action(view_menu, "Refresh", self.refresh, "F5")
-        view_menu.addSeparator()
-        self.detach_action = self._action(
-            view_menu, "Open in Window",
-            lambda: self.detach_requested.emit(self.detach_action.isChecked()),
-            checkable=True,
-        )
         build_menu = bar.addMenu("&Build")
         self._action(build_menu, "Build Selected", lambda: self.test_build(), "Ctrl+B")
         self._action(build_menu, "Build All", lambda: self.test_build(all_modules=True), "Ctrl+Shift+B")
