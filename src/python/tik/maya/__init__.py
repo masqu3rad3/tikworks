@@ -15,7 +15,6 @@ from .core.shapenode import ShapeNode
 from .constructs import (
     AimFrame,
     ChainLengths,
-    IkFkChain,
     MatrixBlend,
     MatrixConstraint,
     MatrixSpline,
@@ -66,7 +65,6 @@ __all__ = [
     "SpaceSwitch",
     "Ribbon",
     "SoftIk",
-    "IkFkChain",
     "META_PREFIX",
 ]
 

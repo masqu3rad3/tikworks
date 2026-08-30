@@ -2,7 +2,6 @@
 
 from .aim_frame import AimFrame
 from .chain_lengths import ChainLengths
-from .ikfk_chain import IkFkChain
 from .matrix_blend import MatrixBlend
 from .matrix_constraint import MatrixConstraint
 from .matrix_spline import MatrixSpline
@@ -16,7 +15,6 @@ from .space_switch import SpaceSwitch
 __all__ = [
     "AimFrame",
     "ChainLengths",
-    "IkFkChain",
     "MatrixBlend",
     "MatrixConstraint",
     "MatrixSpline",
