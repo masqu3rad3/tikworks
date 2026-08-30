@@ -41,7 +41,7 @@ from .exceptions import (
     SessionSaveError,
     TriggerError,
 )
-from .manifest import Guides, Input, instance_key
+from .manifest import Guides, Input, Space, instance_key
 from .module import Module
 from .registry import (
     clear_registries,
@@ -87,6 +87,7 @@ __all__ = [
     "ERROR",
     "Guides",
     "Input",
+    "Space",
     "instance_key",
     "Module",
     "Side",

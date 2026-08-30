@@ -25,6 +25,29 @@ class Input:
     help: str = ""
 
 
+@dataclass(frozen=True)
+class Space:
+    """An animation space a controller in this module can follow.
+
+    Unlike an ``Input``, which resolves to exactly one source and drives the
+    bind hierarchy, a space takes any number of sources and becomes an enum on
+    the controller. ``world`` is always index 0.
+
+    Args:
+        name: Connection name (unique per module).
+        control: Controller role the switch is built on (e.g. ``"ik"``).
+        mode: ``parent`` | ``point`` | ``orient``.
+        default: Default enum index; 0 is ``world``.
+        help: Tooltip text.
+    """
+
+    name: str
+    control: str
+    mode: str = "parent"
+    default: int = 0
+    help: str = ""
+
+
 def instance_key(name: str, side: str) -> str:
     """Stable key used in files and connections: ``L_arm`` / ``body``."""
     side = str(side)

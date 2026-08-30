@@ -283,3 +283,45 @@ def test_builder_bind_parent_defaults_when_unconnected():
     report = Builder(backend).build(rig_name="rig", afterlife="keep")
     ctx = report.contexts[solo.instance_id]
     assert ctx.bind_parent == ctx.groups.bind
+
+
+# ------------------------------------------------------------------- spaces
+def test_space_declaration_defaults():
+    from tik.trigger.core import Space
+
+    space = Space("ik_hand", control="ik")
+    assert space.mode == "parent" and space.default == 0
+
+
+def test_module_space_lookup():
+    from tik.trigger.core import Module, Space
+
+    class Spaced(Module):
+        spaces = (Space("ik_hand", control="ik", mode="point"),)
+
+    assert Spaced.space_names() == ["ik_hand"]
+    assert Spaced.get_space("ik_hand").mode == "point"
+    assert Spaced.get_space("nope") is None
+
+
+def test_module_has_no_spaces_by_default():
+    assert ToyRoot.spaces == ()
+    assert ToyRoot.space_names() == []
+
+
+def test_instance_spaces_round_trip():
+    from tik.trigger.core.schemas import ModuleInstance
+
+    instance = ToyChain(name="arm").to_instance()
+    instance.spaces = {"ik_hand": ["spine.chest", "head.head"]}
+    restored = ModuleInstance.from_dict(instance.to_dict())
+    assert restored.spaces == {"ik_hand": ["spine.chest", "head.head"]}
+
+
+def test_instance_spaces_default_to_empty():
+    from tik.trigger.core.schemas import ModuleInstance
+
+    restored = ModuleInstance.from_dict(
+        {"module_type": "toychain", "instance_id": "x", "name": "arm"}
+    )
+    assert restored.spaces == {}

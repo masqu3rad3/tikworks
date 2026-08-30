@@ -26,7 +26,7 @@ from typing import Optional
 from tik.core.fields import Schema
 from tik.core.side import Side
 
-from .manifest import Guides, Input, instance_key
+from .manifest import Guides, Input, Space, instance_key
 from .schemas import GuidePose, ModuleInstance, ParentRef
 
 
@@ -37,6 +37,7 @@ class Module(Schema):
     sided: bool = True
     guides: Guides = Guides("root")
     inputs: tuple[Input, ...] = (Input("root", primary=True),)
+    spaces: tuple[Space, ...] = ()
     outputs: tuple[str, ...] = ("root",)
     module_type: str = ""  # stamped by @register_module
     legacy_types: dict = {}  # role -> old .trg "type" name (default: capitalised role)
@@ -63,6 +64,14 @@ class Module(Schema):
     @classmethod
     def input_names(cls) -> list[str]:
         return [item.name for item in cls.inputs]
+
+    @classmethod
+    def space_names(cls) -> list[str]:
+        return [item.name for item in cls.spaces]
+
+    @classmethod
+    def get_space(cls, name: str) -> Optional[Space]:
+        return next((item for item in cls.spaces if item.name == name), None)
 
     @classmethod
     def primary_input(cls) -> Optional[Input]:
