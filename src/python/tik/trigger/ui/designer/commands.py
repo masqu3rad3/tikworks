@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from tik.core.side import Side
-from tik.shared.ui.Qt import QtWidgets
+from tik.shared.ui.Qt import QtGui, QtWidgets
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.guides import EXTENSION as GUIDE_EXTENSION

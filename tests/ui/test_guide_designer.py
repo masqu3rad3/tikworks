@@ -99,6 +99,13 @@ def test_window_shell(designer):
     assert not designer.graph_pane.isVisible()
 
 
+def test_the_palette_opens(designer):
+    # Tab -> show_palette; it once died on a missing QtGui import
+    designer.show_palette()
+    assert designer.palette.isVisible()
+    designer.palette.hide()
+
+
 def test_designer_is_a_page_not_a_window(designer):
     assert not isinstance(designer, QtWidgets.QMainWindow)
     assert designer.menu_bar.parent() is designer          # built, not installed
