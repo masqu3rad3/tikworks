@@ -23,7 +23,7 @@ def test_create_guides_tags_and_parents(backend):
     assert joint.meta[tags.KIND] == "guide"
     assert joint.meta[tags.MODULE] == "base"
     assert joint.meta[tags.NAME] == "body"
-    assert joint.meta[tags.SETTINGS] == {"controller_size": 10.0}
+    assert joint.meta[tags.SETTINGS] == {"controller_size": 10.0, "anim_spaces": []}
     assert joint.parent.name == tags.GUIDE_HOLDER
     assert instance.guide_pairs == [("root", 0)]
 
@@ -65,7 +65,10 @@ def test_settings_roundtrip_and_delete_keeps_children(backend):
     root = backend.create_guides(get_module("base")(name="body"))
     child = backend.create_guides(get_module("fkchain")(name="tail"), parent=ParentRef(root.instance_id, "root"))
     backend.write_settings(root.instance_id, {"controller_size": 3.0})
-    assert backend.read_settings(root.instance_id) == {"controller_size": 3.0}
+    assert backend.read_settings(root.instance_id) == {
+        "controller_size": 3.0,
+        "anim_spaces": [],
+    }
     backend.delete_guides(root.instance_id)
     assert backend.find_instances([root.instance_id]) == []
     remaining = backend.find_instances()

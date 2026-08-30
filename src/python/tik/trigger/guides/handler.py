@@ -135,7 +135,7 @@ class GuideHandle:
 
     @property
     def input_names(self) -> list[str]:
-        return self.module_class.input_names()
+        return self.module_class.input_names(self.settings)
 
     @property
     def outputs(self) -> tuple:

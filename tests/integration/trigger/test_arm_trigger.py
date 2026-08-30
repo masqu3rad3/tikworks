@@ -66,7 +66,7 @@ def test_declares_four_outputs():
 def test_has_only_the_behaviour_fields():
     """No ik_solver, no ribbon fields, no soft_ik, no size or limit knobs."""
     names = set(get_module("arm").fields())
-    assert names == {"stretch", "squash", "pole_pin"}
+    assert names == {"stretch", "squash", "pole_pin", "anim_spaces"}
 
 
 def test_control_names_carry_one_module_token(backend):

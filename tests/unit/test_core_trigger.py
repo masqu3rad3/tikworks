@@ -84,7 +84,8 @@ def test_module_instance_roundtrip():
     )
     data = json.loads(json.dumps(instance.to_dict()))
     restored = ModuleInstance.from_dict(data)
-    assert restored.settings == {"segments": 3}
+    # anim_spaces lives on the base Module, so every module carries the key.
+    assert restored.settings == {"segments": 3, "anim_spaces": []}
     assert restored.side == "R"
     assert restored.parent == ParentRef("abc", "root")
     assert restored.attach == "end"
@@ -286,3 +287,57 @@ def test_builder_bind_parent_defaults_when_unconnected():
 
 
 # ------------------------------------------------------------------- spaces
+
+# ------------------------------------------------------------ anim spaces
+def _spaced_module():
+    from tik.trigger.core import Module
+
+    class Spaced(Module):
+        space_controls = ("ik", "pole")
+
+    return Spaced
+
+
+def test_space_rows_are_empty_by_default():
+    assert _spaced_module().space_rows({}) == []
+
+
+def test_space_inputs_derive_one_port_per_row():
+    module_cls = _spaced_module()
+    settings = {"anim_spaces": [
+        {"control": "ik", "mode": "parent", "label": "chest"},
+        {"control": "pole", "mode": "point", "label": "chest"},
+    ]}
+    derived = module_cls.space_inputs(settings)
+    assert [item.name for item in derived] == ["ik_chest", "pole_chest"]
+    assert all(item.kind == "space" for item in derived)
+    assert all(item.optional for item in derived)
+
+
+def test_input_names_include_spaces():
+    module_cls = _spaced_module()
+    settings = {"anim_spaces": [{"control": "ik", "mode": "parent", "label": "chest"}]}
+    assert module_cls.input_names(settings) == ["root", "ik_chest"]
+    assert module_cls.input_names({}) == ["root"]
+
+
+def test_validate_rejects_an_empty_label():
+    module = _spaced_module()(name="x")
+    module.anim_spaces = [{"control": "ik", "mode": "parent", "label": ""}]
+    assert any("label" in problem for problem in module.validate())
+
+
+def test_validate_rejects_an_unknown_control():
+    module = _spaced_module()(name="x")
+    module.anim_spaces = [{"control": "ghost", "mode": "parent", "label": "chest"}]
+    assert any("ghost" in problem for problem in module.validate())
+
+
+def test_validate_rejects_duplicate_rows():
+    """(control, label) is the derived port name; a clash would drop a wire."""
+    module = _spaced_module()(name="x")
+    module.anim_spaces = [
+        {"control": "ik", "mode": "parent", "label": "chest"},
+        {"control": "ik", "mode": "orient", "label": "chest"},
+    ]
+    assert any("ik_chest" in problem for problem in module.validate())

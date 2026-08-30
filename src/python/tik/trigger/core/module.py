@@ -23,7 +23,7 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from tik.core.fields import Schema
+from tik.core.fields import Column, Schema, TableField
 from tik.core.side import Side
 
 from .manifest import Guides, Input, instance_key
@@ -37,9 +37,20 @@ class Module(Schema):
     sided: bool = True
     guides: Guides = Guides("root")
     inputs: tuple[Input, ...] = (Input("root", primary=True),)
+    space_controls: tuple[str, ...] = ()  # controller roles that accept spaces
     outputs: tuple[str, ...] = ("root",)
     module_type: str = ""  # stamped by @register_module
     legacy_types: dict = {}  # role -> old .trg "type" name (default: capitalised role)
+    anim_spaces = TableField(
+        [],
+        label="Anim Spaces",
+        help="Each row adds one animation space and one input port.",
+        columns=(
+            Column("control", "choice", choices_from="space_controls"),
+            Column("mode", "choice", choices=("parent", "point", "orient")),
+            Column("label", "string"),
+        ),
+    )
 
     def __init__(
         self,
@@ -61,8 +72,28 @@ class Module(Schema):
         return cls.label or cls.module_type or cls.__name__
 
     @classmethod
-    def input_names(cls) -> list[str]:
-        return [item.name for item in cls.inputs]
+    def space_rows(cls, settings=None) -> list[dict]:
+        """The anim-space rows from ``settings`` (or the field default)."""
+        if settings is None:
+            return [dict(row) for row in cls.anim_spaces.default]
+        return [dict(row) for row in (settings.get("anim_spaces") or [])]
+
+    @classmethod
+    def space_inputs(cls, settings=None) -> list[Input]:
+        """One optional, space-kind Input per row: ``<control>_<label>``."""
+        found = []
+        for row in cls.space_rows(settings):
+            control, label = row.get("control", ""), row.get("label", "")
+            if not control or not label:
+                continue
+            found.append(Input(f"{control}_{label}", kind="space", optional=True))
+        return found
+
+    @classmethod
+    def input_names(cls, settings=None) -> list[str]:
+        return [item.name for item in cls.inputs] + [
+            item.name for item in cls.space_inputs(settings)
+        ]
 
     @classmethod
     def primary_input(cls) -> Optional[Input]:
@@ -103,7 +134,29 @@ class Module(Schema):
     def validate(self) -> list[str]:
         """Return problems that prevent building (empty list = ok)."""
         pairs = self.guide_pairs or self.expected_guides()
-        return self.guides.validate(pairs)
+        problems = list(self.guides.validate(pairs))
+        problems.extend(self._validate_spaces())
+        return problems
+
+    def _validate_spaces(self) -> list[str]:
+        """Anim-space rows must derive unique, well-formed port names."""
+        problems, seen = [], set()
+        for index, row in enumerate(self.anim_spaces):
+            control, label = row.get("control", ""), row.get("label", "")
+            if not label:
+                problems.append(f"anim space row {index + 1}: label is required")
+                continue
+            if control not in self.space_controls:
+                problems.append(
+                    f"anim space row {index + 1}: '{control}' is not one of "
+                    f"{list(self.space_controls)}"
+                )
+                continue
+            name = f"{control}_{label}"
+            if name in seen:
+                problems.append(f"anim space row {index + 1}: '{name}' is already defined")
+            seen.add(name)
+        return problems
 
     def draw_guides(self, ctx) -> None:
         """Create the default guide layout through ``ctx``."""
