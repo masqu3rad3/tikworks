@@ -16,6 +16,10 @@ class GuidePose:
     index: int = 0
     position: tuple = (0.0, 0.0, 0.0)
     rotation: tuple = (0.0, 0.0, 0.0)
+    # Euler triples are order-relative, so the order travels with them: reading
+    # a rotation in one order and applying it in another silently reinterprets
+    # it. Maya's default (xyz) is 0.
+    rotate_order: int = 0
 
     @classmethod
     def from_dict(cls, data: dict) -> "GuidePose":
@@ -24,6 +28,7 @@ class GuidePose:
             index=int(data.get("index", 0)),
             position=tuple(data.get("position", (0.0, 0.0, 0.0))),
             rotation=tuple(data.get("rotation", (0.0, 0.0, 0.0))),
+            rotate_order=int(data.get("rotate_order", 0)),
         )
 
 

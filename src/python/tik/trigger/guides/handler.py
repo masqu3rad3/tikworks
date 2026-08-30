@@ -403,9 +403,14 @@ class Guides:
         target_side = handle.side.mirror
         existing = self.find(instance.name, target_side.value)
         poses = [
+            # Mirroring is conjugation by the world-YZ reflection, which maps
+            # each euler factor onto the same axis: Rx keeps its angle, Ry and Rz
+            # negate. Conjugation distributes over the product, so this is exact
+            # in any rotation order - provided the order travels with it.
             GuidePose(pose.role, pose.index,
                       (-pose.position[0], pose.position[1], pose.position[2]),
-                      (pose.rotation[0], -pose.rotation[1], -pose.rotation[2]))
+                      (pose.rotation[0], -pose.rotation[1], -pose.rotation[2]),
+                      pose.rotate_order)
             for pose in instance.guides
         ]
         if existing is not None:

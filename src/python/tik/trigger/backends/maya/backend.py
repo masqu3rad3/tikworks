@@ -130,7 +130,8 @@ class MayaBackend:
         for (role, index), node in sorted(nodes.items(), key=lambda item: (item[0][0], item[0][1])):
             position = tuple(cmds.xform(node.long_name, query=True, worldSpace=True, translation=True))
             rotation = tuple(cmds.xform(node.long_name, query=True, worldSpace=True, rotation=True))
-            poses.append(GuidePose(role, index, position, rotation))
+            rotate_order = cmds.getAttr(f"{node.long_name}.rotateOrder")
+            poses.append(GuidePose(role, index, position, rotation, rotate_order))
         return ModuleInstance(
             module_type=module_type,
             instance_id=instance_id,
@@ -291,6 +292,9 @@ class MayaBackend:
             if node is None:
                 continue
             cmds.xform(node.long_name, worldSpace=True, translation=pose.position)
+            # The order must be set before the rotation: xform interprets the
+            # euler triple in the node's current rotateOrder.
+            cmds.setAttr(f"{node.long_name}.rotateOrder", pose.rotate_order)
             cmds.xform(node.long_name, worldSpace=True, rotation=pose.rotation)
 
     def apply_guide_poses(self, instance: ModuleInstance) -> None:
