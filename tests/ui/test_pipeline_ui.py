@@ -238,7 +238,7 @@ def test_reference_children_appear_after_file_edit(view, tmp_path):
 
 # ------------------------------------------------- graph view: space ports
 def _graph_scene():
-    from tik.trigger.ui.graph_view import GraphScene
+    from tik.trigger.ui.graph import GraphScene
 
     scene = GraphScene()
     scene.add_node("body", "body", "Base", [], ["root"], "#888888")
@@ -264,7 +264,7 @@ def test_single_input_port_keeps_one_wire():
 
 
 def test_a_node_without_spaces_still_builds():
-    from tik.trigger.ui.graph_view import GraphScene
+    from tik.trigger.ui.graph import GraphScene
 
     scene = GraphScene()
     node = scene.add_node("body", "body", "Base", ["root"], ["root"], "#888888")

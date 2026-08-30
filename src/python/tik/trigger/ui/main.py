@@ -340,7 +340,7 @@ class TriggerWindow(MayaToolWindow):
 
     # ------------------------------------------------------------ guides
     def open_guide_designer(self, guides_path: str = ""):
-        from .guide_designer import GuideDesigner
+        from .designer import GuideDesigner
 
         if self._guide_designer is None:
             self._guide_designer = GuideDesigner(parent=self, events=self.events, file_browser=self.file_browser)

@@ -6,8 +6,8 @@ from tik.shared.ui.binding import BindingManager, bind
 from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.trigger.core import clear_registries, register_module
 from tik.trigger.core.schemas import ParentRef
-from tik.trigger.ui.graph_view import WireItem
-from tik.trigger.ui.guide_designer import GuideDesigner
+from tik.trigger.ui.graph import WireItem
+from tik.trigger.ui.designer import GuideDesigner
 from stub import StubScene
 from toy_modules import ToyChain, ToyRoot
 
