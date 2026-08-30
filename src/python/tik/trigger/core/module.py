@@ -103,8 +103,14 @@ class Module(Schema):
         return cls.inputs[0] if cls.inputs else None
 
     @classmethod
-    def get_input(cls, name: str) -> Optional[Input]:
-        return next((item for item in cls.inputs if item.name == name), None)
+    def get_input(cls, name: str, settings=None) -> Optional[Input]:
+        """Find a declared input, or one derived from an anim-space row."""
+        found = next((item for item in cls.inputs if item.name == name), None)
+        if found is not None:
+            return found
+        return next(
+            (item for item in cls.space_inputs(settings) if item.name == name), None
+        )
 
     @classmethod
     def output_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:

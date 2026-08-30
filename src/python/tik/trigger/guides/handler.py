@@ -142,7 +142,7 @@ class GuideHandle:
         return self.module_class.output_names(self.settings)
 
     def set_input(self, input_name: str, source: Optional[str]) -> None:
-        if self.module_class.get_input(input_name) is None:
+        if self.module_class.get_input(input_name, self.settings) is None:
             raise GuideError(f"'{self.module_type}' has no input '{input_name}'.")
         inputs = self.inputs
         if source:

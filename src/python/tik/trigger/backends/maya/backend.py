@@ -258,7 +258,9 @@ class MayaBackend:
         for name, field_obj in module.fields().items():
             value = getattr(module, name)
             kind = field_obj.type_name
-            if kind in ("list", "dict", "vector"):
+            # Non-scalar kinds have no sensible single attribute; they live in
+            # the trg_settings meta dict, which is the real storage.
+            if kind in ("list", "dict", "vector", "table"):
                 continue
             if not root.has_attr(name):
                 if kind == "bool":

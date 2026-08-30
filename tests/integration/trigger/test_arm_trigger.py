@@ -292,3 +292,85 @@ def test_arm_still_satisfies_every_ground_rule(backend):
         assert not cmds.listConnections(
             f"{joint.long_name}.offsetParentMatrix", source=True, destination=False
         )
+
+
+# -------------------------------------------------------------------- spaces
+def _arm_with_spaces(backend, rows, wires):
+    body = backend.create_guides(get_module("base")(name="body"))
+    cmds.xform(
+        backend.guide_node(body.instance_id, "root").long_name, ws=True, t=(0, 15, 0)
+    )
+    arm = backend.create_guides(
+        get_module("arm")(name="arm", side="L", settings={"anim_spaces": rows}),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    inputs = dict(backend.find_instances([arm.instance_id])[0].inputs)
+    inputs.update(wires)
+    backend.set_inputs(arm.instance_id, inputs)
+    report = Builder(backend).build(rig_name="hero", afterlife="keep")
+    return report, report.contexts[arm.instance_id]
+
+
+def test_arm_declares_its_space_controls():
+    assert get_module("arm").space_controls == ("ik", "pole")
+
+
+def test_two_rows_on_one_control_make_one_enum(backend):
+    rows = [
+        {"control": "ik", "mode": "parent", "label": "body"},
+        {"control": "ik", "mode": "parent", "label": "root"},
+    ]
+    wires = {"ik_body": "body.root", "ik_root": "body.root"}
+    _report, ctx = _arm_with_spaces(backend, rows, wires)
+    control = _ik_control(ctx)
+    assert control.has_attr("parentSwitch")
+    listed = cmds.attributeQuery(
+        "parentSwitch", node=control.long_name, listEnum=True
+    )[0]
+    assert listed.split(":") == ["body", "root"]
+
+
+def test_no_world_entry_is_added(backend):
+    """Nothing appears that the rigger did not define."""
+    rows = [{"control": "ik", "mode": "parent", "label": "body"}]
+    _report, ctx = _arm_with_spaces(backend, rows, {"ik_body": "body.root"})
+    listed = cmds.attributeQuery(
+        "parentSwitch", node=_ik_control(ctx).long_name, listEnum=True
+    )[0]
+    assert "world" not in listed.split(":")
+
+
+def test_modes_build_separate_switches(backend):
+    """Two modes on one control are two switches, so the labels must differ:
+    (control, label) is the derived port name."""
+    rows = [
+        {"control": "ik", "mode": "parent", "label": "body"},
+        {"control": "ik", "mode": "orient", "label": "chest"},
+    ]
+    wires = {"ik_body": "body.root", "ik_chest": "body.root"}
+    _report, ctx = _arm_with_spaces(backend, rows, wires)
+    control = _ik_control(ctx)
+    assert control.has_attr("parentSwitch")
+    assert control.has_attr("orientSwitch")
+
+
+def test_trg_round_trip_keeps_rows_and_wires(backend, tmp_path):
+    from tik.trigger.guides import Guides
+
+    guides = Guides(backend)
+    body = guides.add("base", name="body")
+    guides.add(
+        "arm", side="L", name="arm", parent=body,
+        anim_spaces=[{"control": "ik", "mode": "parent", "label": "body"}],
+    )
+    guides.connect("L_arm.ik_body", "body.root")
+
+    path = guides.export(tmp_path / "spaces")
+    guides.clear()
+    guides.import_(path)
+
+    restored = guides.find("arm", "L")
+    assert restored.anim_spaces == [
+        {"control": "ik", "mode": "parent", "label": "body"}
+    ]
+    assert restored.inputs.get("ik_body") == "body.root"
