@@ -14,6 +14,7 @@ ATTACH = "trg_attach"  # plug override (root guide only)
 DESIGNER = "trg_designer"  # Guide Designer layout dict (guide holder only)
 MIRROR = "trg_mirror"  # "behaviour" | "world" - how a pose-mirror tool treats it
 OUTPUT_NAME = "trg_output"  # declared output this node fulfils
+SPACES = "trg_spaces"  # {space name: [sources]} (root guide only)
 
 GUIDE = "guide"
 RIG = "rig"

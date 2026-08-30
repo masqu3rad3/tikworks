@@ -230,3 +230,33 @@ def test_mirror_holds_for_every_rotation_order(guides, rotate_order):
     target = guides.backend.guide_node(mirrored.instance_id, "elbow")
 
     assert _matrices_match(_world(target), _reflected(source))
+
+
+# ------------------------------------------------------------ spaces storage
+def test_spaces_round_trip_through_the_scene(guides):
+    body = guides.add("base", name="body")
+    arm = guides.add("arm", side="L", name="arm", parent=body)
+    arm.set_space("ik_hand", ["body.root"])
+    assert guides.find("arm", "L").spaces == {"ik_hand": ["body.root"]}
+
+
+def test_setting_an_unknown_space_raises(guides):
+    arm = guides.add("arm", side="L", name="arm")
+    with pytest.raises(GuideError):
+        arm.set_space("nope", ["body.root"])
+
+
+def test_clearing_a_space_removes_it(guides):
+    arm = guides.add("arm", side="L", name="arm")
+    arm.set_space("ik_hand", ["body.root"])
+    arm.set_space("ik_hand", [])
+    assert guides.find("arm", "L").spaces == {}
+
+
+def test_mirror_maps_space_sources_across_sides(guides):
+    body = guides.add("base", name="body")
+    left = guides.add("arm", side="L", name="arm", parent=body)
+    guides.add("arm", side="L", name="other", parent=body)
+    left.set_space("ik_hand", ["L_other.hand", "body.root"])
+    mirrored = guides.mirror(left)
+    assert mirrored.spaces["ik_hand"] == ["R_other.hand", "body.root"]

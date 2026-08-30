@@ -141,6 +141,24 @@ class GuideHandle:
     def outputs(self) -> tuple:
         return self.module_class.output_names(self.settings)
 
+    @property
+    def spaces(self) -> dict:
+        """``{space name: [sources]}``."""
+        return {key: list(value) for key, value in self._refresh().spaces.items()}
+
+    def set_space(self, name: str, sources) -> None:
+        """Replace the source list for one declared space."""
+        if self.module_class.get_space(name) is None:
+            raise GuideError(f"'{self.module_type}' has no space '{name}'.")
+        spaces = self.spaces
+        sources = [item for item in (sources or []) if item]
+        if sources:
+            spaces[name] = sources
+        else:
+            spaces.pop(name, None)
+        self._guides.backend.set_spaces(self.instance_id, spaces)
+        self._touch()
+
     def set_input(self, input_name: str, source: Optional[str]) -> None:
         if self.module_class.get_input(input_name) is None:
             raise GuideError(f"'{self.module_type}' has no input '{input_name}'.")
@@ -372,6 +390,11 @@ class Guides:
             raise GuideError(f"'{source_key}' has no output '{output}' (has {list(producer.outputs)}).")
         handle.set_input(input_name, source)
 
+    def set_spaces(self, handle, spaces: dict) -> None:
+        """Replace every space source list on ``handle``."""
+        for name, sources in spaces.items():
+            handle.set_space(name, sources)
+
     def disconnect(self, target: str) -> None:
         key, _dot, input_name = target.rpartition(".")
         handle = self.by_key(key)
@@ -422,11 +445,32 @@ class Guides:
                 existing.instance_id,
                 {name: _mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()},
             )
+            self.backend.set_spaces(
+                existing.instance_id,
+                {
+                    name: [
+                        _mirror_source(source, handle.side.value, target_side.value)
+                        for source in sources
+                    ]
+                    for name, sources in instance.spaces.items()
+                },
+            )
             self.invalidate()
             return existing
         module = handle.module_class(name=instance.name, side=target_side, settings=instance.settings)
         mirrored_inputs = {name: _mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()}
         created = self.backend.create_guides(module, parent=instance.parent, poses=poses, attach=instance.attach, inputs=mirrored_inputs)
+        if instance.spaces:
+            self.backend.set_spaces(
+                created.instance_id,
+                {
+                    name: [
+                        _mirror_source(source, handle.side.value, target_side.value)
+                        for source in sources
+                    ]
+                    for name, sources in instance.spaces.items()
+                },
+            )
         self.invalidate()
         return GuideHandle(self, created)
 
