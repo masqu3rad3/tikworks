@@ -21,10 +21,10 @@ class Kinematics(Action):
 
     label = "Kinematics"
 
-    guides_file = FileField("", extensions=[".trg"], label="Guides file")
+    guides_file = FileField("", extensions=[".trg"], label="GuideLayout file")
     guide_roots = ListField(item_type=str, help="Root guide names to build; empty = all")
     rig_name = StringField("trigger", label="Rig name")
-    after_build = ChoiceField("delete", choices=list(AFTERLIFE_MODES), label="Guides after build")
+    after_build = ChoiceField("delete", choices=list(AFTERLIFE_MODES), label="GuideLayout after build")
     auto_switchers = BoolField(True, help="Create automatic space switchers")
 
     def run(self, ctx) -> None:

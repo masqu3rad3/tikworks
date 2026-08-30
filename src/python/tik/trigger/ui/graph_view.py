@@ -1,8 +1,8 @@
 """Node graph of module instances: input ports left, output ports right, wires between.
 
-The graph edits the same connections the tree does (through ``Guides``), and
+The graph edits the same connections the tree does (through ``GuideScene``), and
 stores its own state (node positions, collapse modes, scene-node groups) in
-``Guides.layout`` so it lands in the ``.trg`` and undoes with Maya.
+``GuideScene.layout`` so it lands in the ``.trg`` and undoes with Maya.
 
 * drag from an output port to an input port to connect;
 * drag a connected input port away to unplug it (drop on another input to
@@ -475,7 +475,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
 
 
 class GraphView(QtWidgets.QGraphicsView):
-    """Renders a ``Guides`` handler's instances and connections; edits go back through it."""
+    """Renders a ``GuideScene``'s instances and connections; edits go back through it."""
 
     selection_changed = QtCore.Signal(str)
     external_selection_changed = QtCore.Signal(str)

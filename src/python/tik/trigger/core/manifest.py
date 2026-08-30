@@ -31,12 +31,12 @@ def instance_key(name: str, side: str) -> str:
     return name if side in ("C", "") else f"{side}_{name}"
 
 
-class Guides:
+class GuideLayout:
     """Ordered guide roles a module needs.
 
     Example:
-        Guides("collar", "shoulder", "elbow", "hand")
-        Guides("root", multi="segment", min=2)   # root + N segment guides
+        GuideLayout("collar", "shoulder", "elbow", "hand")
+        GuideLayout("root", multi="segment", min=2)   # root + N segment guides
 
     Args:
         *roles: Fixed roles, root first.
@@ -53,7 +53,7 @@ class Guides:
         max: Optional[int] = None,  # noqa: A002
     ) -> None:
         if not roles:
-            raise ValueError("Guides needs at least one role.")
+            raise ValueError("GuideLayout needs at least one role.")
         if len(set(roles)) != len(roles):
             raise ValueError("Guide roles must be unique.")
         if multi in roles:
@@ -105,4 +105,4 @@ class Guides:
 
     def __repr__(self) -> str:
         multi = f", multi={self.multi!r}" if self.multi else ""
-        return f"Guides({', '.join(repr(role) for role in self.roles)}{multi})"
+        return f"GuideLayout({', '.join(repr(role) for role in self.roles)}{multi})"

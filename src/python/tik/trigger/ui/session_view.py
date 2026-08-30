@@ -10,7 +10,7 @@ from tik.shared.ui.tile_grid import TileEntry, TileGrid
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import ActionExecutionError, SessionError, TriggerError
 from tik.trigger.core.steps import STEP_FAILED, STEP_FINISHED, STEP_STARTED
-from tik.trigger.handler import ActionHandle, Session
+from tik.trigger.session import ActionHandle, Session
 
 from .delegates import PipelineDelegate
 from .model import MIME_TYPE, PipelineModel

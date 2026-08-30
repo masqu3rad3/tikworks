@@ -6,12 +6,12 @@ the real builder in Maya and with the Qt stub scene alike.
 
 from __future__ import annotations
 
-from tik.trigger.core import Guides, Input, IntField, Module
+from tik.trigger.core import GuideLayout, Input, IntField, Module
 
 class ToyRoot(Module):
     label = "Toy Root"
     sided = False
-    guides = Guides("root")
+    guides = GuideLayout("root")
     inputs = ()
     outputs = ("root",)
     space_controls = ("root",)
@@ -26,7 +26,7 @@ class ToyRoot(Module):
 
 class ToyChain(Module):
     label = "Toy Chain"
-    guides = Guides("root", multi="segment", min=1)
+    guides = GuideLayout("root", multi="segment", min=1)
     inputs = (Input("root", primary=True), Input("space", optional=True))
     outputs = ("root", "end")
     segments = IntField(2, min=1)

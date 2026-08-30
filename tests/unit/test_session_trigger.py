@@ -6,7 +6,7 @@ from maya import cmds
 from tik.core.fields import FieldValidationError, FileField
 from tik.trigger.core import Action, IntField, StringField, clear_registries, register_action
 from tik.trigger.core.exceptions import SessionError, SessionSaveError
-from tik.trigger.handler import Session
+from tik.trigger.session import Session
 
 
 CALLS: list = []

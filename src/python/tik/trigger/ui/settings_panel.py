@@ -9,7 +9,7 @@ from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.icons import glyph_icon, initials
 from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.trigger.core import registry
-from tik.trigger.handler import ActionHandle
+from tik.trigger.session import ActionHandle
 
 
 class ActionSettingsPanel(QtWidgets.QWidget):

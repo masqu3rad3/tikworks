@@ -8,7 +8,7 @@ from toy_modules import ToyChain, ToyRoot
 from tik.trigger.core import (
     DuplicateRegistrationError,
     EventBus,
-    Guides,
+    GuideLayout,
     ModuleInstance,
     NotFoundError,
     ParentRef,
@@ -34,12 +34,12 @@ def _registered():
 
 # ---------------------------------------------------------------- manifest
 def test_guides_fixed_and_multi():
-    fixed = Guides("collar", "shoulder")
+    fixed = GuideLayout("collar", "shoulder")
     assert fixed.root == "collar"
     assert fixed.expand() == [("collar", 0), ("shoulder", 0)]
     assert fixed.validate([("collar", 0)]) == ["missing guide 'shoulder'"]
 
-    chain = Guides("root", multi="segment", min=2, max=4)
+    chain = GuideLayout("root", multi="segment", min=2, max=4)
     assert chain.expand(3) == [("root", 0), ("segment", 0), ("segment", 1), ("segment", 2)]
     assert chain.validate([("root", 0), ("segment", 0)]) == ["needs at least 2 'segment' guides"]
     assert "allows at most 4" in chain.validate([("root", 0)] + [("segment", i) for i in range(5)])[0]
@@ -50,11 +50,11 @@ def test_guides_fixed_and_multi():
 
 def test_guides_rejects_bad_declarations():
     with pytest.raises(ValueError):
-        Guides()
+        GuideLayout()
     with pytest.raises(ValueError):
-        Guides("a", "a")
+        GuideLayout("a", "a")
     with pytest.raises(ValueError):
-        Guides("a", multi="a")
+        GuideLayout("a", multi="a")
 
 
 # ------------------------------------------------------------------ module

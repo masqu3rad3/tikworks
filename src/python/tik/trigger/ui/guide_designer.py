@@ -1,6 +1,6 @@
 """Guide Designer: dockable tool window — modules · tree · graph · properties.
 
-Tree and graph are two views of the same connections (see ``Guides``);
+Tree and graph are two views of the same connections (see ``GuideScene``);
 the properties panel shows the module's Inputs first. Connections are data
 only: the designer never parents guide joints into each other and never
 selects joints in Maya on its own — use *Select guides* for that. Scene
@@ -8,7 +8,7 @@ structure changes (new/removed/undone guides) reach the UI through a
 debounced ``SceneWatcher``; our own edits are muted.
 
 Everything the designer authors (connections, scene-node groups, node
-positions, collapse modes) lives in ``Guides`` / ``Guides.layout`` and is
+positions, collapse modes) lives in ``GuideScene`` / ``GuideScene.layout`` and is
 exported with the ``.trg``; only window geometry and selection are transient.
 """
 
@@ -1156,9 +1156,9 @@ class GuideDesigner(MayaToolWindow):
         if self.file_browser is not None:
             return self.file_browser(mode, [GUIDE_EXTENSION], self.file_path) or ""
         if mode == "save":
-            path, _f = QtWidgets.QFileDialog.getSaveFileName(self, "Export guides", self.file_path, f"Guides (*{GUIDE_EXTENSION})")
+            path, _f = QtWidgets.QFileDialog.getSaveFileName(self, "Export guides", self.file_path, f"GuideLayout (*{GUIDE_EXTENSION})")
         else:
-            path, _f = QtWidgets.QFileDialog.getOpenFileName(self, "Import guides", self.file_path, f"Guides (*{GUIDE_EXTENSION})")
+            path, _f = QtWidgets.QFileDialog.getOpenFileName(self, "Import guides", self.file_path, f"GuideLayout (*{GUIDE_EXTENSION})")
         return path
 
     def export_file(self, path: Optional[str] = None, ask: bool = False, selected: bool = False) -> Optional[Path]:
@@ -1168,7 +1168,7 @@ class GuideDesigner(MayaToolWindow):
         handles = self.selected_handles() if selected else []
         written = self.guides.export(path, *handles)
         self.set_file(str(written))
-        self.events.log(f"Guides exported: {written}")
+        self.events.log(f"GuideLayout exported: {written}")
         return written
 
     def import_file(self, path: Optional[str] = None, reset: bool = False) -> list[GuideHandle]:

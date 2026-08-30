@@ -1,21 +1,23 @@
 """Module base class.
 
-A module declares what it needs (guides, plugs/sockets, settings) and
-implements two methods that touch the scene through a context:
+A module declares what it needs (guides, inputs/outputs, settings) and
+implements two methods that touch the scene through the objects the builder
+hands them::
 
     @register_module("arm")
     class Arm(Module):
         label = "Arm"
-        guides = Guides("collar", "shoulder", "elbow", "hand")
-        plugs = ("collar", "hand")
-        sockets = ("root",)
-        local = BoolField(False)
+        guides = GuideLayout("collar", "shoulder", "elbow", "hand")
+        inputs = (Input("root", primary=True),)
+        outputs = ("collar", "upperarm", "lowerarm", "hand")
+        stretch = BoolField(True)
 
-        def draw_guides(self, ctx): ...
-        def build(self, ctx): ...
+        def draw_guides(self, guides): ...
+        def build(self, rig): ...
 
-Everything else (groups, naming, tagging, side handling, parenting under
-the rig root, attaching to the parent module) is done by the backend/builder.
+Everything else — the four groups, naming, tagging, side handling, parenting
+under the rig root, materializing a socket per declared input and connecting
+it to the producer — is done by ``ModuleRig`` and the builder.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from typing import Optional
 from tik.core.fields import Column, Schema, TableField
 from tik.core.side import Side
 
-from .manifest import Guides, Input, instance_key
+from .manifest import GuideLayout, Input, instance_key
 from .schemas import GuidePose, ModuleInstance, ParentRef
 
 
@@ -35,7 +37,7 @@ class Module(Schema):
 
     label: str = ""
     sided: bool = True
-    guides: Guides = Guides("root")
+    guides: GuideLayout = GuideLayout("root")
     inputs: tuple[Input, ...] = (Input("root", primary=True),)
     space_controls: tuple[str, ...] = ()  # controller roles that accept spaces
     outputs: tuple[str, ...] = ("root",)

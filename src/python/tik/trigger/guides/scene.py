@@ -73,7 +73,7 @@ class GuideScene:
     def create_guides(self, module, parent=None, poses=None, inputs=None) -> ModuleInstance:
         """Draw a module's guides and tag them; returns the scene instance."""
         if nodes.guide_nodes(module.instance_id):
-            raise GuideError(f"Guides for instance {module.instance_id} already exist.")
+            raise GuideError(f"GuideLayout for instance {module.instance_id} already exist.")
         parent_node = None
         if parent is not None:
             parent_node = nodes.guide_node(parent.instance_id, parent.role, parent.index)
@@ -620,4 +620,4 @@ class GuideScene:
     load = import_
 
     def __repr__(self) -> str:
-        return f"Guides({len(self.instances())} instances)"
+        return f"GuideLayout({len(self.instances())} instances)"

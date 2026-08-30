@@ -18,7 +18,7 @@ from tik.trigger.core import (
     BoolField,
     ChoiceField,
     FloatField,
-    Guides,
+    GuideLayout,
     Input,
     Module,
     register_module,
@@ -32,7 +32,7 @@ class Arm(Module):
     """Biped arm: collar, shoulder, elbow, hand."""
 
     label = "Arm"
-    guides = Guides("collar", "shoulder", "elbow", "hand")
+    guides = GuideLayout("collar", "shoulder", "elbow", "hand")
     inputs = (Input("root", primary=True, help="Where the collar hangs (chest/body)"),)
     outputs = ("collar", "upperarm", "lowerarm", "hand")
     space_controls = ("ik", "pole")

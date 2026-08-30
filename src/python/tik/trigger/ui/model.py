@@ -7,7 +7,7 @@ from typing import Optional
 from tik.shared.ui.Qt import QtCore
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import SessionError
-from tik.trigger.handler import ActionHandle, Session
+from tik.trigger.session import ActionHandle, Session
 
 MIME_PATH = "application/x-trigger-action-path"
 MIME_TYPE = "application/x-trigger-action-type"

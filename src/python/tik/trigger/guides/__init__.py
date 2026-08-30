@@ -1,4 +1,4 @@
-"""Guides as an asset: ``.trg`` files and the live-scene ``GuideScene``.
+"""GuideLayout as an asset: ``.trg`` files and the live-scene ``GuideScene``.
 
 ``format`` is pure Python (the file). ``nodes`` and ``scene`` touch Maya, so
 they resolve on first use and importing this package stays Maya-free.

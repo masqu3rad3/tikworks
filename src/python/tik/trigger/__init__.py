@@ -18,7 +18,7 @@ from tik.trigger.core import (  # noqa: F401 - public API
     ActionContext,
     BuildError,
     EventBus,
-    Guides,
+    GuideLayout,
     Module,
     Side,
     TriggerError,
@@ -47,8 +47,8 @@ _MAYA_NAMES = {
     "AFTERLIFE_MODES": "tik.trigger.maya.build",
     "GuideScene": "tik.trigger.guides",
     "GuideHandle": "tik.trigger.guides",
-    "Session": "tik.trigger.handler",
-    "ActionHandle": "tik.trigger.handler",
+    "Session": "tik.trigger.session",
+    "ActionHandle": "tik.trigger.session",
 }
 
 
@@ -73,7 +73,7 @@ __all__ = [
     "EventBus",
     "GuideHandle",
     "GuideScene",
-    "Guides",
+    "GuideLayout",
     "Module",
     "Session",
     "Side",

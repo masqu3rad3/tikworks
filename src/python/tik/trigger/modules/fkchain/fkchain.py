@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tik.maya as tm
-from tik.trigger.core import FloatField, Guides, Input, IntField, Module, register_module
+from tik.trigger.core import FloatField, GuideLayout, Input, IntField, Module, register_module
 
 
 @register_module("fkchain")
@@ -11,7 +11,7 @@ class FkChain(Module):
     """A simple FK chain (tails, fingers, antennas...)."""
 
     label = "FK Chain"
-    guides = Guides("root", multi="segment", min=1, max=50)
+    guides = GuideLayout("root", multi="segment", min=1, max=50)
     inputs = (Input("root", primary=True, help="Where the chain hangs"),)
     outputs = ("root", "end")  # plus one "segment<N>" output per joint after the root
 

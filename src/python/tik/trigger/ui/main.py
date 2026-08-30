@@ -11,7 +11,7 @@ from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.status import StatusFields
 from tik.trigger.core import ERROR, LOG, EventBus, versioning
 from tik.trigger.core.document import EXTENSION
-from tik.trigger.handler import Session
+from tik.trigger.session import Session
 
 from .session_view import SessionView
 from .widgets import LogWidget

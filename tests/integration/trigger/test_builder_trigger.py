@@ -14,7 +14,7 @@ from tik.trigger.core import (
     AttachError,
     BuildError,
     EventBus,
-    Guides,
+    GuideLayout,
     Input,
     IntField,
     Module,
@@ -30,7 +30,7 @@ class ToyRoot(Module):
 
     label = "Toy Root"
     sided = False
-    guides = Guides("root")
+    guides = GuideLayout("root")
     inputs = ()
     outputs = ("root",)
     space_controls = ("root",)
@@ -49,7 +49,7 @@ class ToyChain(Module):
     """A root plus N segments, with one required and one optional input."""
 
     label = "Toy Chain"
-    guides = Guides("root", multi="segment", min=1)
+    guides = GuideLayout("root", multi="segment", min=1)
     inputs = (Input("root", primary=True), Input("space", optional=True))
     outputs = ("root", "end")
     space_controls = ("fk",)
@@ -86,7 +86,7 @@ class ToyBoom(Module):
     """Fails while building, to prove the builder reports which module broke."""
 
     sided = False
-    guides = Guides("root")
+    guides = GuideLayout("root")
     inputs = ()
     outputs = ("root",)
 

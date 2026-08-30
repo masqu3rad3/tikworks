@@ -34,7 +34,7 @@ class GuideHandle:
     def _refresh(self) -> ModuleInstance:
         found = self._guides._snapshot().get(self._instance.instance_id)
         if found is None:
-            raise GuideError(f"Guides for '{self._instance.name}' no longer exist.")
+            raise GuideError(f"GuideLayout for '{self._instance.name}' no longer exist.")
         object.__setattr__(self, "_instance", found)
         return found
 
@@ -156,6 +156,6 @@ class GuideHandle:
         self._guides.select_guides(self.instance_id)
 
     def __repr__(self) -> str:
-        return f"<Guides {self.name} ({self.module_type} {self.side.value})>"
+        return f"<GuideLayout {self.name} ({self.module_type} {self.side.value})>"
 
 

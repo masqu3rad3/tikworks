@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tik.maya as tm
-from tik.trigger.core import FloatField, Guides, Module, register_module
+from tik.trigger.core import FloatField, GuideLayout, Module, register_module
 
 
 @register_module("base")
@@ -12,7 +12,7 @@ class Base(Module):
 
     label = "Base"
     sided = False
-    guides = Guides("root")
+    guides = GuideLayout("root")
     inputs = ()
     outputs = ("root",)
 
