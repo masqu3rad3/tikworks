@@ -186,13 +186,8 @@ def test_stretch_off_builds_a_smaller_graph(backend):
 # ----------------------------------------------------------------- behaviour
 def test_hand_follows_ik_when_switched(backend):
     ctx = _arm_ctx(backend)
-    switch = next(
-        item.transform
-        for item in ctx.controllers
-        if item.transform.name.endswith("_arm_switch_ctrl")
-    )
-    switch["ikFk"].value = 1.0
     control = _ik_control(ctx)
+    control["ikFk"].value = 1.0
     before = ctx.outputs["hand"].world_translation
     control.translate = tuple(
         value + shift for value, shift in zip(control.translate, (0, 3, 0))

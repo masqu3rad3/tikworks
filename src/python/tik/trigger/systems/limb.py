@@ -43,7 +43,7 @@ class LimbResult:
     fk_controls: list = field(default_factory=list)
     ik_control: object = None
     pole_control: object = None
-    switch_control: object = None
+    switch_control: object = None  # retired; ikFk lives on the IK control
     switch_plug: object = None
     size: float = 0.0
     hinge_axis: Optional[str] = None
@@ -106,6 +106,7 @@ def build_ikfk_limb(
     _build_controls(ctx, name, parent, controller_size, labels, result)
     control = result.ik_control.transform
 
+    attribute.add_separator(control, "segments_")
     segment_scales = [
         attribute.add_float(control, f"s{label.capitalize()}", default=1.0, min=0.001)
         for label in labels[:-1]
@@ -201,24 +202,9 @@ def _build_controls(ctx, name, parent, size, labels, result) -> None:
     )
     attribute.lock_and_hide(result.ik_control.transform, ("sx", "sy", "sz", "v"))
 
-    result.switch_control = ctx.controller(
-        _role(name, "switch"),
-        shape="Cube",
-        size=size * 0.4,
-        parent=ctx.groups.control,
-        match=result.ik_joints[-1],
-        mirror="world",
-    )
-    switch_offset = result.switch_control.transform.create_offset_group(
-        name=ctx.name(name, "switch", suffix="offset")
-    )
-    switch_offset.translate = tuple(
-        value + shift
-        for value, shift in zip(switch_offset.translate, (0, size * 1.5, 0))
-    )
-    attribute.lock_and_hide(result.switch_control.transform)
+    attribute.add_separator(result.ik_control.transform, "ikfk_")
     result.switch_plug = attribute.add_float(
-        result.switch_control.transform, "ikFk", default=1.0, min=0.0, max=1.0
+        result.ik_control.transform, "ikFk", default=1.0, min=0.0, max=1.0
     )
 
     # Controllers live in control_grp and are *driven* by the limb's parent,
@@ -249,6 +235,9 @@ def _build_controls(ctx, name, parent, size, labels, result) -> None:
         tm.MatrixConstraint.create(
             fk_control.transform, joint, maintain_offset=True, skip_scale="xyz"
         )
+        # The switch must stay reachable from whichever set is visible: at
+        # ikFk = 0 the IK controls are hidden, so FK carries the proxy.
+        attribute.add_proxy(fk_control.transform, result.switch_plug, name="ikFk")
         result.fk_controls.append(fk_control)
         fk_parent = fk_control.transform
 
@@ -314,6 +303,8 @@ def _build_stretch(ctx, name, stretch, squash, limit_default, control, result) -
     factor; an unbuilt one is 1.0 and the flags cannot interact.
     """
     total = result.ik_lengths.total_length
+    if stretch or squash:
+        attribute.add_separator(control, "stretch_")
     if stretch:
         stretch_plug = attribute.add_float(
             control, "stretch", default=0.0, min=0.0, max=1.0
@@ -351,6 +342,7 @@ def _build_stretch(ctx, name, stretch, squash, limit_default, control, result) -
 # ----------------------------------------------------------------------- pole
 def _build_pole(ctx, name, size, pole_pin, control, pole_rest, result) -> None:
     """Pole controller in a twist-aware auto space blended against a rest space."""
+    attribute.add_separator(control, "pole_")
     pole_follow = attribute.add_float(
         control, "poleFollow", default=1.0, min=0.0, max=1.0
     )

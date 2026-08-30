@@ -211,3 +211,36 @@ def test_straight_chain_locks_no_rotation(build_context):
     middle = result.fk_controls[1].transform
     for attr in ("rx", "ry", "rz"):
         assert not _locked(middle, attr)
+
+
+# ------------------------------------------------------ switch and separators
+def test_no_separate_switch_control(build_context):
+    result, _binds = _limb(build_context())
+    assert result.switch_control is None
+    assert result.switch_plug.node.name.endswith("_ik_ctrl")
+
+
+def test_every_fk_control_proxies_the_switch(build_context):
+    result, _binds = _limb(build_context())
+    for control in (item.transform for item in result.fk_controls):
+        assert control.has_attr("ikFk")
+    result.switch_plug.value = 0.0
+    for control in (item.transform for item in result.fk_controls):
+        assert abs(control["ikFk"].value) < 1e-6
+
+
+def test_switch_is_reachable_from_fk_when_ik_is_hidden(build_context):
+    """The reason removing the switch control is safe."""
+    result, _binds = _limb(build_context())
+    result.switch_plug.value = 0.0
+    assert not result.ik_control.transform.parent.visibility
+    # An animator in FK flips it back through the proxy.
+    result.fk_controls[0].transform["ikFk"].value = 1.0
+    assert result.ik_control.transform.parent.visibility
+
+
+def test_ik_control_has_separators(build_context):
+    result, _binds = _limb(build_context())
+    control = result.ik_control.transform
+    for separator in ("ikfk_", "stretch_", "segments_", "pole_"):
+        assert control.has_attr(separator), f"missing separator {separator}"
