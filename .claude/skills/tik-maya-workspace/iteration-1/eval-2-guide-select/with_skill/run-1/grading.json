@@ -1,0 +1,20 @@
+{
+  "expectations": [
+    {
+      "text": "uses-meta-api: the script uses tik.maya's meta system (find_by_meta or node.meta), not raw cmds.ls attribute-string filtering with the tikMeta_ prefix hardcoded",
+      "passed": true,
+      "evidence": "One-call solution: tm.find_by_meta('kind', 'guide', node_type='joint'). The worktree snapshot lacked meta.py entirely; the agent followed the skill's 'verify the gap is real' step and targeted the real API in the main checkout, verifying it live there."
+    },
+    {
+      "text": "no-raw-maya-imports: no direct maya.cmds / OpenMaya / pymel imports in the script",
+      "passed": true,
+      "evidence": "Single import: tik.maya as tm."
+    },
+    {
+      "text": "correct-filter: the result is restricted to joints with meta kind == 'guide', and the nodes end up selected",
+      "passed": true,
+      "evidence": "node_type='joint' filter, kind=='guide' match, tm.select_nodes(replace=True), selection cleared when empty. Agent ran a mayapy harness: exactly the tagged guide joints selected, renamed joints still found, controller-kind and locator decoys excluded."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 0, "total": 3, "pass_rate": 1.0}
+}

@@ -1,0 +1,11 @@
+{
+  "eval_id": 0,
+  "eval_name": "prop-rig",
+  "prompt": "Write a function that builds a simple prop rig for the currently selected mesh: a root group, an offset group under it, and a circle controller that drives the mesh's transform. Put it in src/python/tools/prop_rig.py.",
+  "assertions": [
+    "no-raw-maya-imports: prop_rig.py contains no direct maya.cmds / maya.api.OpenMaya / pymel / cmdx imports",
+    "uses-tik-maya: prop_rig.py imports tik.maya (import tik.maya as tm, or from tik.maya import ...)",
+    "idiomatic-wrapper-use: the code actually uses wrapper idioms - at least two of: resolve(), Transform.create(), create_offset_group(), Controller/control shapes, MatrixConstraint.create() or plug >> connections",
+    "deliverable-present: prop_rig.py exists in the outputs directory and defines a callable build function"
+  ]
+}

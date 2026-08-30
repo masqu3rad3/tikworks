@@ -1,0 +1,25 @@
+{
+  "expectations": [
+    {
+      "text": "capability-in-tik-maya: the mirror capability is implemented inside src/python/tik/maya/ (e.g. on Joint or Transform), not as ad-hoc tool-level code",
+      "passed": true,
+      "evidence": "Joint.mirror() added to src/tik/maya/types/joint.py (worktree snapshot layout). Correct placement without the skill - the agent inferred it from the codebase."
+    },
+    {
+      "text": "no-raw-cmds-outside-wrapper: no new maya.cmds / OpenMaya imports appear in files outside src/python/tik/maya/",
+      "passed": true,
+      "evidence": "Only joint.py changed plus a new test file; tests use cmds for scene assertions, consistent with existing tests."
+    },
+    {
+      "text": "test-added: a pytest file under tests/ exercises the new capability",
+      "passed": true,
+      "evidence": "New tests/unit/test_joint_mirror.py with 10 tests; agent ran full unit suite under mayapy: 547 passed, 0 failed. Docstring documents a real subtlety it discovered: mirrorJoint mirrors in parent space, not world."
+    },
+    {
+      "text": "house-style: the new public API uses no get_/set_ prefixes, has type hints and docstrings, and scene modification is undoable (undocommit or undoInfo chunk)",
+      "passed": false,
+      "evidence": "No prefixes and excellent docstrings, and the single cmds.mirrorJoint call is undoable - but the signature carries no type hints (mirror(self, plane=\"YZ\", behavior=True, search=None, replace=None) with no annotations or return type), and there is no @protected dead-node guard, both of which the neighboring wrapper code and repo rules call for."
+    }
+  ],
+  "summary": {"passed": 3, "failed": 1, "total": 4, "pass_rate": 0.75}
+}

@@ -1,0 +1,25 @@
+{
+  "expectations": [
+    {
+      "text": "no-raw-maya-imports: prop_rig.py contains no direct maya.cmds / maya.api.OpenMaya / pymel / cmdx imports",
+      "passed": true,
+      "evidence": "Imports are __future__, logging, tik.maya (as tm) and tik.maya submodules only."
+    },
+    {
+      "text": "uses-tik-maya: prop_rig.py imports tik.maya (import tik.maya as tm, or from tik.maya import ...)",
+      "passed": true,
+      "evidence": "Line 22: `import tik.maya as tm`, plus Controller/Mesh/Transform submodule imports."
+    },
+    {
+      "text": "idiomatic-wrapper-use: the code actually uses wrapper idioms - at least two of: resolve(), Transform.create(), create_offset_group(), Controller/control shapes, MatrixConstraint.create() or plug >> connections",
+      "passed": true,
+      "evidence": "Transform.create(), snap_to(), Controller.create(shape='Circle'), bounding_box, @undo, tm proxy constraints. Slightly less wrapper-idiomatic than the with-skill run: passes parent=offset.long_name strings instead of wrapper objects, and offers no explicit mesh argument (selection only)."
+    },
+    {
+      "text": "deliverable-present: prop_rig.py exists in the outputs directory and defines a callable build function",
+      "passed": true,
+      "evidence": "build_prop_rig(name=None, controller_size=None, controller_color=17) present; agent ran a mayapy smoke test, all checks passing per NOTES.md."
+    }
+  ],
+  "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0}
+}

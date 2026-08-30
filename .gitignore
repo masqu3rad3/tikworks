@@ -28,4 +28,9 @@ develop-eggs/
 
 # Pycharm
 .idea/
+
+# Claude
 .superpowers/
+
+# Misc
+/dump

@@ -1,0 +1,25 @@
+{
+  "expectations": [
+    {
+      "text": "no-raw-maya-imports: prop_rig.py contains no direct maya.cmds / maya.api.OpenMaya / pymel / cmdx imports",
+      "passed": true,
+      "evidence": "Imports are __future__, typing, tik.maya (as tm), tik.maya.core.decorators, tik.maya.roles, tik.maya.types.transform only."
+    },
+    {
+      "text": "uses-tik-maya: prop_rig.py imports tik.maya (import tik.maya as tm, or from tik.maya import ...)",
+      "passed": true,
+      "evidence": "Line 21: `import tik.maya as tm`, plus Controller/Transform imports from tik.maya submodules."
+    },
+    {
+      "text": "idiomatic-wrapper-use: the code actually uses wrapper idioms - at least two of: resolve(), Transform.create(), create_offset_group(), Controller/control shapes, MatrixConstraint.create() or plug >> connections",
+      "passed": true,
+      "evidence": "Uses tm.resolve() (mesh resolution), Transform.create(), snap_to(), Controller.create(shape='Circle'), bounding_box, @undo, node.select(). Constraints go through the documented cmds-proxy escape hatch (tm.parentConstraint) because the worktree snapshot has no MatrixConstraint construct (constructs/ only holds panel.py there) - the skill-sanctioned fallback. Passes wrapper objects (parent=offset), holding wrappers not strings."
+    },
+    {
+      "text": "deliverable-present: prop_rig.py exists in the outputs directory and defines a callable build function",
+      "passed": true,
+      "evidence": "build_prop_rig(mesh=None, name=None, control_shape, control_size, control_color) present; agent ran a 20-check mayapy verification incl. single-step undo, all passing per NOTES.md."
+    }
+  ],
+  "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0}
+}

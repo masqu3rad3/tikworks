@@ -1,0 +1,11 @@
+{
+  "eval_id": 1,
+  "eval_name": "mirror-chain",
+  "prompt": "I need to be able to mirror a joint chain from left to right across the YZ plane, behavior-mirrored. Add that capability to this codebase, with tests.",
+  "assertions": [
+    "capability-in-tik-maya: the mirror capability is implemented inside src/python/tik/maya/ (e.g. on Joint or Transform), not as ad-hoc tool-level code",
+    "no-raw-cmds-outside-wrapper: no new maya.cmds / OpenMaya imports appear in files outside src/python/tik/maya/",
+    "test-added: a pytest file under tests/ exercises the new capability",
+    "house-style: the new public API uses no get_/set_ prefixes, has type hints and docstrings, and scene modification is undoable (undocommit or undoInfo chunk)"
+  ]
+}

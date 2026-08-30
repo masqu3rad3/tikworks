@@ -1,0 +1,290 @@
+{
+ "metadata": {
+  "skill_name": "tik-maya",
+  "skill_path": "<path/to/skill>",
+  "executor_model": "<model-name>",
+  "analyzer_model": "<model-name>",
+  "timestamp": "2026-08-29T09:55:36Z",
+  "evals_run": [
+   0,
+   1,
+   2
+  ],
+  "runs_per_configuration": 3
+ },
+ "runs": [
+  {
+   "eval_id": 0,
+   "configuration": "with_skill",
+   "run_number": 1,
+   "result": {
+    "pass_rate": 1.0,
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "time_seconds": 281.9,
+    "tokens": 79704,
+    "tool_calls": 0,
+    "errors": 0
+   },
+   "expectations": [
+    {
+     "text": "no-raw-maya-imports: prop_rig.py contains no direct maya.cmds / maya.api.OpenMaya / pymel / cmdx imports",
+     "passed": true,
+     "evidence": "Imports are __future__, typing, tik.maya (as tm), tik.maya.core.decorators, tik.maya.roles, tik.maya.types.transform only."
+    },
+    {
+     "text": "uses-tik-maya: prop_rig.py imports tik.maya (import tik.maya as tm, or from tik.maya import ...)",
+     "passed": true,
+     "evidence": "Line 21: `import tik.maya as tm`, plus Controller/Transform imports from tik.maya submodules."
+    },
+    {
+     "text": "idiomatic-wrapper-use: the code actually uses wrapper idioms - at least two of: resolve(), Transform.create(), create_offset_group(), Controller/control shapes, MatrixConstraint.create() or plug >> connections",
+     "passed": true,
+     "evidence": "Uses tm.resolve() (mesh resolution), Transform.create(), snap_to(), Controller.create(shape='Circle'), bounding_box, @undo, node.select(). Constraints go through the documented cmds-proxy escape hatch (tm.parentConstraint) because the worktree snapshot has no MatrixConstraint construct (constructs/ only holds panel.py there) - the skill-sanctioned fallback. Passes wrapper objects (parent=offset), holding wrappers not strings."
+    },
+    {
+     "text": "deliverable-present: prop_rig.py exists in the outputs directory and defines a callable build function",
+     "passed": true,
+     "evidence": "build_prop_rig(mesh=None, name=None, control_shape, control_size, control_color) present; agent ran a 20-check mayapy verification incl. single-step undo, all passing per NOTES.md."
+    }
+   ],
+   "notes": []
+  },
+  {
+   "eval_id": 1,
+   "configuration": "with_skill",
+   "run_number": 1,
+   "result": {
+    "pass_rate": 1.0,
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "time_seconds": 348.2,
+    "tokens": 83595,
+    "tool_calls": 0,
+    "errors": 0
+   },
+   "expectations": [
+    {
+     "text": "capability-in-tik-maya: the mirror capability is implemented inside src/python/tik/maya/ (e.g. on Joint or Transform), not as ad-hoc tool-level code",
+     "passed": true,
+     "evidence": "Joint.mirror() added to src/tik/maya/types/joint.py (the worktree snapshot's tik.maya location - path caveat: eval worktrees were based on main-era layout). NOTES.md cites the skill's layering rules for choosing the type layer."
+    },
+    {
+     "text": "no-raw-cmds-outside-wrapper: no new maya.cmds / OpenMaya imports appear in files outside src/python/tik/maya/",
+     "passed": true,
+     "evidence": "Only joint.py (inside tik.maya, where cmds is legal) and tests/unit/test_joint.py changed; tests use cmds for independent scene assertions, matching the existing test file's established convention."
+    },
+    {
+     "text": "test-added: a pytest file under tests/ exercises the new capability",
+     "passed": true,
+     "evidence": "9 tests appended to tests/unit/test_joint.py incl. the defining behavior-mirror symmetry check on a chain with non-trivial joint orients; agent ran full unit suite under mayapy: 546 passed, 0 failed."
+    },
+    {
+     "text": "house-style: the new public API uses no get_/set_ prefixes, has type hints and docstrings, and scene modification is undoable (undocommit or undoInfo chunk)",
+     "passed": true,
+     "evidence": "mirror() - verb method, no prefixes; typed signature with -> list[Joint]; full Google-style docstring with Raises; @protected + @keepselection; single cmds.mirrorJoint call is natively undoable. Minor nit: `search: str = None` should be Optional[str]."
+    }
+   ],
+   "notes": []
+  },
+  {
+   "eval_id": 2,
+   "configuration": "with_skill",
+   "run_number": 1,
+   "result": {
+    "pass_rate": 1.0,
+    "passed": 3,
+    "failed": 0,
+    "total": 3,
+    "time_seconds": 170.4,
+    "tokens": 51803,
+    "tool_calls": 0,
+    "errors": 0
+   },
+   "expectations": [
+    {
+     "text": "uses-meta-api: the script uses tik.maya's meta system (find_by_meta or node.meta), not raw cmds.ls attribute-string filtering with the tikMeta_ prefix hardcoded",
+     "passed": true,
+     "evidence": "One-call solution: tm.find_by_meta('kind', 'guide', node_type='joint'). The worktree snapshot lacked meta.py entirely; the agent followed the skill's 'verify the gap is real' step and targeted the real API in the main checkout, verifying it live there."
+    },
+    {
+     "text": "no-raw-maya-imports: no direct maya.cmds / OpenMaya / pymel imports in the script",
+     "passed": true,
+     "evidence": "Single import: tik.maya as tm."
+    },
+    {
+     "text": "correct-filter: the result is restricted to joints with meta kind == 'guide', and the nodes end up selected",
+     "passed": true,
+     "evidence": "node_type='joint' filter, kind=='guide' match, tm.select_nodes(replace=True), selection cleared when empty. Agent ran a mayapy harness: exactly the tagged guide joints selected, renamed joints still found, controller-kind and locator decoys excluded."
+    }
+   ],
+   "notes": []
+  },
+  {
+   "eval_id": 0,
+   "configuration": "without_skill",
+   "run_number": 1,
+   "result": {
+    "pass_rate": 1.0,
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "time_seconds": 300.2,
+    "tokens": 75006,
+    "tool_calls": 0,
+    "errors": 0
+   },
+   "expectations": [
+    {
+     "text": "no-raw-maya-imports: prop_rig.py contains no direct maya.cmds / maya.api.OpenMaya / pymel / cmdx imports",
+     "passed": true,
+     "evidence": "Imports are __future__, logging, tik.maya (as tm) and tik.maya submodules only."
+    },
+    {
+     "text": "uses-tik-maya: prop_rig.py imports tik.maya (import tik.maya as tm, or from tik.maya import ...)",
+     "passed": true,
+     "evidence": "Line 22: `import tik.maya as tm`, plus Controller/Mesh/Transform submodule imports."
+    },
+    {
+     "text": "idiomatic-wrapper-use: the code actually uses wrapper idioms - at least two of: resolve(), Transform.create(), create_offset_group(), Controller/control shapes, MatrixConstraint.create() or plug >> connections",
+     "passed": true,
+     "evidence": "Transform.create(), snap_to(), Controller.create(shape='Circle'), bounding_box, @undo, tm proxy constraints. Slightly less wrapper-idiomatic than the with-skill run: passes parent=offset.long_name strings instead of wrapper objects, and offers no explicit mesh argument (selection only)."
+    },
+    {
+     "text": "deliverable-present: prop_rig.py exists in the outputs directory and defines a callable build function",
+     "passed": true,
+     "evidence": "build_prop_rig(name=None, controller_size=None, controller_color=17) present; agent ran a mayapy smoke test, all checks passing per NOTES.md."
+    }
+   ],
+   "notes": []
+  },
+  {
+   "eval_id": 1,
+   "configuration": "without_skill",
+   "run_number": 1,
+   "result": {
+    "pass_rate": 0.75,
+    "passed": 3,
+    "failed": 1,
+    "total": 4,
+    "time_seconds": 314.0,
+    "tokens": 69402,
+    "tool_calls": 0,
+    "errors": 0
+   },
+   "expectations": [
+    {
+     "text": "capability-in-tik-maya: the mirror capability is implemented inside src/python/tik/maya/ (e.g. on Joint or Transform), not as ad-hoc tool-level code",
+     "passed": true,
+     "evidence": "Joint.mirror() added to src/tik/maya/types/joint.py (worktree snapshot layout). Correct placement without the skill - the agent inferred it from the codebase."
+    },
+    {
+     "text": "no-raw-cmds-outside-wrapper: no new maya.cmds / OpenMaya imports appear in files outside src/python/tik/maya/",
+     "passed": true,
+     "evidence": "Only joint.py changed plus a new test file; tests use cmds for scene assertions, consistent with existing tests."
+    },
+    {
+     "text": "test-added: a pytest file under tests/ exercises the new capability",
+     "passed": true,
+     "evidence": "New tests/unit/test_joint_mirror.py with 10 tests; agent ran full unit suite under mayapy: 547 passed, 0 failed. Docstring documents a real subtlety it discovered: mirrorJoint mirrors in parent space, not world."
+    },
+    {
+     "text": "house-style: the new public API uses no get_/set_ prefixes, has type hints and docstrings, and scene modification is undoable (undocommit or undoInfo chunk)",
+     "passed": false,
+     "evidence": "No prefixes and excellent docstrings, and the single cmds.mirrorJoint call is undoable - but the signature carries no type hints (mirror(self, plane=\"YZ\", behavior=True, search=None, replace=None) with no annotations or return type), and there is no @protected dead-node guard, both of which the neighboring wrapper code and repo rules call for."
+    }
+   ],
+   "notes": []
+  },
+  {
+   "eval_id": 2,
+   "configuration": "without_skill",
+   "run_number": 1,
+   "result": {
+    "pass_rate": 0.33,
+    "passed": 1,
+    "failed": 2,
+    "total": 3,
+    "time_seconds": 217.6,
+    "tokens": 55776,
+    "tool_calls": 0,
+    "errors": 0
+   },
+   "expectations": [
+    {
+     "text": "uses-meta-api: the script uses tik.maya's meta system (find_by_meta or node.meta), not raw cmds.ls attribute-string filtering with the tikMeta_ prefix hardcoded",
+     "passed": false,
+     "evidence": "74-line manual approach: tm.ls(type='joint') loop + has_attr + joint['kind'].value reading a plain string attribute named 'kind'. Environment caveat: the worktree snapshot predates core/meta.py, so find_by_meta did not exist there - but the agent also did not discover the current API, and hardcoded plain-attribute semantics."
+    },
+    {
+     "text": "no-raw-maya-imports: no direct maya.cmds / OpenMaya / pymel imports in the script",
+     "passed": true,
+     "evidence": "Imports logging and tik.maya as tm only; the getAttr fallback goes through the tm cmds proxy, not a raw import."
+    },
+    {
+     "text": "correct-filter: the result is restricted to joints with meta kind == 'guide', and the nodes end up selected",
+     "passed": false,
+     "evidence": "Against the current repo's meta semantics (JSON payloads in hidden tikMeta_kind attributes) this script selects nothing - it reads a plain 'kind' attribute. Within its snapshot's semantics it filters and selects correctly (verified under mayapy, incl. a duplicate-short-name edge case that exposed a real Plug short-name resolution bug the agent documented). Failed against current-repo ground truth, with that environment caveat on record."
+    }
+   ],
+   "notes": []
+  }
+ ],
+ "run_summary": {
+  "with_skill": {
+   "pass_rate": {
+    "mean": 1.0,
+    "stddev": 0.0,
+    "min": 1.0,
+    "max": 1.0
+   },
+   "time_seconds": {
+    "mean": 266.8333,
+    "stddev": 89.8525,
+    "min": 170.4,
+    "max": 348.2
+   },
+   "tokens": {
+    "mean": 71700.6667,
+    "stddev": 17341.3617,
+    "min": 51803,
+    "max": 83595
+   }
+  },
+  "without_skill": {
+   "pass_rate": {
+    "mean": 0.6933,
+    "stddev": 0.3386,
+    "min": 0.33,
+    "max": 1.0
+   },
+   "time_seconds": {
+    "mean": 277.2667,
+    "stddev": 52.1315,
+    "min": 217.6,
+    "max": 314.0
+   },
+   "tokens": {
+    "mean": 66728.0,
+    "stddev": 9889.941,
+    "min": 55776,
+    "max": 75006
+   }
+  },
+  "delta": {
+   "pass_rate": "+0.31",
+   "time_seconds": "-10.4",
+   "tokens": "+4973"
+  }
+ },
+ "notes": [
+  "Environment caveat: the isolated worktrees snapshotted main-era history (src/tik layout, no core/meta.py, no MatrixConstraint), not the current branch. Both arms shared the same snapshot so the comparison is fair; with-skill agents compensated by consulting the live checkout the skill references.",
+  "eval-2 (guide-select) was the big discriminator: with the skill, a one-call find_by_meta solution targeting the real meta API; without it, a 74-line manual tm.ls loop reading a plain 'kind' attribute that would select nothing against the current repo's tikMeta_ JSON semantics.",
+  "eval-0 (prop-rig) did not discriminate on assertions (4/4 both arms): the repo's CLAUDE.md one-liner already keeps agents off raw cmds. The skill's visible effect was subtler quality: wrapper-object hygiene (parent=offset vs parent=offset.long_name), an explicit mesh argument, and constraints via the documented proxy escape hatch. Consider a sharper assertion or accept this eval as a regression guard.",
+  "eval-1 (mirror-chain): both arms correctly extended tik.maya's Joint rather than writing tool-level code - repo conventions are strong. The skill's margin was house-style: typed signature and @protected on the with-skill run, missing on the baseline.",
+  "Single run per configuration - variance is unknown; the stddev columns reflect across-eval spread, not repeat-run noise. Time and tokens are roughly equal between arms, so the skill adds capability at no measurable cost.",
+  "Side finding worth acting on regardless of the skill: the eval-2 baseline surfaced a real tik.maya bug - Plug resolves attributes by short name (plug.py _find_plug), raising RuntimeError on nodes with ambiguous short names."
+ ]
+}

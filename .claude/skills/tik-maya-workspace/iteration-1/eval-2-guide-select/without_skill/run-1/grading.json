@@ -1,0 +1,20 @@
+{
+  "expectations": [
+    {
+      "text": "uses-meta-api: the script uses tik.maya's meta system (find_by_meta or node.meta), not raw cmds.ls attribute-string filtering with the tikMeta_ prefix hardcoded",
+      "passed": false,
+      "evidence": "74-line manual approach: tm.ls(type='joint') loop + has_attr + joint['kind'].value reading a plain string attribute named 'kind'. Environment caveat: the worktree snapshot predates core/meta.py, so find_by_meta did not exist there - but the agent also did not discover the current API, and hardcoded plain-attribute semantics."
+    },
+    {
+      "text": "no-raw-maya-imports: no direct maya.cmds / OpenMaya / pymel imports in the script",
+      "passed": true,
+      "evidence": "Imports logging and tik.maya as tm only; the getAttr fallback goes through the tm cmds proxy, not a raw import."
+    },
+    {
+      "text": "correct-filter: the result is restricted to joints with meta kind == 'guide', and the nodes end up selected",
+      "passed": false,
+      "evidence": "Against the current repo's meta semantics (JSON payloads in hidden tikMeta_kind attributes) this script selects nothing - it reads a plain 'kind' attribute. Within its snapshot's semantics it filters and selects correctly (verified under mayapy, incl. a duplicate-short-name edge case that exposed a real Plug short-name resolution bug the agent documented). Failed against current-repo ground truth, with that environment caveat on record."
+    }
+  ],
+  "summary": {"passed": 1, "failed": 2, "total": 3, "pass_rate": 0.33}
+}
