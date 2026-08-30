@@ -217,7 +217,7 @@ class Builder:
 
     def _connect_one(self, instance, module_cls, inputs, by_key, report, known_keys) -> None:
         """Attach every declared input of one already-built instance."""
-        ctx = report.rigs[instance.instance_id]
+        rig = report.rigs[instance.instance_id]
         for declared in module_cls.inputs:
             source = inputs.get(declared.name)
             if not source:
@@ -234,14 +234,11 @@ class Builder:
                     level="warning",
                 )
                 continue
-            node = self._resolve_source(instance, declared.name, source, by_key, report)
-            target = ctx.attachments.get(declared.name)
-            if target is None:
-                raise AttachError(
-                    f"{instance.key}.{declared.name}: module did not call ctx.attach() for this input.",
-                    instance_id=instance.instance_id, module_type=instance.module_type,
-                )
-            connect(ctx, declared.name, node)
+            node = self.resolve(
+                source, by_key, report,
+                where=f"{instance.key}.{declared.name}", instance=instance,
+            )
+            connect(rig, declared.name, node)
             report.connections.append((f"{instance.key}.{declared.name}", source))
 
     def _connect_spaces(self, instances, report: BuildReport, by_key: dict) -> None:
@@ -270,7 +267,7 @@ class Builder:
                         level="warning",
                     )
                     continue
-                node = self._resolve_space_source(source, by_key, report)
+                node = self.resolve(source, by_key, report, strict=False)
                 if node is None:
                     self.events.log(
                         f"{instance.key}.{control}_{label}: source '{source}' was not "
@@ -285,33 +282,34 @@ class Builder:
             for (control, mode), (targets, labels) in groups.items():
                 connect_space(ctx, control, mode, targets, labels)
 
-    def _resolve_space_source(self, source: str, by_key: dict, report: BuildReport):
-        """Return the node for a space source, or None when it cannot be found."""
-        key, output = split_source(source)
-        if key is not None and key in by_key:
-            producer_ctx = report.rigs.get(by_key[key].instance_id)
-            if producer_ctx is None:
-                return None
-            return producer_ctx.outputs.get(output)
-        return guide_nodes.scene_node(source)
+    def resolve(self, source: str, by_key: dict, report: BuildReport, *,
+                strict: bool = True, where: str = "", instance=None):
+        """The node a source names.
 
-    def _resolve_source(self, instance, input_name, source, by_key, report):
+        A source is ``"<module key>.<output>"`` or a bare scene node name.
+        Returns None instead of raising when ``strict`` is False, which is what
+        a space connection wants: an unresolved space is a warning, not a
+        failed build.
+        """
         key, output = split_source(source)
         if key is not None and key in by_key:
-            producer = by_key[key]
-            producer_ctx = report.rigs.get(producer.instance_id)
-            if producer_ctx is None or output not in producer_ctx.outputs:
+            producer = report.rigs.get(by_key[key].instance_id)
+            node = producer.outputs.get(output) if producer else None
+            if node is None and strict:
                 raise AttachError(
-                    f"{instance.key}.{input_name}: source '{source}' was not built "
-                    f"(available outputs: {sorted(producer_ctx.outputs) if producer_ctx else []}).",
-                    instance_id=instance.instance_id, module_type=instance.module_type,
+                    f"{where}: source '{source}' was not built "
+                    f"(available outputs: {sorted(producer.outputs) if producer else []}).",
+                    instance_id=instance.instance_id if instance else None,
+                    module_type=instance.module_type if instance else None,
                 )
-            return producer_ctx.outputs[output]
+            return node
         node = guide_nodes.scene_node(source)
-        if node is None:
+        if node is None and strict:
             raise AttachError(
-                f"{instance.key}.{input_name}: source '{source}' is neither a built module output nor an existing scene node.",
-                instance_id=instance.instance_id, module_type=instance.module_type,
+                f"{where}: source '{source}' is neither a built module output "
+                f"nor an existing scene node.",
+                instance_id=instance.instance_id if instance else None,
+                module_type=instance.module_type if instance else None,
             )
         return node
 
