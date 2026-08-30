@@ -151,3 +151,14 @@ def test_right_side_uses_negative_translate_x(build_context):
     result, _binds = _limb(build_context("fkchain", side="R"))
     assert result.ik_joints[1].translate.x < 0
     assert result.fk_joints[1].translate.x < 0
+
+
+def test_empty_name_adds_no_token(build_context):
+    """The default limb name contributes no extra name token."""
+    ctx = build_context()
+    guides = tm.Joint.chain(
+        [(0, 0, 0), (4, 0, -1), (8, 0, 0)], name_pattern="noname_guide_{index}"
+    )
+    result = build_ikfk_limb(ctx, guides, labels=("upper", "lower", "end"))
+    assert result.ik_control.transform.name == "C_probe_ik_ctrl"
+    assert result.pole_control.transform.name == "C_probe_pole_ctrl"

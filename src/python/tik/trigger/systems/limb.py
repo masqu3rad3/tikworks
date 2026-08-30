@@ -45,16 +45,17 @@ class LimbResult:
     pole_control: object = None
     switch_control: object = None
     switch_plug: object = None
+    size: float = 0.0
 
 
 def build_ikfk_limb(
     ctx,
     guides: Sequence,
     *,
-    name: str = "limb",
+    name: str = "",
     parent=None,
     bind_joints: Optional[Sequence] = None,
-    controller_size: float = 3.0,
+    controller_size: Optional[float] = None,
     soft_ik: bool = True,
     stretch: bool = True,
     squash: bool = True,
@@ -67,11 +68,14 @@ def build_ikfk_limb(
     Args:
         ctx: The module build context.
         guides: Guide nodes, root first. At least three.
-        name: Token used in every created name.
+        name: Extra token for every created name; empty by default, since
+            ``ctx.name`` already prefixes the instance name. Set it only to
+            disambiguate a module that builds two limbs.
         parent: Transform the limb hangs from; defaults to ``ctx.groups.socket``.
         bind_joints: Bind joints to drive, one per guide. When omitted the
             puppet is built but nothing is blended onto a deform skeleton.
-        controller_size: Base controller size.
+        controller_size: Base controller size; derived from the limb length
+            when omitted.
         soft_ik: Build the soft-IK network. Always True for an arm.
         stretch: Build the extend-side factor and its limit clamp.
         squash: Build the compress-side factor.
@@ -87,7 +91,10 @@ def build_ikfk_limb(
         raise ValueError("build_ikfk_limb needs at least three guides.")
     labels = list(labels) if labels else [str(index) for index in range(len(guides))]
     parent = parent if parent is not None else ctx.groups.socket
+    if controller_size is None:
+        controller_size = _derive_size(guides)
     result = LimbResult()
+    result.size = controller_size
     side_sign = ctx.side_mult
 
     _build_chains(ctx, guides, name, parent, side_sign, result)
@@ -181,7 +188,7 @@ def _build_pole_base(ctx, name, parent, result) -> None:
 def _build_controls(ctx, name, parent, size, labels, result) -> None:
     """Create the IK, switch and FK controllers."""
     result.ik_control = ctx.controller(
-        f"{name}_ik",
+        _role(name, "ik"),
         shape="Cube",
         size=size,
         parent=ctx.groups.control,
@@ -193,7 +200,7 @@ def _build_controls(ctx, name, parent, size, labels, result) -> None:
     )
 
     result.switch_control = ctx.controller(
-        f"{name}_switch",
+        _role(name, "switch"),
         shape="Cube",
         size=size * 0.4,
         parent=ctx.groups.control,
@@ -218,7 +225,7 @@ def _build_controls(ctx, name, parent, size, labels, result) -> None:
     fk_parent = None
     for label, joint in zip(labels, result.fk_joints):
         fk_control = ctx.controller(
-            f"{name}_fk_{label}",
+            _role(name, "fk", label),
             shape="Circle",
             size=size,
             parent=fk_parent if fk_parent is not None else ctx.groups.control,
@@ -356,7 +363,7 @@ def _build_pole(ctx, name, size, pole_pin, control, pole_rest, result) -> None:
     )
 
     result.pole_control = ctx.controller(
-        f"{name}_pole",
+        _role(name, "pole"),
         shape="Diamond",
         size=size * 0.5,
         parent=ctx.groups.control,
@@ -408,6 +415,23 @@ def _blend_to_bind(ctx, name, bind_joints, result) -> None:
             name=ctx.name(name, f"blend{index}"),
         )
         tm.MatrixConstraint.create(blend.output, bind_joint, maintain_offset=True)
+
+
+def _role(*parts) -> str:
+    """Join non-empty name parts.
+
+    An empty limb name must add no token: ``f"{name}_ik"`` would yield ``"_ik"``
+    and a doubled underscore once ``ctx.name`` prefixes the instance.
+    """
+    return "_".join(part for part in parts if part)
+
+
+def _derive_size(joints: Sequence) -> float:
+    """Base controller size from the chain's rest length."""
+    total = 0.0
+    for first, second in zip(joints, joints[1:]):
+        total += first.distance_to(second)
+    return total * 0.15
 
 
 def _pole_rest_position(joints: Sequence):

@@ -49,7 +49,7 @@ def _ik_control(ctx):
     return next(
         item.transform
         for item in ctx.controllers
-        if item.transform.name.endswith("_arm_ik_ctrl")
+        if item.transform.name.endswith("_ik_ctrl")
     )
 
 
@@ -63,20 +63,33 @@ def test_declares_four_outputs():
     )
 
 
-def test_has_no_ik_solver_ribbon_or_soft_ik_fields():
-    """The SC solver has nothing to do once the pole has a twist-aware space."""
+def test_has_only_the_behaviour_fields():
+    """No ik_solver, no ribbon fields, no soft_ik, no size or limit knobs."""
     names = set(get_module("arm").fields())
-    assert "ik_solver" not in names
-    assert "ribbon_joints" not in names
-    assert "ribbon_controllers" not in names
-    assert "soft_ik" not in names
-    assert names == {
-        "stretch",
-        "squash",
-        "stretch_limit",
-        "pole_pin",
-        "controller_size",
-    }
+    assert names == {"stretch", "squash", "pole_pin"}
+
+
+def test_control_names_carry_one_module_token(backend):
+    """L_arm_ik_ctrl, not L_arm_arm_ik_ctrl."""
+    ctx = _arm_ctx(backend)
+    names = {item.transform.name for item in ctx.controllers}
+    assert "L_arm_ik_ctrl" in names
+    assert "L_arm_pole_ctrl" in names
+    assert not any("_arm_arm_" in name for name in names)
+
+
+def test_controller_size_scales_with_the_limb():
+    """No size field: size is derived from the chain length."""
+    from tik.trigger.systems.limb import _derive_size
+
+    short = tm.Joint.chain(
+        [(0, 0, 0), (4, 0, -1), (8, 0, 0)], name_pattern="short_{index}"
+    )
+    long_chain = tm.Joint.chain(
+        [(0, 0, 0), (40, 0, -1), (80, 0, 0)], name_pattern="long_{index}"
+    )
+    assert _derive_size(short) > 0
+    assert _derive_size(long_chain) > _derive_size(short)
 
 
 # -------------------------------------------------------------- deform rules

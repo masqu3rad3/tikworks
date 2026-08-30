@@ -13,15 +13,15 @@ anticipate them.
 from __future__ import annotations
 
 import tik.maya as tm
+from tik.maya import attribute
 from tik.trigger.core import (
     BoolField,
-    FloatField,
     Guides,
     Input,
     Module,
     register_module,
 )
-from tik.trigger.systems.limb import build_ikfk_limb
+from tik.trigger.systems.limb import _derive_size, build_ikfk_limb
 
 
 @register_module("arm")
@@ -35,15 +35,7 @@ class Arm(Module):
 
     stretch = BoolField(True, help="Build the stretch network")
     squash = BoolField(True, help="Build the compress-side network")
-    stretch_limit = FloatField(
-        50.0,
-        min=0.0,
-        max=500.0,
-        label="Stretch Limit %",
-        help="Default cap on how far a segment may stretch, as a percentage",
-    )
     pole_pin = BoolField(False, help="Lock the elbow to the pole control")
-    controller_size = FloatField(3.0, min=0.01, label="Controller Size")
 
     # --------------------------------------------------------------- guides
     def draw_guides(self, ctx) -> None:
@@ -55,9 +47,9 @@ class Arm(Module):
 
     # ---------------------------------------------------------------- build
     def build(self, ctx) -> None:
-        size = self.controller_size
         collar_guide = ctx.guide("collar")
         limb_guides = [ctx.guide("shoulder"), ctx.guide("elbow"), ctx.guide("hand")]
+        size = _derive_size(limb_guides)
 
         # socket -------------------------------------------------------------
         socket = tm.Transform.create(
@@ -96,14 +88,11 @@ class Arm(Module):
         build_ikfk_limb(
             ctx,
             limb_guides,
-            name="arm",
             parent=collar_ctrl.transform,
             bind_joints=bind_joints,
-            controller_size=size,
             soft_ik=True,  # never optional for an IK solution
             stretch=self.stretch,
             squash=self.squash,
-            stretch_limit_default=self.stretch_limit,
             pole_pin=self.pole_pin,
             labels=("upper", "lower", "hand"),
         )
