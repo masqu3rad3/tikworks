@@ -19,7 +19,6 @@ from tik.trigger.core import (
     Guides,
     Input,
     Module,
-    Space,
     register_module,
 )
 from tik.trigger.systems.limb import _derive_size, build_ikfk_limb
@@ -33,12 +32,6 @@ class Arm(Module):
     guides = Guides("collar", "shoulder", "elbow", "hand")
     inputs = (Input("root", primary=True, help="Where the collar hangs (chest/body)"),)
     outputs = ("collar", "upperarm", "lowerarm", "hand")
-    spaces = (
-        Space("ik_hand", control="ik", mode="parent",
-              help="What the IK hand follows"),
-        Space("pole", control="pole", mode="point",
-              help="What the pole vector follows"),
-    )
 
     stretch = BoolField(True, help="Build the stretch network")
     squash = BoolField(True, help="Build the compress-side network")

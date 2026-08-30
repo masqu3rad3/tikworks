@@ -20,7 +20,6 @@ from . import tags
 from .context import MayaBuildContext, MayaGuideContext
 
 INPUTS = "trg_inputs"
-SPACES = "trg_spaces"
 
 _JOINT_SIDES = {"C": 0, "L": 1, "R": 2}
 _AXES = {"upAxis": (0.0, 1.0, 0.0), "mirrorAxis": (1.0, 0.0, 0.0), "lookAxis": (0.0, 0.0, 1.0)}
@@ -143,10 +142,6 @@ class MayaBackend:
             parent=self._parent_ref(root),
             attach=root_meta.get(tags.ATTACH),
             inputs=dict(root_meta.get(INPUTS, {}) or {}),
-            spaces={
-                key: list(value)
-                for key, value in dict(root_meta.get(SPACES, {}) or {}).items()
-            },
         )
 
     def find_instances(self, scope: Any = "scene") -> list[ModuleInstance]:
@@ -225,16 +220,6 @@ class MayaBackend:
             raise GuideError(f"No guides for instance {instance_id}.")
         root = self._root_guide(self.guide_nodes(instance_id), instance[0].module_type)
         root.meta[INPUTS] = {key: value for key, value in dict(inputs).items() if value}
-
-    def set_spaces(self, instance_id: str, spaces: dict) -> None:
-        """Store ``{space name: [sources]}`` on the instance's root guide."""
-        instance = self.find_instances([instance_id])
-        if not instance:
-            raise GuideError(f"No guides for instance {instance_id}.")
-        root = self._root_guide(self.guide_nodes(instance_id), instance[0].module_type)
-        root.meta[SPACES] = {
-            key: list(value) for key, value in dict(spaces).items() if value
-        }
 
     @staticmethod
     def scene_node(name: str):
@@ -404,8 +389,6 @@ class MayaBackend:
                 root = nodes[(module_cls.guides.root, 0)]
                 self._write_root_meta(root, module, None)
                 root.meta[INPUTS] = dict(guide_instance.inputs)
-                # Legacy .trg records carry no spaces; guard rather than assume.
-                root.meta[SPACES] = dict(getattr(guide_instance, "spaces", {}) or {})
                 built.append((guide_instance, module, nodes))
             for guide_instance, module, nodes in built:
                 for (role, index), record in guide_instance.joints.items():
@@ -519,26 +502,6 @@ class MayaBackend:
         target = ctx.attachments[input_name]
         tm.MatrixConstraint.create(
             source_node, target, maintain_offset=True, name=ctx.name("attach", input_name)
-        )
-
-    def connect_space(self, ctx: MayaBuildContext, space, source_nodes, labels) -> None:
-        """Build a SpaceSwitch on the controller the space names."""
-        controller = ctx.controller_by_role(space.control)
-        if controller is None:
-            raise AttachError(
-                f"{ctx.instance.key}.{space.name}: no controller with role "
-                f"'{space.control}'.",
-                instance_id=ctx.instance.instance_id,
-                module_type=ctx.module.module_type,
-            )
-        tm.SpaceSwitch.create(
-            controller.transform,
-            source_nodes,
-            attr_name=f"{space.name}Space",
-            mode=space.mode,
-            labels=[label.split(".")[0] for label in labels],
-            default=space.default,
-            name=ctx.name(space.name),
         )
 
     def afterlife(self, instances: Sequence[ModuleInstance], mode: str) -> None:

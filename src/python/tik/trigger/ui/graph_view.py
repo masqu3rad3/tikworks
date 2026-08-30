@@ -43,19 +43,19 @@ ROW_GAP = 24
 
 class Port(QtWidgets.QGraphicsEllipseItem):
     def __init__(self, node: "NodeItem", name: str, is_output: bool, primary: bool = False,
-                 multi: bool = False) -> None:
+                 space: bool = False) -> None:
         super().__init__(-PORT_RADIUS, -PORT_RADIUS, PORT_RADIUS * 2, PORT_RADIUS * 2, node)
         self.node = node
         self.name = name
         self.is_output = is_output
         self.primary = primary
-        self.multi = multi  # a space port: many wires in, not one
+        self.space = space  # an animation-space port: coloured apart
         self.connected = False
-        self.setBrush(QtGui.QColor(PORT_SPACE if multi else "#7b7b7b"))
+        self.setBrush(QtGui.QColor(PORT_SPACE if space else "#7b7b7b"))
         self.setPen(QtGui.QPen(QtGui.QColor("#111111"), 1))
         self.setZValue(3)
         self.setAcceptHoverEvents(True)
-        self.setToolTip(f"{node.key}.{name}" + (" (space)" if multi else ""))
+        self.setToolTip(f"{node.key}.{name}" + (" (space)" if space else ""))
 
     @property
     def key(self) -> str:
@@ -63,7 +63,7 @@ class Port(QtWidgets.QGraphicsEllipseItem):
 
     def set_connected(self, connected: bool) -> None:
         self.connected = connected
-        if self.multi:
+        if self.space:
             self.setBrush(QtGui.QColor(PORT_SPACE))
             return
         self.setBrush(QtGui.QColor(theme.ACCENT if connected else "#7b7b7b"))
@@ -79,12 +79,8 @@ class Port(QtWidgets.QGraphicsEllipseItem):
             event.ignore()
             return
         scene = self.scene()
-        # A multi port has no single wire to pick up, so clicking starts a new
-        # one; its existing wires are removed by selecting the wire itself.
-        wire = None
-        if not self.is_output and not self.multi:
-            wires = scene.wires_for_input(self)
-            wire = wires[0] if wires else None
+        wires = scene.wires_for_input(self) if not self.is_output else []
+        wire = wires[0] if wires else None
         if wire is not None:
             scene.pick_up_wire(wire, event.scenePos())  # unplug from the input end
         else:
@@ -112,7 +108,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         for name in inputs:
             self.inputs[name] = Port(self, name, False, primary=(name == primary_input))
         for name in spaces or []:
-            self.inputs[name] = Port(self, name, False, multi=True)
+            self.inputs[name] = Port(self, name, False, space=True)
         for name in outputs:
             self.outputs[name] = Port(self, name, True)
         self.relayout()
@@ -263,8 +259,8 @@ class WireItem(QtWidgets.QGraphicsPathItem):
 
 
 class GraphScene(QtWidgets.QGraphicsScene):
-    connect_requested = QtCore.Signal(str, str, bool)  # input key, source key, is_space
-    disconnect_requested = QtCore.Signal(str, bool, str)  # input key, is_space, source key
+    connect_requested = QtCore.Signal(str, str)  # input key, source key (node.port)
+    disconnect_requested = QtCore.Signal(str)  # input key
     remove_group_requested = QtCore.Signal(str)  # scene-nodes group name
     node_selected = QtCore.Signal(str)  # instance key
     external_selected = QtCore.Signal(str)  # scene-nodes group name
@@ -330,7 +326,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         self.moved = set()
 
     def wires_for_input(self, port: Port) -> list[WireItem]:
-        """Every wire landing on ``port``; a multi port may have several."""
+        """Every wire landing on ``port``."""
         return [wire for wire in self.wires if wire.target is port]
 
     def update_wires(self) -> None:
@@ -415,18 +411,15 @@ class GraphScene(QtWidgets.QGraphicsScene):
         if origin is None:
             return
         target = None
-        input_port = None
         if port is not None:
             if origin.is_output and not port.is_output:
-                target, input_port = (port.key, origin.key), port
+                target = (port.key, origin.key)
             elif not origin.is_output and port.is_output:
-                target, input_port = (origin.key, port.key), origin
+                target = (origin.key, port.key)
         if detached is not None and (target is None or target[0] != detached):
-            # Only single-connection ports can be picked up, so a detached wire
-            # is never a space.
-            self.disconnect_requested.emit(detached, False, "")
+            self.disconnect_requested.emit(detached)
         if target is not None:
-            self.connect_requested.emit(*target, input_port.multi)
+            self.connect_requested.emit(*target)
         elif detached is None:
             self.update()
 
@@ -439,9 +432,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         blade = stroker.createStroke(blade)
         sliced = [wire for wire in list(self.wires) if wire.path().intersects(blade)]
         for wire in sliced:
-            self.disconnect_requested.emit(
-                wire.target_key, wire.target.multi, wire.source.key
-            )
+            self.disconnect_requested.emit(wire.target_key)
         return [wire.target_key for wire in sliced]
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
@@ -456,9 +447,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         wires = [item for item in self.selectedItems() if isinstance(item, WireItem)]
         externals = [item for item in self.selectedItems() if isinstance(item, NodeItem) and item.external]
         for wire in wires:
-            self.disconnect_requested.emit(
-                wire.target_key, wire.target.multi, wire.source.key
-            )
+            self.disconnect_requested.emit(wire.target_key)
         for node in externals:
             self.remove_group_requested.emit(node.key)
         return bool(wires or externals)
@@ -577,15 +566,13 @@ class GraphView(QtWidgets.QGraphicsView):
             node.subtitle = "scene ✗ missing" if missing else "scene ✓"
         for handle in sorted(handles, key=lambda item: (depth.get(item.key, 1), item.key)):
             module_cls = handle.module_class
-            rows = max(
-                len(module_cls.inputs) + len(module_cls.spaces), len(handle.outputs), 1
-            )
+            rows = max(len(module_cls.inputs), len(handle.outputs), 1)
             pos = free_pos(handle.key, HEADER + rows * ROW + 8)
             primary = module_cls.primary_input()
             self.graph.add_node(
                 handle.key, handle.key, module_cls.display_label(), module_cls.input_names(), list(handle.outputs),
                 theme.SIDE.get(handle.side.value, theme.SIDE["C"]), primary_input=primary.name if primary else None, pos=pos,
-                mode=collapse.get(handle.key, MODE_FULL), spaces=module_cls.space_names(),
+                mode=collapse.get(handle.key, MODE_FULL),
             )
         node_group = {node: name for name, nodes in groups.items() for node in nodes}
         for handle in handles:
@@ -597,14 +584,6 @@ class GraphView(QtWidgets.QGraphicsView):
                 else:
                     source_key = f"{node_group.get(source, 'scene')}.{source}"
                 self.graph.add_wire(source_key, f"{handle.key}.{input_name}", primary is not None and input_name == primary.name)
-            for space_name, sources in handle.spaces.items():
-                for source in sources:
-                    key, output = split_source(source)
-                    if key is not None and key in by_key:
-                        source_key = f"{key}.{output}"
-                    else:
-                        source_key = f"{node_group.get(source, 'scene')}.{source}"
-                    self.graph.add_wire(source_key, f"{handle.key}.{space_name}", False)
         self.graph.finish_build()
         if not self._fitted:
             self.fit()
@@ -622,11 +601,7 @@ class GraphView(QtWidgets.QGraphicsView):
         for name in sorted(groups):
             place(name, 0, HEADER + len(groups[name]) * ROW + 8)
         for handle in sorted(handles, key=lambda item: (depth.get(item.key, 1), item.key)):
-            rows = max(
-                len(handle.module_class.inputs) + len(handle.module_class.spaces),
-                len(handle.outputs),
-                1,
-            )
+            rows = max(len(handle.module_class.inputs), len(handle.outputs), 1)
             place(handle.key, depth.get(handle.key, 1), HEADER + rows * ROW + 8)
         return result
 
@@ -714,32 +689,12 @@ class GraphView(QtWidgets.QGraphicsView):
             return port
         return source_key
 
-    def connect_input(self, input_key: str, source_key: str, is_space: bool = False) -> None:
+    def connect_input(self, input_key: str, source_key: str) -> None:
         source = self.resolve_source(source_key)
-        if not is_space:
-            self._apply(lambda: self.guides.connect(input_key, source))
-            return
-        key, _dot, space_name = input_key.rpartition(".")
-        handle = self.guides.by_key(key)
-        if handle is None:
-            return
-        sources = handle.spaces.get(space_name, [])
-        if source in sources:
-            return
-        self._apply(lambda: handle.set_space(space_name, [*sources, source]))
+        self._apply(lambda: self.guides.connect(input_key, source))
 
-    def disconnect_input(self, input_key: str, is_space: bool = False, source_key: str = "") -> None:
-        if not is_space:
-            self._apply(lambda: self.guides.disconnect(input_key))
-            return
-        key, _dot, space_name = input_key.rpartition(".")
-        handle = self.guides.by_key(key)
-        if handle is None:
-            return
-        source = self.resolve_source(source_key) if source_key else ""
-        remaining = [item for item in handle.spaces.get(space_name, []) if item != source]
-        self._apply(lambda: handle.set_space(space_name, remaining))
-
+    def disconnect_input(self, input_key: str) -> None:
+        self._apply(lambda: self.guides.disconnect(input_key))
     def sever(self, key: str) -> None:
         """Drop every connection into or out of the node ``key`` (module or scene-nodes group)."""
         group_nodes = set(self.guides.scene_groups().get(key, []))

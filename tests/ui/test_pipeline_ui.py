@@ -237,19 +237,11 @@ def _graph_scene():
     return scene
 
 
-def test_space_port_is_multi():
+def test_space_port_is_marked():
     scene = _graph_scene()
     node = scene.nodes["L_arm"]
-    assert node.inputs["root"].multi is False
-    assert node.inputs["ik_hand"].multi is True
-
-
-def test_space_port_accepts_several_wires():
-    scene = _graph_scene()
-    assert scene.add_wire("body.root", "L_arm.ik_hand", False) is not None
-    assert scene.add_wire("head.root", "L_arm.ik_hand", False) is not None
-    port = scene.nodes["L_arm"].inputs["ik_hand"]
-    assert len(scene.wires_for_input(port)) == 2
+    assert node.inputs["root"].space is False
+    assert node.inputs["ik_hand"].space is True
 
 
 def test_single_input_port_keeps_one_wire():
@@ -266,30 +258,3 @@ def test_a_node_without_spaces_still_builds():
     node = scene.add_node("body", "body", "Base", ["root"], ["root"], "#888888")
     assert set(node.inputs) == {"root"}
 
-
-def test_connect_signal_reports_whether_the_port_is_a_space():
-    scene = _graph_scene()
-    seen = []
-    scene.connect_requested.connect(lambda *args: seen.append(args))
-
-    scene.start_wire(scene.nodes["body"].outputs["root"], QtCore.QPointF(0, 0))
-    scene.finish_wire(scene.nodes["L_arm"].inputs["ik_hand"])
-    assert seen and seen[-1][2] is True
-
-    scene.start_wire(scene.nodes["body"].outputs["root"], QtCore.QPointF(0, 0))
-    scene.finish_wire(scene.nodes["L_arm"].inputs["root"])
-    assert seen[-1][2] is False
-
-
-def test_disconnect_signal_carries_the_source_for_spaces():
-    scene = _graph_scene()
-    scene.add_wire("body.root", "L_arm.ik_hand", False)
-    scene.add_wire("head.root", "L_arm.ik_hand", False)
-    seen = []
-    scene.disconnect_requested.connect(lambda *args: seen.append(args))
-
-    wire = scene.wires_for_input(scene.nodes["L_arm"].inputs["ik_hand"])[0]
-    wire.setSelected(True)
-    scene.delete_selected()
-    assert seen and seen[-1][1] is True
-    assert seen[-1][2] in ("body.root", "head.root")

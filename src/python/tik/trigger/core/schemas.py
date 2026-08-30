@@ -64,7 +64,6 @@ class ModuleInstance:
     parent: Optional[ParentRef] = None
     attach: Optional[str] = None  # legacy: output name override on the parent
     inputs: dict = field(default_factory=dict)  # input name -> "<key>.<output>" | scene node
-    spaces: dict = field(default_factory=dict)  # space name -> [sources]
 
     @property
     def key(self) -> str:
@@ -91,10 +90,6 @@ class ModuleInstance:
             parent=ParentRef.from_dict(data.get("parent")),
             attach=data.get("attach"),
             inputs=dict(data.get("inputs", {}) or {}),
-            spaces={
-                key: list(value)
-                for key, value in dict(data.get("spaces", {}) or {}).items()
-            },
         )
 
 

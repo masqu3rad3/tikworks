@@ -20,7 +20,6 @@ class BuildReport:
     built: list[str] = field(default_factory=list)  # instance ids in build order
     contexts: dict = field(default_factory=dict)  # instance id -> BuildContext
     connections: list[tuple[str, str]] = field(default_factory=list)  # ("L_arm.root", "body.root")
-    spaces: list[tuple[str, str]] = field(default_factory=list)  # ("L_arm.ik_hand", "body.root")
     rig_root: Any = None
 
     @property
@@ -105,7 +104,6 @@ class Builder:
                 self._connect_one(
                     instance, module_cls, inputs, by_key, report, known_keys
                 )
-            self._connect_spaces(instances, report, by_key)
             self.backend.afterlife(instances, afterlife)
         self.events.log(f"Built {total} module(s) into '{rig_name}'.")
         return report
@@ -159,51 +157,6 @@ class Builder:
                 )
             self.backend.connect(ctx, declared.name, node)
             report.connections.append((f"{instance.key}.{declared.name}", source))
-
-    def _connect_spaces(self, instances, report: BuildReport, by_key: dict) -> None:
-        """Build every declared space switch, after all modules exist.
-
-        Deliberately not part of ``order_by_connections``: a space switch does
-        not affect the bind hierarchy, and spaces are legitimately mutually
-        referential (an arm in head space while the head sits in arm space),
-        which would raise a false cycle in the topological sort.
-        """
-        for instance in instances:
-            module_cls = registry.get_module(instance.module_type)
-            ctx = report.contexts.get(instance.instance_id)
-            if ctx is None:
-                continue
-            for space in module_cls.spaces:
-                sources = list(instance.spaces.get(space.name, []))
-                if not sources:
-                    continue
-                nodes, resolved = [], []
-                for source in sources:
-                    node = self._resolve_space_source(source, by_key, report)
-                    if node is None:
-                        self.events.log(
-                            f"{instance.key}.{space.name}: source '{source}' was not "
-                            f"found; skipped.",
-                            level="warning",
-                        )
-                        continue
-                    nodes.append(node)
-                    resolved.append(source)
-                if not nodes:
-                    continue
-                self.backend.connect_space(ctx, space, nodes, resolved)
-                for source in resolved:
-                    report.spaces.append((f"{instance.key}.{space.name}", source))
-
-    def _resolve_space_source(self, source: str, by_key: dict, report: BuildReport):
-        """Return the node for a space source, or None when it cannot be found."""
-        key, output = split_source(source)
-        if key is not None and key in by_key:
-            producer_ctx = report.contexts.get(by_key[key].instance_id)
-            if producer_ctx is None:
-                return None
-            return producer_ctx.outputs.get(output)
-        return self.backend.scene_node(source)
 
     def _resolve_source(self, instance, input_name, source, by_key, report):
         key, output = split_source(source)
