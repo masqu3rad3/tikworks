@@ -16,6 +16,18 @@ def _node(item):
     return resolve(item) if isinstance(item, str) else item
 
 
+def _matrix_plug(item) -> Plug:
+    """Return a world-matrix plug for a node, a node name, or a matrix plug."""
+    if isinstance(item, Plug):
+        return item
+    return _node(item)["worldMatrix[0]"]
+
+
+def _label(item) -> str:
+    """Short name for an item that may be a node or a plug."""
+    return item.node.name if isinstance(item, Plug) else _node(item).name
+
+
 class Measure:
     """Wrapper for a ``distanceBetween`` node fed by two world matrices."""
 
@@ -29,12 +41,17 @@ class Measure:
     @classmethod
     @undo
     def create(cls, start, end, name: Optional[str] = None) -> "Measure":
-        """Measure the distance between ``start`` and ``end``."""
-        start, end = _node(start), _node(end)
-        name = name or f"{start.name}_{end.name}"
+        """Measure the distance between ``start`` and ``end``.
+
+        Args:
+            start: Node, node name, or matrix plug.
+            end: Node, node name, or matrix plug.
+            name: Prefix for the created node.
+        """
+        name = name or f"{_label(start)}_{_label(end)}"
         node = create_node("distanceBetween", name=f"{name}_distance")
-        start["worldMatrix[0]"] >> node["inMatrix1"]
-        end["worldMatrix[0]"] >> node["inMatrix2"]
+        _matrix_plug(start) >> node["inMatrix1"]
+        _matrix_plug(end) >> node["inMatrix2"]
         return cls(node, start, end, node["distance"].value)
 
     @property
