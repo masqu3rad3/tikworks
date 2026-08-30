@@ -20,6 +20,7 @@ class BuildReport:
     built: list[str] = field(default_factory=list)  # instance ids in build order
     contexts: dict = field(default_factory=dict)  # instance id -> BuildContext
     connections: list[tuple[str, str]] = field(default_factory=list)  # ("L_arm.root", "body.root")
+    spaces: list[tuple[str, str]] = field(default_factory=list)  # ("L_arm.ik_chest", "body.root")
     rig_root: Any = None
 
     @property
@@ -51,6 +52,11 @@ def split_source(source: str) -> tuple[Optional[str], str]:
         key, _dot, output = source.rpartition(".")
         return key, output
     return None, source
+
+
+def space_input_names(module_cls, settings) -> set:
+    """Names of the inputs derived from anim-space rows."""
+    return {item.name for item in module_cls.space_inputs(settings)}
 
 
 class Builder:
@@ -86,9 +92,19 @@ class Builder:
             # Producers must be built before consumers: ctx.bind_parent is
             # resolved from the producer's output, so bind joints can be created
             # in their final hierarchy position instead of reparented later.
-            instances = order_by_connections(
-                instances, lambda item: derive_inputs(item, by_id)
-            )
+            def structural_inputs(item):
+                module_cls = registry.get_module(item.module_type)
+                skip = space_input_names(module_cls, item.settings)
+                return {
+                    name: source
+                    for name, source in derive_inputs(item, by_id).items()
+                    if name not in skip
+                }
+
+            # Space connections are legitimately mutually referential - an arm in
+            # head space while the head sits in arm space is a normal rig - so
+            # they must not reach the topological sort.
+            instances = order_by_connections(instances, structural_inputs)
             by_key: dict = {}
             for number, instance in enumerate(instances, start=1):
                 self.events.progress(number, total, f"Building {instance.name}")
@@ -104,6 +120,7 @@ class Builder:
                 self._connect_one(
                     instance, module_cls, inputs, by_key, report, known_keys
                 )
+            self._connect_spaces(instances, report, by_key)
             self.backend.afterlife(instances, afterlife)
         self.events.log(f"Built {total} module(s) into '{rig_name}'.")
         return report
@@ -116,7 +133,7 @@ class Builder:
         is unconnected — the context then falls back to its own ``bind_grp``.
         """
         primary = module_cls.primary_input()
-        if primary is None:
+        if primary is None or primary.kind == "space":
             return None
         source = inputs.get(primary.name)
         if not source:
@@ -157,6 +174,58 @@ class Builder:
                 )
             self.backend.connect(ctx, declared.name, node)
             report.connections.append((f"{instance.key}.{declared.name}", source))
+
+    def _connect_spaces(self, instances, report: BuildReport, by_key: dict) -> None:
+        """Build one space switch per (control, mode), after all modules exist.
+
+        Deliberately not part of ``order_by_connections``: a space switch does
+        not affect the bind hierarchy, and spaces are legitimately mutually
+        referential, which would be a false cycle in the topological sort.
+        """
+        by_id = {instance.instance_id: instance for instance in instances}
+        for instance in instances:
+            module_cls = registry.get_module(instance.module_type)
+            ctx = report.contexts.get(instance.instance_id)
+            if ctx is None:
+                continue
+            inputs = derive_inputs(instance, by_id)
+            groups: dict = {}
+            for row in module_cls.space_rows(instance.settings):
+                control, mode = row.get("control", ""), row.get("mode", "parent")
+                label = row.get("label", "")
+                if not control or not label:
+                    continue
+                source = inputs.get(f"{control}_{label}")
+                if not source:
+                    self.events.log(
+                        f"{instance.key}.{control}_{label}: no source connected; skipped.",
+                        level="warning",
+                    )
+                    continue
+                node = self._resolve_space_source(source, by_key, report)
+                if node is None:
+                    self.events.log(
+                        f"{instance.key}.{control}_{label}: source '{source}' was not "
+                        f"found; skipped.",
+                        level="warning",
+                    )
+                    continue
+                targets, labels = groups.setdefault((control, mode), ([], []))
+                targets.append(node)
+                labels.append(label)
+                report.spaces.append((f"{instance.key}.{control}_{label}", source))
+            for (control, mode), (targets, labels) in groups.items():
+                self.backend.connect_space(ctx, control, mode, targets, labels)
+
+    def _resolve_space_source(self, source: str, by_key: dict, report: BuildReport):
+        """Return the node for a space source, or None when it cannot be found."""
+        key, output = split_source(source)
+        if key is not None and key in by_key:
+            producer_ctx = report.contexts.get(by_key[key].instance_id)
+            if producer_ctx is None:
+                return None
+            return producer_ctx.outputs.get(output)
+        return self.backend.scene_node(source)
 
     def _resolve_source(self, instance, input_name, source, by_key, report):
         key, output = split_source(source)

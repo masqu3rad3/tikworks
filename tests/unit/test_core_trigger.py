@@ -341,3 +341,58 @@ def test_validate_rejects_duplicate_rows():
         {"control": "ik", "mode": "orient", "label": "chest"},
     ]
     assert any("ik_chest" in problem for problem in module.validate())
+
+
+def _with_space_rows(instance, rows):
+    instance.settings["anim_spaces"] = rows
+    return instance
+
+
+def test_space_inputs_do_not_feed_build_order():
+    """An arm in head space while the head is in arm space is a normal rig."""
+    backend = FakeBackend()
+    first = backend.create_guides(ToyRoot(name="a"))
+    second = backend.create_guides(ToyRoot(name="b"))
+    _with_space_rows(first, [{"control": "root", "mode": "parent", "label": "b"}])
+    _with_space_rows(second, [{"control": "root", "mode": "parent", "label": "a"}])
+    first.inputs = {"root_b": "b.root"}
+    second.inputs = {"root_a": "a.root"}
+    report = Builder(backend).build(rig_name="rig", afterlife="keep")
+    assert report.count == 2
+
+
+def test_space_connections_are_grouped_by_control_and_mode():
+    backend = FakeBackend()
+    backend.create_guides(ToyRoot(name="body"))
+    backend.create_guides(ToyRoot(name="head"))
+    arm = backend.create_guides(ToyRoot(name="arm"))
+    _with_space_rows(arm, [
+        {"control": "root", "mode": "parent", "label": "body"},
+        {"control": "root", "mode": "parent", "label": "head"},
+    ])
+    arm.inputs = {"root_body": "body.root", "root_head": "head.root"}
+    Builder(backend).build(rig_name="rig", afterlife="keep")
+    assert backend.space_connections == [("arm", "root", "parent", ["body", "head"])]
+
+
+def test_row_order_is_enum_order():
+    backend = FakeBackend()
+    backend.create_guides(ToyRoot(name="body"))
+    backend.create_guides(ToyRoot(name="head"))
+    arm = backend.create_guides(ToyRoot(name="arm"))
+    _with_space_rows(arm, [
+        {"control": "root", "mode": "parent", "label": "head"},
+        {"control": "root", "mode": "parent", "label": "body"},
+    ])
+    arm.inputs = {"root_body": "body.root", "root_head": "head.root"}
+    Builder(backend).build(rig_name="rig", afterlife="keep")
+    assert backend.space_connections[0][3] == ["head", "body"]
+
+
+def test_an_unconnected_space_row_is_skipped():
+    backend = FakeBackend()
+    arm = backend.create_guides(ToyRoot(name="arm"))
+    _with_space_rows(arm, [{"control": "root", "mode": "parent", "label": "ghost"}])
+    report = Builder(backend).build(rig_name="rig", afterlife="keep")
+    assert backend.space_connections == []
+    assert report.spaces == []

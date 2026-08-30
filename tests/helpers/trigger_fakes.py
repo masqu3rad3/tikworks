@@ -92,6 +92,7 @@ class FakeBackend:
         self.calls: list[tuple] = []
         self.settings: dict[str, dict] = {}
         self.connections: list[tuple[str, str, str]] = []
+        self.space_connections: list = []
         self.scene_nodes: set[str] = set()
         self.afterlife_mode: Optional[str] = None
         self.fail_on: Optional[str] = None
@@ -236,6 +237,9 @@ class FakeBackend:
             if item.instance_id == instance_id:
                 item.inputs = {key: value for key, value in inputs.items() if value}
 
+    def connect_space(self, ctx, control, mode, targets, labels):
+        self.space_connections.append((ctx.instance.key, control, mode, list(labels)))
+
     def afterlife(self, instances, mode):
         self.afterlife_mode = mode
 
@@ -246,6 +250,7 @@ class ToyRoot(Module):
     guides = Guides("root")
     inputs = ()
     outputs = ("root",)
+    space_controls = ("root",)
 
     def draw_guides(self, ctx):
         ctx.joint("root", (0, 0, 0))
