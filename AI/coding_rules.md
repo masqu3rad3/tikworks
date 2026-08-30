@@ -127,7 +127,7 @@ Exactly four children per module, created by the backend, never by the module:
 
 ```
 <side>_<name>_grp
-├── ..._socket_grp    input attach transforms, driven by parent module outputs
+├── ..._socket_grp    one transform per declared input, driven by the producer
 ├── ..._control_grp   controllers and their offset/space groups — nothing else
 ├── ..._rig_grp       the puppet: IK/FK chains, handles, math, helpers
 └── ..._bind_grp      deform/export joints only — empty when connected
@@ -157,13 +157,45 @@ never exported.
 ### Single Bind Hierarchy
 
 - Every rig has **exactly one** deform-joint hierarchy.
-- `ctx.bind_parent` resolves the connected input's bind joint **before**
+- `rig.bind_parent` resolves the connected input's bind joint **before**
   `build()` runs. Bind joints are *created* in their final position and
   **never reparented** — `MatrixConstraint` wires a live connection to
   `driven.parent.worldInverseMatrix[0]` captured at build time, so a joint
   reparented after being constrained keeps compensating for its old parent.
 - **Every module output resolves to a bind joint**, because that is what
-  `ctx.bind_parent` reads.
+  `rig.bind_parent` reads.
+
+### What a Module Writes, and What It Gets for Free
+
+A module declares and then builds:
+
+```python
+@register_module("arm")
+class Arm(Module):
+    guides  = GuideLayout("collar", "shoulder", "elbow", "hand")
+    inputs  = (Input("root", primary=True),)
+    outputs = ("collar", "upperarm", "lowerarm", "hand")
+    stretch = BoolField(True)
+
+    def draw_guides(self, guides): ...
+    def build(self, rig): ...
+```
+
+The four groups, the naming, the tagging, **a socket per declared input**, and
+**an offset group per controller** are created for it. `rig.socket("root")`
+fetches the socket the declaration made; `ctrl.offset` is the controller's
+offset group.
+
+**The boundary rule:** `rig` owns naming, tagging, group placement and
+registration. tik.maya owns the mechanism. A helper earns a place on `rig` only
+when it removes naming, tagging, placement or registration boilerplate — which
+is why module code calls `tm.MatrixConstraint.create(...)` directly instead of
+through a wrapper that would only hide it.
+
+`Controller` proxies attribute and plug **reads** to its transform, so
+`ctrl["tx"]` and `ctrl.long_name` work. It does not proxy writes: assignments
+(`ctrl.transform.world_position = ...`) and type-checked tik.maya APIs
+(`snap_to`, `pole_vector`) take `ctrl.transform`.
 
 ### Control Mirror Metadata
 

@@ -2,6 +2,12 @@
 
 Date: 2026-08-29
 Status: brainstormed with Arda Kutlu; awaiting spec review.
+
+> **Superseded in part (2026-08-30):** the UI file layout is now
+> `ui/designer/` and `ui/graph/` per
+> `docs/superpowers/specs/2026-08-30-trigger-simplification-design.md`.
+> The module I/O model in section 3 still stands.
+
 Builds on `2026-08-28-trigger-workflow-and-ui-design.md` (session = blueprint,
 reference action, `.trg` asset, `Session`/`Guides` handlers). Replaces its
 §7 attachment rule (nearest socket / DAG-derived) and §8 UI details.

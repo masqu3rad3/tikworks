@@ -2,6 +2,11 @@
 
 Date: 2026-08-28
 Status: approved in brainstorming (Arda Kutlu), execution authorised.
+
+> **Superseded in part (2026-08-30):** the backend boundary and the `ctx`
+> build context are replaced by `docs/superpowers/specs/2026-08-30-trigger-simplification-design.md`.
+> The declarative module model, fields and `.trg` decisions still stand.
+
 Plan A (tik.maya foundation): completed 2026-08-28.
 Plan B (trigger core rebuild): completed 2026-08-28.
 Plan C (arm module): completed 2026-08-28.
