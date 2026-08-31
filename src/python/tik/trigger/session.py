@@ -365,6 +365,8 @@ class Session:
         from tik.trigger.core.guide_document import GuideDocument
         from tik.trigger.guides import document_store, regenerate
 
+        if not self._scene_available():
+            return  # headless: there is no scene to project into
         if not force and not self.owns_scene_guides:
             raise SessionError(
                 "The guides in this scene belong to another session. Save that "

@@ -346,8 +346,18 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
 
     def _build_status(self) -> None:
         self.status_strip = QtWidgets.QWidget()
-        self.status = StatusFields(self.status_strip, ("modules", "connections", "file"))
+        self.status = StatusFields(
+            self.status_strip, ("session", "modules", "connections", "file")
+        )
         self.status.set_activity("Ready")
+
+    def set_owner(self, name: str) -> None:
+        """Name the session whose guides are checked out into the scene.
+
+        With one Designer per session tab, "whose guides am I looking at?" must
+        never need inference.
+        """
+        self.status.set("session", name or "")
 
     # ------------------------------------------------------------ state
     @property

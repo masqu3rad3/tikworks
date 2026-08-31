@@ -21,6 +21,7 @@ from tik.shared.ui.maya_window import HAS_MAYA, MayaToolWindow
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.status import StatusFields
 from tik.trigger.core import ERROR, LOG, EventBus, versioning
+from tik.trigger.core.exceptions import SessionError
 from tik.trigger.core.document import EXTENSION
 from tik.trigger.session import Session
 
@@ -54,6 +55,8 @@ class TriggerWindow(MayaToolWindow):
         # one Designer per session view: each session owns its guides, so
         # each owns a Designer and a checkout of the scene
         self._designers: dict = {}
+        # which tab's guides are currently in the scene
+        self._checked_out_view = None
         self.recent_files: list[str] = []
         self.setWindowTitle(f"Trigger {VERSION}")
         self.resize(1180, 720)
@@ -470,11 +473,32 @@ class TriggerWindow(MayaToolWindow):
         return self._mode_menus.get(self._active_mode)
 
     def _show_active_designer(self):
-        """Put the active tab's Designer in front, building it if needed."""
+        """Put the active tab's Designer in front, and check its session out.
+
+        The scene holds one checkout at a time, so the tab being left keeps its
+        work before the incoming one takes the scene. A scene belonging to a
+        session we do not have open is reported, never seized: discarding
+        somebody else's working copy has to be a decision.
+        """
         view = self.current_view
         if view is None:
             return None
+        outgoing = self._checked_out_view
+        if outgoing is not None and outgoing is not view and outgoing in self.views:
+            try:
+                outgoing.session.capture_guides()
+            except Exception as error:  # noqa: BLE001 - keep the tool alive
+                self.events.log(f"Could not capture guides: {error}", level="warning")
+        if outgoing is not view:
+            try:
+                view.session.checkout_guides()
+                self._checked_out_view = view
+            except SessionError as error:
+                self.events.log(str(error), level="warning")
+            except Exception as error:  # noqa: BLE001
+                self.events.log(f"Could not check out guides: {error}", level="warning")
         designer = self.designer_for(view)
+        designer.set_owner(view.session.name)
         self.designer_menus.setCurrentWidget(designer.menu_bar)
         self.designer_pages.setCurrentWidget(designer)
         self.designer_status.setCurrentWidget(designer.status_strip)
@@ -490,6 +514,8 @@ class TriggerWindow(MayaToolWindow):
 
     def _drop_designer(self, view) -> None:
         """Tear down and forget a closed tab's Designer."""
+        if self._checked_out_view is view:
+            self._checked_out_view = None
         designer = self._designers.pop(id(view), None)
         if designer is None:
             return
