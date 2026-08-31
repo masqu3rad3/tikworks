@@ -188,50 +188,44 @@ def _stub_designer():
     return GuideDesigner(scene=StubScene())
 
 
-def test_mode_bar_swaps_menus_status_and_shortcuts(qapp):
+def test_the_shell_is_one_menu_bar_over_the_session_tabs(qapp):
+    """The session is the outer container; there is no mode above it."""
     window = TriggerWindow(designer_factory=_stub_designer)
     window.show()
-    assert [window.mode_bar.tabText(i) for i in range(window.mode_bar.count())] == ["Trigger", "Guide Designer"]
-    assert window.mode_bar.currentIndex() == 0
-    assert window.pages.currentWidget() is window.tabs
-    assert window.status_stack.currentWidget() is window.trigger_status_strip
-    trigger_menus = window.menu_bar
-
-    window.mode_bar.setCurrentIndex(1)
-    assert window.menu_bar is not trigger_menus
+    assert not hasattr(window, "mode_bar")
+    assert window.centralWidget() is window.tabs
+    assert window.menu_bar is window.menus
     assert [action.text() for action in window.menu_bar.actions()][0] == "&File"
-    assert window.pages.currentWidget() is not window.tabs
-    # nothing is disabled to keep the modes apart: a WindowShortcut only
-    # matches while its widget is visible, and the inactive bar is in a
-    # hidden stack page (measured in Maya, both shapes)
-    assert all(action.isEnabled() for action in trigger_menus.actions())
-    assert not window.trigger_menus.isVisible()
-
-    window.mode_bar.setCurrentIndex(0)
-    assert window.trigger_menus.isVisible()
     window.close()
 
 
-def test_designer_mode_is_built_lazily(qapp):
+def test_a_session_tab_holds_both_views(qapp):
     window = TriggerWindow(designer_factory=_stub_designer)
     window.show()
-    assert window._designers == {}
-    assert window.designer_pages.count() == 1  # just the empty placeholder
-    window.mode_bar.setCurrentIndex(1)
+    view = window.views[0]
+    titles = [view.sub_tabs.tabText(i) for i in range(view.sub_tabs.count())]
+    assert titles == ["Session", "Guide Designer"]
+    window.close()
+
+
+def test_the_designer_is_built_lazily(qapp):
+    window = TriggerWindow(designer_factory=_stub_designer)
+    window.show()
+    assert window.active_designer is None
+    window.views[0].sub_tabs.setCurrentIndex(1)
     assert window.active_designer is not None
-    assert window.designer_pages.count() == 2
     window.close()
 
 
-def test_open_guide_designer_selects_the_mode_and_sets_the_file(qapp, tmp_path):
+def test_open_guide_designer_shows_the_guides_view(qapp):
     window = TriggerWindow(designer_factory=_stub_designer)
     window.show()
-    designer = window.open_guide_designer(str(tmp_path / "biped.trg"))
-    assert window.mode_bar.currentIndex() == 1
-    assert designer.file_path.endswith("biped.trg")
-    assert window.mode_bar.tabText(1) == "Guide Designer \u2014 biped.trg"
-    assert window.windowTitle().endswith("Guide Designer \u2014 biped.trg")
+    designer = window.open_guide_designer()
+    assert designer is window.views[0].designer
+    assert window.views[0].on_designer_tab
+    assert window.windowTitle().endswith("Guides")
     window.close()
+
 
 
 def test_main_window_tabs_and_files(qapp, tmp_path):

@@ -25,14 +25,12 @@ from tik.trigger.core.exceptions import SessionError
 from tik.trigger.core.document import EXTENSION
 from tik.trigger.session import Session
 
-from .session_view import SessionView
+from .session_view import DESIGNER_TAB, SessionView
 from .widgets import LogWidget
 
 FILE_FILTER = f"Trigger session (*{EXTENSION})"
 VERSION = "0.2.0"
 MAX_RECENT = 8
-TRIGGER_MODE = 0
-DESIGNER_MODE = 1
 
 
 def _holder() -> QtWidgets.QWidget:
@@ -52,19 +50,14 @@ class TriggerWindow(MayaToolWindow):
         self.file_browser = file_browser
         self.events = EventBus()
         self.designer_factory = designer_factory
-        # one Designer per session view: each session owns its guides, so
-        # each owns a Designer and a checkout of the scene
-        self._designers: dict = {}
-        # which tab's guides are currently in the scene
+        # which session tab's guides are currently in the scene
         self._checked_out_view = None
         self.recent_files: list[str] = []
         self.setWindowTitle(f"Trigger {VERSION}")
         self.resize(1180, 720)
         self.setMinimumWidth(900)
         self._build_shell()
-        self._build_trigger_mode()
-        self._build_designer_mode()
-        self.mode_bar.currentChanged.connect(self._activate_mode)
+        self._build_tabs()
         theme.apply(self)
         self.events.subscribe(LOG, self._on_log)
         self.events.subscribe(ERROR, self._on_error)
@@ -72,23 +65,18 @@ class TriggerWindow(MayaToolWindow):
 
     # ------------------------------------------------------------------ ui
     def _build_shell(self) -> None:
-        self.mode_bar = QtWidgets.QTabBar()
-        self.mode_bar.setDrawBase(False)
-        self.mode_bar.setExpanding(False)
-        self.menu_stack = QtWidgets.QStackedWidget()
-        header = QtWidgets.QWidget()
-        header_layout = QtWidgets.QVBoxLayout(header)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(0)
-        header_layout.addWidget(self.mode_bar)
-        header_layout.addWidget(self.menu_stack)
-        self.setMenuWidget(header)  # the tabs sit above the menus
-        self.pages = QtWidgets.QStackedWidget()
-        self.setCentralWidget(self.pages)
-        self.status_stack = QtWidgets.QStackedWidget()
-        self.statusBar().addWidget(self.status_stack, 1)
-        self._mode_menus: dict[int, QtWidgets.QMenuBar] = {}
-        self._active_mode = TRIGGER_MODE
+        """One menu bar over the session tabs.
+
+        The session is the outer container: its guides live in the ``.tr``, so
+        Session and Guide Designer are two views of one document and sit inside
+        the tab rather than above it.
+        """
+        self.menus = QtWidgets.QMenuBar()
+        self._build_menus(self.menus)
+        self.setMenuWidget(self.menus)
+        self.status_strip = QtWidgets.QWidget()
+        self._build_status(self.status_strip)
+        self.statusBar().addWidget(self.status_strip, 1)
         self.log = LogWidget()
         self.log_dock = QtWidgets.QDockWidget("Log", self)
         self.log_dock.setObjectName("TriggerLogDock")
@@ -96,54 +84,19 @@ class TriggerWindow(MayaToolWindow):
         self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.log_dock)
         self.log_dock.hide()
 
-    def add_mode(self, title: str, menu_widget, content, status_widget) -> int:
-        """Register one mode; the three stacks stay index-aligned."""
-        index = self.mode_bar.addTab(title)
-        self.menu_stack.insertWidget(index, menu_widget)
-        self.pages.insertWidget(index, content)
-        self.status_stack.insertWidget(index, status_widget)
-        return index
-
     @property
-    def menu_bar(self) -> Optional[QtWidgets.QMenuBar]:
-        return self._mode_menus.get(self._active_mode)
+    def menu_bar(self) -> QtWidgets.QMenuBar:
+        """The window's one menu bar."""
+        return self.menus
 
-    def _build_trigger_mode(self) -> None:
+    def _build_tabs(self) -> None:
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.setTabsClosable(True)
         self.tabs.setMovable(True)
         self.tabs.setDocumentMode(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self._on_tab_changed)
-        self.trigger_menus = QtWidgets.QMenuBar()
-        self._build_menus(self.trigger_menus)
-        self.trigger_status_strip = QtWidgets.QWidget()
-        self._build_status(self.trigger_status_strip)
-        self._mode_menus[TRIGGER_MODE] = self.trigger_menus
-        self.add_mode("Trigger", self.trigger_menus, self.tabs, self.trigger_status_strip)
-
-    def _build_designer_mode(self) -> None:
-        """Register the tab now, build the Designer on first use.
-
-        ``GuideDesigner`` constructs a ``GuideScene``, which imports Maya, so it
-        cannot be built at window startup — the UI tests run without Maya.
-        """
-        self.designer_menus = QtWidgets.QStackedWidget()
-        self.designer_pages = QtWidgets.QStackedWidget()
-        self.designer_status = QtWidgets.QStackedWidget()
-        for stack in (self.designer_menus, self.designer_pages, self.designer_status):
-            stack.addWidget(_holder())  # shown before any Designer is built
-        self.add_mode("Guide Designer", self.designer_menus,
-                      self.designer_pages, self.designer_status)
-
-    def _activate_mode(self, index: int) -> None:
-        if index == DESIGNER_MODE:
-            self._show_active_designer()
-        self._active_mode = index
-        self.menu_stack.setCurrentIndex(index)
-        self.pages.setCurrentIndex(index)
-        self.status_stack.setCurrentIndex(index)
-        self._update_title()
+        self.setCentralWidget(self.tabs)
 
     def _action(self, menu, text, slot, shortcut: Optional[str] = None, checkable: bool = False):
         action = menu.addAction(text)
@@ -243,7 +196,11 @@ class TriggerWindow(MayaToolWindow):
         return view.current_path() if view else None
 
     def add_session(self, session: Session) -> SessionView:
-        view = SessionView(session, file_browser=self.file_browser)
+        view = SessionView(
+            session, file_browser=self.file_browser,
+            designer_factory=self.designer_factory, events=self.events,
+        )
+        view.sub_tab_changed.connect(lambda index, v=view: self._on_sub_tab_changed(v, index))
         view.title_changed.connect(self._update_title)
         view.open_guides_requested.connect(self.open_guide_designer)
         view.activity.connect(self.status.set_activity)
@@ -411,8 +368,9 @@ class TriggerWindow(MayaToolWindow):
     def _update_title(self) -> None:
         for index, view in enumerate(self.views):
             self.tabs.setTabText(index, view.session.name + ("*" if view.session.is_modified else ""))
-        if self._active_mode == DESIGNER_MODE and self.active_designer is not None:
-            self.setWindowTitle(f"Trigger {VERSION} — {self.active_designer.title}")
+        view = self.current_view
+        if view is not None and view.on_designer_tab:
+            self.setWindowTitle(f"Trigger {VERSION} — {view.session.name} — Guides")
             return
         session = self.session
         if session is None:
@@ -430,109 +388,58 @@ class TriggerWindow(MayaToolWindow):
         self.status.set("references", f"{references} reference(s)" + (f" · {state}" if state else ""))
 
     # ------------------------------------------------------------ guides
-    def designer_for(self, view):
-        """The Guide Designer for one session view, built on first use."""
-        key = id(view)
-        designer = self._designers.get(key)
-        if designer is not None:
-            return designer
-        if self.designer_factory is not None:
-            designer = self.designer_factory()
-        else:
-            from .designer import GuideDesigner
-
-            designer = GuideDesigner(events=self.events, file_browser=self.file_browser)
-        designer.title_changed.connect(
-            lambda title, owner=designer: self._on_designer_title(owner, title)
-        )
-        self._designers[key] = designer
-        self.designer_menus.addWidget(designer.menu_bar)
-        self.designer_pages.addWidget(designer)
-        self.designer_status.addWidget(designer.status_strip)
-        return designer
-
-    def _on_designer_title(self, owner, title: str) -> None:
-        """Only the tab in front gets to name the mode."""
-        if owner is not self.active_designer:
-            return
-        self.mode_bar.setTabText(DESIGNER_MODE, title)
-        self._update_title()
-
+    # --------------------------------------------------------------- guides
     @property
     def active_designer(self):
-        """The Designer of the active session tab, or None before one is built."""
+        """The Guide Designer of the active session tab, if it has been built."""
         view = self.current_view
-        return self._designers.get(id(view)) if view is not None else None
+        return view.designer if view is not None else None
 
-    def current_menu_bar(self):
-        """The menu bar the window is showing for the active mode."""
-        if self._active_mode == DESIGNER_MODE:
-            designer = self.active_designer
-            if designer is not None:
-                return designer.menu_bar
-        return self._mode_menus.get(self._active_mode)
-
-    def _show_active_designer(self):
-        """Put the active tab's Designer in front, and check its session out.
-
-        The scene holds one checkout at a time, so the tab being left keeps its
-        work before the incoming one takes the scene. A scene belonging to a
-        session we do not have open is reported, never seized: discarding
-        somebody else's working copy has to be a decision.
-        """
+    def open_guide_designer(self, guides_path: str = ""):
+        """Show the active session's Guide Designer."""
         view = self.current_view
         if view is None:
             return None
+        view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
+        return view.designer
+
+    def _hand_over_to(self, view) -> None:
+        """Give the scene's checkout to ``view``'s session.
+
+        Switching *session tabs* is the hand-off; switching between a session's
+        own sub-tabs changes nothing about the scene.
+        """
         outgoing = self._checked_out_view
-        if outgoing is not view:
-            if outgoing is not None and outgoing not in self.views:
-                outgoing = None  # its tab is gone; nothing to hand over
-            try:
-                Session.hand_over(
-                    outgoing.session if outgoing is not None else None, view.session
-                )
-                self._checked_out_view = view
-            except SessionError as error:
-                self.events.log(str(error), level="warning")
-            except Exception as error:  # noqa: BLE001 - keep the tool alive
-                self.events.log(f"Could not check out guides: {error}", level="warning")
-        designer = self.designer_for(view)
-        designer.set_owner(view.session.name)
-        self.designer_menus.setCurrentWidget(designer.menu_bar)
-        self.designer_pages.setCurrentWidget(designer)
-        self.designer_status.setCurrentWidget(designer.status_strip)
-        self._mode_menus[DESIGNER_MODE] = designer.menu_bar
-        self.mode_bar.setTabText(DESIGNER_MODE, designer.title)
-        self._update_title()
-        return designer
+        if outgoing is view:
+            return
+        if outgoing is not None and outgoing not in self.views:
+            outgoing = None  # its tab is gone; nothing to hand over
+        try:
+            Session.hand_over(
+                outgoing.session if outgoing is not None else None, view.session
+            )
+            self._checked_out_view = view
+        except SessionError as error:
+            self.events.log(str(error), level="warning")
+        except Exception as error:  # noqa: BLE001 - keep the tool alive
+            self.events.log(f"Could not check out guides: {error}", level="warning")
 
     def _on_tab_changed(self, _index: int) -> None:
-        if self._active_mode == DESIGNER_MODE:
-            self._show_active_designer()
+        view = self.current_view
+        if view is not None and view.designer is not None:
+            self._hand_over_to(view)
+        self._update_title()
+
+    def _on_sub_tab_changed(self, view, index: int) -> None:
+        """The first time a session's Designer opens, its guides get the scene."""
+        if index == DESIGNER_TAB:
+            self._hand_over_to(view)
         self._update_title()
 
     def _drop_designer(self, view) -> None:
-        """Tear down and forget a closed tab's Designer."""
         if self._checked_out_view is view:
             self._checked_out_view = None
-        designer = self._designers.pop(id(view), None)
-        if designer is None:
-            return
-        designer.teardown()
-        for stack, widget in (
-            (self.designer_menus, designer.menu_bar),
-            (self.designer_pages, designer),
-            (self.designer_status, designer.status_strip),
-        ):
-            stack.removeWidget(widget)
-            widget.setParent(None)
-
-    def open_guide_designer(self, guides_path: str = ""):
-        designer = self._show_active_designer()
-        if designer is not None and guides_path:
-            designer.set_file(guides_path)
-        self.mode_bar.setCurrentIndex(DESIGNER_MODE)
-        return designer
+        view.teardown()
 
     # -------------------------------------------------------------- events
     def _on_log(self, level: str = "info", message: str = "", **_kw) -> None:
@@ -550,8 +457,8 @@ class TriggerWindow(MayaToolWindow):
             if view.session.is_modified and not self.ask_discard(view.session):
                 event.ignore()
                 return
-        for designer in list(self._designers.values()):
-            designer.teardown()
+        for view in self.views:
+            view.teardown()
         super().closeEvent(event)
 
 
