@@ -1,5 +1,7 @@
 # Guides in the Session Implementation Plan
 
+**Status: complete** (2026-08-31). All 6 tasks landed; unit 1124, integration 178, UI 80 passing.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Move guide data into the `.tr` session document so a session is a self-contained rig description, and give each session its own Guide Designer and its own checkout of the Maya scene — making "whose guides are these?" a well-formed question.
@@ -39,7 +41,7 @@ Spec §6.4 says the Designer "becomes a view owned by `SessionView`, one per tab
 - `guides` is a serialized `GuideDocument` (`GuideDocument.to_dict()`), or `{}` when the session has none.
 - `is_modified` needs no change: it already compares `document.to_dict()`, so a guide edit makes the session dirty for free.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/test_document_trigger.py`:
 
@@ -80,12 +82,12 @@ def test_editing_guides_makes_the_document_differ():
     assert document.to_dict() != before
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_document_trigger.py -q`
 Expected: FAIL — `TypeError: Document.__init__() got an unexpected keyword argument 'guides'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/python/tik/trigger/core/document.py`:
 
@@ -102,17 +104,17 @@ In `src/python/tik/trigger/core/document.py`:
 - In `to_dict`, add `"guides": copy.deepcopy(self.guides),`
 - In `from_dict`, add `guides=dict(data.get("guides") or {}),`
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_document_trigger.py tests/unit/test_import_boundaries.py -q`
 Expected: PASS
 
-- [ ] **Step 5: Run the unit suite**
+- [x] **Step 5: Run the unit suite**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy tests/unit/invoke.py`
 Expected: PASS — the schema bump is additive.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/python/tik/trigger/core/document.py tests/unit/test_document_trigger.py
@@ -140,7 +142,7 @@ The two directions of the working-copy relationship, plus the stamp that makes "
 - `Session.owns_scene_guides -> bool` — the stamp matches (or the scene has none).
 - `save()` calls `capture_guides()` first, but only when this session owns the scene's guides.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/test_session_guides_trigger.py`:
 
@@ -265,12 +267,12 @@ def test_a_saved_session_round_trips_its_guides(tmp_path):
     assert GuideScene().get(handle.instance_id).name == "tail"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_session_guides_trigger.py -q`
 Expected: FAIL — `AttributeError: 'Session' object has no attribute 'session_id'`
 
-- [ ] **Step 3: Add the stamp to the tags and the store**
+- [x] **Step 3: Add the stamp to the tags and the store**
 
 In `src/python/tik/trigger/maya/tags.py`, after `DOCUMENT`:
 
@@ -293,7 +295,7 @@ def write_stamp(session_id: str) -> None:
     nodes.holder().meta[tags.SESSION] = str(session_id)
 ```
 
-- [ ] **Step 4: Implement the Session half**
+- [x] **Step 4: Implement the Session half**
 
 In `src/python/tik/trigger/session.py`, add to `Session` (Maya imported inside the methods, never at module level):
 
@@ -367,17 +369,17 @@ In `save()`, before `self.document.save(target)`:
         self.capture_guides()
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_session_guides_trigger.py -q`
 Expected: PASS (11 tests)
 
-- [ ] **Step 6: Confirm session.py is still Maya-free at import**
+- [x] **Step 6: Confirm session.py is still Maya-free at import**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" TIK_TESTS_NO_MAYA=1 QT_QPA_PLATFORM=offscreen mayapy -m pytest tests/ui -q`
 Expected: PASS — a Maya import at module scope in `session.py` would break these.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/python/tik/trigger/session.py src/python/tik/trigger/maya/tags.py src/python/tik/trigger/guides/document_store.py tests/unit/test_session_guides_trigger.py
@@ -398,7 +400,7 @@ The version-skew fix. `guides_file` becomes an override for a shared guide libra
 - `guides_file` stays a `FileField` but is optional; empty means "this session's guides".
 - The action reads `ctx.session.document.guides` when no file is set.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/integration/trigger/test_session_build_trigger.py`:
 
@@ -434,12 +436,12 @@ def test_kinematics_without_guides_or_a_file_reports_clearly(tmp_path):
         session.build()
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/integration/trigger/test_session_build_trigger.py -q`
 Expected: FAIL — `kinematics: no guides file set.`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `kinematics.py`, change the field help and `run`:
 
@@ -474,12 +476,12 @@ and in `run`, replace the `if not self.guides_file: raise` opening with:
             handles = guides.instances()
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/integration/trigger/test_session_build_trigger.py -q`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/actions/kinematics/kinematics.py tests/integration/trigger/test_session_build_trigger.py
@@ -496,7 +498,7 @@ git commit -m "feat(tik.trigger): kinematics builds this session's guides by def
 - Modify: `src/python/tik/trigger/guides/scene.py` (`_entries_from_import`)
 - Test: `tests/unit/test_guides_trigger.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/test_guides_trigger.py`:
 
@@ -525,12 +527,12 @@ def test_importing_remaps_connections_onto_the_new_ids(guides, tmp_path):
     assert new_child.inputs["root"] == f"{new_parent.key}.root"
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_guides_trigger.py -q`
 Expected: FAIL — duplicate names.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `_entries_from_import`, uniquify the name before building the entry. The connection remap already resolves through `keys`, which is built from the *entries being imported*, so it follows the new names automatically — but the key map must be built from the pre-rename keys and the entries' post-rename ids:
 
@@ -562,12 +564,12 @@ In `_entries_from_import`, uniquify the name before building the entry. The conn
 
 Note the rename must happen *before* `unique_name` is consulted for the next module, and `self.unique_name` reads `self.document.modules`, so appending as we go is what makes a two-module import uniquify against itself.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_guides_trigger.py -q`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/scene.py tests/unit/test_guides_trigger.py
@@ -590,7 +592,7 @@ The Designer mode's page becomes a stack that follows the active session tab.
 - `TriggerWindow._ensure_designer()` returns the designer for the **active** session view.
 - Closing a session tab tears down and drops its designer.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/ui/test_designer_per_session.py`:
 
@@ -639,23 +641,23 @@ def test_the_designer_is_not_built_until_the_mode_is_opened(window):
     assert window._designers == {}
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" TIK_TESTS_NO_MAYA=1 QT_QPA_PLATFORM=offscreen mayapy -m pytest tests/ui/test_designer_per_session.py -q`
 Expected: FAIL — `AttributeError: 'TriggerWindow' object has no attribute 'designer_for'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Replace the single `self._guide_designer` with a per-view map. In `_build_designer_mode`, make the page holder a `QStackedWidget`; `designer_for(view)` builds a `GuideDesigner` for that view (passing `view.session`), adds it to the stack, and remembers it. `_activate_mode(DESIGNER_MODE)` and the tab-changed signal both call `_show_active_designer()`, which sets the stack's current widget and swaps the mode's menu bar and status strip. `close_tab` calls `teardown()` on that view's designer and drops it.
 
 Keep `open_guide_designer` working by delegating to the active view.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" TIK_TESTS_NO_MAYA=1 QT_QPA_PLATFORM=offscreen mayapy -m pytest tests/ui -q`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/ui/main.py tests/ui/test_designer_per_session.py
@@ -673,7 +675,7 @@ The scene holds one checkout at a time, and which one is always visible.
 - Modify: `src/python/tik/trigger/ui/designer/window.py`
 - Test: `tests/ui/test_designer_per_session.py`, `tests/integration/trigger/test_session_checkout_trigger.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/ui/test_designer_per_session.py`:
 
@@ -751,20 +753,20 @@ def test_a_checkout_round_trips_poses_between_two_sessions():
     assert placed == pytest.approx([8.0, 1.0, 2.0])
 ```
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run both suites; expect failures on the missing activation hook.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `_show_active_designer()`, before showing: capture the outgoing view's guides (it owns them), then for the incoming view call `session.checkout_guides()` inside a `try/except SessionError`, logging the message rather than forcing. Add a status field to the Designer showing the owning session's name, set from the host.
 
-- [ ] **Step 4: Run every suite**
+- [x] **Step 4: Run every suite**
 
 Run: `mayapy tests/unit/invoke.py`, `mayapy tests/integration/invoke.py`, and the UI suite.
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/ui/ tests/ui/test_designer_per_session.py tests/integration/trigger/test_session_checkout_trigger.py

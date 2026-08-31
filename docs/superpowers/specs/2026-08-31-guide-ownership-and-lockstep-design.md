@@ -1,7 +1,12 @@
 # Guide Ownership, Lockstep and Guides-in-Session — Design Spec
 
 Date: 2026-08-31
-Status: brainstormed with Arda Kutlu; awaiting spec review.
+Status: implemented (2026-08-31). Items 1-5 in
+`docs/superpowers/plans/2026-08-31-guide-ownership-and-lockstep.md`, items 6-7 in
+`docs/superpowers/plans/2026-08-31-guides-in-session.md`.
+One deliberate deviation: §6.4's Designer-under-the-tabs is implemented as the
+Designer mode's pages following the active session tab -- same behaviour, far
+less widget surgery.
 
 Revises `2026-08-29-trigger-ui-v3-and-io-graph-design.md` (the I/O graph stays;
 its storage changes) and supersedes the window-level Designer mode in
