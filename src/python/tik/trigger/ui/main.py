@@ -19,6 +19,7 @@ from typing import Optional
 from tik.shared.ui import theme
 from tik.shared.ui.maya_window import HAS_MAYA, MayaToolWindow
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
+from tik.shared.ui.scene_watcher import SceneWatcher
 from tik.shared.ui.status import StatusFields
 from tik.trigger.core import ERROR, LOG, EventBus, versioning
 from tik.trigger.core.exceptions import SessionError
@@ -582,6 +583,9 @@ def show(dockable: bool = True) -> TriggerWindow:
     import tik.trigger as trigger
 
     trigger.load_plugins()
+    # a previous instance's watchers are still registered with Maya, and after a
+    # module reload they fire into stale code
+    SceneWatcher.uninstall_all()
     TriggerWindow.teardown_workspace_control()
     window = TriggerWindow()
     window.show_tool(dockable=dockable)

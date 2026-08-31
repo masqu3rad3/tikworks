@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import weakref
 from typing import Callable, Iterable, Optional
 
 from tik.shared.ui.Qt import QtCore
@@ -22,6 +23,21 @@ DEFAULT_EVENTS = ("SelectionChanged", "DagObjectCreated", "SceneOpened", "NewSce
 
 class SceneWatcher(QtCore.QObject):
     """Debounced, re-entrancy-guarded scene observer."""
+
+    #: Every watcher ever installed, weakly held. Relaunching a tool leaves the
+    #: previous instance's watchers registered with Maya, still firing into the
+    #: code they captured -- which after a module reload is stale code. The
+    #: launcher clears them through :meth:`uninstall_all`.
+    _live: "weakref.WeakSet" = weakref.WeakSet()
+
+    @classmethod
+    def uninstall_all(cls) -> None:
+        """Stop every watcher in this interpreter. Called when a tool relaunches."""
+        for watcher in list(cls._live):
+            try:
+                watcher.uninstall()
+            except Exception:  # noqa: BLE001 - one bad watcher must not block the rest
+                LOG.debug("could not uninstall a scene watcher", exc_info=True)
 
     def __init__(
         self,
@@ -54,6 +70,7 @@ class SceneWatcher(QtCore.QObject):
     # ------------------------------------------------------------ lifecycle
     def install(self) -> list[int]:
         self.uninstall()
+        SceneWatcher._live.add(self)
         install = self._install_job or self._maya_install
         for event in self.events:
             try:
