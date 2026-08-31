@@ -14,7 +14,6 @@ __all__ = [
     "GuideHandle",
     "GuideScene",
     "make_record",
-    "module_node",
 ]
 
 
@@ -23,9 +22,4 @@ def __getattr__(name: str):
         from .scene import GuideScene
 
         return GuideScene
-    if name == "module_node":
-        # importlib, not ``from . import``: the latter re-enters __getattr__.
-        import importlib
-
-        return importlib.import_module(f"{__name__}.module_node")
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

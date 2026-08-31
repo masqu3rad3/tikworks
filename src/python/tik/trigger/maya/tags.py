@@ -25,7 +25,6 @@ DEFORM = "deform"
 CONTROLLER = "controller"
 OUTPUT = "output"
 INPUT = "input"
-MODULE_NODE = "module_node"  # KIND value for a module document node
 
 BEHAVIOUR = "behaviour"  # FK-like: follows its joint, equal values mirror
 WORLD = "world"  # IK/world: world-aligned, mirroring is tool logic

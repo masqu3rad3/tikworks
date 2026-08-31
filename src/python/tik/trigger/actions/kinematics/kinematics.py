@@ -49,8 +49,10 @@ class Kinematics(Action):
         guides = GuideScene(ctx.events)
         if self.guides_file:
             handles = guides.import_(ctx.resolve(self.guides_file))
+            document = guides.document
         else:
             handles = self._checkout_session_guides(guides, ctx)
+            document = ctx.session.document.guides
         if self.guide_roots:
             wanted = set(self.guide_roots)
             roots = [handle for handle in handles if handle.name in wanted or handle.root.name in wanted]
@@ -62,7 +64,8 @@ class Kinematics(Action):
         else:
             scope = [handle.instance_id for handle in handles]
         report = Builder(ctx.events).build(
-            scope=scope, rig_name=self.rig_name, afterlife=self.after_build
+            scope=scope, document=document, rig_name=self.rig_name,
+            afterlife=self.after_build,
         )
         source = self.guides_file or "this session"
         ctx.log(f"Kinematics built {report.count} module(s) from {source}.")
@@ -74,8 +77,7 @@ class Kinematics(Action):
         The session is a self-contained rig description, so there is no version
         skew between it and a separate guides file to get wrong.
         """
-        from tik.trigger.core.guide_document import GuideDocument
-        from tik.trigger.guides import document_store, regenerate
+        from tik.trigger.guides import regenerate
 
         document = getattr(ctx.session, "document", None)
         stored = getattr(document, "guides", None)
@@ -83,11 +85,10 @@ class Kinematics(Action):
             raise ActionExecutionError(
                 "kinematics: no guides in this session and no guides file set."
             )
-        guides.clear()
-        document_store.write_document(stored)
-        guides.reload()
-        regenerate.regenerate_all(guides.document)
-        return guides.instances()
+        session_guides = ctx.session.guides
+        session_guides.clear_rendering()
+        regenerate.regenerate_all(stored)
+        return session_guides.instances()
 
 
 def _descendants(guides, roots) -> list[str]:

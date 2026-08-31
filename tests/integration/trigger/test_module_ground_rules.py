@@ -34,7 +34,7 @@ def _solo(module_type):
             get_module(module_type)(name=module_type),
             parent=ParentRef(body.instance_id, "root"),
         )
-    report = Builder().build(rig_name="rules", afterlife="keep")
+    report = Builder().build(document=scene.document, rig_name="rules", afterlife="keep")
     return report.rigs[instance.instance_id]
 
 
@@ -48,7 +48,7 @@ def connected_rig():
         get_module("arm")(name="arm", side="L"),
         parent=ParentRef(body.instance_id, "root"),
     )
-    report = Builder().build(rig_name="rules", afterlife="keep")
+    report = Builder().build(document=scene.document, rig_name="rules", afterlife="keep")
     return report, body, arm
 
 
@@ -165,7 +165,7 @@ def test_module_parents_everything_it_creates(module_type):
         )
     else:
         scene.create_guides(get_module(module_type)(name=module_type))
-    Builder().build(rig_name="rules", afterlife="delete")
+    Builder().build(document=scene.document, rig_name="rules", afterlife="delete")
 
     # trigger_modules_grp holds the guide *document*, which deliberately
     # outlives the guides it renders -- it is not module output.
@@ -204,7 +204,7 @@ def test_space_inputs_get_no_socket():
         }),
         parent=ParentRef(body.instance_id, "root"),
     )
-    report = Builder().build(rig_name="rules", afterlife="keep")
+    report = Builder().build(document=scene.document, rig_name="rules", afterlife="keep")
     rig = report.rigs[arm.instance_id]
 
     assert "root" in rig.attachments

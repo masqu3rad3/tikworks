@@ -118,12 +118,12 @@ def _rows(handle, rows):
 
 # ------------------------------------------------------------------- build
 def test_builds_in_order_and_connects(pair):
-    _scene, body, tail = pair
+    scene, body, tail = pair
     events = EventBus()
     seen = []
     events.subscribe("progress", lambda **kw: seen.append(kw["label"]))
 
-    report = Builder(events).build(rig_name="rig", afterlife="hide")
+    report = Builder(events).build(document=scene.document, rig_name="rig", afterlife="hide")
 
     assert report.built == [body.instance_id, tail.instance_id]
     assert seen == ["Building body", "Building tail"]
@@ -146,22 +146,22 @@ def test_scene_node_sources_must_exist_and_optional_inputs_may_be_empty(pair):
     scene, _body, tail = pair
     tail.set_input("space", "some_jnt")
     with pytest.raises(AttachError) as info:
-        Builder().build()
+        Builder().build(document=scene.document, )
     assert "some_jnt" in str(info.value) and "L_tail.space" in str(info.value)
 
     tm.Transform.create(name="some_jnt")
-    report = Builder().build(afterlife="keep")
+    report = Builder().build(document=scene.document, afterlife="keep")
     assert ("L_tail.space", "some_jnt") in report.connections
 
     tail.set_input("root", "body.nope")
     with pytest.raises(AttachError) as info:
-        Builder().build()
+        Builder().build(document=scene.document, )
     assert "not built" in str(info.value)
 
     tail.set_input("root", "")
     tail.set_input("space", "")
     with pytest.raises(AttachError) as info:
-        Builder().build()
+        Builder().build(document=scene.document, )
     assert "required input" in str(info.value)
 
 
@@ -172,7 +172,7 @@ def test_a_failing_module_is_named_in_the_error(toys):
     events.subscribe("error", lambda **kw: errors.append(kw["context"]))
 
     with pytest.raises(BuildError) as info:
-        Builder(events).build()
+        Builder(events).build(document=toys.document, )
 
     assert info.value.instance_id == boom.instance_id
     assert errors == ["building kaboom"]
@@ -182,24 +182,23 @@ def test_missing_guides_fail_validation(pair):
     scene, _body, tail = pair
     # the segments are a chain, so deleting the first takes the rest with it
     cmds.delete(scene.guide_node(tail.instance_id, "segment", 0).long_name)
-    scene.invalidate()
 
     with pytest.raises(BuildError) as info:
-        Builder().build()
+        Builder().build(document=scene.document, )
     assert "needs at least" in str(info.value)
 
 
 def test_empty_scene_and_bad_afterlife(toys):
-    assert Builder().build().count == 0
+    assert Builder().build(document=toys.document, ).count == 0
     with pytest.raises(ValueError):
-        Builder().build(afterlife="burn")
+        Builder().build(document=toys.document, afterlife="burn")
 
 
 # ------------------------------------------------------------- bind parent
 def test_bind_parent_comes_from_the_producer(pair):
     """A connected module builds its bind joints inside the producer's."""
-    _scene, body, tail = pair
-    report = Builder().build(rig_name="rig", afterlife="keep")
+    scene, body, tail = pair
+    report = Builder().build(document=scene.document, rig_name="rig", afterlife="keep")
 
     producer = report.rigs[body.instance_id]
     consumer = report.rigs[tail.instance_id]
@@ -211,7 +210,7 @@ def test_bind_parent_comes_from_the_producer(pair):
 
 def test_bind_parent_defaults_to_the_modules_own_group_when_unconnected(toys):
     solo = toys.add("toy_root", name="solo")
-    report = Builder().build(rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
     rig = report.rigs[solo.instance_id]
     assert rig.bind_parent.long_name == rig.groups.bind.long_name
 
@@ -226,7 +225,7 @@ def test_space_inputs_do_not_feed_build_order(toys):
     first.set_input("root_b", "b.root")
     second.set_input("root_a", "a.root")
 
-    report = Builder().build(rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
     assert report.count == 2
 
 
@@ -241,7 +240,7 @@ def test_space_connections_are_grouped_by_control_and_mode(toys):
     arm.set_input("root_body", "body.root")
     arm.set_input("root_head", "head.root")
 
-    report = Builder().build(rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
 
     control = report.rigs[arm.instance_id].controller_by_role("root")
     assert control.transform.has_attr("parentSwitch")
@@ -261,7 +260,7 @@ def test_row_order_is_enum_order(toys):
     arm.set_input("root_body", "body.root")
     arm.set_input("root_head", "head.root")
 
-    report = Builder().build(rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
 
     control = report.rigs[arm.instance_id].controller_by_role("root")
     listed = cmds.attributeQuery("parentSwitch", node=control.transform.long_name, listEnum=True)[0]
@@ -272,7 +271,7 @@ def test_an_unconnected_space_row_is_skipped(toys):
     arm = toys.add("toy_root", name="arm")
     _rows(arm, [{"control": "root", "mode": "parent", "label": "ghost"}])
 
-    report = Builder().build(rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
 
     control = report.rigs[arm.instance_id].controller_by_role("root")
     assert not control.transform.has_attr("parentSwitch")

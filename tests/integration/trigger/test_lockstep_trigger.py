@@ -11,9 +11,12 @@ from tik.trigger.maya import tags
 
 @pytest.fixture
 def scene():
+    """A session's guides. The session owns them; the scene renders them."""
+    from tik.trigger.session import Session
+
     trigger.load_plugins()
     cmds.file(new=True, force=True)
-    yield GuideScene()
+    yield Session().guides
     cmds.file(new=True, force=True)
 
 
@@ -113,14 +116,18 @@ def test_sync_on_a_clean_scene_changes_nothing(scene):
     assert after == before  # nothing was rebuilt
 
 
-def test_a_settings_change_and_its_redraw_undo_together(scene):
-    """One Ctrl+Z takes back both the setting and the joints it drew."""
+def test_a_settings_change_undoes_with_the_session(scene):
+    """Structure is a session edit, so Trigger's undo takes it back.
+
+    The rendering follows on the next sync, exactly as it does for any other
+    structural change.
+    """
     handle = scene.add("fkchain", side="C", name="tail", segments=2)
     handle.segments = 4
     assert ("segment", 3) in scene.guide_nodes(handle.instance_id)
-    cmds.undo()
-    scene.reload()
+    scene.session.undo()
     assert scene.get(handle.instance_id).segments == 2
+    scene.sync()
     assert ("segment", 3) not in scene.guide_nodes(handle.instance_id)
 
 
@@ -191,7 +198,6 @@ def test_document_survives_a_full_round_trip(scene):
         cmds.delete(joint.long_name)
     scene.sync()
 
-    scene.reload()
     assert scene.document.to_dict() == before
     restored = scene.guide_nodes(handle.instance_id)[("segment", 1)]
     placed = cmds.xform(restored.long_name, query=True, worldSpace=True, translation=True)
@@ -204,7 +210,6 @@ def test_connections_survive_a_rename_in_maya(scene):
     child = scene.add("fkchain", side="L", name="tail", segments=1)
     scene.connect(f"{child.key}.root", f"{parent.key}.root")
     cmds.rename(parent.root.long_name, "renamed_by_hand")
-    scene.reload()
     assert scene.get(child.instance_id).inputs["root"] == f"{parent.key}.root"
 
 
@@ -226,8 +231,7 @@ def test_a_build_that_deletes_the_guides_keeps_them_deleted(scene):
     from tik.trigger.maya.build import Builder
 
     handle = scene.add("base", side="C", name="body")
-    Builder().build(rig_name="afterlife", afterlife="delete")
-    scene.reload()
+    Builder().build(document=scene.document, rig_name="afterlife", afterlife="delete")
     diff = scene.sync()
     assert scene.guide_nodes(handle.instance_id) == {}
     assert scene.dismissed is True
@@ -245,8 +249,7 @@ def test_restoring_brings_dismissed_guides_back(scene):
     root = scene.guide_nodes(handle.instance_id)[("root", 0)]
     cmds.xform(root.long_name, worldSpace=True, translation=(3.0, 4.0, 5.0))
     scene.sync()
-    Builder().build(rig_name="afterlife", afterlife="delete")
-    scene.reload()
+    Builder().build(document=scene.document, rig_name="afterlife", afterlife="delete")
     scene.restore()
     restored = scene.guide_nodes(handle.instance_id)[("root", 0)]
     placed = cmds.xform(restored.long_name, query=True, worldSpace=True, translation=True)
@@ -258,8 +261,7 @@ def test_authoring_again_after_a_build_un_dismisses(scene):
     from tik.trigger.maya.build import Builder
 
     scene.add("base", side="C", name="body")
-    Builder().build(rig_name="afterlife", afterlife="delete")
-    scene.reload()
+    Builder().build(document=scene.document, rig_name="afterlife", afterlife="delete")
     handle = scene.add("fkchain", side="C", name="tail", segments=1)
     assert scene.guide_nodes(handle.instance_id)
     assert scene.dismissed is False
@@ -269,7 +271,6 @@ def test_keeping_the_guides_does_not_dismiss_them(scene):
     from tik.trigger.maya.build import Builder
 
     handle = scene.add("base", side="C", name="body")
-    Builder().build(rig_name="afterlife", afterlife="keep")
-    scene.reload()
+    Builder().build(document=scene.document, rig_name="afterlife", afterlife="keep")
     assert scene.dismissed is False
     assert scene.guide_nodes(handle.instance_id)

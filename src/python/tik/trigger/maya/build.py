@@ -108,7 +108,7 @@ def connect_space(rig, control, mode, targets, labels) -> None:
     )
 
 
-def apply_afterlife(instances, mode: str) -> None:
+def apply_afterlife(instances, mode: str, document=None) -> None:
     """What happens to the guides once the rig is built.
 
     Anything but ``keep`` is a deliberate dismissal, and it has to be recorded:
@@ -117,9 +117,8 @@ def apply_afterlife(instances, mode: str) -> None:
     """
     if mode == "keep":
         return
-    from tik.trigger.guides import document_store
-
-    document_store.write_dismissed(True)
+    if document is not None:
+        document.dismissed = True
     if not cmds.objExists(tags.GUIDE_HOLDER):
         return
     holder = guide_nodes.holder()
@@ -155,11 +154,17 @@ class Builder:
         scope: Any = "scene",
         rig_name: str = "trigger",
         afterlife: str = "delete",
+        document=None,
     ) -> BuildReport:
         if afterlife not in AFTERLIFE_MODES:
             raise ValueError(f"afterlife must be one of {AFTERLIFE_MODES}.")
-        instances = self.order(guide_nodes.find_instances(scope))
-        known_keys = {item.key for item in (instances if scope == "scene" else guide_nodes.find_instances("scene"))}
+        instances = self.order(guide_nodes.find_instances(scope, document))
+        known_keys = {
+            item.key for item in (
+                instances if scope == "scene"
+                else guide_nodes.find_instances("scene", document)
+            )
+        }
         report = BuildReport()
         total = len(instances)
         if not total:
@@ -200,7 +205,7 @@ class Builder:
                     instance, module_cls, inputs, by_key, report, known_keys
                 )
             self._connect_spaces(instances, report, by_key)
-            apply_afterlife(instances, afterlife)
+            apply_afterlife(instances, afterlife, document)
         self.events.log(f"Built {total} module(s) into '{rig_name}'.")
         return report
 

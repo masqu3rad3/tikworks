@@ -32,9 +32,8 @@ def test_add_settings_attrs_export_import_roundtrip(guides, tmp_path):
     arm.pole_pin = True
     assert arm.pole_pin is True
     root = arm.root
-    # settings are attributes on the module document node now, so that deleting
-    # a guide joint cannot take them with it
-    assert guides.settings_plug(arm.instance_id, "pole_pin").value is True
+    # settings live in the session's document -- nothing in the scene holds them
+    assert guides.document.module(arm.instance_id).settings["pole_pin"] is True
     with pytest.raises(AttributeError):
         arm.nope = 1
     cmds.xform(guides.guide_node(tail.instance_id, "segment", 2).long_name, ws=True, t=(0, 3, -9))

@@ -82,10 +82,10 @@ class ActionHandle:
     def enabled(self, value: bool) -> None:
         if self._linked:
             self._override()["enabled"] = bool(value)
-            self._session._touch()
+            self._session.touch()
         else:
             self._node.enabled = bool(value)
-            self._session._touch()
+            self._session.touch()
 
     # ---------------------------------------------------------- settings
     def _override(self) -> dict:
@@ -120,7 +120,7 @@ class ActionHandle:
             self._override().setdefault("settings", {})[item] = validated
         else:
             self._node.settings[item] = validated
-        self._session._touch()
+        self._session.touch()
 
     def set(self, **settings) -> "ActionHandle":
         for key, value in settings.items():
@@ -140,7 +140,7 @@ class ActionHandle:
                 self._node.settings.clear()
             else:
                 self._node.settings.pop(field_name, None)
-        self._session._touch()
+        self._session.touch()
 
     # ---------------------------------------------------------- children
     @property
@@ -193,6 +193,7 @@ class Session:
         self.file_path: Optional[Path] = None
         self._saved_state = self.document.to_dict()
         self._reference_cache: dict[str, Document] = {}
+        self._guides = None
         self._undo: list[dict] = []
         self._redo: list[dict] = []
         self._last_state = self.document.to_dict()
@@ -206,8 +207,13 @@ class Session:
     # ------------------------------------------------------------ state
     UNDO_LIMIT = 50
 
-    def _touch(self) -> None:
-        """Record an undo step when the document changed since the last touch."""
+    def touch(self) -> None:
+        """Record an undo step when the document changed since the last touch.
+
+        Public because the guide layer calls it: a guide edit is a document
+        edit, and reaching across modules for a private method to say so is the
+        kind of coupling that rots.
+        """
         self._reference_cache.clear()
         state = self.document.to_dict()
         if state != self._last_state:
@@ -299,6 +305,15 @@ class Session:
     # guides are these?" always has an answer.
 
     @property
+    def guides(self):
+        """This session's guides. The scene renders them; the session owns them."""
+        if self._guides is None:
+            from tik.trigger.guides import GuideScene
+
+            self._guides = GuideScene(events=self.events, session=self)
+        return self._guides
+
+    @property
     def session_id(self) -> str:
         """Stable id for this session, used to stamp its checkout in the scene."""
         found = self.document.meta.get("session_id")
@@ -306,11 +321,6 @@ class Session:
             found = uuid.uuid4().hex
             self.document.meta["session_id"] = found
         return found
-
-    def _guide_scene(self):
-        from tik.trigger.guides import GuideScene
-
-        return GuideScene(self.events)
 
     @staticmethod
     def _scene_available() -> bool:
@@ -335,10 +345,15 @@ class Session:
         return not stamp or stamp == self.session_id
 
     def capture_guides(self) -> bool:
-        """Fold the scene's guide document into this session. Scene -> document.
+        """Read the scene's poses into this session's guides. Scene -> document.
 
         A no-op without a live Maya scene: a session can legitimately be opened
         and edited headlessly, and then its stored guides are already the truth.
+
+        No guard is needed against an empty scene. Capture only updates the
+        poses and guide attrs of modules the document already holds -- it cannot
+        add or remove one -- so there is nothing here that could write emptiness
+        over the session's guides.
         """
         if not self._scene_available():
             return False
@@ -346,23 +361,11 @@ class Session:
 
         if not self.owns_scene_guides:
             return False
-        scene = self._guide_scene()
-        if not document_store.read_stamp() and not scene.document.modules:
-            # An unstamped, guide-less scene was never this session's working
-            # copy -- reopening a saved file in a fresh scene, say. Capturing
-            # here would write emptiness over everything the session stores.
-            # An *unstamped scene with guides* is a first capture, and our own
-            # stamp means the scene is authoritative even when we emptied it.
-            return False
-        # poses first, but never redraw: capturing must not edit the scene
-        scene.sync(regenerate_stale=False)
-        from tik.trigger.core.guide_document import GuideDocument
-
-        captured = scene.document.to_dict()
-        changed = captured != self.document.guides.to_dict()
-        self.document.guides = GuideDocument.from_dict(captured)
+        before = self.document.guides.to_dict()
+        # poses only, never a redraw: capturing must not edit the scene
+        self.guides.sync(regenerate_stale=False)
         document_store.write_stamp(self.session_id)
-        return changed
+        return self.document.guides.to_dict() != before
 
     @staticmethod
     def hand_over(outgoing: Optional["Session"], incoming: "Session") -> None:
@@ -392,7 +395,6 @@ class Session:
         session is reported rather than silently adopted -- discarding someone
         else's working copy has to be a decision, not a side effect.
         """
-        from tik.trigger.core.guide_document import GuideDocument
         from tik.trigger.guides import document_store, regenerate
 
         if not self._scene_available():
@@ -402,10 +404,8 @@ class Session:
                 "The guides in this scene belong to another session. Save that "
                 "session first, or check out with force=True."
             )
-        scene = self._guide_scene()
-        scene.clear()
-        document_store.write_document(self.document.guides)
-        scene.reload()
+        scene = self.guides
+        scene.clear_rendering()
         regenerate.regenerate_all(scene.document)
         document_store.write_stamp(self.session_id)
 
@@ -470,30 +470,30 @@ class Session:
             index = [node.name for node in siblings].index(parts[-1]) + 1
         node = ActionNode(name=name or action_type, type=action_type, settings=action.values())
         path = self.document.add(node, parent=parent_path, index=index)
-        self._touch()
+        self.touch()
         return self[path]
 
     def remove(self, path: str | ActionHandle) -> None:
         self.document.remove(path.path if isinstance(path, ActionHandle) else path)
-        self._touch()
+        self.touch()
 
     def move(self, path: str | ActionHandle, *, parent: Optional[str] = None,
              index: Optional[int] = None, after: Optional[str] = None) -> ActionHandle:
         path = path.path if isinstance(path, ActionHandle) else path
         new_path = self.document.move(path, parent=parent, index=index, after=after)
-        self._touch()
+        self.touch()
         return self[new_path]
 
     def rename(self, path: str | ActionHandle, new_name: str) -> ActionHandle:
         path = path.path if isinstance(path, ActionHandle) else path
         new_path = self.document.rename(path, new_name)
-        self._touch()
+        self.touch()
         return self[new_path]
 
     def duplicate(self, path: str | ActionHandle) -> ActionHandle:
         path = path.path if isinstance(path, ActionHandle) else path
         new_path = self.document.duplicate(path)
-        self._touch()
+        self.touch()
         return self[new_path]
 
     # ------------------------------------------------------- references

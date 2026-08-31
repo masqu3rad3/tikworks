@@ -99,7 +99,7 @@ def test_build_pipeline_creates_groups_controllers_and_attaches(scene):
     cmds.xform(scene.guide_node(root.instance_id, "root").long_name, ws=True, t=(0, 10, 0))
     cmds.xform(scene.guide_node(child.instance_id, "root").long_name, ws=True, t=(2, 10, 0))
 
-    report = Builder().build(rig_name="hero", afterlife="delete")
+    report = Builder().build(document=scene.document, rig_name="hero", afterlife="delete")
     assert report.count == 2
     assert cmds.objExists("hero_rig")
     assert cmds.objExists("C_body_grp") and cmds.objExists("L_tail_grp")
@@ -129,16 +129,16 @@ def test_build_pipeline_creates_groups_controllers_and_attaches(scene):
 
 def test_build_afterlife_keep_and_hide(scene):
     scene.create_guides(get_module("base")(name="body"))
-    Builder().build(rig_name="a", afterlife="keep")
+    Builder().build(document=scene.document, rig_name="a", afterlife="keep")
     assert cmds.getAttr(f"{tags.GUIDE_HOLDER}.v")
-    Builder().build(rig_name="b", afterlife="hide")
+    Builder().build(document=scene.document, rig_name="b", afterlife="hide")
     assert not cmds.getAttr(f"{tags.GUIDE_HOLDER}.v")
     assert cmds.objExists("a_rig") and cmds.objExists("b_rig")
 
 
 def test_build_is_undoable(scene):
     scene.create_guides(get_module("base")(name="body"))
-    Builder().build(afterlife="keep")
+    Builder().build(document=scene.document, afterlife="keep")
     assert cmds.objExists("C_body_grp")
     cmds.undo()
     assert not cmds.objExists("C_body_grp")
@@ -146,7 +146,7 @@ def test_build_is_undoable(scene):
 
 def test_visibility_attributes(scene):
     scene.create_guides(get_module("base")(name="body"))
-    Builder().build(afterlife="keep")
+    Builder().build(document=scene.document, afterlife="keep")
     limb = tm.Transform("C_body_grp")
     limb["controlVisibility"].value = False
     assert not tm.Transform("C_body_control_grp").visibility
@@ -160,7 +160,7 @@ def _built(scene, module_type="base", name="body", settings=None):
     """Build one instance and return its build context."""
     module = get_module(module_type)(name=name, settings=settings or {})
     instance = scene.create_guides(module)
-    report = Builder().build(rig_name="rules", afterlife="keep")
+    report = Builder().build(document=scene.document, rig_name="rules", afterlife="keep")
     return report.rigs[instance.instance_id]
 
 
@@ -267,7 +267,7 @@ def _connected(scene):
         get_module("fkchain")(name="tail", side="L", settings={"segments": 2}),
         parent=ParentRef(root.instance_id, "root"),
     )
-    report = Builder().build(rig_name="single", afterlife="keep")
+    report = Builder().build(document=scene.document, rig_name="single", afterlife="keep")
     return report.rigs[root.instance_id], report.rigs[child.instance_id]
 
 
@@ -338,17 +338,3 @@ def test_connect_space_builds_a_named_switch(scene):
         "parentSwitch", node=main.transform.long_name, listEnum=True
     )[0]
     assert listed.split(":") == ["chest", "head"]
-
-
-def test_settings_plug_lives_on_the_module_node(scene):
-    """Settings are attributes on the document node, not on a guide joint."""
-    handle = scene.add("fkchain", side="C", name="tail")
-    plug = scene.settings_plug(handle.instance_id, "segments")
-    assert plug is not None
-    assert "_module" in plug.path
-
-
-def test_settings_plug_is_none_for_an_unknown_module():
-    from tik.trigger.guides import GuideScene
-
-    assert GuideScene().settings_plug("nosuchmodule", "segments") is None

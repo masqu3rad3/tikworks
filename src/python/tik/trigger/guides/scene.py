@@ -17,11 +17,12 @@ from tik.trigger.core import registry
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import instance_key
+from tik.trigger.core.guide_document import GuideDocument
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 from tik.trigger.maya import tags
 from tik.trigger.maya.rig import GuideDraft
 
-from . import document_store, module_node, nodes
+from . import document_store, nodes
 from .capture import capture
 from .format import GuideFile, GuideInstance, make_record
 from .handle import GuideHandle, mirror_source
@@ -34,31 +35,40 @@ from .snapshot import snapshot
 class GuideScene:
     """The guides in the current Maya scene: author, connect, import/export, test build."""
 
-    def __init__(self, events: Optional[EventBus] = None) -> None:
+    def __init__(self, events: Optional[EventBus] = None, session=None) -> None:
         self.events = events or EventBus()
-        self._document = None
+        self._session = session
+        # unbound: a free-standing document for scripting, that no session sees
+        self._own = None if session is not None else GuideDocument()
         self._syncing = False
 
     # ------------------------------------------------------- the document
     @property
-    def document(self):
-        """The guide document, read from the scene once and cached."""
-        if self._document is None:
-            self._document = document_store.read_document()
-        return self._document
+    def session(self):
+        """The session that owns these guides, or None when unbound."""
+        return self._session
 
-    def reload(self):
-        """Drop the cached document and re-read it from the scene."""
-        self._document = None
-        return self.document
+    @property
+    def document(self) -> GuideDocument:
+        """The guides. Owned by the session; the Maya scene only renders them."""
+        return self._session.document.guides if self._session is not None else self._own
 
-    def commit(self, modules: Optional[dict] = None) -> None:
-        """Write the cached document back to the scene."""
-        document_store.write_document(self.document, modules=modules)
+    def _touch(self) -> None:
+        """Record the edit on the session's undo stack."""
+        if self._session is not None:
+            self._session.touch()
 
-    def invalidate(self) -> None:
-        """Forget the cached document. Kept for callers that edited by hand."""
-        self.reload()
+    def clear_rendering(self) -> None:
+        """Delete every guide joint in the scene without touching the document.
+
+        Every guide, not just this document's: taking the scene over from
+        another session has to clear what is actually drawn.
+        """
+        drawn = {guide.node for guide in snapshot()}
+        if not drawn:
+            return
+        with nodes.undo_chunk("Trigger clear guides"):
+            cmds.delete([name for name in drawn if cmds.objExists(name)])
 
     def _module_for(self, entry):
         module_cls = registry.get_module(entry.module_type)
@@ -67,22 +77,18 @@ class GuideScene:
             side=entry.side, settings=dict(entry.settings),
         )
 
-    def _write(self, entry) -> None:
-        """Persist one entry, keeping its mirrored setting attributes fresh."""
-        document_store.write_entry(entry, self._module_for(entry))
-
     def _primary_input_name(self, entry) -> Optional[str]:
         primary = registry.get_module(entry.module_type).primary_input()
         return primary.name if primary else None
 
     @property
     def dismissed(self) -> bool:
-        """True when the guides are deliberately not rendered (see the store)."""
-        return document_store.read_dismissed()
+        """True when the guides are deliberately not drawn (a build cleared them)."""
+        return self.document.dismissed
 
     @dismissed.setter
     def dismissed(self, value: bool) -> None:
-        document_store.write_dismissed(value)
+        self.document.dismissed = bool(value)
 
     def restore(self):
         """Draw the guides again after a build took them away."""
@@ -109,11 +115,9 @@ class GuideScene:
             return GuideDiff()
         self._syncing = True
         try:
-            self.reload()
             rendered = snapshot()
             if capture(self.document, rendered):
-                for entry in self.document.modules:
-                    self._write(entry)
+                self._touch()
             diff = self.diff()
             # a rendering that is *meant* to be absent is not damage
             if regenerate_stale and self.dismissed:
@@ -166,7 +170,9 @@ class GuideScene:
 
     # ------------------------------------------------------- scene access
     def find_instances(self, scope: Any = "scene") -> list[ModuleInstance]:
-        return nodes.find_instances(scope)
+        """Build-time instances: identity and settings from the document, poses
+        from the joints."""
+        return nodes.find_instances(scope, self.document)
 
     def guide_node(self, instance_id: str, role: str, index: int = 0):
         return nodes.guide_node(instance_id, role, index)
@@ -230,14 +236,13 @@ class GuideScene:
         with nodes.undo_chunk(f"Trigger guides: {module.name}"):
             self.dismissed = False  # authoring again means showing them again
             self.document.modules.append(entry)
-            self._write(entry)
             created = regenerate(entry, self.document)
             if not created:
                 raise GuideError(f"'{module.module_type}' drew no guides.")
             if not poses:
                 # the first render defines the poses the document then owns
                 capture(self.document, snapshot())
-                self._write(entry)
+            self._touch()
         return nodes.instance_from_nodes(module.instance_id, created, entry=entry)
 
     def delete_guides(self, instance_id: str) -> None:
@@ -257,7 +262,7 @@ class GuideScene:
         entry = self._entry(instance_id)
         with nodes.undo_chunk("Trigger rename module"):
             entry.name = name
-            self._write(entry)
+            self._touch()
             regenerate(entry, self.document)
 
     def reparent_guides(self, instance_id: str, parent: Optional[ParentRef]) -> None:
@@ -290,7 +295,7 @@ class GuideScene:
                 name: self.source_as_id(source)
                 for name, source in dict(inputs).items() if source
             }
-            self._write(entry)
+            self._touch()
             regenerate(entry, self.document)
 
     def set_input(self, instance_id: str, input_name: str, source: Optional[str]) -> None:
@@ -301,7 +306,7 @@ class GuideScene:
                 entry.inputs[input_name] = self.source_as_id(source)
             else:
                 entry.inputs.pop(input_name, None)
-            self._write(entry)
+            self._touch()
             regenerate(entry, self.document)
 
     def read_settings(self, instance_id: str) -> dict:
@@ -324,12 +329,8 @@ class GuideScene:
         with nodes.undo_chunk("Trigger module settings"):
             entry.settings = module.values()
             expand_guides(entry, module.guides, module.guide_count())
-            self._write(entry)
+            self._touch()
             regenerate(entry, self.document)
-
-    def settings_plug(self, instance_id: str, field_name: str):
-        """The plug holding a module property (for two-way UI binding)."""
-        return module_node.settings_plug(instance_id, field_name)
 
     def _root_node(self, instance_id: str):
         """This module's root guide joint, from the document's module type."""
@@ -355,12 +356,14 @@ class GuideScene:
         """Store designer state back into the document, keyed by id."""
         self.document.layout_from_keys(layout)
         with nodes.undo_chunk("Trigger designer layout"):
-            self.commit()
+            self._touch()
 
     # ------------------------------------------------------- .trg records
     def export_guide_records(self, instance_ids=None) -> list[dict]:
         """Serialize scene guides as ``.trg`` joint records."""
-        found = nodes.find_instances() if instance_ids is None else nodes.find_instances(list(instance_ids))
+        found = nodes.find_instances(
+            "scene" if instance_ids is None else list(instance_ids), self.document
+        )
         records: list[dict] = []
         for instance in found:
             module_cls = registry.get_module(instance.module_type)
@@ -550,7 +553,7 @@ class GuideScene:
         # the imported joints are the authored poses, so record them
         capture(document, snapshot())
         for entry, _gi in entries.values():
-            self._write(entry)
+            self._touch()
         # a renamed module's joints still carry the file's name; redraw them so
         # the scene matches the document it now belongs to
         for instance_id in renamed:
@@ -586,7 +589,7 @@ class GuideScene:
             for entry in list(self.document.modules):
                 self.delete_guides(entry.instance_id)
             self.document.modules = []
-            self.commit()
+            self._touch()
 
     # ---------------------------------------------------------- authoring
     def add(
@@ -638,7 +641,7 @@ class GuideScene:
                     name: source for name, source in entry.inputs.items()
                     if source.rpartition(".")[0] != instance_id
                 }
-            self.commit()
+            self._touch()
 
     # ------------------------------------------------------------ layout
     @property
@@ -716,7 +719,7 @@ class GuideScene:
         document = self.document
         document.positions.pop(name, None)
         document.collapse.pop(name, None)
-        self.commit()
+        self._touch()
 
     def scene_node_group(self, node: str) -> Optional[str]:
         """The group that lists scene node ``node`` (first match)."""
@@ -781,7 +784,6 @@ class GuideScene:
 
     def mirror(self, handle: GuideHandle) -> GuideHandle:
         """Create (or update) the opposite-side copy of ``handle``."""
-        self.invalidate()  # poses may have been edited by hand
         instance = handle.instance
         if handle.side is Side.CENTER:
             raise GuideError("Center guides cannot be mirrored.")
@@ -806,7 +808,7 @@ class GuideScene:
                     record.position = tuple(pose.position)
                     record.rotation = tuple(pose.rotation)
                     record.rotate_order = pose.rotate_order
-            self._write(existing_entry)
+            self._touch()
             self.write_settings(existing.instance_id, instance.settings)
             self.set_inputs(
                 existing.instance_id,
@@ -821,7 +823,6 @@ class GuideScene:
 
     def duplicate(self, handle: GuideHandle, name: Optional[str] = None) -> GuideHandle:
         """Copy a module: same type/side/settings/inputs/poses, a unique name (``arm`` -> ``arm1``)."""
-        self.invalidate()
         instance = handle.instance
         module = handle.module_class(name=name or instance.name, side=instance.side, settings=instance.settings)
         module.name = self.unique_name(module.name, module.side.value)
@@ -829,24 +830,23 @@ class GuideScene:
         collapse = self.document.collapse
         if handle.instance_id in collapse:
             collapse[module.instance_id] = collapse[handle.instance_id]
-            self.commit()
+            self._touch()
         return GuideHandle(self, module.instance_id)
 
     # ------------------------------------------------------------- build
     def test_build(self, *handles: GuideHandle, rig_name: str = "test") -> Any:
         scope = [handle.instance_id for handle in handles] or "scene"
-        self.invalidate()  # guides may have been moved by hand since the last read
-        try:
-            from tik.trigger.maya.build import Builder
+        from tik.trigger.maya.build import Builder
 
-            return Builder(self.events).build(scope=scope, rig_name=rig_name, afterlife="keep")
-        finally:
-            self.invalidate()
+        # poses may have been edited by hand since the last sync
+        self.sync(regenerate_stale=False)
+        return Builder(self.events).build(
+            scope=scope, document=self.document, rig_name=rig_name, afterlife="keep"
+        )
 
     # ------------------------------------------------------------ files
     def export(self, file_path, *handles: GuideHandle) -> Path:
         wanted = {handle.instance_id for handle in handles} or None
-        self.invalidate()  # export the joints as they are now
         records = self.export_guide_records(wanted)
         keys = {handle.key for handle in (handles or self.instances())}
         connections = [item for item in self.connections() if item["input"].split(".")[0] in keys]
@@ -872,7 +872,6 @@ class GuideScene:
             self.clear()
             self.set_layout({})
         created = self.import_guide_instances(instances)
-        self.invalidate()
         if guide_file.designer:
             layout = {} if reset else self.layout
             for section in ("scene_nodes", "positions", "collapse"):

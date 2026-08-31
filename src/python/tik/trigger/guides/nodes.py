@@ -190,7 +190,7 @@ def instance_from_nodes(
     )
 
 
-def find_instances(scope: Any = "scene") -> list[ModuleInstance]:
+def find_instances(scope: Any = "scene", document=None) -> list[ModuleInstance]:
     """Every guide instance in ``scope``, ordered by name.
 
     ``scope`` is ``"scene"``, ``"selection"``, or a collection of instance ids.
@@ -230,9 +230,9 @@ def find_instances(scope: Any = "scene") -> list[ModuleInstance]:
         for instance_id in list(grouped):
             grouped[instance_id] = guide_nodes(instance_id)
 
-    from .document_store import read_document
+    from tik.trigger.core.guide_document import GuideDocument
 
-    document = read_document()
+    document = document if document is not None else GuideDocument()
     keys = {entry.instance_id: entry.key for entry in document.modules}
     instances = []
     for instance_id, nodes in grouped.items():
