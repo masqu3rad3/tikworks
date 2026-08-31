@@ -5,6 +5,13 @@
 **Supersedes:** Part 2 of `2026-08-30-arm-module-revision-design.md` (fixed `Space` declarations)
 **Builds on:** `2026-08-30-arm-module-and-module-ground-rules-design.md`
 
+> **Part 4 (The Reach System) is superseded** by
+> `2026-08-31-auto-collar-redesign-design.md`. The mechanism described there
+> had two unrelated zeros — the ramp measured from the arm's bind direction
+> while the blend aimed the base at the target — so an A-posed collar dipped
+> before it lifted, and past the end angle it tracked the target 1:1 without
+> bound. The rest of this document still stands.
+
 ## Purpose
 
 Two changes from testing the revised arm.

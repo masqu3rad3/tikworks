@@ -1,7 +1,8 @@
 # Auto-Collar Redesign — Design Spec
 
 Date: 2026-08-31
-Status: designed, not implemented.
+Status: implemented 2026-08-31. See "Corrections after implementation" at
+the end for the six things this spec originally got wrong.
 Supersedes Part 4 ("The Reach System") of
 `2026-08-30-dynamic-spaces-and-reach-design.md`. The file
 `systems/reach.py` survives; its mechanism does not.
@@ -370,14 +371,21 @@ Each remap output is multiplied by its own animator attribute
 
 ### 3.6 Node budget
 
-Roughly 2 transforms plus 2 `distanceBetween`, 2 `atan2`, 2 `remapValue`,
-2 multiplies and 4 `unitConversion` for the angle strands, plus 2 nodes and
-a transform for the IK branch, 2 for the FK branch and 1 `blendColors` —
-about **21 nodes** against the current mechanism's 20 or so (4 transforms,
-2 `multiplyDivide`, `angleBetween`, `remapValue`, `aimMatrix`,
-`multMatrix`, `blendMatrix` and three `MatrixConstraint` networks).
-Comparable cost, and it avoids the second IK solve that the rejected
-humerus driver would have required.
+**Measured after implementation: 22 nodes per arm** — the difference in
+total scene node count between an arm built with `auto_collar` on and one
+built with it off.
+
+An earlier draft of this section claimed the redesign was *cheaper* than the
+mechanism it replaces. That was an estimate compared against an estimate and
+it should not have been stated as a benefit. The honest position is that the
+two are roughly cost-neutral: the old chain (4 transforms, 2
+`multiplyDivide`, `angleBetween`, `remapValue`, `aimMatrix`, `multMatrix`,
+`blendMatrix` and three `MatrixConstraint` networks) is of the same order,
+and no one has measured it. The redesign is worth doing because it is
+*correct*, not because it is smaller.
+
+What it does avoid is the second IK solve per arm that the rejected humerus
+driver would have required.
 
 ## 4. The authoring surface
 
@@ -601,3 +609,60 @@ Integration, against a real scene (`tests/integration/trigger/`):
   the authoring surface; a sampler would write to it, and can be added
   later without touching this design.
 - FK segment-scale stretch in the FK driver branch (section 3.2).
+
+## Corrections after implementation
+
+Six things this spec got wrong, found by building it.
+
+**1. The angles have a +/-90 ceiling, and the defaults ignored it.** The
+off-plane `atan2` form saturates at +/-90 whatever the arm does -- that is
+the price of having no branch cut, and it is not avoidable inside this
+formulation. The proposed `lift_max_angle` default of 120 degrees was
+therefore unreachable: the falloff would never complete and the collar would
+creep across its whole range instead of settling. Caught by
+`test_lift_is_monotonic_from_the_neutral_to_the_limit`, which measured the
+output *decreasing* before the limit. Defaults are now -60/+75 for lift and
+-45/+60 for swing, every angle field is bounded to +/-89, and
+`ReachAxis.validate` rejects a limit at or beyond 90 rather than shipping a
+rig that never saturates. Sections 3.3 and 4.1 are updated.
+
+**2. The node budget claimed an advantage it had not measured.** Section 3.6
+said the redesign was cheaper than the mechanism it replaces. Measured cost
+is 22 nodes per arm; the old chain was never measured, so the two should be
+called roughly cost-neutral. Section 3.6 is rewritten.
+
+**3. `Arm.validate()` returns a list, it does not raise.** The spec assumed
+raising. The module collects `ReachAxis.validate`'s `ValueError` and appends
+its message instead. Separately, the field bounds already reject an
+out-of-sign neutral at *assignment* time, so `validate`'s neutral check is
+reachable only at exactly zero -- which is still degenerate, and still worth
+catching.
+
+**4. The neutral frame cannot take its up vector from an up *object*.**
+`Transform.aim_at`'s `world_up_object` mode points the up vector *at the
+object's position*, and the socket and the collar pivot very nearly coincide,
+which leaves that aim degenerate. The build reads the socket's world Y off
+its `worldMatrix[0]` plug and passes it as a plain up *vector* instead --
+which is the Gram-Schmidt step section 3.1 describes, done by aimConstraint.
+
+**5. The FK product needs no matrix constants.** Section 3.2 derived a
+build-time constant `B`. In practice `fk_ref`, a static transform parented
+under the neutral frame and aligned to the FK root's offset, has exactly `B`
+as its own `matrix` plug -- so the whole product is live plugs and nothing
+writes a matrix value. Same node count, no baked numbers to go stale. The
+offset groups' `matrix` plugs are likewise wired live rather than sampled.
+
+**6. Filling a missing guide role is best done by keeping the scratch
+draft's joints.** Section 5 implied hand-creating the joint. Running
+`draw_guides` into a scratch group and *keeping* the joints for the missing
+roles gets naming, tagging, colour and `guide_attrs` right for free, because
+`GuideDraft` made them. The hierarchy is flattened before the already-present
+roles are deleted, so removing one cannot take a missing child with it.
+
+Confirmed as specified, no change needed: `atan2`, `distanceBetween`,
+`multMatrix`, `translationFromMatrix` and `blendColors` all exist in Maya
+2026 with the attribute names assumed (`translationFromMatrix` needed no
+`decomposeMatrix` substitution); `remapValue` clamps rather than
+extrapolates; the three-point `smooth` ramp is C1 at the neutral and at both
+limits; and `blendColors`' polarity is right as written, since `ikFk = 1` is
+IK (`limb.py:209`, `limb.py:404`).
