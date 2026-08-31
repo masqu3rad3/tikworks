@@ -362,6 +362,39 @@ Requirements:
 
 ### 6.4 UI placement
 
+**Revised 2026-08-31 after first use.** The original plan kept the window-level
+mode bar and made its pages follow the active session tab. Using it showed the
+shell is simply inverted: a mode bar *above* the sessions, with sessions
+reachable from only one of the modes, and two separate menu bars for one
+document.
+
+Once the guides live in the `.tr`, the session is the outer container and
+Session / Guide Designer are two **views of one document**. The shell follows:
+
+```
+  File  Edit  Session  Guides  View  Build  Help      <- one menu bar
+ ┌──────────────┬─────────────────┐
+ │ something.tr │ somethingElse.tr│                   <- session tabs, outermost
+ ├──────────────┴─────────────────┴────────────────┐
+ │  Session │ Guide Designer                       │  <- sub-tabs, per session
+ │  ...                                            │
+```
+
+What this deletes: the mode bar, the per-mode menu stack, the per-mode status
+stack, the `_designers` map keyed by view id, and the separate Designer title
+and file path. Each `SessionView` owns its Designer as a child, so "whose guides
+are these?" is answered by which tab you are on, structurally — no stamp
+indicator needed in the common case.
+
+The checkout hand-off moves with it: switching **session tabs** is the
+hand-over, which is the only place it was ever meaningful. Switching between
+Session and Guide Designer inside one tab changes nothing about the scene.
+
+This supersedes `2026-08-30-designer-as-mode-tab-design.md` entirely, and the
+"Deviation" note in `2026-08-31-guides-in-session.md`.
+
+### 6.4.1 Old placement (superseded)
+
 The Designer stops being a window-level mode (`main.py:_build_designer_mode`,
 `_ensure_designer`) and becomes a view owned by `SessionView`, one per tab.
 Tear-off is preserved; it is torn off from a tab. This supersedes the mode-tab
