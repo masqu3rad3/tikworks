@@ -31,6 +31,7 @@ class SceneWatcher(QtCore.QObject):
         install_job: Optional[Callable[[str, Callable], int]] = None,
         kill_job: Optional[Callable[[int], None]] = None,
         owner=None,
+        api_callbacks: bool = False,
     ) -> None:
         super().__init__(parent)
         self._on_invalidate = on_invalidate
@@ -45,6 +46,10 @@ class SceneWatcher(QtCore.QObject):
         self._muted = 0
         self._install_job = install_job
         self._kill_job = kill_job
+        # Node removal has no scriptJob equivalent; opt in to the OpenMaya
+        # callbacks that do see it.
+        self._api_wanted = api_callbacks
+        self._api = None
 
     # ------------------------------------------------------------ lifecycle
     def install(self) -> list[int]:
@@ -55,9 +60,21 @@ class SceneWatcher(QtCore.QObject):
                 self._jobs.append(install(event, lambda name=event: self.notify(name)))
             except Exception as error:  # noqa: BLE001 - keep the tool alive
                 LOG.debug("cannot watch %s: %s", event, error)
+        if self._api_wanted:
+            try:
+                from tik.trigger.maya.observer import ApiCallbacks
+
+                self._api = ApiCallbacks(self.notify)
+                self._api.start()
+            except Exception as error:  # noqa: BLE001 - keep the tool alive
+                LOG.debug("cannot install API callbacks: %s", error)
+                self._api = None
         return list(self._jobs)
 
     def uninstall(self) -> None:
+        if self._api is not None:
+            self._api.stop()
+            self._api = None
         kill = self._kill_job or self._maya_kill
         while self._jobs:
             job = self._jobs.pop()
@@ -92,10 +109,14 @@ class SceneWatcher(QtCore.QObject):
     def mute(self):
         """Ignore events while the tool changes the scene itself."""
         self._muted += 1
+        if self._api is not None:
+            self._api.muted = True
         try:
             yield
         finally:
             self._muted -= 1
+            if self._api is not None and not self._muted:
+                self._api.muted = False
 
     def notify(self, event: str = "manual") -> None:
         """Feed an event (scriptJob callback or a fake backend)."""

@@ -103,6 +103,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             install_job=getattr(self.guides, "install_scene_job", None),
             kill_job=getattr(self.guides, "kill_scene_job", None),
             parent=self,
+            # deleting a guide in the outliner has no scriptJob event
+            api_callbacks=True,
         )
         self.watcher.install()
         # closeEvent is not the only teardown path; a destroyed dock leaves the
