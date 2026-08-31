@@ -1,19 +1,19 @@
 """``GuideHandle``: one module instance, as the UI and TDs see it.
 
-A handle is a view onto a ``ModuleInstance`` plus the scene that owns it.
-It holds no Maya of its own — every write goes back through the scene — so
-it works against any scene implementation.
+A handle is a view onto a ``ModuleEntry`` in the guide document plus the scene
+that owns it. It holds nothing itself -- every read goes to the document and
+every write goes back through the scene -- so a handle stays valid across a
+regenerate, and stays valid when the guide joints are deleted.
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from tik.core.side import Side
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import instance_key
-from tik.trigger.core.schemas import ModuleInstance, ParentRef
 
 
 def mirror_source(source: str, side: str, target_side: str) -> str:
@@ -27,33 +27,30 @@ def mirror_source(source: str, side: str, target_side: str) -> str:
 class GuideHandle:
     """One module instance in the scene; settings are attributes."""
 
-    def __init__(self, guides: "GuideScene", instance: ModuleInstance) -> None:
+    def __init__(self, guides: "GuideScene", instance_id: str) -> None:
         object.__setattr__(self, "_guides", guides)
-        object.__setattr__(self, "_instance", instance)
+        object.__setattr__(self, "_instance_id", instance_id)
 
-    def _refresh(self) -> ModuleInstance:
-        found = self._guides._snapshot().get(self._instance.instance_id)
-        if found is None:
-            raise GuideError(f"GuideLayout for '{self._instance.name}' no longer exist.")
-        object.__setattr__(self, "_instance", found)
-        return found
-
-    def _touch(self) -> ModuleInstance:
-        """After a write: drop the cache and re-read this instance."""
-        self._guides.invalidate()
-        return self._refresh()
-
+    # ---------------------------------------------------------- identity
     @property
-    def instance(self) -> ModuleInstance:
-        return self._refresh()
+    def entry(self):
+        """This module's document entry.
+
+        Raises when the module has been removed -- note that deleting its guide
+        joints does *not* remove it: the joints are a rendering.
+        """
+        found = self._guides.document.module(self._instance_id)
+        if found is None:
+            raise GuideError(f"Module '{self._instance_id}' is no longer in the document.")
+        return found
 
     @property
     def instance_id(self) -> str:
-        return self._instance.instance_id
+        return self._instance_id
 
     @property
     def name(self) -> str:
-        return self._instance.name
+        return self.entry.name
 
     @name.setter
     def name(self, value: str) -> None:
@@ -64,47 +61,79 @@ class GuideHandle:
         taken = self._guides.by_key(key)
         if taken is not None and taken.instance_id != self.instance_id:
             raise GuideError(f"A module named '{key}' already exists.")
-        if key in self._guides.layout.get("scene_nodes", {}):
+        if self._guides.scene_groups().get(key) is not None:
             raise GuideError(f"'{key}' is already a scene-nodes group.")
-        old_key = self.key
         self._guides.rename_instance(self.instance_id, value)
-        self._touch()
-        self._guides._rename_key(old_key, self.key)
 
     @property
     def module_type(self) -> str:
-        return self._instance.module_type
+        return self.entry.module_type
 
     @property
     def side(self) -> Side:
-        return Side.from_value(self._instance.side)
+        return Side.from_value(self.entry.side)
+
+    @property
+    def key(self) -> str:
+        return self.entry.key
 
     @property
     def module_class(self) -> type:
-        return registry.get_module(self._instance.module_type)
+        return registry.get_module(self.entry.module_type)
+
+    def __repr__(self) -> str:
+        entry = self._guides.document.module(self._instance_id)
+        if entry is None:
+            return f"<GuideHandle {self._instance_id} (removed)>"
+        return f"<GuideHandle {entry.name} ({entry.module_type} {entry.side})>"
+
+    # ------------------------------------------------------------- scene
+    @property
+    def instance(self):
+        """The build-time ``ModuleInstance`` for this module (poses from the scene)."""
+        found = self._guides.find_instances([self._instance_id])
+        if not found:
+            raise GuideError(f"Module '{self.name}' has no guides in the scene.")
+        return found[0]
 
     @property
     def root(self):
-        return self._guides.guide_node(self.instance_id, self.module_class.guides.root)
+        """This module's root guide joint, or None when it is not rendered."""
+        return self._guides.guide_nodes(self._instance_id).get(
+            (self.module_class.guides.root, 0)
+        )
 
     @property
     def parent(self) -> Optional["GuideHandle"]:
-        instance = self._refresh()
-        if instance.parent is None:
+        """The module feeding this one's primary input."""
+        primary = self.module_class.primary_input()
+        source = self.entry.inputs.get(primary.name) if primary else None
+        if not source or "." not in source:
             return None
-        return self._guides.get(instance.parent.instance_id)
+        return self._guides.get(source.rpartition(".")[0])
 
+    def select(self) -> None:
+        self._guides.select_guides(self._instance_id)
+
+    # ---------------------------------------------------------- settings
     @property
     def settings(self) -> dict:
-        module = self.module_class(settings=self._refresh().settings)
+        module = self.module_class(settings=self.entry.settings)
         return module.values()
 
     def __getattr__(self, item: str) -> Any:
         if item.startswith("_"):
             raise AttributeError(item)
+        # A property that raises AttributeError lands here, and treating it as a
+        # settings lookup would re-enter this method forever. Re-raise instead,
+        # so the real failure is what surfaces.
+        if isinstance(getattr(type(self), item, None), property):
+            raise AttributeError(
+                f"'{type(self).__name__}.{item}' failed; the module may be gone."
+            )
         fields = self.module_class.fields()
         if item not in fields:
-            raise AttributeError(f"'{self._instance.module_type}' has no property '{item}'.")
+            raise AttributeError(f"'{self.module_type}' has no property '{item}'.")
         return self.settings[item]
 
     def __setattr__(self, item: str, value: Any) -> None:
@@ -113,25 +142,21 @@ class GuideHandle:
             return
         fields = self.module_class.fields()
         if item not in fields:
-            raise AttributeError(f"'{self._instance.module_type}' has no property '{item}'.")
+            raise AttributeError(f"'{self.module_type}' has no property '{item}'.")
         settings = self.settings
         settings[item] = fields[item].validate(value)
         self._guides.write_settings(self.instance_id, settings)
-        self._touch()
 
     def set(self, **settings) -> "GuideHandle":
         for key, value in settings.items():
             setattr(self, key, value)
         return self
 
-    @property
-    def key(self) -> str:
-        return self._refresh().key
-
+    # ------------------------------------------------------------ inputs
     @property
     def inputs(self) -> dict:
-        """``{input name: source}`` (explicit connections only)."""
-        return dict(self._refresh().inputs)
+        """``{input name: source}``; sources are ``"<key>.<output>"`` or a scene node."""
+        return self._guides.inputs_as_keys(self.entry)
 
     @property
     def input_names(self) -> list[str]:
@@ -144,18 +169,4 @@ class GuideHandle:
     def set_input(self, input_name: str, source: Optional[str]) -> None:
         if self.module_class.get_input(input_name, self.settings) is None:
             raise GuideError(f"'{self.module_type}' has no input '{input_name}'.")
-        inputs = self.inputs
-        if source:
-            inputs[input_name] = source
-        else:
-            inputs.pop(input_name, None)
-        self._guides.set_inputs(self.instance_id, inputs)
-        self._touch()
-
-    def select(self) -> None:
-        self._guides.select_guides(self.instance_id)
-
-    def __repr__(self) -> str:
-        return f"<GuideLayout {self.name} ({self.module_type} {self.side.value})>"
-
-
+        self._guides.set_input(self.instance_id, input_name, source)

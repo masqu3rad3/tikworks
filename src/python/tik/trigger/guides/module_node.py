@@ -56,12 +56,29 @@ def write(node, entry: ModuleEntry, module=None) -> None:
 
 def read(node) -> ModuleEntry:
     """Rebuild the ``ModuleEntry`` stored on ``node``."""
+    from tik.trigger.core import registry
+
     entry = ModuleEntry.from_dict(dict(node.meta[tags.ENTRY]))
+    if not registry.is_module_registered(entry.module_type):
+        return entry
+    fields = registry.get_module(entry.module_type).fields()
     # Attributes win over the meta copy: the channel box is an authoring
     # surface, so a value tweaked there has to read back.
     for name in list(entry.settings):
-        if node.has_attr(name):
-            entry.settings[name] = node[name].value
+        field_obj = fields.get(name)
+        if field_obj is None or not node.has_attr(name):
+            continue
+        value = node[name].value
+        kind = field_obj.type_name
+        if kind == "choice":
+            # the enum attribute stores an index; the setting wants the label
+            try:
+                value = field_obj.choices[int(value)]
+            except (IndexError, ValueError, TypeError):
+                continue
+        elif kind == "bool":
+            value = bool(value)
+        entry.settings[name] = value
     return entry
 
 

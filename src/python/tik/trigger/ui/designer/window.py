@@ -394,17 +394,19 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                     if p_key and by_key[p_key].instance_id not in items:
                         remaining.append(handle)
                         continue
-                    instance = handle.instance
+                    # the document entry, not a scene scan: the tree describes
+                    # what the rig *is*, and one refresh reads the scene once
+                    entry = handle.entry
                     module_cls = handle.module_class
                     label = module_cls.display_label()
                     if module_cls.guides.multi:
-                        count = sum(1 for role, _index in instance.guide_pairs if role == module_cls.guides.multi)
+                        count = sum(1 for role, _index in entry.pairs if role == module_cls.guides.multi)
                         label = f"{label} · {count}"
                     primary = module_cls.primary_input()
                     primary_text = handle.inputs.get(primary.name, "") if primary else ""
-                    item = QtWidgets.QTreeWidgetItem([handle.key, label, instance.side, primary_text or "—"])
+                    item = QtWidgets.QTreeWidgetItem([handle.key, label, entry.side, primary_text or "—"])
                     item.setData(0, QtCore.Qt.UserRole, handle.instance_id)
-                    item.setIcon(0, glyph_icon(initials(module_cls.display_label()), theme.SIDE.get(instance.side, theme.SIDE["C"])))
+                    item.setIcon(0, glyph_icon(initials(module_cls.display_label()), theme.SIDE.get(entry.side, theme.SIDE["C"])))
                     item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled | QtCore.Qt.ItemIsDropEnabled)
                     if p_key:
                         items[by_key[p_key].instance_id].addChild(item)
@@ -589,12 +591,12 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.inherit_orientation.setEnabled(False)
             self.status.set_activity("Select a module, or add one from the shelf (Tab to search).")
             return
-        instance = handle.instance
+        entry = handle.entry
         module_cls = handle.module_class
-        self._module_obj = module_cls(name=instance.name, side=instance.side, settings=instance.settings)
-        self.name_edit.setText(instance.name)
-        self.type_label.setText(f"{module_cls.display_label()} · {instance.side}")
-        self.icon.setPixmap(glyph_icon(initials(module_cls.display_label()), theme.SIDE.get(instance.side, theme.SIDE["C"]), 24).pixmap(24, 24))
+        self._module_obj = module_cls(name=entry.name, side=entry.side, settings=entry.settings)
+        self.name_edit.setText(entry.name)
+        self.type_label.setText(f"{module_cls.display_label()} · {entry.side}")
+        self.icon.setPixmap(glyph_icon(initials(module_cls.display_label()), theme.SIDE.get(entry.side, theme.SIDE["C"]), 24).pixmap(24, 24))
         multi = len(self._multi) > 1
         if multi:
             self.name_edit.setEnabled(False)

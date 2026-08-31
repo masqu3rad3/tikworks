@@ -32,31 +32,96 @@ class StubScene:
         self.calls: list[tuple] = []
         self.scene_nodes: set[str] = set()
         self.selection: Optional[ParentRef] = None
-        self.layout: dict = {}
+        # stored by id, exactly like the real document, so a rename
+        # cannot orphan a node's position
+        self._positions: dict = {}
+        self._collapse: dict = {}
+        self._scene_nodes: dict = {}
         # what write_settings stored, so tests can assert on it directly
         self.settings: dict[str, dict] = {}
         self._scene_jobs: dict = {}
-        self._cache: Optional[dict] = None
+        self._cache: Optional[list] = None
+        self._document_cache = None
+
+    # ------------------------------------------------------------ document
+    @property
+    def document(self):
+        """A ``GuideDocument`` view over the stub's instances.
+
+        The Designer reads structure through the document now, so the double
+        has to speak it too. Built on demand from ``_instances`` -- this is a
+        test stand-in, not a store.
+        """
+        from tik.trigger.core.guide_document import GuideDocument, GuideRecord, ModuleEntry, SceneGroup
+
+        if self._document_cache is not None:
+            return self._document_cache
+        document = GuideDocument()
+        for instance_id in self._snapshot():
+            instance = self._instances[instance_id]
+            entry = ModuleEntry(
+                instance_id=instance.instance_id, module_type=instance.module_type,
+                name=instance.name, side=instance.side,
+                settings=dict(instance.settings), inputs=dict(instance.inputs),
+                guides=[
+                    GuideRecord(role=pose.role, index=pose.index,
+                                position=tuple(pose.position), rotation=tuple(pose.rotation),
+                                rotate_order=pose.rotate_order)
+                    for pose in instance.guides
+                ],
+            )
+            document.modules.append(entry)
+        document.scene_groups = [
+            SceneGroup(group_id=name, name=name, nodes=list(group_nodes))
+            for name, group_nodes in self._scene_nodes.items()
+        ]
+        document.positions = dict(self._positions)
+        document.collapse = dict(self._collapse)
+        self._document_cache = document
+        return document
+
+    def inputs_as_keys(self, entry) -> dict:
+        """The stub stores sources as display keys already."""
+        return dict(entry.inputs)
+
+    def set_input(self, instance_id: str, input_name: str, source) -> None:
+        instance = self._instances[instance_id]
+        if source:
+            instance.inputs[input_name] = source
+        else:
+            instance.inputs.pop(input_name, None)
+        self.calls.append(("set_input", instance_id, input_name, source))
+        self.invalidate()
+
+    def guide_nodes(self, instance_id: str) -> dict:
+        instance = self._instances.get(instance_id)
+        if instance is None:
+            return {}
+        return {
+            (pose.role, pose.index): f"{instance.key}_{pose.role}{pose.index}"
+            for pose in instance.guides
+        }
 
     # ------------------------------------------------------------ listing
     def invalidate(self) -> None:
         self._cache = None
+        self._document_cache = None
 
-    def _snapshot(self) -> dict:
-        """One scan reused by every handle, exactly like the real scene."""
+    def _snapshot(self) -> list:
+        """Instance ids, in scan order."""
         if self._cache is None:
-            self._cache = {item.instance_id: item for item in self.find_instances()}
+            self._cache = [item.instance_id for item in self.find_instances()]
         return self._cache
 
     def instances(self) -> list[GuideHandle]:
-        return [GuideHandle(self, item) for item in self._snapshot().values()]
+        return [GuideHandle(self, item) for item in self._snapshot()]
 
     def roots(self) -> list[GuideHandle]:
-        return [item for item in self.instances() if item.instance.parent is None]
+        return [item for item in self.instances() if item.parent is None]
 
     def get(self, instance_id: str) -> Optional[GuideHandle]:
-        found = self._snapshot().get(instance_id)
-        return GuideHandle(self, found) if found else None
+        found = instance_id in self._instances
+        return GuideHandle(self, instance_id) if found else None
 
     def find(self, name: str, side: Optional[str] = None) -> Optional[GuideHandle]:
         for handle in self.instances():
@@ -105,12 +170,11 @@ class StubScene:
         self._instances[instance.instance_id] = instance
         self.calls.append(("create_guides", instance.instance_id))
         self.invalidate()
-        return GuideHandle(self, instance)
+        return GuideHandle(self, instance.instance_id)
 
     def remove(self, handle: GuideHandle) -> None:
         key = handle.key  # read before the instance is gone
         self.delete_guides(handle.instance_id)
-        self._forget_key(key)
 
     def delete_guides(self, instance_id: str) -> None:
         self._instances.pop(instance_id, None)
@@ -119,6 +183,7 @@ class StubScene:
 
     def clear(self) -> None:
         self._instances.clear()
+        self.invalidate()
 
     def duplicate(self, handle: GuideHandle, name: Optional[str] = None) -> GuideHandle:
         instance = handle.instance
@@ -132,7 +197,7 @@ class StubScene:
         if handle.key in collapse:
             collapse[copy.key] = collapse[handle.key]
             self.update_layout(collapse=collapse)
-        return GuideHandle(self, created)
+        return GuideHandle(self, created.instance_id)
 
     def mirror(self, handle: GuideHandle) -> GuideHandle:
         instance = handle.instance
@@ -149,7 +214,7 @@ class StubScene:
         created = module.to_instance(guides=list(instance.guides), inputs=mirrored)
         self._instances[created.instance_id] = created
         self.invalidate()
-        return GuideHandle(self, created)
+        return GuideHandle(self, created.instance_id)
 
     def reparent(self, handle: GuideHandle, parent) -> None:
         parent_ref = parent
@@ -206,11 +271,22 @@ class StubScene:
                 for name, source in handle.inputs.items()]
 
     # ------------------------------------------------------------ layout
+    @property
+    def layout(self) -> dict:
+        return self.read_layout()
+
     def read_layout(self) -> dict:
-        return dict(self.layout)
+        return self.document.layout_as_keys()
 
     def write_layout(self, layout: dict) -> None:
-        self.layout = dict(layout)
+        document = self.document
+        document.layout_from_keys(layout)
+        self._scene_nodes = {
+            group.name: list(group.nodes) for group in document.scene_groups
+        }
+        self._positions = dict(document.positions)
+        self._collapse = dict(document.collapse)
+        self.invalidate()
 
     def set_layout(self, layout: dict) -> None:
         self.write_layout(layout)
@@ -220,16 +296,6 @@ class StubScene:
         layout.update(sections)
         self.set_layout(layout)
         return layout
-
-    def _rename_key(self, old: str, new: str) -> None:
-        for section in ("positions", "collapse"):
-            table = self.layout.get(section, {})
-            if old in table:
-                table[new] = table.pop(old)
-
-    def _forget_key(self, key: str) -> None:
-        for section in ("positions", "collapse"):
-            self.layout.get(section, {}).pop(key, None)
 
     # ------------------------------------------------------- scene nodes
     def scene_groups(self) -> dict[str, list[str]]:
@@ -271,7 +337,6 @@ class StubScene:
             raise GuideError(f"'{new}' is already used.")
         groups[new] = groups.pop(old)
         self.update_layout(scene_nodes=groups)
-        self._rename_key(old, new)
 
     def remove_scene_group(self, name: str) -> None:
         groups = self.scene_groups()
@@ -280,7 +345,6 @@ class StubScene:
         for item in self.connections():
             if item["source"] in gone and not self.scene_node_group(item["source"]):
                 self.disconnect(item["input"])
-        self._forget_key(name)
 
     def scene_node_group(self, node: str) -> Optional[str]:
         for name, nodes in self.scene_groups().items():
@@ -345,10 +409,58 @@ class StubScene:
     # Joint records are the scene's job; the tests monkeypatch these two and
     # assert on everything the designer itself authored.
     def export_guide_records(self, instance_ids=None) -> list:
-        return []
+        """Minimal but real ``.trg`` joint records, so a file round-trips.
+
+        Without these the file carries no modules, nothing is recreated on
+        import, and layout keyed by module identity is (correctly) dropped --
+        which would make an export/import test assert nothing.
+        """
+        from tik.trigger.guides.format import make_record
+
+        records = []
+        for instance in self._instances.values():
+            if instance_ids is not None and instance.instance_id not in instance_ids:
+                continue
+            module_cls = registry.get_module(instance.module_type)
+            root_role = module_cls.guides.root
+            for pose in instance.guides:
+                is_root = pose.role == root_role and pose.index == 0
+                records.append(make_record(
+                    name=f"{instance.key}_{pose.role}{pose.index}",
+                    position=pose.position, rotation=pose.rotation,
+                    joint_orient=(0, 0, 0), parent=None, side=instance.side,
+                    module=instance.module_type, role=pose.role, index=pose.index,
+                    instance=instance.instance_id,
+                    settings=dict(instance.settings) if is_root else None,
+                    module_name=instance.name if is_root else None,
+                ))
+        return records
 
     def import_guide_instances(self, guide_instances) -> list:
-        return []
+        """Recreate instances from ``.trg`` records.
+
+        Real enough that layout keyed by module identity survives an import --
+        with nothing created, there would be no module for a position to belong
+        to and the projection would (correctly) drop it.
+        """
+        created = []
+        for guide_instance in guide_instances:
+            instance = ModuleInstance(
+                module_type=guide_instance.module_type,
+                instance_id=guide_instance.instance_id,
+                name=guide_instance.name,
+                side=guide_instance.side,
+                settings=dict(guide_instance.settings),
+                guides=[
+                    GuidePose(role, index, tuple(record.get("position", (0, 0, 0))))
+                    for (role, index), record in guide_instance.joints.items()
+                ],
+                inputs=dict(guide_instance.inputs),
+            )
+            self._instances[instance.instance_id] = instance
+            created.append(instance)
+        self.invalidate()
+        return created
 
     def export(self, file_path, *handles):
         wanted = {handle.instance_id for handle in handles} or None
@@ -384,7 +496,7 @@ class StubScene:
                 if merged:
                     layout[section] = merged
             self.set_layout(layout)
-        return [GuideHandle(self, item) for item in created]
+        return [GuideHandle(self, item.instance_id) for item in created]
 
     def test_build(self, *handles, rig_name: str = "test"):
         self.calls.append(("test_build", len(handles)))

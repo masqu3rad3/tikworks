@@ -199,8 +199,8 @@ automatically: they may be a rigger's scratch work, and destroying untracked
 scene content is not a repair.
 
 Expected shape comes from the manifest: document settings →
-`GuideLayout.guide_pairs(count)` (`core/manifest.py:102`) → compare with what is
-rendered. `GuideLayout.validate` (`:117`) already phrases the problems in English
+`GuideLayout.expand(count)` (`core/manifest.py:98`) → compare with what is
+rendered. `GuideLayout.validate` (`:110`) already phrases the problems in English
 and is currently called by nothing.
 
 Reconcile is **pure Python — no Maya, no Qt** — so it lives in `core`, satisfies

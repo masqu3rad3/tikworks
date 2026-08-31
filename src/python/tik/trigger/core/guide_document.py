@@ -189,6 +189,61 @@ class GuideDocument:
                 return entry
         return None
 
+    def node_ids(self) -> dict:
+        """``{display key: id}`` for everything the graph can draw a node for.
+
+        Scene groups use their name as their id -- they exist only in the
+        document, so nothing in the scene can rename one behind our back.
+        """
+        ids = {entry.key: entry.instance_id for entry in self.modules}
+        ids.update({group.name: group.group_id for group in self.scene_groups})
+        return ids
+
+    def layout_as_keys(self) -> dict:
+        """Designer layout re-keyed from ids to display keys, for the graph.
+
+        Storage is id-keyed so a rename can never orphan a node's position; the
+        graph speaks display keys, so they are translated at this boundary --
+        the same trick as connections and the Builder. Entries whose module is
+        gone simply do not project.
+        """
+        labels = {value: key for key, value in self.node_ids().items()}
+
+        def relabel(table):
+            return {
+                labels[key]: value for key, value in table.items() if key in labels
+            }
+
+        sections = {
+            "scene_nodes": {group.name: list(group.nodes) for group in self.scene_groups},
+            "positions": {key: list(value) for key, value in relabel(self.positions).items()},
+            "collapse": dict(relabel(self.collapse)),
+        }
+        # empty sections are omitted, so an untouched layout is simply ``{}``
+        return {name: value for name, value in sections.items() if value}
+
+    def layout_from_keys(self, layout: dict) -> None:
+        """Store a display-key-keyed layout back under ids. Mutates in place.
+
+        This is a *replacement*, not a merge: a section the caller omits is
+        cleared, so ``layout_from_keys({})`` resets the layout. Partial edits go
+        through ``read`` -> mutate -> ``write``, which always passes all three.
+        """
+        layout = dict(layout)
+        self.scene_groups = [
+            SceneGroup(group_id=name, name=name, nodes=list(group_nodes))
+            for name, group_nodes in (layout.get("scene_nodes") or {}).items()
+        ]
+        ids = self.node_ids()
+        self.positions = {
+            ids.get(key, key): list(value)
+            for key, value in (layout.get("positions") or {}).items()
+        }
+        self.collapse = {
+            ids.get(key, key): int(value)
+            for key, value in (layout.get("collapse") or {}).items()
+        }
+
     def to_dict(self) -> dict:
         return {
             "schema": self.schema,

@@ -24,8 +24,14 @@ def test_create_guides_tags_and_parents(scene):
     assert joint.type == "joint"
     assert joint.meta[tags.KIND] == "guide"
     assert joint.meta[tags.MODULE] == "base"
-    assert joint.meta[tags.NAME] == "body"
-    assert joint.meta[tags.SETTINGS] == {"controller_size": 10.0, "anim_spaces": []}
+    # the name lives in the document, not on the joint: deleting the guide
+    # must not be able to destroy the module's identity
+    assert tags.NAME not in joint.meta
+    assert scene.document.module(instance.instance_id).name == "body"
+    assert tags.SETTINGS not in joint.meta
+    assert scene.document.module(instance.instance_id).settings == {
+        "controller_size": 10.0, "anim_spaces": []
+    }
     assert joint.parent.name == tags.GUIDE_HOLDER
     assert instance.guide_pairs == [("root", 0)]
 

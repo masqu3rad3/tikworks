@@ -167,7 +167,13 @@ def test_module_parents_everything_it_creates(module_type):
         scene.create_guides(get_module(module_type)(name=module_type))
     Builder().build(rig_name="rules", afterlife="delete")
 
-    stray = set(cmds.ls(assemblies=True, long=True)) - before - {"|rules_rig"}
+    # trigger_modules_grp holds the guide *document*, which deliberately
+    # outlives the guides it renders -- it is not module output.
+    stray = (
+        set(cmds.ls(assemblies=True, long=True))
+        - before
+        - {"|rules_rig", "|trigger_modules_grp"}
+    )
     assert not stray, f"'{module_type}' left {sorted(stray)} at the world root"
 
 

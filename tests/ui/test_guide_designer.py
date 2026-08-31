@@ -370,9 +370,9 @@ def test_unique_names_layout_persistence_and_slice(designer, tmp_path):
     designer.graph.graph.nodes["L_tail"].setPos(33, 47)
     assert designer.graph.graph.nodes["L_tail"].pos() == QtCore.QPointF(40, 40)
     designer.graph.graph.nodes_moved.emit()
-    # export / import round-trips everything the designer authored (joint records are the backend's job)
-    designer.guides.export_guide_records = lambda wanted=None: []
-    designer.guides.import_guide_instances = lambda instances: []
+    # Export / import round-trips everything the designer authored. The joint
+    # records have to travel too: layout is keyed by module identity now, so a
+    # position only survives if its module does.
     path = designer.export_file(str(tmp_path / "g.trg"))
     import json
     data = json.loads(path.read_text())
@@ -426,12 +426,18 @@ def test_handles_share_one_scene_scan(designer):
     backend.find_instances = counting
     designer.refresh()
     assert calls["n"] == 1  # tree + graph + status from a single scan
+    # Structure comes from the shared document, so these are free. ``.instance``
+    # is deliberately not: it carries the guides' live poses, which is a scene
+    # question and must not be served from a cache.
     calls["n"] = 0
     for handle in designer.guides.instances():
-        _ = (handle.key, handle.inputs, handle.outputs, handle.settings, handle.instance)
+        _ = (handle.key, handle.inputs, handle.outputs, handle.settings)
     assert calls["n"] == 0
+    # A write invalidates; the rescan happens on the next read, not eagerly.
     designer.guides.connect("L_toy_chain.root", "toy_root.root")
-    assert calls["n"] == 1  # a write invalidates once
+    assert calls["n"] == 0
+    designer.guides.instances()
+    assert calls["n"] == 1
     backend.find_instances = original
 
 

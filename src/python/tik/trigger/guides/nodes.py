@@ -142,9 +142,13 @@ def parent_ref(root) -> Optional[ParentRef]:
 
 
 def instance_from_nodes(
-    instance_id: str, nodes: dict, meta: Optional[dict] = None
+    instance_id: str, nodes: dict, meta: Optional[dict] = None, entry=None
 ) -> Optional[ModuleInstance]:
     """Build a ``ModuleInstance`` from ``{(role, index): joint}``.
+
+    The joints supply identity and poses only. Name, settings and inputs come
+    from ``entry`` -- the module's document entry -- because structure no longer
+    lives on the guides; without one the instance carries the module defaults.
 
     ``meta`` may carry the already-read ``node.meta.as_dict()`` per joint
     (keyed by long name) so a scene scan reads each attribute once.
@@ -177,12 +181,12 @@ def instance_from_nodes(
     return ModuleInstance(
         module_type=module_type,
         instance_id=instance_id,
-        name=root_meta.get(tags.NAME, module_type),
-        side=root_meta.get(tags.SIDE, "C"),
-        settings=root_meta.get(tags.SETTINGS, {}) or {},
+        name=entry.name if entry is not None else module_type,
+        side=entry.side if entry is not None else root_meta.get(tags.SIDE, "C"),
+        settings=dict(entry.settings) if entry is not None else {},
         guides=poses,
         parent=parent_ref(root),
-        inputs=dict(root_meta.get(INPUTS, {}) or {}),
+        inputs=dict(entry.inputs) if entry is not None else {},
     )
 
 
@@ -191,6 +195,12 @@ def find_instances(scope: Any = "scene") -> list[ModuleInstance]:
 
     ``scope`` is ``"scene"``, ``"selection"``, or a collection of instance ids.
     The scene is scanned once: every guide joint's meta is read a single time.
+
+    Instances are hydrated from the guide document, and their connection sources
+    are translated from ``"<uuid>.<output>"`` to ``"<key>.<output>"`` here. The
+    uuid is the storage format; the key is the build-time one, and translating
+    at this single boundary means the Builder keeps working unchanged and the
+    two can never drift -- the map is rebuilt on every scan.
     """
     meta: dict[str, dict] = {}
     joints = []
@@ -220,13 +230,32 @@ def find_instances(scope: Any = "scene") -> list[ModuleInstance]:
         for instance_id in list(grouped):
             grouped[instance_id] = guide_nodes(instance_id)
 
+    from .document_store import read_document
+
+    document = read_document()
+    keys = {entry.instance_id: entry.key for entry in document.modules}
     instances = []
     for instance_id, nodes in grouped.items():
-        instance = instance_from_nodes(instance_id, nodes, meta)
-        if instance is not None:
-            instances.append(instance)
+        entry = document.module(instance_id)
+        instance = instance_from_nodes(instance_id, nodes, meta, entry)
+        if instance is None:
+            continue
+        instance.inputs = {
+            name: _source_as_key(source, keys)
+            for name, source in instance.inputs.items()
+        }
+        instances.append(instance)
     instances.sort(key=lambda item: item.name)
     return instances
+
+
+def _source_as_key(source: str, keys: dict) -> str:
+    """``"<uuid>.hand"`` -> ``"L_arm.hand"``; scene-node sources pass through."""
+    if not source or "." not in source:
+        return source
+    instance_id, _dot, output = source.rpartition(".")
+    key = keys.get(instance_id)
+    return f"{key}.{output}" if key else source
 
 
 # -------------------------------------------------------------------- pose

@@ -21,10 +21,13 @@ from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 from tik.trigger.maya import tags
 from tik.trigger.maya.rig import GuideDraft
 
-from . import nodes
+from . import document_store, module_node, nodes
+from .capture import capture
 from .format import GuideFile, GuideInstance, make_record
 from .handle import GuideHandle, mirror_source
 from .nodes import INPUTS
+from .regenerate import regenerate, regenerate_all
+from .snapshot import snapshot
 
 
 class GuideScene:
@@ -32,7 +35,77 @@ class GuideScene:
 
     def __init__(self, events: Optional[EventBus] = None) -> None:
         self.events = events or EventBus()
-        self._cache: Optional[dict[str, ModuleInstance]] = None
+        self._document = None
+        self._syncing = False
+
+    # ------------------------------------------------------- the document
+    @property
+    def document(self):
+        """The guide document, read from the scene once and cached."""
+        if self._document is None:
+            self._document = document_store.read_document()
+        return self._document
+
+    def reload(self):
+        """Drop the cached document and re-read it from the scene."""
+        self._document = None
+        return self.document
+
+    def commit(self, modules: Optional[dict] = None) -> None:
+        """Write the cached document back to the scene."""
+        document_store.write_document(self.document, modules=modules)
+
+    def invalidate(self) -> None:
+        """Forget the cached document. Kept for callers that edited by hand."""
+        self.reload()
+
+    def _module_for(self, entry):
+        module_cls = registry.get_module(entry.module_type)
+        return module_cls(
+            instance_id=entry.instance_id, name=entry.name,
+            side=entry.side, settings=dict(entry.settings),
+        )
+
+    def _write(self, entry) -> None:
+        """Persist one entry, keeping its mirrored setting attributes fresh."""
+        document_store.write_entry(entry, self._module_for(entry))
+
+    def _primary_input_name(self, entry) -> Optional[str]:
+        primary = registry.get_module(entry.module_type).primary_input()
+        return primary.name if primary else None
+
+    def diff(self):
+        """Reconcile the document against what the scene renders."""
+        from tik.trigger.core.reconcile import reconcile
+
+        return reconcile(
+            self.document, snapshot(), primary_input_of=self._primary_input_name
+        )
+
+    def inputs_as_keys(self, entry) -> dict:
+        """``{input: "<key>.<output>"}`` -- uuid sources resolved for display."""
+        keys = {item.instance_id: item.key for item in self.document.modules}
+        found = {}
+        for name, source in entry.inputs.items():
+            if source and "." in source:
+                instance_id, _dot, output = source.rpartition(".")
+                key = keys.get(instance_id)
+                found[name] = f"{key}.{output}" if key else source
+            else:
+                found[name] = source
+        return found
+
+    def source_as_id(self, source: str) -> str:
+        """``"L_arm.hand"`` -> ``"<uuid>.hand"``; scene-node sources pass through."""
+        if not source or "." not in source:
+            return source
+        key, _dot, output = source.rpartition(".")
+        entry = self.document.by_key(key)
+        if entry is not None:
+            return f"{entry.instance_id}.{output}"
+        if self.document.module(key) is not None:
+            return source  # already a uuid
+        return source
 
 
     # ------------------------------------------------------- scene access
@@ -71,34 +144,44 @@ class GuideScene:
 
     # ---------------------------------------------------------- authoring
     def create_guides(self, module, parent=None, poses=None, inputs=None) -> ModuleInstance:
-        """Draw a module's guides and tag them; returns the scene instance."""
-        if nodes.guide_nodes(module.instance_id):
-            raise GuideError(f"GuideLayout for instance {module.instance_id} already exist.")
-        parent_node = None
-        if parent is not None:
-            parent_node = nodes.guide_node(parent.instance_id, parent.role, parent.index)
+        """Write a module's document entry, then render its guides."""
+        from tik.trigger.core.guide_document import ModuleEntry, expand_guides
+
+        if self.document.module(module.instance_id) is not None:
+            raise GuideError(f"Module {module.instance_id} already exists.")
+        resolved = {name: self.source_as_id(source) for name, source in (inputs or {}).items()}
+        if not resolved and parent is not None and module.primary_input() is not None:
+            # convenience: drawing under another module's guide pre-fills the
+            # primary input with a real value
+            producer = self.document.module(parent.instance_id)
+            if producer is not None:
+                parent_cls = registry.get_module(producer.module_type)
+                output = parent_cls.output_at_role(parent.role)
+                if output:
+                    resolved = {module.primary_input().name: f"{producer.instance_id}.{output}"}
+        entry = ModuleEntry(
+            instance_id=module.instance_id, module_type=module.module_type,
+            name=module.name, side=module.side.value,
+            settings=module.values(), inputs=resolved,
+        )
+        expand_guides(entry, module.guides, module.guide_count())
+        for pose in poses or []:
+            record = entry.guide(pose.role, pose.index)
+            if record is not None:
+                record.position = tuple(pose.position)
+                record.rotation = tuple(pose.rotation)
+                record.rotate_order = pose.rotate_order
         with nodes.undo_chunk(f"Trigger guides: {module.name}"):
-            draft = GuideDraft(module, nodes.holder(), parent_node)
-            module.draw_guides(draft)
-            if draft.root is None:
+            self.document.modules.append(entry)
+            self._write(entry)
+            created = regenerate(entry, self.document)
+            if not created:
                 raise GuideError(f"'{module.module_type}' drew no guides.")
-            self._write_root_meta(draft.root, module)
-            if poses:
-                nodes.apply_poses(draft.created, poses)
-            # after the poses land, so a guide rig can take over the channels
-            module.wire_guides(draft.created)
-            resolved = dict(inputs or {})
-            if not resolved and parent is not None and module.primary_input() is not None:
-                # convenience: drawing under another module's guide pre-fills
-                # the primary input with a real value
-                found = nodes.find_instances([parent.instance_id])
-                if found:
-                    parent_cls = registry.get_module(found[0].module_type)
-                    output = parent_cls.output_at_role(parent.role)
-                    if output:
-                        resolved = {module.primary_input().name: f"{found[0].key}.{output}"}
-            draft.root.meta[INPUTS] = resolved
-        return nodes.instance_from_nodes(module.instance_id, draft.created)
+            if not poses:
+                # the first render defines the poses the document then owns
+                capture(self.document, snapshot())
+                self._write(entry)
+        return nodes.instance_from_nodes(module.instance_id, created, entry=entry)
 
     def delete_guides(self, instance_id: str) -> None:
         found = nodes.guide_nodes(instance_id)
@@ -113,11 +196,16 @@ class GuideScene:
         cmds.delete([node.long_name for node in found.values() if node.exists()])
 
     def rename_instance(self, instance_id: str, name: str) -> None:
-        self._root_of(instance_id).meta[tags.NAME] = name
+        """Rename a module. Guide joint names follow on the next regenerate."""
+        entry = self._entry(instance_id)
+        with nodes.undo_chunk("Trigger rename module"):
+            entry.name = name
+            self._write(entry)
+            regenerate(entry, self.document)
 
     def reparent_guides(self, instance_id: str, parent: Optional[ParentRef]) -> None:
         """Hang an instance's root guide under another instance's guide (or the holder)."""
-        root = self._root_of(instance_id)
+        root = self._root_node(instance_id)
         if parent is None:
             target = nodes.holder()
         else:
@@ -138,95 +226,79 @@ class GuideScene:
 
     # ----------------------------------------------------------- settings
     def set_inputs(self, instance_id: str, inputs: dict) -> None:
-        root = self._root_of(instance_id)
-        root.meta[INPUTS] = {key: value for key, value in dict(inputs).items() if value}
+        """Replace a module's connections wholesale."""
+        entry = self._entry(instance_id)
+        with nodes.undo_chunk("Trigger set inputs"):
+            entry.inputs = {
+                name: self.source_as_id(source)
+                for name, source in dict(inputs).items() if source
+            }
+            self._write(entry)
+            regenerate(entry, self.document)
+
+    def set_input(self, instance_id: str, input_name: str, source: Optional[str]) -> None:
+        """Connect or disconnect one input."""
+        entry = self._entry(instance_id)
+        with nodes.undo_chunk("Trigger set input"):
+            if source:
+                entry.inputs[input_name] = self.source_as_id(source)
+            else:
+                entry.inputs.pop(input_name, None)
+            self._write(entry)
+            regenerate(entry, self.document)
 
     def read_settings(self, instance_id: str) -> dict:
-        found = nodes.find_instances([instance_id])
-        return dict(found[0].settings) if found else {}
+        entry = self.document.module(instance_id)
+        return dict(entry.settings) if entry is not None else {}
 
     def write_settings(self, instance_id: str, settings: dict) -> None:
-        found = nodes.find_instances([instance_id])
-        if not found:
-            raise GuideError(f"No guides for instance {instance_id}.")
-        root = nodes.root_guide(nodes.guide_nodes(instance_id), found[0].module_type)
-        module_cls = registry.get_module(found[0].module_type)
-        module = module_cls(name=found[0].name, side=found[0].side, settings=settings)
-        root.meta[tags.SETTINGS] = module.values()
-        self._sync_setting_attrs(root, module)
+        """Store settings and redraw, so the guides match them immediately.
+
+        A settings change that adds or removes guides (``fkchain.segments``)
+        expands the entry first, which keeps every surviving pose.
+        """
+        from tik.trigger.core.guide_document import expand_guides
+
+        entry = self._entry(instance_id)
+        module_cls = registry.get_module(entry.module_type)
+        module = module_cls(
+            instance_id=instance_id, name=entry.name, side=entry.side, settings=settings
+        )
+        with nodes.undo_chunk("Trigger module settings"):
+            entry.settings = module.values()
+            expand_guides(entry, module.guides, module.guide_count())
+            self._write(entry)
+            regenerate(entry, self.document)
 
     def settings_plug(self, instance_id: str, field_name: str):
         """The plug holding a module property (for two-way UI binding)."""
-        return self._root_of(instance_id)[field_name]
+        return module_node.settings_plug(instance_id, field_name)
 
-    def _root_of(self, instance_id: str):
-        found = nodes.find_instances([instance_id])
-        if not found:
-            raise GuideError(f"No guides for instance {instance_id}.")
-        return nodes.root_guide(nodes.guide_nodes(instance_id), found[0].module_type)
+    def _root_node(self, instance_id: str):
+        """This module's root guide joint, from the document's module type."""
+        entry = self._entry(instance_id)
+        module_cls = registry.get_module(entry.module_type)
+        root = nodes.guide_nodes(instance_id).get((module_cls.guides.root, 0))
+        if root is None:
+            raise GuideError(f"Module '{entry.name}' has no root guide in the scene.")
+        return root
 
-    @staticmethod
-    def _write_root_meta(root, module) -> None:
-        root.meta[tags.NAME] = module.name
-        root.meta[tags.SETTINGS] = module.values()
-        GuideScene._write_guide_attrs(root, module)
-
-    @staticmethod
-    def _write_guide_attrs(root, module) -> None:
-        """Guide-level attributes the Guide Designer edits, plus the module fields.
-
-        ``useRefOri`` ("Inherit Orientation") is a real attribute rather than a
-        module field because it is a property of the guide, not of the module
-        type: the designer binds its checkbox to this plug two-way, and writes
-        it across a multi-selection.
-        """
-        if not root.has_attr("useRefOri"):
-            attribute.add_bool(root, "useRefOri", default=True)
-        GuideScene._sync_setting_attrs(root, module)
-
-    @staticmethod
-    def _sync_setting_attrs(root, module) -> None:
-        """Mirror module fields as real Maya attributes on the root guide.
-
-        The Guide Designer binds its property widgets two-way to these plugs
-        through ``settings_plug()``. The authoritative storage is still the
-        ``trg_settings`` meta dict; non-scalar field kinds have no sensible
-        single attribute and live only there.
-        """
-        for name, field_obj in module.fields().items():
-            value = getattr(module, name)
-            kind = field_obj.type_name
-            if kind in ("list", "dict", "vector", "table"):
-                continue
-            if not root.has_attr(name):
-                if kind == "bool":
-                    attribute.add_bool(root, name, default=bool(value))
-                elif kind == "int":
-                    attribute.add_int(root, name, default=int(value), min=field_obj.min, max=field_obj.max)
-                elif kind == "float":
-                    attribute.add_float(root, name, default=float(value), min=field_obj.min, max=field_obj.max)
-                elif kind == "choice":
-                    attribute.add_enum(root, name, [str(item) for item in field_obj.choices], default=field_obj.choices.index(value))
-                else:
-                    attribute.add_string(root, name)
-            if kind == "choice":
-                root[name].value = field_obj.choices.index(value)
-            elif kind in ("string", "file", "node"):
-                root[name].value = str(value)
-            else:
-                root[name].value = value
+    def _entry(self, instance_id: str):
+        entry = self.document.module(instance_id)
+        if entry is None:
+            raise GuideError(f"No module {instance_id}.")
+        return entry
 
     # ------------------------------------------------------------ layout
     def read_layout(self) -> dict:
-        """Designer state on the guide holder (scene-node groups, positions, collapse)."""
-        if not cmds.objExists(tags.GUIDE_HOLDER):
-            return {}
-        return dict(tm.Transform(tags.GUIDE_HOLDER).meta.get(tags.DESIGNER, {}) or {})
+        """Designer state, projected out of the document under display keys."""
+        return self.document.layout_as_keys()
 
     def write_layout(self, layout: dict) -> None:
-        """Store designer state; one undo chunk so 'auto layout' and node moves undo."""
+        """Store designer state back into the document, keyed by id."""
+        self.document.layout_from_keys(layout)
         with nodes.undo_chunk("Trigger designer layout"):
-            nodes.holder().meta[tags.DESIGNER] = dict(layout)
+            self.commit()
 
     # ------------------------------------------------------- .trg records
     def export_guide_records(self, instance_ids=None) -> list[dict]:
@@ -349,9 +421,6 @@ class GuideScene:
                     extras[module.instance_id] = extra
                     for key, info in extra.items():
                         joints[key] = info["node"]
-                root = joints[(module_cls.guides.root, 0)]
-                self._write_root_meta(root, module)
-                root.meta[INPUTS] = dict(guide_instance.inputs)
                 built.append((guide_instance, module, joints))
             for guide_instance, module, joints in built:
                 for (role, index), record in guide_instance.joints.items():
@@ -372,38 +441,64 @@ class GuideScene:
                     )
             for _guide_instance, module, joints in built:
                 module.wire_guides(joints)
-        return [nodes.instance_from_nodes(module.instance_id, joints) for _gi, module, joints in built]
+            self._entries_from_import(built)
+        return [
+            nodes.instance_from_nodes(
+                module.instance_id, joints, entry=self.document.module(module.instance_id)
+            )
+            for _gi, module, joints in built
+        ]
 
-    # ----------------------------------------------------------- caching
-    def _snapshot(self) -> dict[str, ModuleInstance]:
-        """One scene scan, reused by every handle until something changes."""
-        if self._cache is None:
-            self._cache = {item.instance_id: item for item in self.find_instances()}
-        return self._cache
+    def _entries_from_import(self, built) -> None:
+        """Create document entries for imported guides and wire their inputs.
 
-    def invalidate(self) -> None:
-        """Forget the cached scene snapshot.
-
-        Every write through this API does it for you; call it yourself after
-        editing guides directly in Maya (moving joints, undo, deleting).
+        A ``.trg`` names its connections by display key, and import mints fresh
+        uuids, so sources are resolved in a second pass once every key is known.
         """
-        self._cache = None
+        from tik.trigger.core.guide_document import ModuleEntry, expand_guides
+
+        document = self.document
+        entries = {}
+        for guide_instance, module, _joints in built:
+            entry = ModuleEntry(
+                instance_id=module.instance_id, module_type=module.module_type,
+                name=module.name, side=module.side.value, settings=module.values(),
+            )
+            expand_guides(entry, module.guides, module.guide_count())
+            document.modules.append(entry)
+            entries[module.instance_id] = (entry, guide_instance)
+        keys = {entry.key: entry.instance_id for entry, _gi in entries.values()}
+        for entry, guide_instance in entries.values():
+            entry.inputs = {
+                name: (
+                    f"{keys[source.rpartition('.')[0]]}.{source.rpartition('.')[2]}"
+                    if "." in source and source.rpartition(".")[0] in keys
+                    else source
+                )
+                for name, source in guide_instance.inputs.items() if source
+            }
+        # the imported joints are the authored poses, so record them
+        capture(document, snapshot())
+        for entry, _gi in entries.values():
+            self._write(entry)
+
+
 
     # ----------------------------------------------------------- listing
     def instances(self) -> list[GuideHandle]:
-        return [GuideHandle(self, item) for item in self._snapshot().values()]
+        return [GuideHandle(self, entry.instance_id) for entry in self.document.modules]
 
     def roots(self) -> list[GuideHandle]:
-        return [handle for handle in self.instances() if handle.instance.parent is None]
+        return [handle for handle in self.instances() if handle.parent is None]
 
     def get(self, instance_id: str) -> Optional[GuideHandle]:
-        found = self._snapshot().get(instance_id)
-        return GuideHandle(self, found) if found else None
+        entry = self.document.module(instance_id)
+        return GuideHandle(self, entry.instance_id) if entry is not None else None
 
     def find(self, name: str, side: Optional[str] = None) -> Optional[GuideHandle]:
-        for handle in self.instances():
-            if handle.name == name and (side is None or handle.side == Side.from_value(side)):
-                return handle
+        for entry in self.document.modules:
+            if entry.name == name and (side is None or entry.side == Side.from_value(side).value):
+                return GuideHandle(self, entry.instance_id)
         return None
 
     def __getitem__(self, name: str) -> GuideHandle:
@@ -413,9 +508,11 @@ class GuideScene:
         return handle
 
     def clear(self) -> None:
-        for handle in self.instances():
-            self.delete_guides(handle.instance_id)
-        self.invalidate()
+        with nodes.undo_chunk("Trigger clear guides"):
+            for entry in list(self.document.modules):
+                self.delete_guides(entry.instance_id)
+            self.document.modules = []
+            self.commit()
 
     # ---------------------------------------------------------- authoring
     def add(
@@ -436,13 +533,14 @@ class GuideScene:
         parent_ref = parent
         if isinstance(parent, GuideHandle):
             parent_ref = ParentRef(parent.instance_id, parent.module_class.guides.root)
-        instance = self.create_guides(module, parent=parent_ref, inputs=inputs)
-        self.invalidate()
-        return GuideHandle(self, instance)
+        self.create_guides(module, parent=parent_ref, inputs=inputs)
+        return GuideHandle(self, module.instance_id)
 
     def unique_name(self, name: str, side: str) -> str:
         """``arm`` -> ``arm``, ``arm1``, ``arm2``... until ``<side>_<name>`` is free."""
-        taken = {handle.key for handle in self.instances()} | set(self.layout.get("scene_nodes", {}))
+        taken = {entry.key for entry in self.document.modules} | {
+            group.name for group in self.document.scene_groups
+        }
         base = name.rstrip("0123456789") or name
         candidate, index = name, 1
         while instance_key(candidate, side) in taken:
@@ -451,10 +549,22 @@ class GuideScene:
         return candidate
 
     def remove(self, handle: GuideHandle) -> None:
-        key = handle.key
-        self.delete_guides(handle.instance_id)
-        self.invalidate()
-        self._forget_key(key)
+        """Delete a module: its entry, its guides and its layout."""
+        instance_id = handle.instance_id
+        with nodes.undo_chunk("Trigger remove module"):
+            self.delete_guides(instance_id)
+            document = self.document
+            document.modules = [
+                entry for entry in document.modules if entry.instance_id != instance_id
+            ]
+            document.positions.pop(instance_id, None)
+            document.collapse.pop(instance_id, None)
+            for entry in document.modules:
+                entry.inputs = {
+                    name: source for name, source in entry.inputs.items()
+                    if source.rpartition(".")[0] != instance_id
+                }
+            self.commit()
 
     # ------------------------------------------------------------ layout
     @property
@@ -475,27 +585,6 @@ class GuideScene:
             layout[name] = value
         self.set_layout(layout)
         return layout
-
-    def _rename_key(self, old: str, new: str) -> None:
-        layout = self.layout
-        changed = False
-        for section in ("positions", "collapse"):
-            table = layout.get(section, {})
-            if old in table:
-                table[new] = table.pop(old)
-                changed = True
-        if changed:
-            self.set_layout(layout)
-
-    def _forget_key(self, key: str) -> None:
-        layout = self.layout
-        changed = False
-        for section in ("positions", "collapse"):
-            if key in layout.get(section, {}):
-                del layout[section][key]
-                changed = True
-        if changed:
-            self.set_layout(layout)
 
     # ------------------------------------------------------ scene nodes
     def scene_groups(self) -> dict[str, list[str]]:
@@ -537,8 +626,11 @@ class GuideScene:
         if new in groups or self.by_key(new) is not None:
             raise GuideError(f"'{new}' is already used.")
         groups[new] = groups.pop(old)
+        document = self.document
+        for table in (document.positions, document.collapse):
+            if old in table:
+                table[new] = table.pop(old)
         self.update_layout(scene_nodes=groups)
-        self._rename_key(old, new)
 
     def remove_scene_group(self, name: str) -> None:
         groups = self.scene_groups()
@@ -547,7 +639,10 @@ class GuideScene:
         for item in self.connections():
             if item["source"] in nodes and not self.scene_node_group(item["source"]):
                 self.disconnect(item["input"])
-        self._forget_key(name)
+        document = self.document
+        document.positions.pop(name, None)
+        document.collapse.pop(name, None)
+        self.commit()
 
     def scene_node_group(self, node: str) -> Optional[str]:
         """The group that lists scene node ``node`` (first match)."""
@@ -558,7 +653,8 @@ class GuideScene:
 
     # -------------------------------------------------------- connections
     def by_key(self, key: str) -> Optional[GuideHandle]:
-        return next((handle for handle in self.instances() if handle.key == key), None)
+        entry = self.document.by_key(key)
+        return GuideHandle(self, entry.instance_id) if entry is not None else None
 
     def connect(self, target: str, source: str) -> None:
         """``connect("L_arm.root", "body.root")`` or ``connect("tail.space", "some_jnt")``."""
@@ -580,19 +676,34 @@ class GuideScene:
         handle.set_input(input_name, None)
 
     def connections(self) -> list[dict]:
+        """``[{"input": "L_arm.root", "source": "spine.hip"}]`` -- display keys."""
         found = []
-        for handle in self.instances():
-            for input_name, source in handle.inputs.items():
-                found.append({"input": f"{handle.key}.{input_name}", "source": source})
+        for entry in self.document.modules:
+            for input_name, source in self.inputs_as_keys(entry).items():
+                found.append({"input": f"{entry.key}.{input_name}", "source": source})
         return found
 
     def reparent(self, handle: GuideHandle, parent: Optional[GuideHandle | ParentRef]) -> None:
-        """Hang ``handle`` under ``parent`` (its root guide) or back at the top level."""
-        parent_ref = parent
-        if isinstance(parent, GuideHandle):
-            parent_ref = ParentRef(parent.instance_id, parent.module_class.guides.root)
-        self.reparent_guides(handle.instance_id, parent_ref)
-        self.invalidate()
+        """Attach ``handle`` to ``parent``, or detach it.
+
+        This sets the *primary input*, not the DAG: guide parenting is a
+        rendering of the connection graph and is rebuilt from it on every
+        regenerate (spec 4.4), so there is only one hierarchy to keep straight.
+        """
+        primary = handle.module_class.primary_input()
+        if primary is None:
+            raise GuideError(f"'{handle.module_type}' has no primary input.")
+        if parent is None:
+            self.set_input(handle.instance_id, primary.name, None)
+            return
+        producer_id = parent.instance_id
+        if producer_id == handle.instance_id:
+            raise GuideError("Cannot attach a module to itself.")
+        producer = self._entry(producer_id)
+        producer_cls = registry.get_module(producer.module_type)
+        role = getattr(parent, "role", None) or producer_cls.guides.root
+        output = producer_cls.output_at_role(role) or producer_cls.outputs[0]
+        self.set_input(handle.instance_id, primary.name, f"{producer_id}.{output}")
 
     def mirror(self, handle: GuideHandle) -> GuideHandle:
         """Create (or update) the opposite-side copy of ``handle``."""
@@ -614,21 +725,25 @@ class GuideScene:
             for pose in instance.guides
         ]
         if existing is not None:
-            existing_instance = existing.instance
-            existing_instance.guides = poses
-            self.apply_guide_poses(existing_instance)
+            existing_entry = existing.entry
+            for pose in poses:
+                record = existing_entry.guide(pose.role, pose.index)
+                if record is not None:
+                    record.position = tuple(pose.position)
+                    record.rotation = tuple(pose.rotation)
+                    record.rotate_order = pose.rotate_order
+            self._write(existing_entry)
             self.write_settings(existing.instance_id, instance.settings)
             self.set_inputs(
                 existing.instance_id,
                 {name: mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()},
             )
-            self.invalidate()
+            regenerate(existing.entry, self.document)
             return existing
         module = handle.module_class(name=instance.name, side=target_side, settings=instance.settings)
         mirrored_inputs = {name: mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()}
-        created = self.create_guides(module, parent=instance.parent, poses=poses, inputs=mirrored_inputs)
-        self.invalidate()
-        return GuideHandle(self, created)
+        self.create_guides(module, parent=instance.parent, poses=poses, inputs=mirrored_inputs)
+        return GuideHandle(self, module.instance_id)
 
     def duplicate(self, handle: GuideHandle, name: Optional[str] = None) -> GuideHandle:
         """Copy a module: same type/side/settings/inputs/poses, a unique name (``arm`` -> ``arm1``)."""
@@ -636,14 +751,12 @@ class GuideScene:
         instance = handle.instance
         module = handle.module_class(name=name or instance.name, side=instance.side, settings=instance.settings)
         module.name = self.unique_name(module.name, module.side.value)
-        created = self.create_guides(module, poses=list(instance.guides), inputs=dict(instance.inputs))
-        self.invalidate()
-        layout = self.layout
-        collapse = layout.get("collapse", {})
-        if handle.key in collapse:
-            collapse[module.key] = collapse[handle.key]
-            self.update_layout(collapse=collapse)
-        return GuideHandle(self, created)
+        self.create_guides(module, poses=list(instance.guides), inputs=dict(instance.inputs))
+        collapse = self.document.collapse
+        if handle.instance_id in collapse:
+            collapse[module.instance_id] = collapse[handle.instance_id]
+            self.commit()
+        return GuideHandle(self, module.instance_id)
 
     # ------------------------------------------------------------- build
     def test_build(self, *handles: GuideHandle, rig_name: str = "test") -> Any:
@@ -694,7 +807,7 @@ class GuideScene:
                 if merged:
                     layout[section] = merged
             self.set_layout(layout)
-        return [GuideHandle(self, item) for item in created]
+        return [GuideHandle(self, item.instance_id) for item in created]
 
     load = import_
 
