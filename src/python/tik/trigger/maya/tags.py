@@ -13,6 +13,7 @@ SETTINGS = "trg_settings"  # settings dict (root guide only)
 DESIGNER = "trg_designer"  # Guide Designer layout dict (guide holder only)
 ENTRY = "trg_entry"  # serialized ModuleEntry (module document node only)
 DOCUMENT = "trg_document"  # scene groups / positions / collapse (guide holder only)
+SESSION = "trg_session"  # id of the session whose guides are checked out
 MIRROR = "trg_mirror"  # "behaviour" | "world" - how a pose-mirror tool treats it
 OUTPUT_NAME = "trg_output"  # declared output this node fulfils
 

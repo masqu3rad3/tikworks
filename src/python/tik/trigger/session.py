@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime
 import getpass
+import uuid
 from pathlib import Path
 from typing import Any, Optional
 
@@ -281,6 +282,7 @@ class Session:
         self.document.meta.setdefault("created_at", now)
         self.document.meta.setdefault("author", getpass.getuser())
         self.document.meta["modified_at"] = now
+        self.capture_guides()  # the file must never lag the viewport
         self.document.save(target)
         self.file_path = target
         self._saved_state = self.document.to_dict()
@@ -289,6 +291,91 @@ class Session:
 
     def increment(self) -> Path:
         return self.save(increment=True)
+
+    # ------------------------------------------------------------ guides
+    #
+    # The session is the durable home for the rig's guides; the Maya scene is a
+    # working copy of exactly one session at a time, stamped so that "whose
+    # guides are these?" always has an answer.
+
+    @property
+    def session_id(self) -> str:
+        """Stable id for this session, used to stamp its checkout in the scene."""
+        found = self.document.meta.get("session_id")
+        if not found:
+            found = uuid.uuid4().hex
+            self.document.meta["session_id"] = found
+        return found
+
+    def _guide_scene(self):
+        from tik.trigger.guides import GuideScene
+
+        return GuideScene(self.events)
+
+    @staticmethod
+    def _scene_available() -> bool:
+        """Whether there is a Maya scene to read guides out of."""
+        try:
+            from tik.trigger.guides import document_store
+
+            document_store.read_stamp()
+        except Exception:  # noqa: BLE001 - no Maya, or no scene yet
+            return False
+        return True
+
+    @property
+    def owns_scene_guides(self) -> bool:
+        """True when the scene's guides are ours, or there are none."""
+        from tik.trigger.guides import document_store
+
+        try:
+            stamp = document_store.read_stamp()
+        except Exception:  # noqa: BLE001 - no Maya: nothing owns anything
+            return True
+        return not stamp or stamp == self.session_id
+
+    def capture_guides(self) -> bool:
+        """Fold the scene's guide document into this session. Scene -> document.
+
+        A no-op without a live Maya scene: a session can legitimately be opened
+        and edited headlessly, and then its stored guides are already the truth.
+        """
+        if not self._scene_available():
+            return False
+        from tik.trigger.guides import document_store
+
+        if not self.owns_scene_guides:
+            return False
+        scene = self._guide_scene()
+        # poses first, but never redraw: capturing must not edit the scene
+        scene.sync(regenerate_stale=False)
+        captured = scene.document.to_dict()
+        changed = captured != self.document.guides
+        self.document.guides = captured
+        document_store.write_stamp(self.session_id)
+        return changed
+
+    def checkout_guides(self, force: bool = False) -> None:
+        """Project this session's guides into the scene. Document -> scene.
+
+        The scene holds one checkout at a time. A scene stamped for another
+        session is reported rather than silently adopted -- discarding someone
+        else's working copy has to be a decision, not a side effect.
+        """
+        from tik.trigger.core.guide_document import GuideDocument
+        from tik.trigger.guides import document_store, regenerate
+
+        if not force and not self.owns_scene_guides:
+            raise SessionError(
+                "The guides in this scene belong to another session. Save that "
+                "session first, or check out with force=True."
+            )
+        scene = self._guide_scene()
+        scene.clear()
+        document_store.write_document(GuideDocument.from_dict(self.document.guides or {}))
+        scene.reload()
+        regenerate.regenerate_all(scene.document)
+        document_store.write_stamp(self.session_id)
 
     # -------------------------------------------------------------- tree
     @property

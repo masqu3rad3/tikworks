@@ -81,3 +81,15 @@ def write_entry(entry: ModuleEntry, module=None) -> None:
 
 def remove_entry(instance_id: str) -> None:
     module_node.remove(instance_id)
+
+
+def read_stamp() -> str:
+    """The id of the session whose guides the scene holds, or ``""``."""
+    if not cmds.objExists(tags.GUIDE_HOLDER):
+        return ""
+    return str(tm.Transform(tags.GUIDE_HOLDER).meta.get(tags.SESSION, "") or "")
+
+
+def write_stamp(session_id: str) -> None:
+    """Record which session owns the guides currently in the scene."""
+    nodes.holder().meta[tags.SESSION] = str(session_id)
