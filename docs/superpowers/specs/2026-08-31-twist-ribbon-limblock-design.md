@@ -29,60 +29,97 @@ module and the `ribbon` module consume it.
 
 ## 2. Section 1 — the twist extractor and the `twist` module
 
-### 2.1 Why the dump's method is not enough
+### 2.1 Why the dump's method is limited, and what actually fixes it
 
 `dump/twist_dump.py` extracts twist with `composeMatrix` → `multMatrix`
 (negating the build pose) → `decomposeMatrix` → `quatToEuler` on one axis.
-That is a correct swing-twist decomposition, but `quatToEuler` goes through
-`MQuaternion::asEulerRotation()`, which returns `(-180°, 180°]` for a
-single-axis rotation. The pop at ±180 is inherent to the one-step conversion,
-not to how the dump wired it.
+That is a correct swing-twist decomposition, and it wraps at ±180.
 
-The fix is to convert **half** the rotation and double the result. Half of
-±360 is ±180, so the whole range survives the conversion:
+**An earlier draft of this spec proposed a `quatSlerp` half-angle trick to
+push that to ±360. It was measured against Maya 2026 and it does not work.**
+Sweeping a driver from -400° to +400° through
+`quatSlerp(identity, twist, 0.5) → quatToEuler → x2`:
 
-    quatSlerp(identity, twist_quat, t = 0.5)  ->  quatToEuler  ->  x 2
+| driver rx | direct | Shortest | Positive | Negative |
+|---|---|---|---|---|
+| 181 | -179.0 | -179.0 | -179.0 | 181.0 |
+| 200 | -160.0 | -160.0 | -160.0 | 200.0 |
+| 361 | 1.0 | 1.0 | 1.0 | -359.0 |
 
-The discontinuity moves to ±360, which no wrist, ankle or forearm reaches.
+Largest step between adjacent samples across the sweep: 355° for Shortest and
+Positive, 365° for Negative. Every mode wraps.
+
+The cause is upstream of the slerp and is not fixable by any quaternion
+wiring: **a rotation matrix for 200° is identical to the matrix for -160°**,
+and `decomposeMatrix` canonicalises the quaternion to the `w >= 0`
+hemisphere. The information is gone before a quaternion node sees it. Any
+matrix-derived twist is therefore bounded to a 360°-wide window, i.e. ±180
+about the reference pose. This is a property of the representation.
+
+What does carry unbounded twist is a **rotate channel**. With rotate order
+XYZ the X rotation is applied innermost, so `rotateX` is exactly the roll
+about the bone's own axis and it is a plain unbounded float. This is already
+why `Ribbon` sets `ROTATE_ORDER_XYZ` and adds twist onto `rotateX` rather
+than through a matrix (`constructs/ribbon.py`).
+
+So the extractor offers both sources and picks honestly between them.
 
 ### 2.2 `systems/twist.py`
 
 One public function:
 
 ```python
-def twist_plug(driver, reference, *, name, axis="auto") -> Plug:
+def twist_plug(driver, reference, *, name, axis="auto", source="auto") -> Plug:
     """Degrees of ``driver``'s roll about ``axis``, relative to ``reference``."""
 ```
 
-Six nodes, created once per call and shared by every consumer:
+**`source="matrix"`** — swing-twist decomposition. Works for any driver in any
+hierarchy, however it is constrained. Bounded to ±180 about the rest pose.
+Four nodes, created once per call and shared by every consumer:
 
 | node | role |
 |---|---|
 | `multMatrix` (3 inputs: static `rest_inverse`, `driver.worldMatrix`, `reference.worldInverseMatrix`) | relative rotation expressed in the **rest-local** frame, so the twist axis stays the segment's own axis in any pose |
 | `decomposeMatrix` | swing-twist decomposition, giving `outputQuat<axis>` + `outputQuatW` |
-| `quatNormalize` | zeroing the other two quaternion components de-normalises it; `quatSlerp` needs a unit quaternion |
-| `quatSlerp` (identity to twist, `inputT = 0.5`) | the half angle |
-| `quatToEuler` | ±180 on the half is ±360 on the whole |
-| `multDoubleLinear` (x 2) | undo the halving |
+| `quatToEuler` | the angle, in `outputRotate<axis>` |
 
 `multMatrix` multiplies in input order, so a single node with three inputs
 yields `rest_inverse * driver.worldMatrix * reference.worldInverseMatrix` —
 the delta expressed in the rest frame. `rest_inverse` is baked as a static
-matrix value at build time.
+matrix value at build time. Feeding `quatToEuler` only the axis component and
+`W` is what isolates twist from swing.
 
-Per consumer joint the cost is one further `multDoubleLinear` for its weight.
+**`source="channel"`** — reads `driver["rotate<axis>"]` directly. Zero nodes,
+and genuinely unbounded: a propeller, wheel, drill or FK roll control winds
+past 360° without a pop. Valid only when the driver's rotation *is* the twist
+relative to the reference, which requires both:
+
+- `reference` is the driver's parent transform, and
+- the driver's `rotateOrder` applies the twist axis innermost (XYZ for an
+  X twist), so the channel is roll about the bone's own axis rather than a
+  component of a composite rotation.
+
+**`source="auto"`** (the default) checks those two conditions at build time
+and picks `channel` when they hold, `matrix` otherwise, logging which it
+chose at debug level. This gives an FK-driven twist its unbounded range and a
+matrix- or IK-driven one the robust bounded extraction, with no user decision
+required.
+
+**The bound is real and is documented, not hidden.** A wrist or ankle driven
+through `MatrixBlend` (every IK/FK limb in this repo) resolves to rotate
+channels derived from a matrix, so it is bounded whichever source is chosen —
+which is correct, because anatomical twist never approaches 180° from rest.
+Unbounded rotation is a mechanical case, and mechanical drivers are FK, where
+`channel` applies.
+
+Per consumer joint the cost is one `multDoubleLinear` for its weight.
 
 `axis="auto"` runs the dominant-axis dot product from `twist_dump.py`
 (`get_dominant_axis`) **once in Python at build time**, never in the DG.
 `axis` may also be given explicitly as `"X"`, `"Y"` or `"Z"`.
 
-**To pin with a test, not assumed:** `quatSlerp.angleInterpolation` has
-Shortest / Positive / Negative modes, and Shortest would fold the angle back
-near 180 and defeat the whole point. The implementation test sweeps the driver
-from -400° to +400° and asserts the output is monotonic with no discontinuity
-inside ±360; the correct mode is whichever satisfies that. Likewise the
-`multMatrix` input order (`rest_inverse` first vs last) is asserted by a test
-that twists a driver in a non-identity rest pose.
+The `multMatrix` input order (`rest_inverse` first vs last) is asserted by a
+test that twists a driver in a non-identity rest pose.
 
 ### 2.3 The `twist` module
 
@@ -95,7 +132,12 @@ outputs = twist0 ... twistN-1        # via output_names(settings)
 ```
 
 Fields: `count` (drives `guide_count()`), `twist_source` (`"start"` | `"end"`),
-`axis` (`"auto"` | `"X"` | `"Y"` | `"Z"`), `distribute_translation` (bool).
+`axis` (`"auto"` | `"X"` | `"Y"` | `"Z"`), `extraction` (`"auto"` | `"matrix"`
+| `"channel"`, passed to `twist_plug(source=...)`), `distribute_translation`
+(bool).
+
+`twist_source` and `extraction` are deliberately distinct: the first says
+*which end drives* the twist, the second says *how the angle is read*.
 
 This is a **generic** module, not a limb accessory. It covers both directions
 of the common case through `twist_source`:
@@ -386,13 +428,19 @@ Following the repo's conventions — `pytest` under `mayapy`, no third-party
 deps, `test_<module>_trigger.py` naming.
 
 **`tests/unit/test_twist_trigger.py`** (Maya)
-- `twist_plug` returns 0 at rest in a non-identity rest pose.
-- A -400° to +400° sweep of the driver is monotonic with no discontinuity
-  inside ±360. This is the test that pins `quatSlerp.angleInterpolation`.
-- The equivalent sweep through a plain `quatToEuler` *does* break at ±180 —
-  asserted, so the reason for the extra nodes is recorded in the suite.
+- `twist_plug` returns 0 at rest in a non-identity rest pose, for both sources.
+- `source="matrix"` tracks the driver exactly across ±170°.
+- `source="matrix"` wraps beyond ±180 — asserted deliberately, so the
+  documented bound is a tested property rather than a latent surprise, and so
+  a future reader does not re-attempt the quaternion trick. A comment cites
+  the measurement in §2.1.
+- `source="channel"` is monotonic across a -400° to +400° sweep with no step
+  larger than the sample interval — the unbounded case.
+- `source="auto"` picks `channel` for an XYZ-order driver parented to the
+  reference, and `matrix` when the driver is constrained or the rotate order
+  puts the twist axis outermost.
 - Swing contamination: rotating the driver off-axis leaves the extracted twist
-  unchanged.
+  unchanged under `source="matrix"`.
 - `axis="auto"` picks the chain axis for X-, Y- and Z-oriented chains.
 - Module: guide projection yields expected positions for guides dragged off
   the axis; a negative `twistWeight` reverses the joint's rotation; joints land
