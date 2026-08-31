@@ -38,7 +38,8 @@ def add_separator(node, name: str = "____") -> Plug:
 
 
 def _add_numeric(
-    node, name, attribute_type, default, min_value, max_value, keyable
+    node, name, attribute_type, default, min_value, max_value, keyable,
+    soft_min=None, soft_max=None,
 ) -> Plug:
     node = _node(node)
     kwargs = {
@@ -51,22 +52,41 @@ def _add_numeric(
         kwargs["minValue"] = min_value
     if max_value is not None:
         kwargs["maxValue"] = max_value
+    # The soft range is what the channel-box slider spans; the hard range is
+    # what a typed value may reach. A soft range inside a wider hard one keeps
+    # a meaningful detent on the slider without capping the attribute there.
+    if soft_min is not None:
+        kwargs["softMinValue"] = soft_min
+    if soft_max is not None:
+        kwargs["softMaxValue"] = soft_max
     cmds.addAttr(node.long_name, **kwargs)
     return Plug(node, name)
 
 
 def add_float(
-    node, name, default=0.0, min=None, max=None, keyable=True  # noqa: A002
+    node, name, default=0.0, min=None, max=None, keyable=True,  # noqa: A002
+    soft_min=None, soft_max=None,
 ) -> Plug:
-    """Add a double attribute."""
-    return _add_numeric(node, name, "double", float(default), min, max, keyable)
+    """Add a double attribute.
+
+    ``soft_min``/``soft_max`` set the slider range without capping the value:
+    an animator can still type past them, up to ``min``/``max``.
+    """
+    return _add_numeric(
+        node, name, "double", float(default), min, max, keyable,
+        soft_min=soft_min, soft_max=soft_max,
+    )
 
 
 def add_int(
-    node, name, default=0, min=None, max=None, keyable=True  # noqa: A002
+    node, name, default=0, min=None, max=None, keyable=True,  # noqa: A002
+    soft_min=None, soft_max=None,
 ) -> Plug:
     """Add a long (integer) attribute."""
-    return _add_numeric(node, name, "long", int(default), min, max, keyable)
+    return _add_numeric(
+        node, name, "long", int(default), min, max, keyable,
+        soft_min=soft_min, soft_max=soft_max,
+    )
 
 
 def add_bool(node, name, default=False, keyable=True) -> Plug:

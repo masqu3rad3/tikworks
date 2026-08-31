@@ -24,6 +24,28 @@ def test_add_float_with_limits():
     assert cmds.getAttr(plug.path, keyable=True)
 
 
+def test_add_float_with_a_soft_slider_range():
+    """The slider spans the soft range; a typed value may go past it."""
+    node = tm.Transform.create(name="node")
+    plug = attr.add_float(
+        node, "amount", default=0.0, min=-2.0, max=2.0, soft_min=0.0, soft_max=1.0
+    )
+    assert cmds.attributeQuery("amount", node=node.name, softMin=True) == [0.0]
+    assert cmds.attributeQuery("amount", node=node.name, softMax=True) == [1.0]
+    assert cmds.attributeQuery("amount", node=node.name, minimum=True) == [-2.0]
+    assert cmds.attributeQuery("amount", node=node.name, maximum=True) == [2.0]
+    plug.value = 1.7
+    assert abs(plug.value - 1.7) < 1e-6
+    plug.value = -1.4
+    assert abs(plug.value + 1.4) < 1e-6
+
+
+def test_add_float_without_soft_range_is_unchanged():
+    node = tm.Transform.create(name="node2")
+    attr.add_float(node, "plain", default=1.0, min=0.0, max=2.0)
+    assert not cmds.attributeQuery("plain", node=node.name, softMaxExists=True)
+
+
 def test_add_bool_int_enum_string():
     node = tm.Transform.create(name="node")
     assert attr.add_bool(node, "flag", default=True).value is True

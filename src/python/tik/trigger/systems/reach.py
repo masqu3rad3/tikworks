@@ -227,6 +227,18 @@ def build_reach(
     )
     marker.delete()
 
+    # `n x u` lands on the socket's -Z for a mirrored limb, so "front" reads as
+    # a negative azimuth there and the authored front/back numbers would swap.
+    # Derived from the geometry rather than from a side flag, so an unusually
+    # placed neutral guide still resolves correctly.
+    frame_z = frame.world_axis("z")
+    socket_z = (socket_matrix[8], socket_matrix[9], socket_matrix[10])
+    azimuth_sign = (
+        -1.0
+        if sum(a * b for a, b in zip(frame_z, socket_z)) < 0.0
+        else 1.0
+    )
+
     # A transform under the frame whose local translate IS the direction in
     # that frame. Avoids pointMatrixMult, which is plugin-gated.
     probe = tm.Transform.create(name=rig.name(name, "probe"), parent=frame.long_name)
@@ -259,23 +271,41 @@ def build_reach(
     # rotateY is swing on either side with no per-side axis juggling. `align`
     # carries the constant rotation back to the base's own orientation, which
     # is what keeps the driven controller's channels zeroed at bind.
-    group = tm.Transform.create(name=rig.name(name, "auto"), parent=parent.long_name)
-    group.snap_to(origin, rotation=False)
-    group.snap_to(frame, position=False)
+    # `anchor` carries the frame's orientation, `group` carries the animation.
+    # They MUST be separate transforms: the remap network connects group's
+    # rotateY/rotateZ, and a connection overwrites whatever alignment was baked
+    # into those same channels. On an unmirrored limb the alignment happens to
+    # be zero, so folding the two together looks fine and silently inverts the
+    # mirrored side.
+    anchor = tm.Transform.create(
+        name=rig.name(name, "autoAnchor"), parent=parent.long_name
+    )
+    anchor.snap_to(origin, rotation=False)
+    anchor.snap_to(frame, position=False)
+    group = tm.Transform.create(name=rig.name(name, "auto"), parent=anchor.long_name)
     group["rotateOrder"].value = 0  # xyz composes as Rz * Ry * Rx: lift outermost
     align = tm.Transform.create(name=rig.name(name, "align"), parent=group.long_name)
     align.align_to(origin)
 
     attribute.add_separator(control, "auto_")
     plugs = {}
-    for label, axis, channel, numerator, others in (
-        ("Lift", lift, "rotateZ", "Y", ("X", "Z")),
-        ("Swing", swing, "rotateY", "Z", ("X", "Y")),
+    for label, axis, channel, numerator, others, in_sign, out_sign in (
+        # Lift reads the frame's Y, which is the socket's up on either side, so
+        # it needs no handedness correction. A positive rotation about the
+        # frame's Z already tilts its X toward that up.
+        ("Lift", lift, "rotateZ", "Y", ("X", "Z"), 1.0, 1.0),
+        # Swing reads the frame's Z, which mirrors. `in_sign` puts "front" on
+        # the front branch of the curve; `out_sign` is the opposite, because a
+        # positive rotation about the frame's Y tilts its X toward -Z.
+        ("Swing", swing, "rotateY", "Z", ("X", "Y"), azimuth_sign, -azimuth_sign),
     ):
         scalar = attribute.add_float(
-            control, f"{prefix}{label}", default=0.0, min=0.0, max=1.0
+            control, f"{prefix}{label}",
+            default=0.0, min=-2.0, max=2.0, soft_min=0.0, soft_max=1.0,
         )
         angle = _signed_angle(rig, components, numerator, others, f"{name}{label}Angle")
+        if in_sign < 0:
+            angle = angle * in_sign
         ramp = tm.Remap.create(
             angle,
             input_min=axis.min_angle,
@@ -286,7 +316,10 @@ def build_reach(
             points=axis.ramp_points(),
             name=rig.name(name, label.lower()),
         )
-        (ramp.output * scalar) >> group[channel]
+        driven = ramp.output * scalar
+        if out_sign < 0:
+            driven = driven * out_sign
+        driven >> group[channel]
         plugs[label] = scalar
 
     return Reach(

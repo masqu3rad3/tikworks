@@ -550,3 +550,119 @@ def test_the_ribbon_and_twist_group_their_defaults():
     twist = get_module("twist").fields()
     assert twist["count"].group is None
     assert twist["extraction"].group.label == "Extraction"
+
+
+# --------------------------------------------------- auto-collar direction
+#
+# Measured on the SHOULDER JOINT, not on any control's axes. The arm chain
+# hangs off the collar, so the upperarm bind joint moves only because the
+# auto-collar moved it: the difference between the scalars at 0 and at 1 is
+# the automation's whole contribution, with no axis convention involved.
+#
+# Driven in WORLD space too. The IK control is behaviour-mirrored, so a local
+# +Y moves the right hand DOWN -- measuring in local space silently tests the
+# opposite pose on one side, which is how the original bug survived.
+
+
+def _fresh_scene():
+    cmds.file(new=True, force=True)
+    return GuideScene()
+
+
+def _auto_arm(scene, side, **settings):
+    report, _body, arm = _build_arm(scene, side=side, **settings)
+    ctx = report.rigs[arm.instance_id]
+    ik = _ik_control(ctx)
+    return ik, ctx.outputs["upperarm"], tuple(ik.world_position)
+
+
+def _shoulder_move(ik, shoulder, rest, delta):
+    """How far the automation alone moves the shoulder, at this hand pose."""
+    cmds.xform(ik.long_name, ws=True, t=[a + b for a, b in zip(rest, delta)])
+    ik["autoCollarLift"].value = 0.0
+    ik["autoCollarSwing"].value = 0.0
+    off = shoulder.world_translation
+    ik["autoCollarLift"].value = 1.0
+    ik["autoCollarSwing"].value = 1.0
+    on = shoulder.world_translation
+    return (on.x - off.x, on.y - off.y, on.z - off.z)
+
+
+@pytest.mark.parametrize("side", ["L", "R"])
+def test_the_shoulder_lifts_when_the_arm_rises(scene, side):
+    ik, shoulder, rest = _auto_arm(scene, side)
+    assert _shoulder_move(ik, shoulder, rest, (0, 12, 0))[1] > 0.05, side
+
+
+@pytest.mark.parametrize("side", ["L", "R"])
+def test_the_shoulder_drops_when_the_arm_lowers(scene, side):
+    ik, shoulder, rest = _auto_arm(scene, side)
+    assert _shoulder_move(ik, shoulder, rest, (0, -12, 0))[1] < -0.02, side
+
+
+@pytest.mark.parametrize("side", ["L", "R"])
+def test_the_shoulder_protracts_on_a_forward_reach(scene, side):
+    ik, shoulder, rest = _auto_arm(scene, side)
+    assert _shoulder_move(ik, shoulder, rest, (0, 0, 12))[2] > 0.05, side
+
+
+@pytest.mark.parametrize("side", ["L", "R"])
+def test_the_shoulder_retracts_on_a_backward_reach(scene, side):
+    ik, shoulder, rest = _auto_arm(scene, side)
+    assert _shoulder_move(ik, shoulder, rest, (0, 0, -12))[2] < -0.02, side
+
+
+@pytest.mark.parametrize("side", ["L", "R"])
+def test_the_authored_lift_amounts_are_not_swapped(scene, side):
+    """Rising must use the UPPER degrees. A mirrored frame can swap them."""
+    ik, shoulder, rest = _auto_arm(
+        scene, side,
+        auto_collar_lift_angles=(-30.0, 40.0),
+        auto_collar_lift_degrees=(-2.0, 20.0),
+    )
+    up = _shoulder_move(ik, shoulder, rest, (0, 20, 0))[1]
+    down = _shoulder_move(ik, shoulder, rest, (0, -20, 0))[1]
+    assert up > 0.0 > down, side
+    assert abs(up) > 4.0 * abs(down), f"{side}: branches swapped ({up=}, {down=})"
+
+
+@pytest.mark.parametrize("side", ["L", "R"])
+def test_the_authored_swing_amounts_are_not_swapped(scene, side):
+    """Reaching forward must use the FRONT degrees. `n x u` mirrors."""
+    ik, shoulder, rest = _auto_arm(
+        scene, side,
+        auto_collar_swing_angles=(-30.0, 40.0),
+        auto_collar_swing_degrees=(-2.0, 20.0),
+    )
+    front = _shoulder_move(ik, shoulder, rest, (0, 0, 20))[2]
+    back = _shoulder_move(ik, shoulder, rest, (0, 0, -20))[2]
+    assert front > 0.0 > back, side
+    assert abs(front) > 4.0 * abs(back), f"{side}: branches swapped"
+
+
+def test_the_two_sides_behave_as_mirrors(scene):
+    """One test that would have caught all three direction bugs at once."""
+    results = {}
+    for side in ("L", "R"):
+        ik, shoulder, rest = _auto_arm(_fresh_scene(), side)
+        results[side] = [
+            _shoulder_move(ik, shoulder, rest, delta)
+            for delta in ((0, 12, 0), (0, -12, 0), (0, 0, 12), (0, 0, -12))
+        ]
+    for left, right in zip(results["L"], results["R"]):
+        assert abs(left[0] + right[0]) < 1e-3, "X should mirror"
+        assert abs(left[1] - right[1]) < 1e-3, "Y must match"
+        assert abs(left[2] - right[2]) < 1e-3, "Z must match"
+
+
+def test_the_scalars_have_a_soft_slider_and_a_wider_hard_range(scene):
+    """1.0 stays the anchor on the slider; typing past it is allowed."""
+    control = _ik_control(_arm_ctx(scene))
+    for name in ("autoCollarLift", "autoCollarSwing"):
+        node = control.long_name
+        assert cmds.attributeQuery(name, node=node, softMax=True) == [1.0]
+        assert cmds.attributeQuery(name, node=node, softMin=True) == [0.0]
+        assert cmds.attributeQuery(name, node=node, maximum=True) == [2.0]
+        assert cmds.attributeQuery(name, node=node, minimum=True) == [-2.0]
+        cmds.setAttr(f"{node}.{name}", 1.6)
+        assert abs(cmds.getAttr(f"{node}.{name}") - 1.6) < 1e-6

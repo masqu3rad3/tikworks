@@ -191,13 +191,32 @@ def test_the_axes_are_independent(build_context):
     assert abs(_swing(reach)) > 1.0
 
 
-def test_swing_flips_sign_across_the_neutral(build_context):
+def test_swing_tilts_the_group_toward_the_target(build_context):
+    """Direction, not just antisymmetry.
+
+    This test used to assert only that `rotateY` flipped sign across the
+    neutral -- which a completely inverted rig satisfies too, and that is
+    exactly how the swing sign error shipped. Assert where the group's own
+    X axis actually points instead.
+    """
     _socket, target, control, reach = _setup(build_context())
     control["autoCollarSwing"].value = 1.0
     _place(target, 0.0, 30.0)
-    forward = _swing(reach)
+    forward = reach.group.world_axis("x")[2]
     _place(target, 0.0, -30.0)
-    assert forward > 0.0 > _swing(reach)
+    back = reach.group.world_axis("x")[2]
+    assert forward > 0.0 > back, (forward, back)
+
+
+def test_lift_tilts_the_group_toward_the_target(build_context):
+    """The same, for elevation."""
+    _socket, target, control, reach = _setup(build_context())
+    control["autoCollarLift"].value = 1.0
+    _place(target, 30.0)
+    up = reach.group.world_axis("x")[1]
+    _place(target, -30.0)
+    down = reach.group.world_axis("x")[1]
+    assert up > 0.0 > down, (up, down)
 
 
 def test_the_scalars_scale_the_output(build_context):
