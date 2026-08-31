@@ -47,13 +47,6 @@ class Arm(Module):
         help="Hold the shoulder-to-hand distance while the hand anchors. "
              "Inert until the animator raises limbLock.",
     )
-    lock_target = ChoiceField(
-        "socket",
-        choices=("socket", "output"),
-        label="Limb Lock Target",
-        help="'socket' pushes this module's own socket; 'output' publishes "
-             "the push for a body module to absorb",
-    )
     auto_collar = BoolField(True, help="Build the auto-collar network")
     auto_collar_start = FloatField(
         0.0, min=0.0, max=180.0, label="Auto Collar Start Angle",
@@ -67,15 +60,6 @@ class Arm(Module):
         "smooth", choices=("linear", "smooth", "spline"),
         label="Auto Collar Interpolation",
     )
-
-    @classmethod
-    def output_names(cls, settings=None):
-        values = settings or {}
-        enabled = values.get("limb_lock", cls.limb_lock.default)
-        target = values.get("lock_target", cls.lock_target.default)
-        if enabled and target == "output":
-            return (*cls.outputs, "lock")
-        return tuple(cls.outputs)
 
     def validate(self) -> list[str]:
         problems = super().validate()
@@ -102,6 +86,14 @@ class Arm(Module):
 
         socket = rig.socket("root", match=collar_guide)
 
+        # Everything in the arm hangs off this buffer rather than the socket
+        # directly, so limb lock has one place to push. Without the lock it is
+        # an inert pass-through driven straight from the socket.
+        hang_from = rig.group("lock", "push", under="socket")
+        hang_from.snap_to(socket)
+        if not self.limb_lock:
+            tm.MatrixConstraint.create(socket, hang_from, maintain_offset=True)
+
         # deform skeleton — created in final position, never reparented -------
         collar_jnt = rig.bind_joint("collar", match=collar_guide)
         bind_joints = []
@@ -122,9 +114,7 @@ class Arm(Module):
             match=collar_jnt,
             mirror="behaviour",
         )
-        # Driven after the limb is built: limb lock may insert a buffer
-        # between the socket and everything hanging off it.
-        collar_driver = socket
+        tm.MatrixConstraint.create(hang_from, collar_ctrl.offset, maintain_offset=True)
         tm.MatrixConstraint.create(collar_ctrl, collar_jnt, maintain_offset=True)
         attribute.lock_and_hide(collar_ctrl, ("sx", "sy", "sz", "v"))
 
@@ -148,7 +138,7 @@ class Arm(Module):
             build_reach(
                 rig,
                 auto_grp,
-                socket,
+                hang_from,
                 limb.ik_tweak.transform,
                 limb.ik_control.transform,
                 prefix="autoCollar",
@@ -159,28 +149,16 @@ class Arm(Module):
             )
 
         if self.limb_lock:
-            # In socket mode the buffer sits between the socket and everything
-            # hanging off it, and becomes the lock's target. lock_root still
+            # Built last because it needs the limb's IK tweak; lock_root still
             # reads the raw socket, which is what keeps the graph acyclic.
-            buffer_group = None
-            if self.lock_target == "socket":
-                buffer_group = rig.group("lock", "push", under="socket")
-                buffer_group.snap_to(socket)
-                collar_driver = buffer_group
-            lock = build_limb_lock(
+            build_limb_lock(
                 rig,
                 socket=socket,
                 chain_root=limb.ik_joints[0],
                 driver=limb.ik_tweak.transform,
                 control=limb.ik_control,
-                target=buffer_group,
+                target=hang_from,
             )
-            if buffer_group is None:
-                rig.output("lock", lock.push)
-
-        tm.MatrixConstraint.create(
-            collar_driver, collar_ctrl.offset, maintain_offset=True
-        )
 
         rig.output("collar", collar_jnt)
         rig.output("upperarm", bind_joints[0])

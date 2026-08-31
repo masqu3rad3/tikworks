@@ -11,6 +11,7 @@ class _FakeRig:
 
     def __init__(self):
         self.root = tm.Transform.create(name="rig_grp")
+        self.rig_root = self.root
         self.groups = type("Groups", (), {"rig": self.root, "socket": self.root})()
 
     def name(self, *tokens, suffix=None):
@@ -85,19 +86,6 @@ def test_lock_holds_the_length():
     assert abs(lock.push.distance_to(driver) - 10.0) < 1e-3
 
 
-def test_output_mode_pushes_nothing():
-    rig, socket, chain_root, driver, control, target = _setup()
-    lock = build_limb_lock(
-        rig, socket=socket, chain_root=chain_root, driver=driver,
-        control=control, target=None,
-    )
-    assert lock.blend is None
-    assert lock.push is not None
-    assert not cmds.listConnections(
-        target.long_name + ".translate", source=True, destination=False
-    )
-
-
 def test_no_cycle():
     """The regression guard: the measurement must never see its own push."""
     rig, socket, chain_root, driver, control, target = _setup()
@@ -111,20 +99,11 @@ def test_no_cycle():
 
 
 # ------------------------------------------------------------------ the arm
-def test_arm_declares_the_lock_fields():
+def test_arm_declares_the_lock_field():
     from tik.trigger.modules.arm.arm import Arm
 
     assert Arm.limb_lock.default is True
-    assert Arm.lock_target.default == "socket"
-    assert set(Arm.lock_target.choices) == {"socket", "output"}
-
-
-def test_arm_publishes_a_lock_output_only_in_output_mode():
-    from tik.trigger.modules.arm.arm import Arm
-
-    assert "lock" not in Arm.output_names({"lock_target": "socket"})
-    assert "lock" in Arm.output_names({"limb_lock": True, "lock_target": "output"})
-    assert "lock" not in Arm.output_names({"limb_lock": False, "lock_target": "output"})
+    assert not hasattr(Arm, "lock_target")
 
 
 def _armed(**settings):
@@ -156,3 +135,50 @@ def test_arm_lock_off_adds_nothing():
     ctx = _armed(limb_lock=False)
     control = ctx.controller_by_role("ik").transform
     assert not cmds.objExists(f"{control.long_name}.limbLock")
+
+
+def test_arm_lock_actually_moves_the_shoulder():
+    """The test that was missing: engaging the lock must DO something.
+
+    With the hand pulled away and the lock on, the shoulder is dragged out so
+    the shoulder-to-hand distance stays at lockLength. Must hold with
+    auto_collar at its default (on), which is what made this fail before.
+    """
+    ctx = _armed(limb_lock=True)
+    control = ctx.controller_by_role("ik").transform
+    shoulder = ctx.outputs["upperarm"]
+
+    control.world_position = (30, 15, 0)
+    before = shoulder.world_position
+    control["limbLock"].value = 1.0
+    after = shoulder.world_position
+    assert (after - before).length() > 1.0, "the lock moved nothing"
+
+
+def test_arm_lock_holds_shoulder_to_hand_at_lock_length():
+    ctx = _armed(limb_lock=True)
+    control = ctx.controller_by_role("ik").transform
+    shoulder = ctx.outputs["upperarm"]
+    hand = ctx.controller_by_role("ik_tweak").transform
+
+    rest = control["lockLength"].value
+    control["limbLock"].value = 1.0
+    for target in ((30, 15, 0), (25, -8, 6), (18, 2, -11)):
+        control.world_position = target
+        held = (hand.world_position - shoulder.world_position).length()
+        assert abs(held - rest) < 1e-2, f"at {target}: {held} != {rest}"
+
+
+def test_arm_lock_is_inert_when_off():
+    """limbLock = 0 must change nothing, at any hand pose."""
+    ctx = _armed(limb_lock=True)
+    control = ctx.controller_by_role("ik").transform
+    shoulder = ctx.outputs["upperarm"]
+
+    control["limbLock"].value = 0.0
+    rest = shoulder.world_position
+    for target in ((30, 15, 0), (25, -8, 6), (-4, 2, 9)):
+        control.world_position = target
+        assert (shoulder.world_position - rest).length() < 1e-3, (
+            f"the shoulder drifted at {target} with the lock off"
+        )

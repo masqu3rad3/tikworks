@@ -2,7 +2,8 @@
 
 While locked, the distance from the limb root to the IK control is held at
 ``lockLength``. The hand or foot is the animator's anchor, so the **root** is
-what moves.
+what moves: lock an arm, pull the hand away, and the shoulder is dragged out
+after it.
 
 Three animator attributes, in channel-box order::
 
@@ -15,13 +16,20 @@ into ``lockLength``, raise ``limbLock``. Nothing moves at that instant and the
 limb is locked exactly where it stands. A normalised multiplier could not
 express that, which is why the length is in absolute scene units.
 
+**The push is a pure translation.** ``anchor`` and ``push`` ride the same aim
+frame at the current and the locked length, so ``push - anchor`` is the world
+displacement the root needs, and it is added to the socket's position as a
+vector. An earlier version drove the target with a maintained-offset matrix
+constraint off that frame; because the frame swings as the hand moves, the
+maintained offset was re-expressed in a rotating basis and dragged the collar
+even at ``limbLock = 0``. Never route this through a rotating frame's matrix.
+
 **The cycle.** ``lock_root`` is *positioned* at the chain root but *driven*
 from the socket, which is upstream of the push. Measuring from anything the
-push moves would make root -> measure -> push -> root a DG cycle, which is
-what the original implementation this replaces did. The consequence is that
-the lock does not see collar rotation; under a locked limb the shoulder
-rigidly follows the chest. Breaking the cycle needs some pre-push reference
-and this is the closest one available.
+push moves would make root -> measure -> push -> root a DG cycle. The
+consequence is that the lock does not see collar rotation; under a locked
+limb the shoulder rigidly follows the chest. Breaking the cycle needs some
+pre-push reference and this is the closest one available.
 
 No global rig-scale concept exists in tik.maya or tik.trigger, so nothing is
 normalised. If one is ever added, ``lockLength`` becomes ``lockLength *
@@ -36,6 +44,9 @@ from typing import Any
 import tik.maya as tm
 from tik.maya import attribute
 
+SUBTRACT = 2
+SUM = 1
+
 
 @dataclass
 class LimbLock:
@@ -43,13 +54,28 @@ class LimbLock:
 
     lock_root: Any = None
     aim_frame: Any = None
-    push: Any = None
     anchor: Any = None
+    push: Any = None
     measure: Any = None
     lock_plug: Any = None
     current_plug: Any = None
     length_plug: Any = None
-    blend: Any = None
+    target: Any = None
+
+
+def _root_space_translate(node, rig_root, name: str):
+    """``node``'s position expressed in the rig root's space.
+
+    The module's four groups are locked at identity, so a transform parented
+    under one of them has local channels in exactly this space -- which is
+    what lets the delta below be added straight onto ``socket.translate``.
+    """
+    mult = tm.create_node("multMatrix", name=f"{name}_multMatrix")
+    node["worldMatrix[0]"] >> mult["matrixIn[0]"]
+    rig_root["worldInverseMatrix[0]"] >> mult["matrixIn[1]"]
+    decompose = tm.create_node("decomposeMatrix", name=f"{name}_decomposeMatrix")
+    mult["matrixSum"] >> decompose["inputMatrix"]
+    return decompose["outputTranslate"]
 
 
 def build_limb_lock(
@@ -59,7 +85,7 @@ def build_limb_lock(
     chain_root,
     driver,
     control,
-    target=None,
+    target,
     name: str = "",
 ) -> LimbLock:
     """Build the limb lock network.
@@ -67,21 +93,25 @@ def build_limb_lock(
     Args:
         rig: The module's ``ModuleRig``.
         socket: The module's input socket. Drives ``lock_root`` (pre-push) and
-            is the rest side of the blend.
+            supplies the rest position and orientation of ``target``.
         chain_root: Where ``lock_root`` is *positioned* -- the limb's first
             joint. Distinct from ``socket``, which for an arm sits at the
             collar, so measuring from it would lock collar-to-hand and seed
             ``lockLength`` with the wrong number.
         driver: What the rig follows at the far end (the IK tweak).
         control: Where the three animator attributes are added.
-        target: Transform the blend drives. ``None`` selects output mode: the
-            push is built and returned but nothing is driven locally.
+        target: The buffer everything in the module hangs off. It must sit
+            between the socket and its consumers, including the auto-collar's
+            ``rest_from``, or a world-pinned group downstream will discard the
+            push.
         name: Extra name token.
 
     Returns:
         A :class:`LimbLock`.
     """
     result = LimbLock()
+    result.target = target
+    tm.ensure_plugin("matrixNodes")
 
     # --- the pre-push reference ------------------------------------------
     result.lock_root = tm.Transform.create(
@@ -112,7 +142,7 @@ def build_limb_lock(
 
     # --- the push ---------------------------------------------------------
     # The frame sits at the driver and aims back at the unpushed root, so a
-    # child offset along +X lands exactly lockLength from the hand.
+    # child at translateX = d lands d units from the hand along that line.
     result.aim_frame = tm.AimFrame.create(
         driver,
         result.lock_root,
@@ -122,34 +152,37 @@ def build_limb_lock(
         parent=rig.groups.rig,
         name=rig.name(name, "lockAim"),
     )
-    result.push = tm.Transform.create(
-        name=rig.name(name, "lockPush"), parent=result.aim_frame.transform.long_name
-    )
-    # A plain connection: no rest constant, no divides, no scale factor.
-    result.length_plug >> result.push["translateX"]
+    frame = result.aim_frame.transform.long_name
+    result.anchor = tm.Transform.create(name=rig.name(name, "lockAnchor"), parent=frame)
+    result.push = tm.Transform.create(name=rig.name(name, "lockPush"), parent=frame)
 
-    # The anchor rides the same frame at the *current* length, so it sits on
-    # the unpushed root. Blending anchor -> push therefore interpolates
-    # between two matrices with an identical rotation, and the constraint's
-    # maintained offset re-applies as a pure translation delta. Blending from
-    # the socket instead would drag the target by the socket-to-root offset.
-    result.anchor = tm.Transform.create(
-        name=rig.name(name, "lockAnchor"), parent=result.aim_frame.transform.long_name
-    )
+    # The anchor sits on the unpushed root; the push sits at the length the
+    # animator asked for, faded in by limbLock. At limbLock = 0 the two
+    # coincide exactly, so the delta below is identically zero and the lock
+    # is genuinely inert -- not merely small.
     result.measure.distance >> result.anchor["translateX"]
+    blended = (result.length_plug - result.measure.distance) * result.lock_plug
+    (blended + result.measure.distance) >> result.push["translateX"]
 
-    if target is None:
-        return result
-
-    result.blend = tm.MatrixBlend.create(
-        result.anchor, [result.push], [result.lock_plug],
-        name=rig.name(name, "lockBlend"),
+    # --- apply it as a translation, never as a matrix ---------------------
+    push_at = _root_space_translate(result.push, rig.rig_root, rig.name(name, "lockPushAt"))
+    anchor_at = _root_space_translate(
+        result.anchor, rig.rig_root, rig.name(name, "lockAnchorAt")
     )
+    delta = tm.create_node("plusMinusAverage", name=rig.name(name, "lockDelta"))
+    delta["operation"].value = SUBTRACT
+    push_at >> delta["input3D[0]"]
+    anchor_at >> delta["input3D[1]"]
+
+    total = tm.create_node("plusMinusAverage", name=rig.name(name, "lockTotal"))
+    total["operation"].value = SUM
+    socket["translate"] >> total["input3D[0]"]
+    delta["output3D"] >> total["input3D[1]"]
+    total["output3D"] >> target["translate"]
+
+    # Translation is ours; the target still takes its orientation from the
+    # socket so the collar keeps following the chest.
     tm.MatrixConstraint.create(
-        result.blend.output,
-        target,
-        maintain_offset=True,
-        skip_rotate="xyz",
-        skip_scale="xyz",
+        socket, target, maintain_offset=True, skip_translate="xyz"
     )
     return result
