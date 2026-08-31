@@ -1,7 +1,8 @@
 # Field Groups and Vector Fields — Design Spec
 
 Date: 2026-08-31
-Status: designed, not implemented.
+Status: implemented 2026-08-31. See "Corrections after implementation"
+at the end for the four things this spec got wrong.
 Builds on `2026-08-28-trigger-rebuild-design.md` (Python fields are the
 schema, the UI is generated) and
 `2026-08-31-auto-collar-redesign-design.md` (which added the eight
@@ -254,3 +255,42 @@ considered and rejected as machinery that would sit unused.
 - Per-component bounds on a vector field. Shared bounds plus a rule in the
   owner's `validate()` covers the cases here.
 - Reordering fields for presentation. Declaration order is the order.
+
+## Corrections after implementation
+
+Four things this spec got wrong or left vague, found by building it.
+
+**1. `FieldGroup` must be exported from three places, not one.**
+`tik.core.fields` declares it, but `tik.trigger.core.__init__` re-exports the
+field types and modules import from there — so `FieldGroup`, `Vector2Field`
+and `Vector3Field` all needed adding to that `__all__` too. `reference.py`
+imports its fields straight from `tik.core.fields` rather than through
+`tik.trigger.core`, so it takes the third path. Nothing in the spec said
+where the exports live.
+
+**2. `anim_spaces` is declared on the `Module` base**
+(`trigger/core/module.py:48`), so its `SPACES` group is declared there and
+every module inherits the fold. That is the wanted outcome, but it means the
+"no groups" entries in section 6 describe each module's *own* fields only:
+`base`, `fkchain`, `ribbon` and `twist` all show a **Spaces** fold as well.
+
+**3. The grouping tests do not belong in `tests/unit/test_core_trigger.py`.**
+That file has an autouse fixture which clears the registries and registers
+only the toy modules, so `get_module("arm")` raises there. They live in
+`tests/integration/trigger/test_arm_trigger.py`, which already asserts on
+the arm's manifest and has the plugin fixture.
+
+**4. `Field.group` becoming an object breaks one line eagerly.**
+`shared/ui/fields.py` called `field.group.upper()` when building the old
+flat caption. Task 1 of the plan had to patch that to `.label.upper()` as a
+stopgap before Task 4 replaced the block, so that the tree was never left
+red between commits.
+
+Confirmed as specified, no change needed: `CollapsibleGroup` existed with
+exactly the constructor and API assumed (`title`, `expanded=`,
+`content_layout`, `is_expanded()`, `set_expanded()`, `toggled`) and needed
+no theming work; `Schema.schema()` returns `{name: to_schema()}`;
+`FormBuilder` is long-lived in both hosts, so instance-scoped fold memory
+gives the intended per-session behaviour; and the auto-collar behaviour
+tests passed untouched through the Vector2 conversion, which is what proves
+the refactor changed presentation and not behaviour.
