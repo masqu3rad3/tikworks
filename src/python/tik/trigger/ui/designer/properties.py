@@ -32,6 +32,8 @@ class DesignerProperties:
             plug = plug_factory(handle.instance_id, name)
         except TriggerError:
             return None
+        if plug is None:  # no module node, or the field has no mirrored attribute
+            return None
         plug_path = plug if isinstance(plug, str) else plug.path
         return self.binding_adapter(plug_path) if self.binding_adapter else MayaAttributeAdapter(plug_path)
 
@@ -57,11 +59,15 @@ class DesignerProperties:
                 plug = plug_factory(handle.instance_id, name)
             except TriggerError:
                 continue
+            if plug is None:
+                continue
             plug_path = plug if isinstance(plug, str) else plug.path
             adapter = self.binding_adapter(plug_path) if self.binding_adapter else None
             self.bindings.add(bind(plug_path, widget, direction="to_widget", adapter=adapter))
         try:
             plug = plug_factory(handle.instance_id, "useRefOri")
+            if plug is None:
+                raise TriggerError("no useRefOri plug")
             plug_path = plug if isinstance(plug, str) else plug.path
             adapter = self.binding_adapter(plug_path) if self.binding_adapter else None
             self.bindings.add(bind(plug_path, self.inherit_orientation, direction="both", adapter=adapter))

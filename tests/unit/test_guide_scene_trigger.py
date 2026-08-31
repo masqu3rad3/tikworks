@@ -338,3 +338,17 @@ def test_connect_space_builds_a_named_switch(scene):
         "parentSwitch", node=main.transform.long_name, listEnum=True
     )[0]
     assert listed.split(":") == ["chest", "head"]
+
+
+def test_settings_plug_lives_on_the_module_node(scene):
+    """Settings are attributes on the document node, not on a guide joint."""
+    handle = scene.add("fkchain", side="C", name="tail")
+    plug = scene.settings_plug(handle.instance_id, "segments")
+    assert plug is not None
+    assert "_module" in plug.path
+
+
+def test_settings_plug_is_none_for_an_unknown_module():
+    from tik.trigger.guides import GuideScene
+
+    assert GuideScene().settings_plug("nosuchmodule", "segments") is None
