@@ -21,6 +21,7 @@ from tik.trigger.maya import tags
 from tik.trigger.maya.rig import GuideDraft
 
 from . import nodes
+from .capture import regenerating
 
 
 def _module_for(entry: ModuleEntry):
@@ -63,7 +64,7 @@ def regenerate(entry: ModuleEntry, document: Optional[GuideDocument] = None) -> 
     """Rebuild ``entry``'s guide joints. Returns ``{(role, index): joint}``."""
     module = _module_for(entry)
     holder = nodes.holder()
-    with nodes.undo_chunk(f"Trigger regenerate: {entry.name}"):
+    with nodes.undo_chunk(f"Trigger regenerate: {entry.name}"), regenerating():
         existing = nodes.guide_nodes(entry.instance_id)
         for node in existing.values():
             # keep other instances' guides that hang under ours

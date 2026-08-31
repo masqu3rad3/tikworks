@@ -14,9 +14,29 @@ Pure apart from the optional scene read, so it unit-tests without Maya.
 
 from __future__ import annotations
 
+import contextlib
 from typing import Optional
 
+from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.guide_document import GuideDocument
+
+#: True while a regenerate is midway through rebuilding a rendering.
+_REGENERATING = False
+
+
+@contextlib.contextmanager
+def regenerating():
+    """Mark a rebuild in progress, so a capture cannot read a half-built scene."""
+    global _REGENERATING
+    was, _REGENERATING = _REGENERATING, True
+    try:
+        yield
+    finally:
+        _REGENERATING = was
+
+
+def is_regenerating() -> bool:
+    return _REGENERATING
 
 
 def capture(document: GuideDocument, rendered: Optional[list] = None) -> bool:
@@ -29,6 +49,10 @@ def capture(document: GuideDocument, rendered: Optional[list] = None) -> bool:
     Returns:
         True when anything changed.
     """
+    if _REGENERATING:
+        raise GuideError(
+            "capture ran inside a regenerate; it would record a half-built rendering."
+        )
     if rendered is None:
         from .snapshot import snapshot
 
