@@ -1,7 +1,7 @@
 """Ribbon: a pure-math strip of deformer joints between two ends.
 
 No geometry. Start/end "plug" transforms are what callers pin to their
-controllers; ``MatrixSpline`` blends the plugs and the mid controllers into
+controllers; ``MatrixSpline`` blends the plugs and the mid plugs into
 swing-only frames, and every deformer joint is a flat joint with live TRS
 channels: translate/scale/swing decomposed from its spline output and the
 interpolated twist added as a float onto ``rotateX`` — never through a
@@ -23,7 +23,6 @@ from ..core.decorators import undo
 from ..core.plug import Plug
 from ..core.registry import resolve
 from ..core.scene import create_node, ensure_plugin
-from ..roles.controller import Controller
 from ..types.joint import Joint
 from ..types.transform import Transform
 from .matrix_constraint import MatrixConstraint
@@ -51,7 +50,8 @@ class Ribbon:
         self.control_spline: Optional[MatrixSpline] = None
         self.spline: MatrixSpline = None
         self.joint_group: Transform = None
-        self.controllers: list[Controller] = []
+        self.mid_frames: list[Transform] = []
+        self.mid_plugs: list[Transform] = []
         self.deformer_joints: list[Joint] = []
         self.scale_switch: Optional[Plug] = None
         self.measure: Optional[Measure] = None
@@ -68,7 +68,7 @@ class Ribbon:
         *,
         name: str,
         joint_count: int = 5,
-        controller_count: int = 1,
+        mid_count: int = 1,
         degree: int = 3,
         up_vector: Sequence[float] = (0, 1, 0),
         scaleable: bool = True,
@@ -82,9 +82,11 @@ class Ribbon:
             end: Transform at the ribbon end.
             name: Prefix for all created nodes.
             joint_count: Number of deformer joints.
-            controller_count: Number of mid controllers between the ends.
+            mid_count: Number of mid plugs between the ends. Pin a
+                controller to each with ``pin_mid``; the frame it rides is
+                in ``mid_frames``.
             degree: B-spline degree of the joint strip (clamped to the number
-                of drivers minus one; 0 mid controllers is always linear).
+                of drivers minus one; 0 mid plugs is always linear).
             up_vector: World up used for the initial placement of the group.
             scaleable: Add stretch driven ``scaleX`` on the deformer joints.
             preserve_volume: With ``scaleable``, counter-scale Y/Z by
@@ -101,7 +103,7 @@ class Ribbon:
         ribbon._create_group(parent)
         ribbon._create_plugs(length, scaleable)
         ribbon._create_up_frame()
-        ribbon._create_controllers(controller_count, length)
+        ribbon._create_mids(mid_count)
         ribbon._create_joints(joint_count, degree)
         ribbon._place(start, end, up_vector)
         if scaleable:
@@ -138,7 +140,14 @@ class Ribbon:
         self.up_frame = mult["matrixSum"]
         self._nodes.extend([negated.node, compose, mult])
 
-    def _create_controllers(self, count: int, length: float) -> None:
+    def _create_mids(self, count: int) -> None:
+        """Mid plugs on the control spline, for the caller to pin controllers to.
+
+        The frame carries the interpolated twist so a controller riding it
+        travels with the ribbon; the plug is the transform the joint spline
+        reads, so pinning it is what lets the caller drive the strip. Shapes,
+        colours and tags are policy and belong to the caller.
+        """
         if count < 1:
             return
         parameters = [(index + 1) / (count + 1) for index in range(count)]
@@ -152,30 +161,28 @@ class Ribbon:
             parent=self.group,
         )
         for index, output in enumerate(self.control_spline.outputs):
-            # the output frame carries the interpolated twist so the controller rides it
+            # the output frame carries the interpolated twist so the plug rides it
             output.transform["rotateOrder"].value = ROTATE_ORDER_XYZ
             output.twist >> output.transform["rotateX"]
-            controller = Controller.create(
-                name=f"{self.name}_mid{index}_ctrl",
-                shape="Circle",
-                size=length * 0.15,
-                parent=output.transform.long_name,
+            plug = Transform.create(
+                name=f"{self.name}_mid{index}_plug", parent=output.transform.long_name
             )
-            controller.transform["rotateOrder"].value = ROTATE_ORDER_XYZ
-            self.controllers.append(controller)
+            plug["rotateOrder"].value = ROTATE_ORDER_XYZ
+            self.mid_frames.append(output.transform)
+            self.mid_plugs.append(plug)
 
     def _mid_twists(self) -> list[Plug]:
-        """Per mid controller: interpolated end twist plus the controller's own roll."""
+        """Per mid plug: interpolated end twist plus that plug's own roll."""
         twists = []
         outputs = self.control_spline.outputs if self.control_spline is not None else []
-        for output, controller in zip(outputs, self.controllers):
-            twist = output.twist + controller.transform["rotateX"]
+        for output, plug in zip(outputs, self.mid_plugs):
+            twist = output.twist + plug["rotateX"]
             self._nodes.append(twist.node)
             twists.append(twist)
         return twists
 
     def _create_joints(self, count: int, degree: int) -> None:
-        drivers = [self.start_plug, *[ctrl.transform for ctrl in self.controllers], self.end_plug]
+        drivers = [self.start_plug, *self.mid_plugs, self.end_plug]
         twists = [self.start_twist, *self._mid_twists(), self.end_twist]
         parameters = [(index + 0.5) / count for index in range(count)]
         self.spline = MatrixSpline.create(
@@ -246,6 +253,14 @@ class Ribbon:
         return MatrixConstraint.create(
             node, self.end_plug, maintain_offset=maintain_offset,
             name=f"{self.name}_endPin",
+        )
+
+    @undo
+    def pin_mid(self, index: int, node, maintain_offset: bool = True) -> MatrixConstraint:
+        """Drive mid plug ``index`` from ``node`` (full TRS)."""
+        return MatrixConstraint.create(
+            node, self.mid_plugs[index], maintain_offset=maintain_offset,
+            name=f"{self.name}_mid{index}Pin",
         )
 
     @undo

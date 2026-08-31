@@ -32,13 +32,13 @@ def _axes(transform):
 
 def test_ribbon_creates_expected_nodes():
     start, end = _endpoints()
-    ribbon = Ribbon.create(start, end, name="upArm", joint_count=4, controller_count=1)
+    ribbon = Ribbon.create(start, end, name="upArm", joint_count=4, mid_count=1)
     assert len(ribbon.deformer_joints) == 4
-    assert len(ribbon.controllers) == 1
+    assert len(ribbon.mid_plugs) == 1
     assert ribbon.group.name == "upArm_ribbon_grp"
     assert ribbon.start_plug.parent.name == ribbon.group.name
     assert ribbon.deformer_joints[0].name == "upArm_0_jnt"
-    assert ribbon.controllers[0].transform.name == "upArm_mid0_ctrl"
+    assert ribbon.mid_plugs[0].name == "upArm_mid0_plug"
     assert not cmds.ls(type=["nurbsSurface", "follicle", "skinCluster"])
     assert ribbon.spline.degree == 2  # start + mid + end clamps cubic to quadratic
     assert ribbon.control_spline.degree == 1
@@ -46,7 +46,7 @@ def test_ribbon_creates_expected_nodes():
 
 def test_joints_are_distributed_between_endpoints():
     start, end = _endpoints()
-    ribbon = Ribbon.create(start, end, name="rbn", joint_count=3, controller_count=0)
+    ribbon = Ribbon.create(start, end, name="rbn", joint_count=3, mid_count=0)
     assert ribbon.control_spline is None
     for index, joint in enumerate(ribbon.deformer_joints):
         assert _close(joint.world_translation, (10 * (index + 0.5) / 3, 0, 0))
@@ -54,8 +54,8 @@ def test_joints_are_distributed_between_endpoints():
 
 def test_joints_match_basis_weighted_positions_after_bending():
     start, end = _endpoints()
-    ribbon = Ribbon.create(start, end, name="rbn", joint_count=5, controller_count=1)
-    ribbon.controllers[0].transform.translate = (0, 3, 0)
+    ribbon = Ribbon.create(start, end, name="rbn", joint_count=5, mid_count=1)
+    ribbon.mid_plugs[0].translate = (0, 3, 0)
     positions = [(0, 0, 0), (5, 3, 0), (10, 0, 0)]
     for index, joint in enumerate(ribbon.deformer_joints):
         weights = basis((index + 0.5) / 5, 3, 2)
@@ -76,7 +76,7 @@ def test_plugs_sit_on_endpoints_and_joints_aim_along_strip():
 
 def test_deformer_joints_are_flat_with_live_channels():
     start, end = _endpoints()
-    ribbon = Ribbon.create(start, end, name="rbn", joint_count=2, controller_count=0)
+    ribbon = Ribbon.create(start, end, name="rbn", joint_count=2, mid_count=0)
     for joint in ribbon.deformer_joints:
         assert joint.parent.name == ribbon.joint_group.name
         assert joint["rotateOrder"].value == 0
@@ -87,17 +87,17 @@ def test_deformer_joints_are_flat_with_live_channels():
     assert ribbon.deformer_joints[1]["translateX"].value == pytest.approx(7.5, abs=1e-4)
 
 
-def test_mid_controller_follows_ends():
+def test_mid_plug_follows_ends():
     start, end = _endpoints()
-    ribbon = Ribbon.create(start, end, name="rbn", controller_count=1)
+    ribbon = Ribbon.create(start, end, name="rbn", mid_count=1)
     ribbon.start_plug.translate = (-5, 4, 0)
     ribbon.end_plug.translate = (5, 4, 0)
-    assert ribbon.controllers[0].transform.world_translation.y == pytest.approx(4, abs=1e-3)
+    assert ribbon.mid_plugs[0].world_translation.y == pytest.approx(4, abs=1e-3)
 
 
 def test_twist_interpolates_as_unbounded_floats():
     start, end = _endpoints()
-    ribbon = Ribbon.create(start, end, name="rbn", joint_count=3, controller_count=0)
+    ribbon = Ribbon.create(start, end, name="rbn", joint_count=3, mid_count=0)
     ribbon.end_twist.value = 270.0
     for index, joint in enumerate(ribbon.deformer_joints):
         angle = 270 * (index + 0.5) / 3  # 45, 135, 225
@@ -107,10 +107,10 @@ def test_twist_interpolates_as_unbounded_floats():
         assert _close(y_axis, (0, math.cos(math.radians(angle)), math.sin(math.radians(angle))))
 
 
-def test_mid_controller_roll_adds_local_twist():
+def test_mid_plug_roll_adds_local_twist():
     start, end = _endpoints()
-    ribbon = Ribbon.create(start, end, name="rbn", joint_count=3, controller_count=1)
-    ribbon.controllers[0].transform.rotate = (90, 0, 0)
+    ribbon = Ribbon.create(start, end, name="rbn", joint_count=3, mid_count=1)
+    ribbon.mid_plugs[0].rotate = (90, 0, 0)
     weights = basis(0.5, 3, 2)
     assert ribbon.deformer_joints[1]["rotateX"].value == pytest.approx(weights[1] * 90, abs=1e-3)
     assert _close(ribbon.deformer_joints[1].world_translation, (5, 0, 0))
@@ -118,7 +118,7 @@ def test_mid_controller_roll_adds_local_twist():
 
 def test_start_roll_beyond_180_with_twist_wired_does_not_flip():
     start, end = _endpoints()
-    ribbon = Ribbon.create(start, end, name="rbn", joint_count=3, controller_count=0)
+    ribbon = Ribbon.create(start, end, name="rbn", joint_count=3, mid_count=0)
     ribbon.start_plug["rotateX"] >> ribbon.start_twist
     ribbon.end_plug["rotateX"] >> ribbon.end_twist
     ribbon.start_plug.rotate = (270, 0, 0)
@@ -185,7 +185,7 @@ def test_not_scaleable():
 
 def test_pinned_start_roll_with_wired_twist_follows_without_flip():
     start, end = _endpoints()
-    ribbon = Ribbon.create(start, end, name="rbn", joint_count=2, controller_count=0)
+    ribbon = Ribbon.create(start, end, name="rbn", joint_count=2, mid_count=0)
     ribbon.pin_start(start)
     ribbon.pin_end(end)
     start["rotateX"] >> ribbon.start_twist
@@ -213,3 +213,36 @@ def test_create_is_one_undo_step():
     Ribbon.create(start, end, name="rbn")
     cmds.undo()
     assert not cmds.objExists("rbn_ribbon_grp")
+
+
+def test_ribbon_creates_no_controllers():
+    """A tik.maya construct never creates a controller (animator-opinion rule)."""
+    import inspect
+
+    from tik.maya.constructs import ribbon as ribbon_module
+
+    source = inspect.getsource(ribbon_module)
+    assert "Controller.create" not in source
+    assert "from ..roles" not in source
+
+
+def test_pin_mid_drives_the_strip():
+    start, end = _endpoints()
+    ribbon = Ribbon.create(start, end, name="pin", joint_count=5, mid_count=1)
+    driver = tm.Transform.create(name="mid_driver")
+    driver.snap_to(ribbon.mid_plugs[0])
+    ribbon.pin_mid(0, driver)
+    before = ribbon.deformer_joints[2].world_position
+    driver.translate = (
+        driver.translate[0], driver.translate[1] + 5.0, driver.translate[2],
+    )
+    after = ribbon.deformer_joints[2].world_position
+    assert (after - before).length() > 1e-3
+
+
+def test_mid_frames_parent_the_plugs():
+    start, end = _endpoints()
+    ribbon = Ribbon.create(start, end, name="frm", joint_count=4, mid_count=2)
+    assert len(ribbon.mid_frames) == 2 and len(ribbon.mid_plugs) == 2
+    for frame, plug in zip(ribbon.mid_frames, ribbon.mid_plugs):
+        assert plug.parent.long_name == frame.long_name
