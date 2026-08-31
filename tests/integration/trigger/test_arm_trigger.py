@@ -404,3 +404,36 @@ def test_trg_round_trip_keeps_rows_and_wires(scene, tmp_path):
         {"control": "ik", "mode": "parent", "label": "body"}
     ]
     assert restored.inputs.get("ik_body") == "body.root"
+
+
+def test_pole_controller_rests_at_zero(scene):
+    """The rest offset lives in a group, so the animator sees clean channels."""
+    ctx = _arm_ctx(scene)
+    pole = ctx.controller_by_role("pole").transform
+
+    assert tuple(round(value, 6) for value in pole.translate) == (0.0, 0.0, 0.0)
+    assert tuple(round(value, 6) for value in pole.rotate) == (0.0, 0.0, 0.0)
+
+    # zeroed channels must not mean a controller sitting on the chain
+    elbow = ctx.outputs["lowerarm"]
+    assert (pole.world_position - elbow.world_position).length() > 1.0
+
+
+def test_pole_rest_group_carries_the_offset(scene):
+    ctx = _arm_ctx(scene)
+    pole = ctx.controller_by_role("pole").transform
+    rest = pole.parent
+    assert rest.name.endswith("rest_grp"), f"unexpected parent {rest.name}"
+    # the offset the controller used to hold is now on the group
+    assert tuple(rest.translate) != (0.0, 0.0, 0.0)
+
+
+def test_pole_still_drives_the_solve(scene):
+    """Zeroing the channels must not detach the pole from the IK handle."""
+    ctx = _arm_ctx(scene)
+    pole = ctx.controller_by_role("pole").transform
+    elbow = ctx.outputs["lowerarm"]
+
+    before = elbow.world_position
+    pole.translate = (0, 0, 12)
+    assert (elbow.world_position - before).length() > 0.1

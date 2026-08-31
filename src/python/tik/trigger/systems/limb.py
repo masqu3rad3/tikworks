@@ -370,7 +370,14 @@ def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -
         mirror="world",
     )
     tm.MatrixConstraint.create(space.output, result.pole_control.offset, maintain_offset=False)
-    result.pole_control.transform.world_position = pole_rest
+    # The rest offset lives in its own group rather than in the controller's
+    # channels, so the animator gets a pole control that reads zero and can be
+    # returned to its rest pose by zeroing it.
+    rest_group = rig.group(_role(name, "pole"), "rest", under=result.pole_control.offset)
+    rest_group.world_position = pole_rest
+    # Relative, so the controller keeps its zeroed channels and simply inherits
+    # the group's placement.
+    result.pole_control.transform.set_parent(rest_group, relative=True)
     attribute.lock_and_hide(
         result.pole_control.transform, ("rx", "ry", "rz", "sx", "sy", "sz", "v")
     )
