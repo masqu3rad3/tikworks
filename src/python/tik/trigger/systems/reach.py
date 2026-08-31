@@ -21,10 +21,46 @@ from a stock Maya.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional
 
 import tik.maya as tm
 from tik.maya import attribute
+
+
+@dataclass(frozen=True)
+class ReachAxis:
+    """One signed falloff: an input angle range onto an output degree range.
+
+    The neutral is always the zero angle, because the driver is measured in a
+    frame whose X *is* the neutral direction. ``min_angle`` must be negative
+    and ``max_angle`` positive so the neutral lies strictly inside the range --
+    a ramp point at 0.0 or 1.0 would collide with an endpoint.
+    """
+
+    min_angle: float
+    max_angle: float
+    min_output: float
+    max_output: float
+
+    def validate(self, label: str) -> None:
+        """Raise ``ValueError`` if this axis cannot carry a neutral."""
+        if not self.min_angle < 0.0 < self.max_angle:
+            raise ValueError(
+                f"{label} angle range must straddle zero, so the neutral sits "
+                f"inside it ({self.min_angle} .. {self.max_angle})."
+            )
+        if self.min_output >= self.max_output:
+            raise ValueError(
+                f"{label} output range must increase "
+                f"({self.min_output} >= {self.max_output})."
+            )
+
+    def ramp_points(self) -> list:
+        """``(position, value)`` pairs placing the neutral on zero output."""
+        position = (0.0 - self.min_angle) / (self.max_angle - self.min_angle)
+        value = (0.0 - self.min_output) / (self.max_output - self.min_output)
+        return [(0.0, 0.0), (position, value), (1.0, 1.0)]
 
 
 def build_reach(
