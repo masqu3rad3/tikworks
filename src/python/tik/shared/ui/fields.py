@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, Callable, Optional
 
 from tik.core.fields import Field, FieldValidationError, Schema
+from tik.shared.ui.collapsible import CollapsibleGroup
 from tik.shared.ui.Qt import QtCore, QtWidgets
 
 
@@ -282,8 +283,14 @@ class FormBuilder(QtWidgets.QWidget):
             file_extras: ``{extension: (label, callback(path))}`` extra button on matching FileFields.
         """
         super().__init__(parent)
-        self._layout = QtWidgets.QFormLayout(self)
+        self._layout = QtWidgets.QVBoxLayout(self)
         self._layout.setContentsMargins(4, 4, 4, 4)
+        self._layout.setSpacing(4)
+        self._plain: Optional[QtWidgets.QFormLayout] = None
+        self._groups: dict[str, CollapsibleGroup] = {}
+        # Fold state per target class, so tuning a group survives clicking
+        # between modules and resets when the tool restarts.
+        self._collapsed: dict[str, bool] = {}
         self._widgets: dict[str, QtWidgets.QWidget] = {}
         self._labels: dict[str, QtWidgets.QLabel] = {}
         self._target: Optional[Schema] = None
@@ -302,36 +309,83 @@ class FormBuilder(QtWidgets.QWidget):
         return self._target
 
     def clear(self) -> None:
-        while self._layout.count():
-            item = self._layout.takeAt(0)
+        self._clear_layout(self._layout)
+        self._plain = None
+        self._groups.clear()
+        self._widgets.clear()
+        self._labels.clear()
+
+    def _clear_layout(self, layout) -> None:
+        while layout.count():
+            item = layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.hide()
                 widget.setParent(None)
                 widget.deleteLater()
-        self._widgets.clear()
-        self._labels.clear()
+            elif item.layout() is not None:
+                self._clear_layout(item.layout())
+
+    def group_widget(self, label: str) -> CollapsibleGroup:
+        """The fold for a group, by label."""
+        return self._groups[label]
+
+    def _fold_key(self, group) -> str:
+        return f"{type(self._target).__name__}.{group.label}"
+
+    def _new_form(self) -> QtWidgets.QFormLayout:
+        form = QtWidgets.QFormLayout()
+        form.setContentsMargins(0, 0, 0, 0)
+        return form
 
     def set_target(self, target: Optional[Schema]) -> None:
         self.clear()
         self._target = target
         if target is None:
             return
-        current_group = None
+        # Collected rather than emitted inline, so fields sharing a group but
+        # declared apart land in one fold instead of two. Order is the order
+        # each group is first seen.
+        order: list = []
+        rows: dict = {}
         for name, field in target.fields().items():
             if field.hidden:
                 continue
-            if field.group != current_group and field.group:
-                label = QtWidgets.QLabel(field.group.label.upper())
-                label.setObjectName("FieldCaption")
-                self._layout.addRow(label)
-            current_group = field.group
-            widget = self._make_widget(name, field)
-            widget.setToolTip(field.help or "")
-            self._widgets[name] = widget
-            label = QtWidgets.QLabel(field.label or name)
-            self._labels[name] = label
-            self._layout.addRow(label, widget)
+            key = field.group.label if field.group else None
+            if key not in rows:
+                rows[key] = []
+                order.append((key, field.group))
+            rows[key].append((name, field))
+
+        for key, group in order:
+            if key is None:
+                self._plain = self._new_form()
+                self._layout.addLayout(self._plain)
+                form = self._plain
+            else:
+                expanded = self._collapsed.get(
+                    self._fold_key(group), not group.collapsed
+                )
+                fold = CollapsibleGroup(group.label, expanded=expanded)
+                fold.toggled.connect(
+                    lambda state, g=group: self._collapsed.__setitem__(
+                        self._fold_key(g), state
+                    )
+                )
+                holder = QtWidgets.QWidget()
+                form = self._new_form()
+                holder.setLayout(form)
+                fold.content_layout.addWidget(holder)
+                self._layout.addWidget(fold)
+                self._groups[group.label] = fold
+            for name, field in rows[key]:
+                widget = self._make_widget(name, field)
+                widget.setToolTip(field.help or "")
+                self._widgets[name] = widget
+                label = QtWidgets.QLabel(field.label or name)
+                self._labels[name] = label
+                form.addRow(label, widget)
+        self._layout.addStretch(1)
         self.refresh()
 
     def mark_overrides(self, names, reference_values: Optional[dict] = None) -> None:

@@ -3,6 +3,7 @@
 from tik.core.fields import (
     BoolField,
     ChoiceField,
+    FieldGroup,
     FloatField,
     IntField,
     ListField,
@@ -12,6 +13,7 @@ from tik.core.fields import (
     Vector2Field,
     VectorField,
 )
+from tik.shared.ui.collapsible import CollapsibleGroup
 from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.Qt import QtWidgets
 
@@ -164,3 +166,73 @@ def test_vector_editing_still_reaches_the_target(qapp):
     form = FormBuilder(target)
     form.widget("span").spins[0].setValue(-20.0)
     assert target.span == (-20.0, 75.0)
+
+
+# ------------------------------------------------------------ field groups
+
+TUNING = FieldGroup("Tuning", collapsed=True)
+SHAPE = FieldGroup("Shape")
+
+
+class Groupy(Schema):
+    loose = IntField(1)
+    also_loose = BoolField(True)
+    width = FloatField(1.0, group=SHAPE)
+    depth = FloatField(2.0, group=SHAPE)
+    gain = FloatField(0.5, group=TUNING)
+    stray = FloatField(0.0, group=SHAPE)  # non-adjacent, same group
+
+
+def test_ungrouped_fields_render_before_any_group(qapp):
+    form = FormBuilder(Groupy())
+    groups = form.findChildren(CollapsibleGroup)
+    assert [group.title for group in groups] == ["Shape", "Tuning"]
+    # the plain rows live in the first layout item, before any fold
+    assert form._layout.itemAt(0).widget() is None
+
+
+def test_a_collapsed_group_starts_folded(qapp):
+    form = FormBuilder(Groupy())
+    assert form.group_widget("Tuning").is_expanded() is False
+    assert form.group_widget("Shape").is_expanded() is True
+
+
+def test_non_adjacent_fields_join_one_group(qapp):
+    """Declaring A, A, B, A must make two groups, not three."""
+    form = FormBuilder(Groupy())
+    assert len(form.findChildren(CollapsibleGroup)) == 2
+
+
+def test_widgets_inside_a_collapsed_group_are_still_reachable(qapp):
+    """_widgets stays flat, so every caller keeps working."""
+    form = FormBuilder(Groupy())
+    assert form.widget("gain").value() == 0.5
+    form.mark_overrides(["gain"])
+    assert "bold" in form._labels["gain"].styleSheet()
+
+
+def test_editing_inside_a_group_reaches_the_target(qapp):
+    target = Groupy()
+    form = FormBuilder(target)
+    form.widget("gain").setValue(0.75)
+    assert target.gain == 0.75
+
+
+def test_the_fold_state_survives_retargeting(qapp):
+    form = FormBuilder(Groupy())
+    form.group_widget("Tuning").set_expanded(True)
+    form.set_target(Settings())
+    form.set_target(Groupy())
+    assert form.group_widget("Tuning").is_expanded() is True
+
+
+def test_a_fresh_builder_starts_from_the_declared_default(qapp):
+    assert FormBuilder(Groupy()).group_widget("Tuning").is_expanded() is False
+
+
+def test_a_string_group_renders_as_a_real_fold(qapp):
+    """Settings declares group="Geometry" as a bare string."""
+    form = FormBuilder(Settings())
+    assert form.group_widget("Geometry").is_expanded() is True
+    assert form.widget("segments").value() == 3
+    assert form.widget("local").isChecked() is False
