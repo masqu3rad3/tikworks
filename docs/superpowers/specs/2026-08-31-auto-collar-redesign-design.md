@@ -666,3 +666,60 @@ Confirmed as specified, no change needed: `atan2`, `distanceBetween`,
 extrapolates; the three-point `smooth` ramp is C1 at the neutral and at both
 limits; and `blendColors`' polarity is right as written, since `ikFk = 1` is
 IK (`limb.py:209`, `limb.py:404`).
+
+## Corrections after use — the direction bugs (2026-08-31, second pass)
+
+Three faults in which way the collar moved, found by a rigger using the rig
+and not by any test. Recorded because the *reason* the tests missed them
+matters more than the fixes.
+
+**7. Swing was inverted on both sides.** Section 3.1 derives it correctly:
+"a positive azimuth needs a **negative** rotation about u". The
+implementation wired the remap output straight to `rotateY`. A spec that
+says "the implementation negates one of the two; verify empirically" and an
+implementation that does not negate is a gap the review should have closed.
+
+**8. Lift was inverted on the mirrored side.** The driven group carried its
+frame alignment in `rotateY`/`rotateZ` — the same channels the remap network
+connects to — and **a connection overwrites a baked channel value**. On an
+unmirrored limb that alignment is zero, so writing zero changes nothing and
+the design looks correct; on the mirrored side it needs `rotateY = 180`,
+which the connection wipes, leaving the collar 180 degrees from its own
+rotation axes. Section 3.5 is wrong to put the alignment and the animation in
+one transform. The alignment now lives in a static `autoAnchor` parent, and
+the driven group is created under it with clean channels.
+
+**The general rule this is an instance of:** never bake a static orientation
+into a channel something else will drive. Any transform whose rotate is
+connected must inherit its alignment from a parent.
+
+**9. The swing curve's front and back branches were swapped on the mirrored
+side.** `f = n x u` (section 3.1) lands on the socket's -Z for a mirrored
+limb, so a forward reach reads as a *negative* azimuth and uses the authored
+**Back** numbers. Direction still resolves once 7 and 8 are fixed, but the
+authored magnitudes are exchanged. Corrected with a build-time scalar from
+`dot(frame Z, socket Z)` — derived from the geometry, not from a side flag,
+so an unusually placed neutral guide still resolves. Lift needs no such
+correction: the frame's Y is the socket's up on both sides.
+
+**Why the tests missed all three.** Two reasons, both worth carrying forward:
+
+- They asserted a **rotation channel's sign**, not a direction. A completely
+  inverted rig satisfies "the sign flips across the neutral" perfectly.
+- They drove the hand in **local space**. The IK control is
+  behaviour-mirrored, so a local +Y moves the right hand *down* — the
+  mirrored side was silently being tested at the opposite pose. The first
+  diagnostic run of this investigation made the same mistake and reported
+  the bugs backwards until it was checked.
+
+Tests now measure **where the shoulder joint actually moves**, as the
+difference between the scalars at 0 and at 1, driven in world space. That
+readout involves no axis convention at all. A single
+`test_the_two_sides_behave_as_mirrors` catches all three faults, and each
+fix was verified by reverting it and watching the right tests go red.
+
+**10. The animator scalars gained a soft range.** `autoCollarLift` and
+`autoCollarSwing` are now `soft 0..1` inside a hard `-2..2`, so 1.0 remains
+the anchor meaning "exactly what the rigger authored" while a shot can push
+past it or invert it. `tik.maya`'s `add_float`/`add_int` gained
+`soft_min`/`soft_max` for this.
