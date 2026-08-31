@@ -62,8 +62,8 @@ def test_work_done_while_checked_out_belongs_to_that_session():
     GuideScene().add("base", side="C", name="only_in_second")
     second.capture_guides()
 
-    assert [entry["name"] for entry in first.document.guides["modules"]] == ["only_in_first"]
-    assert [entry["name"] for entry in second.document.guides["modules"]] == ["only_in_second"]
+    assert [entry.name for entry in first.document.guides.modules] == ["only_in_first"]
+    assert [entry.name for entry in second.document.guides.modules] == ["only_in_second"]
 
 
 def test_handing_the_scene_over_captures_then_checks_out():
@@ -79,7 +79,7 @@ def test_handing_the_scene_over_captures_then_checks_out():
     assert second.owns_scene_guides is True
     assert GuideScene().find("tail") is None
     # and the outgoing session kept what was authored while it held the scene
-    assert [entry["name"] for entry in first.document.guides["modules"]] == ["tail"]
+    assert [entry.name for entry in first.document.guides.modules] == ["tail"]
 
 
 def test_handing_back_restores_the_first_sessions_guides():
@@ -94,7 +94,7 @@ def test_handing_back_restores_the_first_sessions_guides():
 
     assert GuideScene().find("tail") is not None
     assert GuideScene().find("body") is None
-    assert [entry["name"] for entry in second.document.guides["modules"]] == ["body"]
+    assert [entry.name for entry in second.document.guides.modules] == ["body"]
 
 
 def test_a_hand_over_from_a_session_that_does_not_hold_the_scene_is_still_safe():
