@@ -71,10 +71,8 @@ def test_has_only_the_behaviour_fields():
         "stretch", "squash", "pole_pin", "anim_spaces",
         "limb_lock", "lock_from",
         "auto_collar",
-        "auto_collar_lift_min_angle", "auto_collar_lift_max_angle",
-        "auto_collar_lift_min_output", "auto_collar_lift_max_output",
-        "auto_collar_swing_min_angle", "auto_collar_swing_max_angle",
-        "auto_collar_swing_min_output", "auto_collar_swing_max_output",
+        "auto_collar_lift_angles", "auto_collar_lift_degrees",
+        "auto_collar_swing_angles", "auto_collar_swing_degrees",
         "auto_collar_interpolation",
     }
 
@@ -258,8 +256,8 @@ def test_the_old_auto_collar_attributes_are_gone(scene):
 
 def test_auto_collar_fields_exist():
     names = set(get_module("arm").fields())
-    assert {"auto_collar", "auto_collar_lift_min_angle",
-            "auto_collar_lift_max_output", "auto_collar_swing_max_angle",
+    assert {"auto_collar", "auto_collar_lift_angles",
+            "auto_collar_lift_degrees", "auto_collar_swing_angles",
             "auto_collar_interpolation"} <= names
 
 
@@ -279,10 +277,10 @@ def test_validate_rejects_a_neutral_on_the_boundary():
     degenerate: the middle ramp point would collide with an endpoint.
     """
     module = get_module("arm")(name="arm")
-    module.auto_collar_lift_min_angle = 0.0
+    module.auto_collar_lift_angles = (0.0, 75.0)
     assert any("lift" in problem for problem in module.validate())
-    module.auto_collar_lift_min_angle = -60.0
-    module.auto_collar_swing_max_angle = 0.0
+    module.auto_collar_lift_angles = (-60.0, 75.0)
+    module.auto_collar_swing_angles = (-45.0, 0.0)
     assert any("swing" in problem for problem in module.validate())
 
 
@@ -293,10 +291,7 @@ def test_the_angle_fields_cannot_reach_the_drivers_ceiling():
     validates the same thing for anything set programmatically.
     """
     fields = get_module("arm").fields()
-    for name in (
-        "auto_collar_lift_min_angle", "auto_collar_lift_max_angle",
-        "auto_collar_swing_min_angle", "auto_collar_swing_max_angle",
-    ):
+    for name in ("auto_collar_lift_angles", "auto_collar_swing_angles"):
         field = fields[name]
         assert abs(field.min) < 90.0 and abs(field.max) < 90.0, name
 

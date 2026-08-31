@@ -287,3 +287,15 @@ def test_import_leaves_nothing_behind_when_it_fills_a_role(guides, tmp_path):
     guides.import_(path)
     new = set(cmds.ls(assemblies=True, long=True)) - before
     assert not new, f"import left {new} at the scene root"
+
+
+def test_a_vector_setting_round_trips_through_a_trg(guides, tmp_path):
+    """A Vector2Field must survive export and import like any other setting."""
+    arm = guides.add("arm", side="L", name="arm")
+    arm.auto_collar_lift_angles = (-30.0, 50.0)
+    path = guides.export(tmp_path / "hero")
+
+    guides.clear()
+    guides.import_(path)
+    restored = guides.find("arm", "L").auto_collar_lift_angles
+    assert tuple(restored) == (-30.0, 50.0)

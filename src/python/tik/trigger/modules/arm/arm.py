@@ -17,10 +17,10 @@ from tik.maya import attribute
 from tik.trigger.core import (
     BoolField,
     ChoiceField,
-    FloatField,
     GuideLayout,
     Input,
     Module,
+    Vector2Field,
     register_module,
 )
 from tik.trigger.systems.limb import _derive_size, build_ikfk_limb
@@ -58,37 +58,27 @@ class Arm(Module):
     # Angles are measured from the `neutral` guide, so zero is where the
     # clavicle changes direction. Both limits stay inside +/-89: the driver's
     # off-plane angles saturate at 90, so a wider limit is never reached.
-    auto_collar_lift_min_angle = FloatField(
-        -60.0, min=-89.0, max=0.0, label="Lift Lower Angle",
-        help="Arm elevation below the neutral at full downward falloff.",
+    auto_collar_lift_angles = Vector2Field(
+        (-60.0, 75.0), min=-89.0, max=89.0, labels=("Lower", "Upper"),
+        label="Lift Angles",
+        help="Arm elevation either side of the neutral guide at full falloff. "
+             "Both stay inside +/-89: the driver's off-plane angles saturate "
+             "at 90, so a wider limit is never reached.",
     )
-    auto_collar_lift_max_angle = FloatField(
-        75.0, min=0.0, max=89.0, label="Lift Upper Angle",
-        help="Arm elevation above the neutral at full upward falloff.",
+    auto_collar_lift_degrees = Vector2Field(
+        (-6.0, 15.0), min=-90.0, max=90.0, labels=("Lower", "Upper"),
+        label="Lift Degrees",
+        help="Collar rotation at each of those angles.",
     )
-    auto_collar_lift_min_output = FloatField(
-        -6.0, min=-90.0, max=90.0, label="Lift Lower Degrees",
-        help="Collar rotation at the lower angle.",
+    auto_collar_swing_angles = Vector2Field(
+        (-45.0, 60.0), min=-89.0, max=89.0, labels=("Back", "Front"),
+        label="Swing Angles",
+        help="Arm azimuth either side of the neutral guide at full falloff.",
     )
-    auto_collar_lift_max_output = FloatField(
-        15.0, min=-90.0, max=90.0, label="Lift Upper Degrees",
-        help="Collar rotation at the upper angle.",
-    )
-    auto_collar_swing_min_angle = FloatField(
-        -45.0, min=-89.0, max=0.0, label="Swing Back Angle",
-        help="Arm azimuth behind the neutral at full backward falloff.",
-    )
-    auto_collar_swing_max_angle = FloatField(
-        60.0, min=0.0, max=89.0, label="Swing Forward Angle",
-        help="Arm azimuth ahead of the neutral at full forward falloff.",
-    )
-    auto_collar_swing_min_output = FloatField(
-        -6.0, min=-90.0, max=90.0, label="Swing Back Degrees",
-        help="Collar rotation at the back angle.",
-    )
-    auto_collar_swing_max_output = FloatField(
-        10.0, min=-90.0, max=90.0, label="Swing Forward Degrees",
-        help="Collar rotation at the forward angle.",
+    auto_collar_swing_degrees = Vector2Field(
+        (-6.0, 10.0), min=-90.0, max=90.0, labels=("Back", "Front"),
+        label="Swing Degrees",
+        help="Collar rotation at each of those angles.",
     )
     auto_collar_interpolation = ChoiceField(
         "smooth", choices=("linear", "smooth", "spline"),
@@ -98,19 +88,15 @@ class Arm(Module):
     )
 
     def _lift_axis(self) -> ReachAxis:
+        # Component order is (min, max), matching ReachAxis's first two and
+        # last two arguments.
         return ReachAxis(
-            min_angle=self.auto_collar_lift_min_angle,
-            max_angle=self.auto_collar_lift_max_angle,
-            min_output=self.auto_collar_lift_min_output,
-            max_output=self.auto_collar_lift_max_output,
+            *self.auto_collar_lift_angles, *self.auto_collar_lift_degrees
         )
 
     def _swing_axis(self) -> ReachAxis:
         return ReachAxis(
-            min_angle=self.auto_collar_swing_min_angle,
-            max_angle=self.auto_collar_swing_max_angle,
-            min_output=self.auto_collar_swing_min_output,
-            max_output=self.auto_collar_swing_max_output,
+            *self.auto_collar_swing_angles, *self.auto_collar_swing_degrees
         )
 
     def validate(self) -> list[str]:
