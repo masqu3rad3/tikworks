@@ -57,24 +57,78 @@ def pane(title: str, widget: QtWidgets.QWidget) -> QtWidgets.QWidget:
     return holder
 
 
+#: Sub-tab indices. A session is one document with two views of it.
+SESSION_TAB = 0
+DESIGNER_TAB = 1
+
+
 class SessionView(QtWidgets.QWidget):
-    """Edit and build one ``Session``."""
+    """Edit and build one ``Session``: its pipeline and its guides.
+
+    The session is the outer container -- its guides live in the ``.tr`` -- so
+    the Guide Designer is a *view of this document*, not a separate mode of the
+    window. It is built on first use because ``GuideDesigner`` constructs a
+    ``GuideScene``, which imports Maya.
+    """
 
     title_changed = QtCore.Signal()
     open_guides_requested = QtCore.Signal(str)
     activity = QtCore.Signal(str)
+    sub_tab_changed = QtCore.Signal(int)
 
-    def __init__(self, session: Session, parent=None, file_browser=None) -> None:
+    def __init__(self, session: Session, parent=None, file_browser=None,
+                 designer_factory=None, events=None) -> None:
         super().__init__(parent)
         self.session = session
         self.model = PipelineModel(session, self)
         self._running = False
+        self.file_browser = file_browser
+        self.designer_factory = designer_factory
+        self.events = events or session.events
+        self.designer = None
         self._build_ui(file_browser)
         self._connect_events()
 
+    # -------------------------------------------------------- sub views
+    def ensure_designer(self):
+        """Build this session's Guide Designer on first use."""
+        if self.designer is not None:
+            return self.designer
+        if self.designer_factory is not None:
+            designer = self.designer_factory()
+        else:
+            from .designer import GuideDesigner
+
+            designer = GuideDesigner(events=self.events, file_browser=self.file_browser)
+        self.designer = designer
+        self._designer_page.layout().addWidget(designer)
+        return designer
+
+    def _on_sub_tab_changed(self, index: int) -> None:
+        if index == DESIGNER_TAB:
+            self.ensure_designer()
+        self.sub_tab_changed.emit(index)
+
+    @property
+    def on_designer_tab(self) -> bool:
+        return self.sub_tabs.currentIndex() == DESIGNER_TAB
+
+    def teardown(self) -> None:
+        """Release the Designer's scene jobs. Safe to call more than once."""
+        if self.designer is not None:
+            self.designer.teardown()
+
     # ------------------------------------------------------------------ ui
     def _build_ui(self, file_browser) -> None:
-        layout = QtWidgets.QVBoxLayout(self)
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        self.sub_tabs = QtWidgets.QTabWidget()
+        self.sub_tabs.setDocumentMode(True)
+        outer.addWidget(self.sub_tabs)
+
+        session_page = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(session_page)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
@@ -138,6 +192,13 @@ class SessionView(QtWidgets.QWidget):
         bar.addWidget(self.progress, 1)
         bar.addWidget(self.counter)
         layout.addWidget(bar_frame)
+
+        self.sub_tabs.addTab(session_page, "Session")
+        # a placeholder until the Designer is built on first activation
+        self._designer_page = QtWidgets.QWidget()
+        QtWidgets.QVBoxLayout(self._designer_page).setContentsMargins(0, 0, 0, 0)
+        self.sub_tabs.addTab(self._designer_page, "Guide Designer")
+        self.sub_tabs.currentChanged.connect(self._on_sub_tab_changed)
 
         self.palette = SearchPalette(action_entries(), self)
         self.palette.chosen.connect(self.add_action)
