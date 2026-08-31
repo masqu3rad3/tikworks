@@ -57,6 +57,23 @@ from .widgets import (
 SIDES = ("L", "R", "C", "Both", "Auto")
 
 
+def diff_summary(diff) -> str:
+    """One-line description of a reconcile result for the status strip.
+
+    Pose drift is deliberately absent: it is capture's job, and calling it a
+    redraw would tell the rigger their guides are about to move when they are
+    not.
+    """
+    parts = []
+    if diff.structural:
+        parts.append(f"{len(diff.structural)} module(s) need redraw")
+    if diff.orphans:
+        parts.append(f"{len(diff.orphans)} orphan guide(s)")
+    if diff.duplicates:
+        parts.append(f"{len(diff.duplicates)} duplicate guide(s)")
+    return " · ".join(parts)
+
+
 class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
     """A plain widget on purpose.
 
@@ -428,7 +445,18 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             externals = [item["source"] for item in connections if split_source(item["source"])[0] not in by_key]
             missing = [name for name in externals if getattr(self.guides, "scene_node", lambda _n: True)(name) is None]
             self.status.set("modules", f"{len(handles)} module(s)")
-            self.status.set("connections", f"{len(connections)} connection(s)" + (f" · {len(missing)} missing scene node(s)" if missing else ""))
+            notes = [f"{len(connections)} connection(s)"]
+            if missing:
+                notes.append(f"{len(missing)} missing scene node(s)")
+            # Computed on every refresh, reported and nothing more: this is the
+            # substrate both lockstep and a checkpointed policy build on.
+            try:
+                summary = diff_summary(self.guides.diff())
+            except Exception:  # noqa: BLE001 - a stub scene has no diff()
+                summary = ""
+            if summary:
+                notes.append(summary)
+            self.status.set("connections", " · ".join(notes))
             kept = [items[instance_id] for instance_id in keep if instance_id in items]
             if kept:
                 self.tree.setCurrentItem(kept[0], 0, QtCore.QItemSelectionModel.NoUpdate)
