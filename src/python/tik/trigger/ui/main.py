@@ -51,7 +51,9 @@ class TriggerWindow(MayaToolWindow):
         self.file_browser = file_browser
         self.events = EventBus()
         self.designer_factory = designer_factory
-        self._guide_designer = None
+        # one Designer per session view: each session owns its guides, so
+        # each owns a Designer and a checkout of the scene
+        self._designers: dict = {}
         self.recent_files: list[str] = []
         self.setWindowTitle(f"Trigger {VERSION}")
         self.resize(1180, 720)
@@ -109,7 +111,7 @@ class TriggerWindow(MayaToolWindow):
         self.tabs.setMovable(True)
         self.tabs.setDocumentMode(True)
         self.tabs.tabCloseRequested.connect(self.close_tab)
-        self.tabs.currentChanged.connect(lambda _index: self._update_title())
+        self.tabs.currentChanged.connect(self._on_tab_changed)
         self.trigger_menus = QtWidgets.QMenuBar()
         self._build_menus(self.trigger_menus)
         self.trigger_status_strip = QtWidgets.QWidget()
@@ -123,15 +125,17 @@ class TriggerWindow(MayaToolWindow):
         ``GuideDesigner`` constructs a ``GuideScene``, which imports Maya, so it
         cannot be built at window startup — the UI tests run without Maya.
         """
-        self.designer_menu_holder = _holder()
-        self.designer_page_holder = _holder()
-        self.designer_status_holder = _holder()
-        self.add_mode("Guide Designer", self.designer_menu_holder,
-                      self.designer_page_holder, self.designer_status_holder)
+        self.designer_menus = QtWidgets.QStackedWidget()
+        self.designer_pages = QtWidgets.QStackedWidget()
+        self.designer_status = QtWidgets.QStackedWidget()
+        for stack in (self.designer_menus, self.designer_pages, self.designer_status):
+            stack.addWidget(_holder())  # shown before any Designer is built
+        self.add_mode("Guide Designer", self.designer_menus,
+                      self.designer_pages, self.designer_status)
 
     def _activate_mode(self, index: int) -> None:
         if index == DESIGNER_MODE:
-            self._ensure_designer()
+            self._show_active_designer()
         self._active_mode = index
         self.menu_stack.setCurrentIndex(index)
         self.pages.setCurrentIndex(index)
@@ -334,6 +338,7 @@ class TriggerWindow(MayaToolWindow):
         view = self.tabs.widget(index)
         if isinstance(view, SessionView) and view.session.is_modified and not self.ask_discard(view.session):
             return False
+        self._drop_designer(view)
         self.tabs.removeTab(index)
         if self.tabs.count() == 0:
             self.new_session()
@@ -403,8 +408,8 @@ class TriggerWindow(MayaToolWindow):
     def _update_title(self) -> None:
         for index, view in enumerate(self.views):
             self.tabs.setTabText(index, view.session.name + ("*" if view.session.is_modified else ""))
-        if self._active_mode == DESIGNER_MODE and self._guide_designer is not None:
-            self.setWindowTitle(f"Trigger {VERSION} — {self._guide_designer.title}")
+        if self._active_mode == DESIGNER_MODE and self.active_designer is not None:
+            self.setWindowTitle(f"Trigger {VERSION} — {self.active_designer.title}")
             return
         session = self.session
         if session is None:
@@ -422,35 +427,84 @@ class TriggerWindow(MayaToolWindow):
         self.status.set("references", f"{references} reference(s)" + (f" · {state}" if state else ""))
 
     # ------------------------------------------------------------ guides
-    def _ensure_designer(self):
-        """Build the Guide Designer on first use and host it in the mode."""
-        if self._guide_designer is None:
-            if self.designer_factory is not None:
-                designer = self.designer_factory()
-            else:
-                from .designer import GuideDesigner
+    def designer_for(self, view):
+        """The Guide Designer for one session view, built on first use."""
+        key = id(view)
+        designer = self._designers.get(key)
+        if designer is not None:
+            return designer
+        if self.designer_factory is not None:
+            designer = self.designer_factory()
+        else:
+            from .designer import GuideDesigner
 
-                designer = GuideDesigner(events=self.events, file_browser=self.file_browser)
-            self._guide_designer = designer
-            designer.title_changed.connect(self._on_designer_title)
-            self._mode_menus[DESIGNER_MODE] = designer.menu_bar
-            self._host_designer()
-        return self._guide_designer
+            designer = GuideDesigner(events=self.events, file_browser=self.file_browser)
+        designer.title_changed.connect(
+            lambda title, owner=designer: self._on_designer_title(owner, title)
+        )
+        self._designers[key] = designer
+        self.designer_menus.addWidget(designer.menu_bar)
+        self.designer_pages.addWidget(designer)
+        self.designer_status.addWidget(designer.status_strip)
+        return designer
 
-    def _host_designer(self) -> None:
-        """Put the Designer's three widgets back into the mode holders."""
-        designer = self._guide_designer
-        self.designer_menu_holder.layout().addWidget(designer.menu_bar)
-        self.designer_page_holder.layout().addWidget(designer)
-        self.designer_status_holder.layout().addWidget(designer.status_strip)
-
-    def _on_designer_title(self, title: str) -> None:
+    def _on_designer_title(self, owner, title: str) -> None:
+        """Only the tab in front gets to name the mode."""
+        if owner is not self.active_designer:
+            return
         self.mode_bar.setTabText(DESIGNER_MODE, title)
         self._update_title()
 
+    @property
+    def active_designer(self):
+        """The Designer of the active session tab, or None before one is built."""
+        view = self.current_view
+        return self._designers.get(id(view)) if view is not None else None
+
+    def current_menu_bar(self):
+        """The menu bar the window is showing for the active mode."""
+        if self._active_mode == DESIGNER_MODE:
+            designer = self.active_designer
+            if designer is not None:
+                return designer.menu_bar
+        return self._mode_menus.get(self._active_mode)
+
+    def _show_active_designer(self):
+        """Put the active tab's Designer in front, building it if needed."""
+        view = self.current_view
+        if view is None:
+            return None
+        designer = self.designer_for(view)
+        self.designer_menus.setCurrentWidget(designer.menu_bar)
+        self.designer_pages.setCurrentWidget(designer)
+        self.designer_status.setCurrentWidget(designer.status_strip)
+        self._mode_menus[DESIGNER_MODE] = designer.menu_bar
+        self.mode_bar.setTabText(DESIGNER_MODE, designer.title)
+        self._update_title()
+        return designer
+
+    def _on_tab_changed(self, _index: int) -> None:
+        if self._active_mode == DESIGNER_MODE:
+            self._show_active_designer()
+        self._update_title()
+
+    def _drop_designer(self, view) -> None:
+        """Tear down and forget a closed tab's Designer."""
+        designer = self._designers.pop(id(view), None)
+        if designer is None:
+            return
+        designer.teardown()
+        for stack, widget in (
+            (self.designer_menus, designer.menu_bar),
+            (self.designer_pages, designer),
+            (self.designer_status, designer.status_strip),
+        ):
+            stack.removeWidget(widget)
+            widget.setParent(None)
+
     def open_guide_designer(self, guides_path: str = ""):
-        designer = self._ensure_designer()
-        if guides_path:
+        designer = self._show_active_designer()
+        if designer is not None and guides_path:
             designer.set_file(guides_path)
         self.mode_bar.setCurrentIndex(DESIGNER_MODE)
         return designer
@@ -471,8 +525,8 @@ class TriggerWindow(MayaToolWindow):
             if view.session.is_modified and not self.ask_discard(view.session):
                 event.ignore()
                 return
-        if self._guide_designer is not None:
-            self._guide_designer.teardown()
+        for designer in list(self._designers.values()):
+            designer.teardown()
         super().closeEvent(event)
 
 

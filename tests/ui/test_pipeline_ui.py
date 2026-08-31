@@ -215,11 +215,11 @@ def test_mode_bar_swaps_menus_status_and_shortcuts(qapp):
 def test_designer_mode_is_built_lazily(qapp):
     window = TriggerWindow(designer_factory=_stub_designer)
     window.show()
-    assert window._guide_designer is None
-    assert window.designer_page_holder.layout().count() == 0
+    assert window._designers == {}
+    assert window.designer_pages.count() == 1  # just the empty placeholder
     window.mode_bar.setCurrentIndex(1)
-    assert window._guide_designer is not None
-    assert window.designer_page_holder.layout().count() == 1
+    assert window.active_designer is not None
+    assert window.designer_pages.count() == 2
     window.close()
 
 
