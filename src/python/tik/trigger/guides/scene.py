@@ -263,11 +263,60 @@ class GuideScene:
                 ))
         return records
 
+    def _draw_missing_roles(self, module, present_roles, holder) -> dict:
+        """Draw declared roles a record omits, at their ``draw_guides`` pose.
+
+        Import creates only what the file carries, so a module that gains a
+        guide would otherwise stop building every asset written before it --
+        ``rig.guide(role)`` raises on the missing one. The module owns its
+        layout and nothing else knows those positions, so the honest way to
+        find them is to run ``draw_guides`` into a scratch group and keep the
+        joints we are short of. They come out correctly named, tagged and
+        attributed, because ``GuideDraft`` made them.
+        """
+        missing = {role for role in module.guides.roles if role not in present_roles}
+        if not missing:
+            return {}
+        scratch = tm.Transform.create(name="trg_import_scratch_GRP")
+        try:
+            draft = GuideDraft(module, scratch, None)
+            module.draw_guides(draft)
+            role_of = {
+                joint.long_name: role for (role, _index), joint in draft.created.items()
+            }
+            found = {}
+            for key, joint in draft.created.items():
+                node = joint.parent
+                found[key] = {
+                    "node": joint,
+                    "position": tuple(joint.world_position),
+                    "parent_role": (
+                        role_of.get(node.long_name) if node is not None else None
+                    ),
+                }
+            # Flatten before deleting: removing a role the file already has
+            # must not take a role we are missing down with it.
+            for joint in draft.created.values():
+                joint.parent = scratch
+            kept = {}
+            for key, info in found.items():
+                if key[0] in missing:
+                    kept[key] = info
+                else:
+                    info["node"].delete()
+            for info in kept.values():
+                info["node"].parent = holder
+                info["node"].world_position = info["position"]
+            return kept
+        finally:
+            scratch.delete()
+
     def import_guide_instances(self, guide_instances) -> list[ModuleInstance]:
         """Recreate guide joints from ``GuideInstance`` records; returns scene instances."""
         holder = nodes.holder()
         created_nodes: dict = {}  # record name -> joint
         built: list = []
+        extras: dict = {}  # instance_id -> roles the file predates
         with nodes.undo_chunk("Trigger import guides"):
             for guide_instance in guide_instances:
                 module_cls = registry.get_module(guide_instance.module_type)
@@ -292,6 +341,14 @@ class GuideScene:
                     })
                     joints[(role, index)] = joint
                     created_nodes[record["name"]] = joint
+                # Roles this file predates, drawn where the module puts them.
+                extra = self._draw_missing_roles(
+                    module, {role for (role, _index) in joints}, holder
+                )
+                if extra:
+                    extras[module.instance_id] = extra
+                    for key, info in extra.items():
+                        joints[key] = info["node"]
                 root = joints[(module_cls.guides.root, 0)]
                 self._write_root_meta(root, module)
                 root.meta[INPUTS] = dict(guide_instance.inputs)
@@ -303,6 +360,16 @@ class GuideScene:
                     parent_node = created_nodes.get(parent_name) if parent_name else None
                     joint.parent = parent_node if parent_node is not None else holder
                     cmds.xform(joint.long_name, worldSpace=True, translation=record["position"])
+                for key, info in extras.get(module.instance_id, {}).items():
+                    # Parented after the recorded joints, so a filled role can
+                    # hang off one of them.
+                    target = joints.get((info["parent_role"], 0))
+                    info["node"].parent = target if target is not None else holder
+                    cmds.xform(
+                        info["node"].long_name,
+                        worldSpace=True,
+                        translation=info["position"],
+                    )
             for _guide_instance, module, joints in built:
                 module.wire_guides(joints)
         return [nodes.instance_from_nodes(module.instance_id, joints) for _gi, module, joints in built]

@@ -246,3 +246,44 @@ def test_record_without_attrs_still_imports():
     )
     assert "attrs" not in record
     assert record.get("attrs", {}) == {}
+
+
+def test_import_recreates_a_role_the_file_predates(guides, tmp_path):
+    """An older .trg was written before the module declared this guide.
+
+    Without this, adding a role to a module stops every existing asset from
+    building: import creates only the roles present in the file, and
+    ``rig.guide(role)`` then raises.
+    """
+    arm = guides.add("arm", side="L", name="arm")
+    expected = tuple(guides.guide_node(arm.instance_id, "hand", 0).world_position)
+
+    path = guides.export(tmp_path / "old")
+    data = json.loads(path.read_text())
+    data["joints"] = [
+        record for record in data["joints"] if record.get("role") != "hand"
+    ]
+    path.write_text(json.dumps(data))
+
+    guides.clear()
+    handles = guides.import_(path)
+    node = guides.guide_node(handles[0].instance_id, "hand", 0)
+    assert node is not None, "the declared role was not recreated"
+    assert all(abs(a - b) < 1e-4 for a, b in zip(node.world_position, expected))
+
+
+def test_import_leaves_nothing_behind_when_it_fills_a_role(guides, tmp_path):
+    """The scratch draft used to find the position must not survive."""
+    guides.add("arm", side="L", name="arm")
+    path = guides.export(tmp_path / "old")
+    data = json.loads(path.read_text())
+    data["joints"] = [
+        record for record in data["joints"] if record.get("role") != "hand"
+    ]
+    path.write_text(json.dumps(data))
+
+    guides.clear()
+    before = set(cmds.ls(assemblies=True, long=True))
+    guides.import_(path)
+    new = set(cmds.ls(assemblies=True, long=True)) - before
+    assert not new, f"import left {new} at the scene root"
