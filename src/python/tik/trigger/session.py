@@ -355,6 +355,27 @@ class Session:
         document_store.write_stamp(self.session_id)
         return changed
 
+    @staticmethod
+    def hand_over(outgoing: Optional["Session"], incoming: "Session") -> None:
+        """Move the scene's checkout from one session to another.
+
+        Switching session tabs is a *deliberate* hand-off, and it needs its own
+        verb because the two halves fight otherwise: ``capture_guides`` stamps
+        the scene with the outgoing session's id, which is exactly what would
+        make the following ``checkout_guides`` refuse.
+
+        Forcing is safe here, but only when the outgoing session actually held
+        the scene and its work is now captured. A tab that never owned the
+        guides captures nothing, so there is nothing to make it safe -- and the
+        checkout is left to refuse, as it should.
+        """
+        captured = False
+        if outgoing is not None and outgoing is not incoming:
+            captured = outgoing.owns_scene_guides and outgoing._scene_available()
+            if captured:
+                outgoing.capture_guides()
+        incoming.checkout_guides(force=captured)
+
     def checkout_guides(self, force: bool = False) -> None:
         """Project this session's guides into the scene. Document -> scene.
 

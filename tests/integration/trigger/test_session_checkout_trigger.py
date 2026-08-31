@@ -4,6 +4,7 @@ import pytest
 from maya import cmds
 
 import tik.trigger as trigger
+from tik.trigger.core.exceptions import SessionError
 from tik.trigger.guides import GuideScene
 from tik.trigger.session import Session
 
@@ -63,3 +64,49 @@ def test_work_done_while_checked_out_belongs_to_that_session():
 
     assert [entry["name"] for entry in first.document.guides["modules"]] == ["only_in_first"]
     assert [entry["name"] for entry in second.document.guides["modules"]] == ["only_in_second"]
+
+
+def test_handing_the_scene_over_captures_then_checks_out():
+    """Switching tabs: the outgoing session keeps its work, the incoming one
+    gets the scene. No force needed -- nothing is at risk once captured."""
+    first = Session()
+    first.checkout_guides()
+    GuideScene().add("fkchain", side="C", name="tail", segments=1)
+
+    second = Session()
+    Session.hand_over(first, second)
+
+    assert second.owns_scene_guides is True
+    assert GuideScene().find("tail") is None
+    # and the outgoing session kept what was authored while it held the scene
+    assert [entry["name"] for entry in first.document.guides["modules"]] == ["tail"]
+
+
+def test_handing_back_restores_the_first_sessions_guides():
+    first = Session()
+    first.checkout_guides()
+    GuideScene().add("fkchain", side="C", name="tail", segments=1)
+    second = Session()
+
+    Session.hand_over(first, second)
+    GuideScene().add("base", side="C", name="body")
+    Session.hand_over(second, first)
+
+    assert GuideScene().find("tail") is not None
+    assert GuideScene().find("body") is None
+    assert [entry["name"] for entry in second.document.guides["modules"]] == ["body"]
+
+
+def test_a_hand_over_from_a_session_that_does_not_hold_the_scene_is_still_safe():
+    """The outgoing tab may never have been activated; taking over is fine."""
+    holder = Session()
+    holder.checkout_guides()
+    GuideScene().add("fkchain", side="C", name="tail", segments=1)
+    holder.capture_guides()
+
+    never_activated = Session()
+    incoming = Session()
+    # `never_activated` does not own the scene, so its capture is a no-op --
+    # and the hand-over must not then force away somebody else's work
+    with pytest.raises(SessionError, match="another session"):
+        Session.hand_over(never_activated, incoming)

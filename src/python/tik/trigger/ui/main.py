@@ -484,18 +484,17 @@ class TriggerWindow(MayaToolWindow):
         if view is None:
             return None
         outgoing = self._checked_out_view
-        if outgoing is not None and outgoing is not view and outgoing in self.views:
-            try:
-                outgoing.session.capture_guides()
-            except Exception as error:  # noqa: BLE001 - keep the tool alive
-                self.events.log(f"Could not capture guides: {error}", level="warning")
         if outgoing is not view:
+            if outgoing is not None and outgoing not in self.views:
+                outgoing = None  # its tab is gone; nothing to hand over
             try:
-                view.session.checkout_guides()
+                Session.hand_over(
+                    outgoing.session if outgoing is not None else None, view.session
+                )
                 self._checked_out_view = view
             except SessionError as error:
                 self.events.log(str(error), level="warning")
-            except Exception as error:  # noqa: BLE001
+            except Exception as error:  # noqa: BLE001 - keep the tool alive
                 self.events.log(f"Could not check out guides: {error}", level="warning")
         designer = self.designer_for(view)
         designer.set_owner(view.session.name)
