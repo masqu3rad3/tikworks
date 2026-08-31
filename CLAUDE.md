@@ -19,8 +19,8 @@ Maya API wrapper that "feels like Python, behaves like Maya."
 ### tik.trigger (IN DEVELOPMENT)
 Next-generation rigging framework built on tik.maya.
 - **Location:** `src/python/tik/trigger/`
-- **Status (August 2026):** workflow v2 — the `.tr` session is the rig (nested actions, references with overrides, runner), guides are a `.trg` asset, `Session`/`GuideScene` TD handlers, pipeline UI on the official theme, Guide Designer as a mode tab of that UI (tear-off supported) with two-way binding. Modules `base`/`fkchain`/`arm`/`twist`/`ribbon`; systems `limb`/`limb_lock`/`reach`/`twist`; actions `import_asset`/`kinematics`/`script`/`reference`. Maya-only since the 2026-08-30 simplification pass. Modules may declare `guide_attrs` for per-guide authored data that round-trips through the `.trg`.
-- **Design specs:** `docs/superpowers/specs/2026-08-31-field-groups-and-vectors-design.md` (FieldGroup folds, Vector2/Vector3 fields), `2026-08-31-auto-collar-redesign-design.md` (the signed two-axis auto-collar: a neutral guide, off-plane `atan2`, three-point `remapValue`; supersedes the reach spec's Part 4, and note the measured +/-90 ceiling on off-plane angles), `2026-08-31-twist-ribbon-limblock-design.md` (twist extraction, ribbon module, limb lock; note the measured +/-180 bound on matrix-derived twist), `2026-08-30-trigger-simplification-design.md` (layering and the `rig` object, authoritative), `2026-08-30-designer-as-mode-tab-design.md` (the UI shell: modes, menus, tear-off), `2026-08-29-trigger-ui-v3-and-io-graph-design.md` (module I/O model), `2026-08-28-trigger-workflow-and-ui-design.md` (session blueprint), `2026-08-28-trigger-rebuild-design.md` (tik.maya constructs, fields); plans in `docs/superpowers/plans/`
+- **Status (August 2026):** workflow v3 — the `.tr` session is the rig *and its guides* (nested actions, references with overrides, runner), `Session`/`GuideScene` TD handlers, pipeline UI on the official theme, one Guide Designer per session tab (tear-off supported) with two-way binding. `.trg` is an import/export format for guide libraries, not the master. Modules `base`/`fkchain`/`arm`/`twist`/`ribbon`; systems `limb`/`limb_lock`/`reach`/`twist`; actions `import_asset`/`kinematics`/`script`/`reference`. Maya-only since the 2026-08-30 simplification pass. Modules may declare `guide_attrs` for per-guide authored data, authored on the joint and captured into the document.
+- **Design specs:** `docs/superpowers/specs/2026-08-31-guide-ownership-and-lockstep-design.md` (the guide document, capture/regenerate/reconcile, lockstep, guides in the session — **authoritative for anything touching guides**), `2026-08-31-field-groups-and-vectors-design.md` (FieldGroup folds, Vector2/Vector3 fields), `2026-08-31-auto-collar-redesign-design.md` (the signed two-axis auto-collar: a neutral guide, off-plane `atan2`, three-point `remapValue`; supersedes the reach spec's Part 4, and note the measured +/-90 ceiling on off-plane angles), `2026-08-31-twist-ribbon-limblock-design.md` (twist extraction, ribbon module, limb lock; note the measured +/-180 bound on matrix-derived twist), `2026-08-30-trigger-simplification-design.md` (layering and the `rig` object, authoritative), `2026-08-30-designer-as-mode-tab-design.md` (the UI shell: modes, menus, tear-off), `2026-08-29-trigger-ui-v3-and-io-graph-design.md` (module I/O model), `2026-08-28-trigger-workflow-and-ui-design.md` (session blueprint), `2026-08-28-trigger-rebuild-design.md` (tik.maya constructs, fields); plans in `docs/superpowers/plans/`
 - **Layering rule:** `tik/trigger/core` is pure Python — no Maya, no Qt (enforced by `tests/unit/test_import_boundaries.py`). Everything else in tik.trigger may use tik.maya.
 
 ## Important Patterns
@@ -88,17 +88,22 @@ Authoritative design: `docs/superpowers/specs/2026-08-28-trigger-rebuild-design.
 Key decisions:
 - **Declarative modules** — manifest (`GuideLayout`, `Input`s, `outputs`, typed `Field`s) + `draw_guides(guides)` / `build(rig)`
 - **Python fields are the schema** (`tik.core.fields`); optional `defaults.json` overrides defaults only; UI is generated (`tik.shared.ui.fields.FormBuilder`). Fields group with `FieldGroup(label, collapsed=)` and render as folds; `Vector2Field`/`Vector3Field` put a pair or triple on one row
-- **Scene is the truth** — guides are joints tagged via `node.meta` (`trg_*` keys); identity is a uuid, never a name
+- **The document is the truth; the scene is a working copy** — a `GuideDocument` (`core/guide_document.py`) owns which modules exist, their settings, connections, layout, guide poses and guide attrs, all keyed by instance uuid. It lives in the scene as one node per module (`guides/module_node.py`) so Maya's undo covers it, and is serialized into the `.tr` on save. **Guide joints are a rendering** the document owns and can rebuild. Display keys (`L_arm`) appear only at read boundaries, translated fresh so they cannot drift
 - **Maya-only** — there is no backend protocol. `tik/trigger/maya` (rig, build, runner, tags) and `tik/trigger/guides` (scene, nodes) hold the scene code; `core` stays pure
 - **Folder-per-module/action** with named `.py` files and `@register_module` / `@register_action`
-- **One session document** (`.trg`): guide snapshot + ordered actions
+- **One session document** (`.tr`, schema 5): guides + ordered actions. The scene is a checkout of exactly one session at a time, stamped on the guide holder (`Session.capture_guides` / `checkout_guides`)
+- **Lockstep** — `GuideScene.sync()` captures, reconciles, then redraws whatever is *structurally* stale. Pose drift is resolved by capture (the scene wins); missing or unexpected guides by regenerate (the document wins). The two must never be confused: a redraw triggered by drift would teleport a guide the rigger just dragged. Orphans and duplicates are reported, never deleted
 
 ## tik.trigger Tests
 
 Tests for tik.trigger follow naming convention `test_<module>_trigger.py`:
 - `tests/unit/test_core_trigger.py` — manifest, Module, registry, schemas
 - `tests/unit/test_document_trigger.py`, `test_runner_trigger.py`, `test_session_trigger.py` — session document, runner/references, Session API
-- `tests/unit/test_guides_trigger.py` — .trg format + GuideScene (Maya)
+- `tests/unit/test_guides_trigger.py` — .trg exchange format + GuideScene (Maya)
+- `tests/unit/test_guide_document_trigger.py`, `test_reconcile_trigger.py` — the pure document and reconcile (no Maya)
+- `tests/unit/test_module_node_trigger.py`, `test_document_store_trigger.py`, `test_snapshot_trigger.py`, `test_capture_trigger.py`, `test_regenerate_trigger.py`
+- `tests/unit/test_session_guides_trigger.py` — capture/checkout and the scene stamp
+- `tests/integration/trigger/test_lockstep_trigger.py` — the lockstep guarantees
 - `tests/unit/test_guide_scene_trigger.py` — GuideScene, ModuleRig, build pipeline
 - `tests/integration/trigger/test_builder_trigger.py` — the builder against a real scene
 - `tests/integration/trigger/` — end-to-end pipeline and arm module
