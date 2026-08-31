@@ -23,56 +23,9 @@ if TYPE_CHECKING:
 class DesignerProperties:
     """Mixed into :class:`~.window.GuideDesigner`."""
 
-    def _plug_adapter(self, handle: GuideHandle, name: str):
-        """Read/write adapter for a guide attribute (the same one the two-way bindings use)."""
-        plug_factory = getattr(self.guides, "settings_plug", None)
-        if plug_factory is None:
-            return None
-        try:
-            plug = plug_factory(handle.instance_id, name)
-        except TriggerError:
-            return None
-        if plug is None:  # no module node, or the field has no mirrored attribute
-            return None
-        plug_path = plug if isinstance(plug, str) else plug.path
-        return self.binding_adapter(plug_path) if self.binding_adapter else MayaAttributeAdapter(plug_path)
-
-    def _on_inherit_toggled(self, checked: bool) -> None:
-        """Single selection is handled by the two-way binding; several modules are written here."""
-        if len(self._multi) < 2:
-            return
-        with self.watcher.mute():
-            for handle in self._multi:
-                adapter = self._plug_adapter(handle, "useRefOri")
-                if adapter is not None:
-                    adapter.set(bool(checked))
-
-    def _bind_properties(self, handle: GuideHandle) -> None:
-        plug_factory = getattr(self.guides, "settings_plug", None)
-        if plug_factory is None:
-            return
-        for name in self._module_obj.fields():
-            widget = self.form._widgets.get(name)
-            if widget is None or not isinstance(widget, (QtWidgets.QSpinBox, QtWidgets.QDoubleSpinBox, QtWidgets.QCheckBox, QtWidgets.QComboBox, QtWidgets.QLineEdit)):
-                continue
-            try:
-                plug = plug_factory(handle.instance_id, name)
-            except TriggerError:
-                continue
-            if plug is None:
-                continue
-            plug_path = plug if isinstance(plug, str) else plug.path
-            adapter = self.binding_adapter(plug_path) if self.binding_adapter else None
-            self.bindings.add(bind(plug_path, widget, direction="to_widget", adapter=adapter))
-        try:
-            plug = plug_factory(handle.instance_id, "useRefOri")
-            if plug is None:
-                raise TriggerError("no useRefOri plug")
-            plug_path = plug if isinstance(plug, str) else plug.path
-            adapter = self.binding_adapter(plug_path) if self.binding_adapter else None
-            self.bindings.add(bind(plug_path, self.inherit_orientation, direction="both", adapter=adapter))
-        except TriggerError:
-            pass
+    # Settings have no Maya attribute to bind to: the session owns them, and the
+    # form writes them through ``write_settings``. Per-guide data (``guide_attrs``)
+    # still lives on the joints and is captured from there.
 
     def _source_choices(self):
         """Every other module (with its outputs) and the scene nodes of every group."""

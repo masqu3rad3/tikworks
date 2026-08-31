@@ -72,20 +72,19 @@ def test_edit_dispatches_to_whichever_view_is_active(window):
     assert calls == ["designer", "session"]
 
 
-def test_undo_on_the_designer_tab_goes_to_maya(window, monkeypatch):
-    """Guide edits are scene edits; the session's action undo is the wrong stack."""
+def test_undo_on_the_designer_tab_undoes_trigger_actions(window, monkeypatch):
+    """Guide structure lives in the session, so its undo stack is the right one.
+
+    Moving a guide is a scene edit and stays on Maya's stack, undone with focus
+    in the viewport.
+    """
     view = window.views[0]
     view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
     hits = []
-    monkeypatch.setattr(window, "_maya_undo", lambda: hits.append("maya"))
     monkeypatch.setattr(view.session, "undo", lambda: hits.append("session") or True)
     undo = next(a for a in menu(window, "&Edit").actions() if a.text() == "Undo")
     undo.trigger()
-    assert hits == ["maya"]
-    view.sub_tabs.setCurrentIndex(SESSION_TAB)
-    undo.trigger()
-    assert hits == ["maya", "session"]
-
+    assert hits == ["session"]
 
 def test_export_guides_asks_for_a_path(window):
     """It once passed True as the *path*, which blew up inside pathlib."""

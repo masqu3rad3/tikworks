@@ -195,11 +195,6 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.inputs_form = QtWidgets.QFormLayout()
         self.inputs_form.setContentsMargins(4, 0, 4, 4)
         props.addLayout(self.inputs_form)
-        self.guides_caption = QtWidgets.QLabel("GUIDES")
-        self.guides_caption.setObjectName("FieldCaption")
-        props.addWidget(self.guides_caption)
-        self.inherit_orientation = QtWidgets.QCheckBox("Inherit orientation from guides")
-        props.addWidget(self.inherit_orientation)
         self.module_caption = QtWidgets.QLabel("MODULE")
         self.module_caption.setObjectName("FieldCaption")
         props.addWidget(self.module_caption)
@@ -253,7 +248,6 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.test_button.clicked.connect(lambda: self.test_build())
         self.build_all_button.clicked.connect(lambda: self.test_build(all_modules=True))
         self.name_edit.editingFinished.connect(self._rename_current)
-        self.inherit_orientation.toggled.connect(self._on_inherit_toggled)
         self.form.changed.connect(self._on_setting_changed)
         self.form.error.connect(lambda _name, message: self.events.log(message, level="warning"))
         self.scene_panel.changed.connect(self._on_scene_nodes_changed)
@@ -548,7 +542,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.name_edit.setPlaceholderText("scene nodes group name")
         self.type_label.setText("Scene nodes")
         self.icon.setPixmap(glyph_icon("SN", MODULE_COLORS["scene"], 24).pixmap(24, 24))
-        for widget in (self.inputs_caption, self.guides_caption, self.inherit_orientation, self.module_caption, self.form_scroll):
+        for widget in (self.inputs_caption, self.module_caption, self.form_scroll):
             widget.setVisible(False)
         self.scene_panel.set_nodes(self.guides.scene_groups().get(name, []))
         self.scene_panel.setVisible(True)
@@ -604,7 +598,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 item.widget().deleteLater()
         self._input_rows.clear()
         self.scene_panel.setVisible(False)
-        for widget in (self.guides_caption, self.inherit_orientation, self.module_caption, self.form_scroll):
+        for widget in (self.module_caption, self.form_scroll):
             widget.setVisible(True)
         self.multi_label.setVisible(False)
         self.name_edit.setEnabled(True)
@@ -616,7 +610,6 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.type_label.setText("")
             self.icon.clear()
             self.inputs_caption.setVisible(False)
-            self.inherit_orientation.setEnabled(False)
             self.status.set_activity("Select a module, or add one from the shelf (Tab to search).")
             return
         entry = handle.entry
@@ -643,18 +636,10 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 self._input_rows[declared.name] = row
             self.inputs_caption.setVisible(bool(declared_inputs))
         self.form.set_target(self._module_obj)
-        self.inherit_orientation.setEnabled(True)
-        if not multi:
-            self._bind_properties(handle)
-            self.status.set_activity(f"{handle.key} — {module_cls.display_label()}")
-        else:
-            adapter = self._plug_adapter(handle, "useRefOri")
-            self.inherit_orientation.blockSignals(True)
-            try:
-                self.inherit_orientation.setChecked(bool(adapter.get()) if adapter is not None and adapter.exists() else True)
-            finally:
-                self.inherit_orientation.blockSignals(False)
+        if multi:
             self.status.set_activity(f"{len(self._multi)} × {module_cls.display_label()} selected")
+        else:
+            self.status.set_activity(f"{handle.key} — {module_cls.display_label()}")
 
 
     # -------------------------------------------------------------- teardown

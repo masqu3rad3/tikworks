@@ -261,12 +261,6 @@ class TriggerWindow(MayaToolWindow):
             return self._designer_call(designer_method, *args, **kwargs)
         return self._view_call(session_method, *args, **kwargs)
 
-    @staticmethod
-    def _maya_undo() -> None:
-        from maya import cmds
-
-        cmds.undo()
-
     def _sync_menu_state(self) -> None:
         """The Guides menu is only offered where it has a target."""
         if hasattr(self, "guides_menu_action"):
@@ -393,19 +387,33 @@ class TriggerWindow(MayaToolWindow):
 
     # ----------------------------------------------------------- commands
     def undo(self) -> None:
-        # Guide edits are scene edits, so on the Designer tab Ctrl+Z belongs to
-        # Maya's stack, not to the session's action history.
-        if self._designer is not None:
-            self._maya_undo()
-            return
+        # The session's stack on both tabs: guide *structure* is a document
+        # edit. Moving a guide is a scene edit and stays on Maya's stack,
+        # undone with focus in the viewport.
         session = self.session
         if session is not None and session.undo():
-            self._view_call("refresh")
+            self._after_document_change()
 
     def redo(self) -> None:
         session = self.session
         if session is not None and session.redo():
-            self._view_call("refresh")
+            self._after_document_change()
+
+    def _after_document_change(self) -> None:
+        """Undo/redo replaced the document; put the views back in step with it.
+
+        The guides need a sync as well as a repaint: undo restores the document
+        in memory, and lockstep is what draws the difference.
+        """
+        self._view_call("refresh")
+        designer = self.active_designer
+        if designer is None:
+            return
+        try:
+            designer.guides.sync()
+        except Exception as error:  # noqa: BLE001 - keep the tool alive
+            self.events.log(f"Could not redraw guides: {error}", level="warning")
+        designer.refresh()
 
     def validate_session(self) -> None:
         session = self.session

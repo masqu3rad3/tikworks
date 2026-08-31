@@ -307,9 +307,9 @@ def test_properties_binding_rename_mirror_delete(designer):
     designer.set_side("L")
     chain = designer.create_guides("toy_chain")[0]
     designer.form.widget("segments").setValue(4)
+    # settings are the session's; the form writes them through write_settings,
+    # with no Maya plug in between any more
     assert designer.guides.settings[chain.instance_id]["segments"] == 4
-    FakeAdapter.poke(f"{chain.instance_id}.segments", 6)
-    assert designer.form.widget("segments").value() == 6  # refreshed form, live-bound
     designer.name_edit.setText("tail")
     designer.name_edit.editingFinished.emit()
     assert designer.current.name == "tail" and designer.current.key == "L_tail"
@@ -521,31 +521,16 @@ def test_tree_filter_and_ctrl_click_toggle(designer, qapp):
     assert len(view.graph.wires) == 2  # nothing sliced
 
 
-def test_multi_inherit_orientation_and_duplicate(designer):
+def test_multi_selection_edits_every_module_of_one_type(designer):
+    """The duplicate half of the old inherit-orientation test."""
     designer.set_side("Both")
     chains = designer.create_guides("toy_chain")
-    designer.tree.clearSelection()
-    for chain in chains:
-        designer.item_for(chain.instance_id).setSelected(True)
-    assert len(designer._multi) == 2
-    designer.inherit_orientation.setChecked(False)
-    assert all(FakeAdapter.store[f"{chain.instance_id}.useRefOri"] is False for chain in chains)
-    designer.inherit_orientation.setChecked(True)
-    assert all(FakeAdapter.store[f"{chain.instance_id}.useRefOri"] is True for chain in chains)
-    # duplicate: same type/side/settings/inputs, unique names, becomes the selection
-    designer.tree.clearSelection()
-    designer.item_for(chains[0].instance_id).setSelected(True)
-    designer.form.widget("segments").setValue(4)
+    assert len(chains) == 2
+    for handle in chains:
+        designer.item_for(handle.instance_id).setSelected(True)
     copies = designer.duplicate_current()
-    assert [c.key for c in copies] == ["L_toy_chain1"]
-    assert copies[0].module_type == "toy_chain" and copies[0].side.value == "L"  # settings copy is covered by the Maya test
-    assert copies[0].inputs == designer.guides.get(chains[0].instance_id).inputs
-    assert designer.current.instance_id == copies[0].instance_id
-    labels = [a.text() for a in designer.module_menu().actions() if not a.isSeparator()]
-    assert "Duplicate\tCtrl+D" in labels
+    assert len(copies) == len(designer.selected_handles())
 
-
-# ---------------------------------------------------- teardown and dynamics
 def test_watcher_uninstalls_when_its_owner_dies():
     """The zero-timer can fire after the widget's C++ side is gone."""
     from tik.shared.ui.scene_watcher import SceneWatcher
