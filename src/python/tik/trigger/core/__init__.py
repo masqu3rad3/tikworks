@@ -41,7 +41,15 @@ from .exceptions import (
     SessionSaveError,
     TriggerError,
 )
+from .guide_document import (
+    GuideDocument,
+    GuideRecord,
+    ModuleEntry,
+    SceneGroup,
+    expand_guides,
+)
 from .manifest import GuideAttr, GuideLayout, Input, instance_key
+from .reconcile import GuideDiff, ModuleDiff, RenderedGuide, reconcile
 from .module import Module
 from .registry import (
     clear_registries,
@@ -81,7 +89,16 @@ __all__ = [
     "LOG",
     "ERROR",
     "GuideAttr",
+    "GuideDiff",
+    "GuideDocument",
     "GuideLayout",
+    "GuideRecord",
+    "ModuleDiff",
+    "ModuleEntry",
+    "RenderedGuide",
+    "SceneGroup",
+    "expand_guides",
+    "reconcile",
     "Input",
     "instance_key",
     "Module",
