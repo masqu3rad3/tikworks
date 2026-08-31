@@ -108,3 +108,51 @@ def test_no_cycle():
     control["limbLock"].value = 1.0
     target.world_position  # force an evaluation
     assert (cmds.cycleCheck(all=True, list=True) or []) == []
+
+
+# ------------------------------------------------------------------ the arm
+def test_arm_declares_the_lock_fields():
+    from tik.trigger.modules.arm.arm import Arm
+
+    assert Arm.limb_lock.default is True
+    assert Arm.lock_target.default == "socket"
+    assert set(Arm.lock_target.choices) == {"socket", "output"}
+
+
+def test_arm_publishes_a_lock_output_only_in_output_mode():
+    from tik.trigger.modules.arm.arm import Arm
+
+    assert "lock" not in Arm.output_names({"lock_target": "socket"})
+    assert "lock" in Arm.output_names({"limb_lock": True, "lock_target": "output"})
+    assert "lock" not in Arm.output_names({"limb_lock": False, "lock_target": "output"})
+
+
+def _armed(**settings):
+    import tik.trigger as trigger
+    from tik.trigger.guides import GuideScene
+    from tik.trigger.maya import Builder
+
+    trigger.load_plugins()
+    guides = GuideScene()
+    guides.clear()
+    body = guides.add("base", name="body")
+    arm = guides.add("arm", side="L", name="arm", parent=body, **settings)
+    report = Builder().build(rig_name="hero", afterlife="keep")
+    return report.rigs[arm.instance_id]
+
+
+def test_arm_builds_with_the_lock_and_no_cycle():
+    ctx = _armed(limb_lock=True)
+    control = ctx.controller_by_role("ik").transform
+    for attr in ("limbLock", "currentLength", "lockLength"):
+        assert cmds.objExists(f"{control.long_name}.{attr}")
+    assert control["lockLength"].value > 0.0
+    control["limbLock"].value = 1.0
+    ctx.outputs["hand"].world_position  # force evaluation
+    assert (cmds.cycleCheck(all=True, list=True) or []) == []
+
+
+def test_arm_lock_off_adds_nothing():
+    ctx = _armed(limb_lock=False)
+    control = ctx.controller_by_role("ik").transform
+    assert not cmds.objExists(f"{control.long_name}.limbLock")

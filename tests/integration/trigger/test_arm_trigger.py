@@ -69,6 +69,7 @@ def test_has_only_the_behaviour_fields():
     names = set(get_module("arm").fields())
     assert names == {
         "stretch", "squash", "pole_pin", "anim_spaces",
+        "limb_lock", "lock_target",
         "auto_collar", "auto_collar_start", "auto_collar_end",
         "auto_collar_interpolation",
     }

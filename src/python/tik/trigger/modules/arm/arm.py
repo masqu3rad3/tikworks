@@ -24,6 +24,7 @@ from tik.trigger.core import (
     register_module,
 )
 from tik.trigger.systems.limb import _derive_size, build_ikfk_limb
+from tik.trigger.systems.limb_lock import build_limb_lock
 from tik.trigger.systems.reach import build_reach
 
 
@@ -40,6 +41,19 @@ class Arm(Module):
     stretch = BoolField(True, help="Build the stretch network")
     squash = BoolField(True, help="Build the compress-side network")
     pole_pin = BoolField(False, help="Lock the elbow to the pole control")
+    limb_lock = BoolField(
+        True,
+        label="Limb Lock",
+        help="Hold the shoulder-to-hand distance while the hand anchors. "
+             "Inert until the animator raises limbLock.",
+    )
+    lock_target = ChoiceField(
+        "socket",
+        choices=("socket", "output"),
+        label="Limb Lock Target",
+        help="'socket' pushes this module's own socket; 'output' publishes "
+             "the push for a body module to absorb",
+    )
     auto_collar = BoolField(True, help="Build the auto-collar network")
     auto_collar_start = FloatField(
         0.0, min=0.0, max=180.0, label="Auto Collar Start Angle",
@@ -53,6 +67,15 @@ class Arm(Module):
         "smooth", choices=("linear", "smooth", "spline"),
         label="Auto Collar Interpolation",
     )
+
+    @classmethod
+    def output_names(cls, settings=None):
+        values = settings or {}
+        enabled = values.get("limb_lock", cls.limb_lock.default)
+        target = values.get("lock_target", cls.lock_target.default)
+        if enabled and target == "output":
+            return (*cls.outputs, "lock")
+        return tuple(cls.outputs)
 
     def validate(self) -> list[str]:
         problems = super().validate()
@@ -99,7 +122,9 @@ class Arm(Module):
             match=collar_jnt,
             mirror="behaviour",
         )
-        tm.MatrixConstraint.create(socket, collar_ctrl.offset, maintain_offset=True)
+        # Driven after the limb is built: limb lock may insert a buffer
+        # between the socket and everything hanging off it.
+        collar_driver = socket
         tm.MatrixConstraint.create(collar_ctrl, collar_jnt, maintain_offset=True)
         attribute.lock_and_hide(collar_ctrl, ("sx", "sy", "sz", "v"))
 
@@ -132,6 +157,30 @@ class Arm(Module):
                 interpolation=self.auto_collar_interpolation,
                 name="collar",
             )
+
+        if self.limb_lock:
+            # In socket mode the buffer sits between the socket and everything
+            # hanging off it, and becomes the lock's target. lock_root still
+            # reads the raw socket, which is what keeps the graph acyclic.
+            buffer_group = None
+            if self.lock_target == "socket":
+                buffer_group = rig.group("lock", "push", under="socket")
+                buffer_group.snap_to(socket)
+                collar_driver = buffer_group
+            lock = build_limb_lock(
+                rig,
+                socket=socket,
+                chain_root=limb.ik_joints[0],
+                driver=limb.ik_tweak.transform,
+                control=limb.ik_control,
+                target=buffer_group,
+            )
+            if buffer_group is None:
+                rig.output("lock", lock.push)
+
+        tm.MatrixConstraint.create(
+            collar_driver, collar_ctrl.offset, maintain_offset=True
+        )
 
         rig.output("collar", collar_jnt)
         rig.output("upperarm", bind_joints[0])
