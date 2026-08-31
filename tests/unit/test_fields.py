@@ -7,6 +7,7 @@ import pytest
 from tik.core.fields import (
     BoolField,
     ChoiceField,
+    FieldGroup,
     FieldValidationError,
     FloatField,
     IntField,
@@ -227,3 +228,56 @@ def test_field_order_is_otherwise_definition_order():
         third = IntField(3)
 
     assert list(Ordered.fields()) == ["first", "second", "third"]
+
+
+# --------------------------------------------------------------- field groups
+
+TUNING = FieldGroup("Tuning", collapsed=True)
+
+
+class Grouped(Schema):
+    plain = IntField(1)
+    legacy = IntField(2, group="Geometry")
+    tuned = FloatField(0.5, group=TUNING)
+    also_tuned = FloatField(1.5, group=TUNING)
+
+
+def test_a_field_group_survives_declaration():
+    field = Grouped.fields()["tuned"]
+    assert isinstance(field.group, FieldGroup)
+    assert field.group.label == "Tuning"
+    assert field.group.collapsed is True
+
+
+def test_a_plain_string_group_still_works():
+    """Back-compat: callers passing a bare string keep today's behaviour."""
+    field = Grouped.fields()["legacy"]
+    assert isinstance(field.group, FieldGroup)
+    assert field.group.label == "Geometry"
+    assert field.group.collapsed is False
+
+
+def test_an_ungrouped_field_has_no_group():
+    assert Grouped.fields()["plain"].group is None
+
+
+def test_the_same_group_object_is_shared():
+    fields = Grouped.fields()
+    assert fields["tuned"].group == fields["also_tuned"].group
+
+
+def test_schema_keeps_group_as_a_label_string():
+    """Anything reading a schema today must be unaffected."""
+    schema = Grouped.schema()
+    assert schema["tuned"]["group"] == "Tuning"
+    assert schema["tuned"]["group_collapsed"] is True
+    assert schema["legacy"]["group"] == "Geometry"
+    assert schema["legacy"]["group_collapsed"] is False
+    assert schema["plain"]["group"] is None
+    assert schema["plain"]["group_collapsed"] is False
+    json.dumps(schema)  # still serialisable
+
+
+def test_field_groups_compare_by_value():
+    assert FieldGroup("A") == FieldGroup("A")
+    assert FieldGroup("A", collapsed=True) != FieldGroup("A")

@@ -32,6 +32,20 @@ class FieldValidationError(ValueError):
         super().__init__(f"{field_name}: {reason} (got {value!r})")
 
 
+@dataclass(frozen=True)
+class FieldGroup:
+    """A titled, foldable run of fields.
+
+    Declared once at class level and passed to each field's ``group``, so the
+    label and the default fold state live in one place and a typo cannot
+    silently invent a second group. Groups render in the order their first
+    field is declared.
+    """
+
+    label: str
+    collapsed: bool = False
+
+
 class Field:
     """Base descriptor. Subclasses set ``type_name`` and override ``coerce``."""
 
@@ -47,7 +61,7 @@ class Field:
         max: Any = None,  # noqa: A002
         choices: Optional[Sequence[Any]] = None,
         hidden: bool = False,
-        group: Optional[str] = None,
+        group: Optional[Any] = None,  # FieldGroup or a bare label string
         last: bool = False,
     ) -> None:
         self.default = default
@@ -57,7 +71,10 @@ class Field:
         self.max = max
         self.choices = list(choices) if choices is not None else None
         self.hidden = hidden
-        self.group = group
+        # A bare string keeps working: it is a group that starts open.
+        if isinstance(group, str):
+            group = FieldGroup(group)
+        self.group: Optional[FieldGroup] = group
         # Renders after every non-trailing field, whichever class declared it.
         self.last = last
         self.name = ""
@@ -110,7 +127,8 @@ class Field:
             "max": self.max,
             "choices": list(self.choices) if self.choices is not None else None,
             "hidden": self.hidden,
-            "group": self.group,
+            "group": self.group.label if self.group else None,
+            "group_collapsed": bool(self.group and self.group.collapsed),
             "last": self.last,
         }
 

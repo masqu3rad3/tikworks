@@ -305,7 +305,7 @@ class FormBuilder(QtWidgets.QWidget):
             if field.hidden:
                 continue
             if field.group != current_group and field.group:
-                label = QtWidgets.QLabel(field.group.upper())
+                label = QtWidgets.QLabel(field.group.label.upper())
                 label.setObjectName("FieldCaption")
                 self._layout.addRow(label)
             current_group = field.group
