@@ -1,15 +1,26 @@
-"""Twist module: N joints rolling about one axis, driven by a segment's ends.
+"""Twist module: N joints rolling about one axis between two inputs.
 
 Generic, not a limb accessory. ``twist_source`` says *which end drives* the
-roll; ``extraction`` says *how the angle is read*. Position and weight are
-fully independent: position comes from where the guide sits along the
-segment, weight from an unclamped attribute on that guide, so a joint at 0.95
-may carry a weight of 0.2, or a negative weight to reverse the twist.
+roll; ``extraction`` says *how the angle is read*.
+
+**Placement is an aim, not a guide pose.** The joints ride a frame that sits
+at the base input and aims at the end input, with its up vector taken from the
+base, so they stay on the base-to-end line in every pose. They cannot be
+placed from the guides' own world transforms: the bind chain is aligned to the
+guides rather than aimed down the bone (an arm's lowerarm X axis is only
+0.98 aligned with the direction to the hand), so a joint parented to it with a
+plain local offset drifts off the segment.
+
+**Position and weight are authored, not derived.** A twist guide is a handle
+on two numbers -- ``position`` along the segment and ``twistWeight`` -- and its
+transform channels are locked, driven by ``position`` off the end guide. Base
+and end guides stay free to snap wherever the rigger wants them.
 """
 
 from __future__ import annotations
 
 import tik.maya as tm
+from tik.maya import attribute
 from tik.trigger.core import (
     BoolField,
     ChoiceField,
@@ -24,20 +35,8 @@ from tik.trigger.core import (
 from tik.trigger.systems.twist import AXES, SOURCES, dominant_axis, twist_plug
 
 WEIGHT_ATTR = "twistWeight"
-
-
-def projected_position(start, end, probe) -> float:
-    """Where ``probe`` falls along ``start`` -> ``end``, as a 0-1 fraction.
-
-    Only the component along the axis counts, so a guide dragged sideways for
-    visibility still reads correctly.
-    """
-    axis = end.world_position - start.world_position
-    length_squared = axis * axis
-    if length_squared < 1e-12:
-        return 0.0
-    fraction = ((probe.world_position - start.world_position) * axis) / length_squared
-    return max(0.0, min(1.0, fraction))
+POSITION_ATTR = "position"
+LOCKED_CHANNELS = ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz", "v")
 
 
 @register_module("twist")
@@ -60,6 +59,10 @@ class Twist(Module):
     guide_attrs = {
         "twist": (
             GuideAttr(
+                POSITION_ATTR,
+                help="Where this joint sits between base and end, 0 to 1.",
+            ),
+            GuideAttr(
                 WEIGHT_ATTR,
                 help="How much of the extracted twist this joint takes. "
                      "Unclamped; negative reverses it.",
@@ -79,9 +82,6 @@ class Twist(Module):
         help="'channel' is unbounded but needs an FK-style driver; "
              "'matrix' works anywhere and wraps past 180 degrees",
     )
-    distribute_translation = BoolField(
-        True, help="Slide the joints along when the segment stretches"
-    )
     spacing = FloatField(10.0, min=0.01, help="Default guide distance, base to end")
 
     @classmethod
@@ -95,17 +95,42 @@ class Twist(Module):
     # --------------------------------------------------------------- guides
     def draw_guides(self, guides) -> None:
         span = self.spacing * guides.side_mult
-        base = guides.joint("base", (0, 0, 0))
-        guides.joint("end", (span, 0, 0), parent=base)
+        base = guides.joint("base", (0, 0, 0), radius=1.5)
+        guides.joint("end", (span, 0, 0), parent=base, radius=1.5)
         for index in range(self.count):
             fraction = (index + 1) / (self.count + 1)
             joint = guides.joint(
                 "twist", (span * fraction, 0, 0), index=index, parent=base, radius=0.5
             )
+            joint[POSITION_ATTR].value = fraction
             # The sensible default, freely overridable afterwards.
             joint[WEIGHT_ATTR].value = (
                 fraction if self.twist_source == "end" else 1.0 - fraction
             )
+
+    def wire_guides(self, guides) -> None:
+        """Rail the twist guides between base and end.
+
+        Runs on creation *and* on import, so the rig survives a ``.trg`` round
+        trip -- the authored numbers persist as guide attributes and this
+        rebuilds the connections over them.
+        """
+        end = guides.get(("end", 0))
+        if end is None:
+            return
+        for (role, index), node in sorted(guides.items()):
+            if role != "twist":
+                continue
+            if node["translate"].get_input() is not None:
+                continue  # already railed
+            mult = tm.create_node(
+                "multiplyDivide", name=f"{node.name}_position_multiplyDivide"
+            )
+            end["translate"] >> mult["input1"]
+            for channel in "XYZ":
+                node[POSITION_ATTR] >> mult[f"input2{channel}"]
+            mult["output"] >> node["translate"]
+            attribute.lock_and_hide(node, LOCKED_CHANNELS)
 
     # ---------------------------------------------------------------- build
     def build(self, rig) -> None:
@@ -128,27 +153,54 @@ class Twist(Module):
                 if rig.instance.inputs.get("reference")
                 else base_socket.parent
             )
-
         angle = twist_plug(
             driver, reference, name=rig.name("roll"), axis=axis, source=self.extraction
         )
 
-        measure = None
-        if self.distribute_translation:
-            # The sockets track the real segment ends, so their distance is
-            # the live segment length and the joints redistribute on stretch.
-            measure = tm.Measure.create(
-                base_socket, end_socket, name=rig.name("segment")
-            )
+        # The frame the joints ride: at the base, aimed at the end, up from
+        # the base -- so it carries the base's roll and the extracted angle is
+        # added on top of it.
+        frame = tm.AimFrame.create(
+            base_socket,
+            end_socket,
+            base_socket,
+            aim_axis=(1.0 * rig.side_mult, 0.0, 0.0),
+            twist_axis="X",
+            parent=rig.groups.rig,
+            name=rig.name("twistAim"),
+        )
+        measure = tm.Measure.create(base_socket, end_socket, name=rig.name("segment"))
+        parent_joint = rig.bind_parent
 
         for index, guide_node in enumerate(twist_guides):
-            position = projected_position(base_guide, end_guide, guide_node)
+            position = guide_node[POSITION_ATTR].value
             weight = guide_node[WEIGHT_ATTR].value
-            joint = rig.bind_joint(f"twist{index}", match=guide_node, radius=0.5)
+            slot = tm.Transform.create(
+                name=rig.name(f"twist{index}", suffix="slot"),
+                parent=frame.transform.long_name,
+            )
+            (measure.distance * (position * rig.side_mult)) >> slot["translateX"]
+
+            # Created without a match so joint orient stays zero and the whole
+            # orientation lives in the rotate channels.
+            joint = rig.bind_joint(f"twist{index}", radius=0.5)
             joint["rotateOrder"].value = 0  # xyz -- roll innermost
-            (angle * weight) >> joint[f"rotate{axis}"]
-            if measure is not None:
-                # Bind joints are oriented X down the chain; a mirrored side
-                # aims back up it, so the sign comes from the module's side.
-                (measure.distance * (position * rig.side_mult)) >> joint["translateX"]
+
+            local = tm.create_node("multMatrix", name=rig.name(f"twist{index}", "local"))
+            slot["worldMatrix[0]"] >> local["matrixIn[0]"]
+            parent_joint["worldInverseMatrix[0]"] >> local["matrixIn[1]"]
+            decompose = tm.create_node(
+                "decomposeMatrix", name=rig.name(f"twist{index}", "decompose")
+            )
+            local["matrixSum"] >> decompose["inputMatrix"]
+            decompose["outputTranslate"] >> joint["translate"]
+            for channel in AXES:
+                if channel == axis:
+                    # Roll is added as a float after decomposition, the way
+                    # Ribbon does it, so a channel-sourced twist stays
+                    # unbounded past 180 degrees.
+                    source = decompose[f"outputRotate{channel}"] + angle * weight
+                else:
+                    source = decompose[f"outputRotate{channel}"]
+                source >> joint[f"rotate{channel}"]
             rig.output(f"twist{index}", joint)

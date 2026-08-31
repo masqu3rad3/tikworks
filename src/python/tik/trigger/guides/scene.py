@@ -85,6 +85,8 @@ class GuideScene:
             self._write_root_meta(draft.root, module)
             if poses:
                 nodes.apply_poses(draft.created, poses)
+            # after the poses land, so a guide rig can take over the channels
+            module.wire_guides(draft.created)
             resolved = dict(inputs or {})
             if not resolved and parent is not None and module.primary_input() is not None:
                 # convenience: drawing under another module's guide pre-fills
@@ -301,6 +303,8 @@ class GuideScene:
                     parent_node = created_nodes.get(parent_name) if parent_name else None
                     joint.parent = parent_node if parent_node is not None else holder
                     cmds.xform(joint.long_name, worldSpace=True, translation=record["position"])
+            for _guide_instance, module, joints in built:
+                module.wire_guides(joints)
         return [nodes.instance_from_nodes(module.instance_id, joints) for _gi, module, joints in built]
 
     # ----------------------------------------------------------- caching

@@ -29,6 +29,24 @@ def rigged(guides):
     upper = guides.add("ribbon", side="L", name="upper", parent=arm, joint_count=4)
     guides.connect("L_upper.start", "L_arm.upperarm")
     guides.connect("L_upper.end", "L_arm.lowerarm")
+
+    # Snap each span's ends onto the segment it covers. Sockets connect with
+    # maintain_offset, so a guide left at the module default bakes that offset
+    # in permanently -- this is the authored "snap base, snap end" workflow.
+    def snap(instance, role, arm_role):
+        cmds.xform(
+            guides.guide_node(instance.instance_id, role, 0).long_name,
+            ws=True,
+            t=cmds.xform(
+                guides.guide_node(arm.instance_id, arm_role, 0).long_name,
+                q=True, ws=True, t=True,
+            ),
+        )
+
+    snap(fore, "base", "elbow")
+    snap(fore, "end", "hand")
+    snap(upper, "start", "shoulder")
+    snap(upper, "end", "elbow")
     report = Builder().build(rig_name="hero", afterlife="keep")
     return report, arm, fore, upper
 
@@ -80,3 +98,23 @@ def test_deform_joints_are_tagged_for_export(rigged):
         assert context.deform_joints
         for joint in context.deform_joints:
             assert joint.meta.get(tags.KIND) == tags.DEFORM
+
+
+def test_twist_joints_track_the_segment_end_to_end(rigged):
+    """The whole point: they stay on the base-to-end line as the arm moves."""
+    report, arm, fore, _upper = rigged
+    arm_ctx = report.rigs[arm.instance_id]
+    twist_ctx = report.rigs[fore.instance_id]
+    control = arm_ctx.controller_by_role("ik").transform
+    base, end = arm_ctx.outputs["lowerarm"], arm_ctx.outputs["hand"]
+
+    for pose in ((14, 0, 0), (19, 7, 4), (10, -6, 5)):
+        control.world_position = pose
+        axis = end.world_position - base.world_position
+        for name, joint in twist_ctx.outputs.items():
+            to_joint = joint.world_position - base.world_position
+            fraction = (to_joint * axis) / (axis * axis)
+            closest = base.world_position + axis * fraction
+            assert (joint.world_position - closest).length() < 1e-3, (
+                f"{name} left the segment at {pose}"
+            )

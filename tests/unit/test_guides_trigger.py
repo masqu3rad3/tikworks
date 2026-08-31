@@ -214,6 +214,27 @@ def test_guide_attrs_round_trip(guides, tmp_path):
     assert abs(restored["twistWeight"].value - (-0.42)) < 1e-6
 
 
+def test_twist_guide_rail_survives_a_round_trip(guides, tmp_path):
+    """Authored numbers persist and wire_guides rebuilds the rig on import."""
+    handle = guides.add("twist", name="fore", count=3)
+    node = guides.guide_node(handle.instance_id, "twist", 1)
+    node["position"].value = 0.8
+    node["twistWeight"].value = -0.3
+
+    path = guides.export(tmp_path / "twist")
+    guides.clear()
+    guides.import_(path)
+
+    restored = guides.guide_node(guides.find("fore").instance_id, "twist", 1)
+    assert abs(restored["position"].value - 0.8) < 1e-6
+    assert abs(restored["twistWeight"].value - (-0.3)) < 1e-6
+    # the rail is back, and the channels are locked again
+    assert restored["translate"].get_input() is not None, "rail not rebuilt on import"
+    assert restored["tx"].locked
+    end = guides.guide_node(guides.find("fore").instance_id, "end", 0)
+    assert abs(restored.translate[0] - end.translate[0] * 0.8) < 1e-6
+
+
 def test_record_without_attrs_still_imports():
     """Old .trg files carry no 'attrs' key and must keep loading."""
     from tik.trigger.guides.format import make_record

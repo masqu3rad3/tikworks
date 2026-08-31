@@ -135,25 +135,32 @@ def test_output_names_follow_the_count():
     assert Twist.output_names({"count": 3}) == ("twist0", "twist1", "twist2")
 
 
-def test_projected_position_ignores_sideways_drift():
-    """A guide dragged off the axis still reads its along-axis fraction."""
-    from tik.trigger.modules.twist.twist import projected_position
+def test_twist_guides_are_railed_and_locked():
+    """A twist guide is a handle on two numbers; its channels are not editable."""
+    import tik.trigger as trigger
+    from tik.trigger.guides import GuideScene
 
-    start = tm.Transform.create(name="s")
-    end = tm.Transform.create(name="e")
-    end.translate = (10, 0, 0)
-    probe = tm.Transform.create(name="p")
-    probe.translate = (2.5, 6, -3)  # far off the axis
-    assert abs(projected_position(start, end, probe) - 0.25) < 1e-6
-    probe.translate = (-4, 0, 0)  # behind the start, clamped
-    assert projected_position(start, end, probe) == 0.0
+    trigger.load_plugins()
+    guides = GuideScene()
+    guides.clear()
+    handle = guides.add("twist", name="fore", count=3)
+    node = guides.guide_node(handle.instance_id, "twist", 1)
+    assert node["translate"].get_input() is not None, "not railed"
+    for channel in ("tx", "ty", "tz", "rx", "ry", "rz"):
+        assert node[channel].locked, f"{channel} should be locked"
+    assert not node["position"].locked and not node["twistWeight"].locked
+
+    # position drives placement along base -> end
+    end = guides.guide_node(handle.instance_id, "end", 0)
+    node["position"].value = 0.25
+    assert abs(node.translate[0] - end.translate[0] * 0.25) < 1e-6
 
 
-def test_guide_weights_default_to_position():
-    from tik.trigger.modules.twist.twist import WEIGHT_ATTR, Twist
+def test_guides_declare_position_and_weight():
+    from tik.trigger.modules.twist.twist import POSITION_ATTR, WEIGHT_ATTR, Twist
 
-    module = Twist(name="fore", settings={"count": 3})
-    assert module.guide_attrs["twist"][0].name == WEIGHT_ATTR
+    declared = {attr.name for attr in Twist.attrs_for_role("twist")}
+    assert declared == {POSITION_ATTR, WEIGHT_ATTR}
 
 
 def test_twist_builds_on_an_arm():
@@ -186,3 +193,81 @@ def test_twist_builds_on_an_arm():
     # A negative weight must reverse the joint against the extracted angle.
     ctx = report.rigs[twist.instance_id]
     assert len(ctx.outputs) == 3
+
+
+def _arm_with_twist(count=3):
+    from maya import cmds
+
+    import tik.trigger as trigger
+    from tik.trigger.guides import GuideScene
+    from tik.trigger.maya import Builder
+
+    trigger.load_plugins()
+    guides = GuideScene()
+    guides.clear()
+    body = guides.add("base", name="body")
+    arm = guides.add("arm", side="L", name="arm", parent=body)
+    fore = guides.add("twist", side="L", name="fore", parent=arm, count=count)
+    guides.connect("L_fore.base", "L_arm.lowerarm")
+    guides.connect("L_fore.end", "L_arm.hand")
+    # The authored workflow: snap base and end onto the segment they span.
+    # Sockets are connected with maintain_offset, so a guide left at the
+    # module default would bake that offset in permanently.
+    for role, source in (("base", "elbow"), ("end", "hand")):
+        cmds.xform(
+            guides.guide_node(fore.instance_id, role, 0).long_name,
+            ws=True,
+            t=cmds.xform(
+                guides.guide_node(arm.instance_id, source, 0).long_name,
+                q=True, ws=True, t=True,
+            ),
+        )
+    report = Builder().build(rig_name="hero", afterlife="keep")
+    return report.rigs[arm.instance_id], report.rigs[fore.instance_id]
+
+
+def _distance_to_segment(point, start, end):
+    axis = end - start
+    length_squared = axis * axis
+    if length_squared < 1e-12:
+        return (point - start).length()
+    fraction = ((point - start) * axis) / length_squared
+    fraction = max(0.0, min(1.0, fraction))
+    return (point - (start + axis * fraction)).length()
+
+
+def test_twist_joints_lie_on_the_base_to_end_segment():
+    """They must sit on the line between base and end, in every pose."""
+    arm_ctx, twist_ctx = _arm_with_twist()
+    base = arm_ctx.outputs["lowerarm"]
+    end = arm_ctx.outputs["hand"]
+    control = arm_ctx.controller_by_role("ik").transform
+
+    for pose in ((14, 0, 0), (20, 6, 3), (9, -5, 7)):
+        control.world_position = pose
+        for name, joint in twist_ctx.outputs.items():
+            offset = _distance_to_segment(
+                joint.world_position, base.world_position, end.world_position
+            )
+            assert offset < 1e-3, f"{name} is {offset:.4f} off the segment at {pose}"
+
+
+def test_twist_joints_keep_their_fraction_along_the_segment():
+    arm_ctx, twist_ctx = _arm_with_twist(count=3)
+    base = arm_ctx.outputs["lowerarm"]
+    end = arm_ctx.outputs["hand"]
+    control = arm_ctx.controller_by_role("ik").transform
+    control.world_position = (20, 6, 3)
+
+    axis = end.world_position - base.world_position
+    length_squared = axis * axis
+    fractions = []
+    for index in range(3):
+        joint = twist_ctx.outputs[f"twist{index}"]
+        fractions.append(
+            ((joint.world_position - base.world_position) * axis) / length_squared
+        )
+    assert fractions == sorted(fractions), "twist joints are out of order"
+    for index, fraction in enumerate(fractions):
+        expected = (index + 1) / 4.0
+        assert abs(fraction - expected) < 1e-2, f"twist{index}: {fraction} != {expected}"

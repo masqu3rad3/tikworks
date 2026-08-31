@@ -182,6 +182,15 @@ class Module(Schema):
         """Create the default guide layout through ``ctx``."""
         raise NotImplementedError
 
+    def wire_guides(self, guides) -> None:
+        """Connect a guide rig over already-created guides.
+
+        Called after ``draw_guides`` *and* after guides are re-imported from a
+        ``.trg``, so a module that constrains or drives its own guides gets
+        the same rig on both paths. ``guides`` maps ``(role, index)`` to the
+        guide node. Must be safe to run on freshly created guides only.
+        """
+
     def build(self, ctx) -> None:
         """Build the rig from guides through ``ctx``."""
         raise NotImplementedError
