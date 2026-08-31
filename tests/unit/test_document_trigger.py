@@ -100,3 +100,39 @@ def test_versioning(tmp_path):
     assert versioning.resolve(tmp_path / "hero_v001.tr", "v002").name == "hero_v002.tr"
     assert versioning.resolve(tmp_path / "hero_v001.tr", "pinned").name == "hero_v001.tr"
     assert [item.name for item in versioning.versions(tmp_path / "hero.tr")] == ["hero_v001.tr", "hero_v002.tr", "hero_v005.tr"]
+
+
+def test_document_carries_guides_and_round_trips(tmp_path):
+    from tik.trigger.core.document import SCHEMA_VERSION, Document
+    from tik.trigger.core.guide_document import GuideDocument, GuideRecord, ModuleEntry
+
+    guides = GuideDocument(modules=[ModuleEntry(
+        "id1", "fkchain", "tail", "C",
+        settings={"segments": 3},
+        guides=[GuideRecord("root", position=(1.0, 2.0, 3.0))],
+    )])
+    document = Document(guides=guides.to_dict())
+    path = document.save(tmp_path / "hero.tr")
+    restored = Document.load(path)
+    assert restored.schema == SCHEMA_VERSION
+    recovered = GuideDocument.from_dict(restored.guides)
+    assert recovered.module("id1").name == "tail"
+    assert recovered.module("id1").guide("root").position == (1.0, 2.0, 3.0)
+
+
+def test_a_session_with_no_guides_stores_an_empty_dict():
+    from tik.trigger.core.document import Document
+
+    assert Document().guides == {}
+    assert Document.from_dict({"actions": []}).guides == {}
+
+
+def test_editing_guides_makes_the_document_differ():
+    """This is what gives the session its dirty flag for guide work."""
+    from tik.trigger.core.document import Document
+
+    document = Document()
+    before = document.to_dict()
+    document.guides = {"schema": 1, "modules": [], "scene_groups": [],
+                       "positions": {}, "collapse": {}}
+    assert document.to_dict() != before
