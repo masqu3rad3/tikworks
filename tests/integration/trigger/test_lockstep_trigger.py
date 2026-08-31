@@ -219,3 +219,57 @@ def test_maya_duplicating_a_module_reports_duplicates_instead_of_merging(scene):
     assert diff.modules[handle.instance_id].needs_regenerate is False
     assert scene.get(handle.instance_id).name == "tail"
     assert len(scene.document.modules) == 1
+
+
+def test_a_build_that_deletes_the_guides_keeps_them_deleted(scene):
+    """afterlife='delete' is intent, not an accident to repair."""
+    from tik.trigger.maya.build import Builder
+
+    handle = scene.add("base", side="C", name="body")
+    Builder().build(rig_name="afterlife", afterlife="delete")
+    scene.reload()
+    diff = scene.sync()
+    assert scene.guide_nodes(handle.instance_id) == {}
+    assert scene.dismissed is True
+    # reconcile still reports the rendering as absent -- that is honest; the
+    # dismissal is the policy that decides not to act on it
+    assert diff.structural == [handle.instance_id]
+    # the module itself survives: the document is not the rendering
+    assert scene.get(handle.instance_id).name == "body"
+
+
+def test_restoring_brings_dismissed_guides_back(scene):
+    from tik.trigger.maya.build import Builder
+
+    handle = scene.add("base", side="C", name="body")
+    root = scene.guide_nodes(handle.instance_id)[("root", 0)]
+    cmds.xform(root.long_name, worldSpace=True, translation=(3.0, 4.0, 5.0))
+    scene.sync()
+    Builder().build(rig_name="afterlife", afterlife="delete")
+    scene.reload()
+    scene.restore()
+    restored = scene.guide_nodes(handle.instance_id)[("root", 0)]
+    placed = cmds.xform(restored.long_name, query=True, worldSpace=True, translation=True)
+    assert placed == pytest.approx([3.0, 4.0, 5.0])
+
+
+def test_authoring_again_after_a_build_un_dismisses(scene):
+    """Adding a module means you want to see guides again."""
+    from tik.trigger.maya.build import Builder
+
+    scene.add("base", side="C", name="body")
+    Builder().build(rig_name="afterlife", afterlife="delete")
+    scene.reload()
+    handle = scene.add("fkchain", side="C", name="tail", segments=1)
+    assert scene.guide_nodes(handle.instance_id)
+    assert scene.dismissed is False
+
+
+def test_keeping_the_guides_does_not_dismiss_them(scene):
+    from tik.trigger.maya.build import Builder
+
+    handle = scene.add("base", side="C", name="body")
+    Builder().build(rig_name="afterlife", afterlife="keep")
+    scene.reload()
+    assert scene.dismissed is False
+    assert scene.guide_nodes(handle.instance_id)

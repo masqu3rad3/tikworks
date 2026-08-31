@@ -527,6 +527,15 @@ class TriggerWindow(MayaToolWindow):
         """The first time a session's Designer opens, its guides get the scene."""
         if index == DESIGNER_TAB:
             self._hand_over_to(view)
+            # a build may have cleared the guides on purpose; opening the
+            # Designer is the ask to see them again
+            designer = view.designer
+            try:
+                if designer is not None and getattr(designer.guides, "dismissed", False):
+                    designer.guides.restore()
+                    designer.refresh()
+            except Exception as error:  # noqa: BLE001 - keep the tool alive
+                self.events.log(f"Could not redraw guides: {error}", level="warning")
         self._sync_menu_state()
         self._update_title()
 

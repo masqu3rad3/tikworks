@@ -444,7 +444,11 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             # Computed on every refresh, reported and nothing more: this is the
             # substrate both lockstep and a checkpointed policy build on.
             try:
-                summary = diff_summary(self.guides.diff())
+                if getattr(self.guides, "dismissed", False):
+                    # a build took them away on purpose; do not nag about it
+                    summary = "guides not drawn (cleared by a build)"
+                else:
+                    summary = diff_summary(self.guides.diff())
             except Exception:  # noqa: BLE001 - a stub scene has no diff()
                 summary = ""
             if summary:

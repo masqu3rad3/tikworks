@@ -93,3 +93,21 @@ def read_stamp() -> str:
 def write_stamp(session_id: str) -> None:
     """Record which session owns the guides currently in the scene."""
     nodes.holder().meta[tags.SESSION] = str(session_id)
+
+
+def read_dismissed() -> bool:
+    """Whether the guides are *deliberately* not rendered.
+
+    Set when a build takes them away on purpose (``afterlife`` delete or hide).
+    Reconcile must not treat that as damage to repair -- otherwise
+    ``afterlife="delete"`` becomes a no-op the moment anything touches the
+    scene. Lives on the module holder, which survives a build; the guide holder
+    does not.
+    """
+    if not cmds.objExists(module_node.MODULE_NODES_GRP):
+        return False
+    return bool(tm.Transform(module_node.MODULE_NODES_GRP).meta.get(tags.DISMISSED, False))
+
+
+def write_dismissed(value: bool) -> None:
+    module_node.holder().meta[tags.DISMISSED] = bool(value)

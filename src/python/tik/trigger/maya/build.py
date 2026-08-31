@@ -109,8 +109,18 @@ def connect_space(rig, control, mode, targets, labels) -> None:
 
 
 def apply_afterlife(instances, mode: str) -> None:
-    """What happens to the guides once the rig is built."""
-    if mode == "keep" or not cmds.objExists(tags.GUIDE_HOLDER):
+    """What happens to the guides once the rig is built.
+
+    Anything but ``keep`` is a deliberate dismissal, and it has to be recorded:
+    the document outlives the rendering now, so without this the next reconcile
+    would helpfully draw every guide straight back.
+    """
+    if mode == "keep":
+        return
+    from tik.trigger.guides import document_store
+
+    document_store.write_dismissed(True)
+    if not cmds.objExists(tags.GUIDE_HOLDER):
         return
     holder = guide_nodes.holder()
     if mode == "hide":

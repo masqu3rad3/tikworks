@@ -75,6 +75,20 @@ class GuideScene:
         primary = registry.get_module(entry.module_type).primary_input()
         return primary.name if primary else None
 
+    @property
+    def dismissed(self) -> bool:
+        """True when the guides are deliberately not rendered (see the store)."""
+        return document_store.read_dismissed()
+
+    @dismissed.setter
+    def dismissed(self, value: bool) -> None:
+        document_store.write_dismissed(value)
+
+    def restore(self):
+        """Draw the guides again after a build took them away."""
+        self.dismissed = False
+        return self.sync()
+
     def sync(self, regenerate_stale: bool = True):
         """Capture, reconcile, and redraw whatever is structurally stale.
 
@@ -101,6 +115,9 @@ class GuideScene:
                 for entry in self.document.modules:
                     self._write(entry)
             diff = self.diff()
+            # a rendering that is *meant* to be absent is not damage
+            if regenerate_stale and self.dismissed:
+                regenerate_stale = False
             if regenerate_stale and diff.structural:
                 with nodes.undo_chunk("Trigger lockstep redraw"):
                     stale = [
@@ -211,6 +228,7 @@ class GuideScene:
                 record.rotation = tuple(pose.rotation)
                 record.rotate_order = pose.rotate_order
         with nodes.undo_chunk(f"Trigger guides: {module.name}"):
+            self.dismissed = False  # authoring again means showing them again
             self.document.modules.append(entry)
             self._write(entry)
             created = regenerate(entry, self.document)
