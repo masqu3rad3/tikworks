@@ -408,7 +408,12 @@ def test_multi_selection_edits_same_type_together(designer, qapp):
     assert designer.guides.calls[-1][0] == "select_nodes"
 
 
-def test_handles_share_one_scene_scan(designer):
+def test_a_refresh_does_not_scan_the_scene(designer):
+    """The document is in memory, so drawing the tree costs no scene read.
+
+    It used to cost exactly one. Now the only scene read in the whole cycle is
+    the pose snapshot inside sync().
+    """
     designer.set_side("C")
     designer.create_guides("toy_root")
     designer.set_side("Both")
@@ -423,21 +428,11 @@ def test_handles_share_one_scene_scan(designer):
 
     backend.find_instances = counting
     designer.refresh()
-    assert calls["n"] == 1  # tree + graph + status from a single scan
-    # Structure comes from the shared document, so these are free. ``.instance``
-    # is deliberately not: it carries the guides' live poses, which is a scene
-    # question and must not be served from a cache.
-    calls["n"] = 0
+    assert calls["n"] == 0
     for handle in designer.guides.instances():
         _ = (handle.key, handle.inputs, handle.outputs, handle.settings)
     assert calls["n"] == 0
-    # A write invalidates; the rescan happens on the next read, not eagerly.
-    designer.guides.connect("L_toy_chain.root", "toy_root.root")
-    assert calls["n"] == 0
-    designer.guides.instances()
-    assert calls["n"] == 1
     backend.find_instances = original
-
 
 def test_export_import_and_test_build(designer, tmp_path, monkeypatch):
     designer.set_side("C")

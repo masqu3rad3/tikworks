@@ -181,11 +181,11 @@ def test_build_updates_statuses_and_log(view):
     assert model.data(model.index_for_path("mark1"), StatusRole) == ""
 
 
-def _stub_designer():
+def _stub_designer(scene=None):
     from stub import StubScene
     from tik.trigger.ui.designer import GuideDesigner
 
-    return GuideDesigner(scene=StubScene())
+    return GuideDesigner(scene=scene if scene is not None else StubScene())
 
 
 def test_the_shell_is_one_menu_bar_over_the_session_tabs(qapp):

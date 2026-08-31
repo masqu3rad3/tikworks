@@ -91,7 +91,7 @@ class StubScene:
         else:
             instance.inputs.pop(input_name, None)
         self.calls.append(("set_input", instance_id, input_name, source))
-        self.invalidate()
+        self._invalidate()
 
     def guide_nodes(self, instance_id: str) -> dict:
         instance = self._instances.get(instance_id)
@@ -103,7 +103,11 @@ class StubScene:
         }
 
     # ------------------------------------------------------------ listing
-    def invalidate(self) -> None:
+    def _invalidate(self) -> None:
+        """Internal to the double. The real GuideScene has no such method --
+        the session's document is always current -- so this is deliberately
+        not named ``invalidate``: a stub that keeps a removed method alive is
+        how a stale call site survives the test suite."""
         self._cache = None
         self._document_cache = None
 
@@ -169,7 +173,7 @@ class StubScene:
         )
         self._instances[instance.instance_id] = instance
         self.calls.append(("create_guides", instance.instance_id))
-        self.invalidate()
+        self._invalidate()
         return GuideHandle(self, instance.instance_id)
 
     def remove(self, handle: GuideHandle) -> None:
@@ -179,11 +183,11 @@ class StubScene:
     def delete_guides(self, instance_id: str) -> None:
         self._instances.pop(instance_id, None)
         self.calls.append(("delete_guides", instance_id))
-        self.invalidate()
+        self._invalidate()
 
     def clear(self) -> None:
         self._instances.clear()
-        self.invalidate()
+        self._invalidate()
 
     def duplicate(self, handle: GuideHandle, name: Optional[str] = None) -> GuideHandle:
         instance = handle.instance
@@ -192,7 +196,7 @@ class StubScene:
         copy.name = self.unique_name(copy.name, copy.side.value)
         created = copy.to_instance(guides=list(instance.guides), inputs=dict(instance.inputs))
         self._instances[created.instance_id] = created
-        self.invalidate()
+        self._invalidate()
         collapse = self.layout.get("collapse", {})
         if handle.key in collapse:
             collapse[copy.key] = collapse[handle.key]
@@ -213,7 +217,7 @@ class StubScene:
         module = handle.module_class(name=instance.name, side=target, settings=instance.settings)
         created = module.to_instance(guides=list(instance.guides), inputs=mirrored)
         self._instances[created.instance_id] = created
-        self.invalidate()
+        self._invalidate()
         return GuideHandle(self, created.instance_id)
 
     def reparent(self, handle: GuideHandle, parent) -> None:
@@ -228,7 +232,7 @@ class StubScene:
 
     def rename_instance(self, instance_id: str, name: str) -> None:
         self._instances[instance_id].name = name
-        self.invalidate()
+        self._invalidate()
 
     # ----------------------------------------------------------- settings
     def read_settings(self, instance_id: str) -> dict:
@@ -237,11 +241,11 @@ class StubScene:
     def write_settings(self, instance_id: str, settings: dict) -> None:
         self._instances[instance_id].settings = dict(settings)
         self.settings[instance_id] = dict(settings)
-        self.invalidate()
+        self._invalidate()
 
     def set_inputs(self, instance_id: str, inputs: dict) -> None:
         self._instances[instance_id].inputs = {k: v for k, v in inputs.items() if v}
-        self.invalidate()
+        self._invalidate()
 
     def settings_plug(self, instance_id: str, field_name: str) -> str:
         return f"{instance_id}.{field_name}"
@@ -286,7 +290,7 @@ class StubScene:
         }
         self._positions = dict(document.positions)
         self._collapse = dict(document.collapse)
-        self.invalidate()
+        self._invalidate()
 
     def set_layout(self, layout: dict) -> None:
         self.write_layout(layout)
@@ -459,7 +463,7 @@ class StubScene:
             )
             self._instances[instance.instance_id] = instance
             created.append(instance)
-        self.invalidate()
+        self._invalidate()
         return created
 
     def export(self, file_path, *handles):
@@ -487,7 +491,7 @@ class StubScene:
             self.clear()
             self.set_layout({})
         created = self.import_guide_instances(instances)
-        self.invalidate()
+        self._invalidate()
         if guide_file.designer:
             layout = {} if reset else self.read_layout()
             for section in ("scene_nodes", "positions", "collapse"):

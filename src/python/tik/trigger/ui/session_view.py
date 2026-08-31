@@ -94,12 +94,17 @@ class SessionView(QtWidgets.QWidget):
         """Build this session's Guide Designer on first use."""
         if self.designer is not None:
             return self.designer
+        # the session's guides, never a fresh GuideScene: an unbound one would
+        # show nothing and edit a document no session ever sees
+        scene = self.session.guides
         if self.designer_factory is not None:
-            designer = self.designer_factory()
+            designer = self.designer_factory(scene)
         else:
             from .designer import GuideDesigner
 
-            designer = GuideDesigner(events=self.events, file_browser=self.file_browser)
+            designer = GuideDesigner(
+                events=self.events, file_browser=self.file_browser, scene=scene
+            )
         self.designer = designer
         self._designer_page.layout().addWidget(designer)
         return designer

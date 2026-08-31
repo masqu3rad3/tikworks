@@ -53,3 +53,24 @@ def test_teardown_releases_the_designer(view):
     designer = view.designer
     view.teardown()
     assert designer._torn_down is True
+
+
+def test_the_designer_edits_the_sessions_guides(qapp):
+    """The Designer must not build a GuideScene of its own.
+
+    An unbound one would show nothing and edit a document no session ever sees
+    -- which is what happened, because the UI tests used to hand the double
+    straight to the Designer and so never ran the real wiring.
+    """
+    seen = {}
+
+    def factory(scene=None):
+        seen["scene"] = scene
+        return _stub_designer(scene)
+
+    session = Session()
+    view = SessionView(session, designer_factory=factory)
+    view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
+    assert seen["scene"] is session.guides
+    assert view.designer.guides is session.guides
+    view.teardown()

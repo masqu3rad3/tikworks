@@ -374,7 +374,6 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self._syncing = True
         try:
             keep = [handle.instance_id for handle in (self._multi or ([self._current] if self._current else []))]
-            self.guides.invalidate()  # one scene scan per refresh; handles share it
             handles = self.guides.instances()
             by_key = {handle.key: handle for handle in handles}
             self._clear_tree()
