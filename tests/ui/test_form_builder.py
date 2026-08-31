@@ -9,6 +9,7 @@ from tik.core.fields import (
     NodeRefField,
     Schema,
     StringField,
+    Vector2Field,
     VectorField,
 )
 from tik.shared.ui.fields import FormBuilder
@@ -25,6 +26,7 @@ class Settings(Schema):
     tags = ListField(["a", "b"])
     target = NodeRefField()
     secret = StringField("x", hidden=True)
+    span = Vector2Field((-60.0, 75.0), min=-89.0, max=89.0, labels=("Lower", "Upper"))
 
 
 def test_builds_widgets_and_reads_defaults(qapp):
@@ -129,3 +131,36 @@ def test_table_widget_resolves_choices_from_the_target():
     widget.add_row()
     combo = widget.cell_widget(0, 0)
     assert [combo.itemText(index) for index in range(combo.count())] == ["ik", "pole"]
+
+
+# ------------------------------------------------------------ vector editors
+
+
+def test_vector_editor_clamps_to_the_field_bounds(qapp):
+    form = FormBuilder(Settings())
+    editor = form.widget("span")
+    assert editor.value() == (-60.0, 75.0)
+    for spin in editor.spins:
+        assert spin.minimum() == -89.0
+        assert spin.maximum() == 89.0
+
+
+def test_vector_editor_shows_a_caption_per_component(qapp):
+    form = FormBuilder(Settings())
+    captions = [
+        widget.text()
+        for widget in form.widget("span").findChildren(QtWidgets.QLabel)
+    ]
+    assert captions == ["Lower", "Upper"]
+
+
+def test_an_unlabelled_vector_has_no_captions(qapp):
+    form = FormBuilder(Settings())
+    assert not form.widget("up").findChildren(QtWidgets.QLabel)
+
+
+def test_vector_editing_still_reaches_the_target(qapp):
+    target = Settings()
+    form = FormBuilder(target)
+    form.widget("span").spins[0].setValue(-20.0)
+    assert target.span == (-20.0, 75.0)

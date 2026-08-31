@@ -17,17 +17,34 @@ class _VectorEditor(QtWidgets.QWidget):
 
     valueChanged = QtCore.Signal(object)
 
-    def __init__(self, size: int, parent=None) -> None:
+    def __init__(
+        self, size: int, minimum=None, maximum=None, labels=None, parent=None
+    ) -> None:
         super().__init__(parent)
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         self.spins: list[QtWidgets.QDoubleSpinBox] = []
-        for _index in range(size):
+        for index in range(size):
             spin = QtWidgets.QDoubleSpinBox()
-            spin.setRange(-1e9, 1e9)
+            # The field's own bounds, so the widget cannot offer a value
+            # validate() would then reject.
+            spin.setRange(
+                float(minimum) if minimum is not None else -1e9,
+                float(maximum) if maximum is not None else 1e9,
+            )
             spin.setDecimals(3)
             spin.valueChanged.connect(lambda _value: self.valueChanged.emit(self.value()))
-            layout.addWidget(spin)
+            if labels and index < len(labels):
+                column = QtWidgets.QVBoxLayout()
+                column.setContentsMargins(0, 0, 0, 0)
+                column.setSpacing(1)
+                caption = QtWidgets.QLabel(str(labels[index]))
+                caption.setObjectName("FieldCaption")
+                column.addWidget(caption)
+                column.addWidget(spin)
+                layout.addLayout(column)
+            else:
+                layout.addWidget(spin)
             self.spins.append(spin)
 
     def value(self) -> tuple:
@@ -360,7 +377,12 @@ class FormBuilder(QtWidgets.QWidget):
                 lambda index, n=name, w=widget: self._on_change(n, w.itemData(index))
             )
         elif kind == "vector":
-            widget = _VectorEditor(getattr(field, "size", 3))
+            widget = _VectorEditor(
+                getattr(field, "size", 3),
+                minimum=field.min,
+                maximum=field.max,
+                labels=getattr(field, "labels", None),
+            )
             widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
         elif kind == "list":
             widget = QtWidgets.QLineEdit()
