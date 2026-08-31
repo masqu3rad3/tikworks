@@ -25,7 +25,7 @@ from tik.trigger.core import (
 )
 from tik.trigger.systems.limb import _derive_size, build_ikfk_limb
 from tik.trigger.systems.limb_lock import build_limb_lock
-from tik.trigger.systems.reach import build_reach
+from tik.trigger.systems.reach import ReachAxis, build_reach
 
 
 @register_module("arm")
@@ -33,7 +33,7 @@ class Arm(Module):
     """Biped arm: collar, shoulder, elbow, hand."""
 
     label = "Arm"
-    guides = GuideLayout("collar", "shoulder", "elbow", "hand")
+    guides = GuideLayout("collar", "shoulder", "elbow", "hand", "neutral")
     inputs = (Input("root", primary=True, help="Where the collar hangs (chest/body)"),)
     outputs = ("collar", "upperarm", "lowerarm", "hand")
     space_controls = ("ik", "pole")
@@ -55,26 +55,75 @@ class Arm(Module):
              "Inert until the animator raises limbLock.",
     )
     auto_collar = BoolField(True, help="Build the auto-collar network")
-    auto_collar_start = FloatField(
-        0.0, min=0.0, max=180.0, label="Auto Collar Start Angle",
-        help="Degrees below which the automation does nothing",
+    # Angles are measured from the `neutral` guide, so zero is where the
+    # clavicle changes direction. Both limits stay inside +/-89: the driver's
+    # off-plane angles saturate at 90, so a wider limit is never reached.
+    auto_collar_lift_min_angle = FloatField(
+        -60.0, min=-89.0, max=0.0, label="Lift Lower Angle",
+        help="Arm elevation below the neutral at full downward falloff.",
     )
-    auto_collar_end = FloatField(
-        90.0, min=0.0, max=180.0, label="Auto Collar End Angle",
-        help="Degrees at or above which it is fully applied",
+    auto_collar_lift_max_angle = FloatField(
+        75.0, min=0.0, max=89.0, label="Lift Upper Angle",
+        help="Arm elevation above the neutral at full upward falloff.",
+    )
+    auto_collar_lift_min_output = FloatField(
+        -6.0, min=-90.0, max=90.0, label="Lift Lower Degrees",
+        help="Collar rotation at the lower angle.",
+    )
+    auto_collar_lift_max_output = FloatField(
+        15.0, min=-90.0, max=90.0, label="Lift Upper Degrees",
+        help="Collar rotation at the upper angle.",
+    )
+    auto_collar_swing_min_angle = FloatField(
+        -45.0, min=-89.0, max=0.0, label="Swing Back Angle",
+        help="Arm azimuth behind the neutral at full backward falloff.",
+    )
+    auto_collar_swing_max_angle = FloatField(
+        60.0, min=0.0, max=89.0, label="Swing Forward Angle",
+        help="Arm azimuth ahead of the neutral at full forward falloff.",
+    )
+    auto_collar_swing_min_output = FloatField(
+        -6.0, min=-90.0, max=90.0, label="Swing Back Degrees",
+        help="Collar rotation at the back angle.",
+    )
+    auto_collar_swing_max_output = FloatField(
+        10.0, min=-90.0, max=90.0, label="Swing Forward Degrees",
+        help="Collar rotation at the forward angle.",
     )
     auto_collar_interpolation = ChoiceField(
         "smooth", choices=("linear", "smooth", "spline"),
         label="Auto Collar Interpolation",
+        help="Only 'smooth' is free of a slope discontinuity: 'linear' kinks "
+             "at the neutral and both limits, 'spline' kinks at both limits.",
     )
+
+    def _lift_axis(self) -> ReachAxis:
+        return ReachAxis(
+            min_angle=self.auto_collar_lift_min_angle,
+            max_angle=self.auto_collar_lift_max_angle,
+            min_output=self.auto_collar_lift_min_output,
+            max_output=self.auto_collar_lift_max_output,
+        )
+
+    def _swing_axis(self) -> ReachAxis:
+        return ReachAxis(
+            min_angle=self.auto_collar_swing_min_angle,
+            max_angle=self.auto_collar_swing_max_angle,
+            min_output=self.auto_collar_swing_min_output,
+            max_output=self.auto_collar_swing_max_output,
+        )
 
     def validate(self) -> list[str]:
         problems = super().validate()
-        if self.auto_collar and self.auto_collar_start >= self.auto_collar_end:
-            problems.append(
-                "auto collar start angle must be below the end angle "
-                f"({self.auto_collar_start} >= {self.auto_collar_end})"
-            )
+        if self.auto_collar:
+            for label, axis in (
+                ("lift", self._lift_axis()),
+                ("swing", self._swing_axis()),
+            ):
+                try:
+                    axis.validate(f"auto collar {label}")
+                except ValueError as error:
+                    problems.append(str(error))
         return problems
 
     # --------------------------------------------------------------- guides
@@ -84,6 +133,11 @@ class Arm(Module):
         shoulder = guides.joint("shoulder", (5 * mult, 0, 0), parent=collar)
         elbow = guides.joint("elbow", (9 * mult, 0, -1), parent=shoulder)
         guides.joint("hand", (14 * mult, 0, 0), parent=elbow)
+        # Where the wrist sits when the collar is at rest -- the auto-collar's
+        # zero. Only the direction from `collar` matters, so sitting past the
+        # hand costs nothing and keeps the guide selectable. The default guide
+        # arm is already a T-pose, so the default neutral is the T-pose.
+        guides.joint("neutral", (18 * mult, 0, 0), parent=collar, radius=0.8)
 
     # ---------------------------------------------------------------- build
     def build(self, rig) -> None:
@@ -146,22 +200,25 @@ class Arm(Module):
             labels=("upper", "lower", "hand"),
         )
         if self.auto_collar:
-            auto_grp = rig.group("collar", "auto", under=collar_ctrl.offset)
-            auto_grp.snap_to(collar_ctrl.transform)
-            # Relative, so set_parent writes no compensation into the channels.
-            collar_ctrl.transform.set_parent(auto_grp, relative=True)
-            build_reach(
+            reach = build_reach(
                 rig,
-                auto_grp,
+                collar_ctrl.offset,
+                collar_ctrl.transform,
                 hang_from,
+                tuple(rig.guide("neutral").world_position),
                 limb.ik_tweak.transform,
                 limb.ik_control.transform,
+                lift=self._lift_axis(),
+                swing=self._swing_axis(),
+                fk_controls=limb.fk_controls,
+                switch_plug=limb.switch_plug,
                 prefix="autoCollar",
-                start_angle=self.auto_collar_start,
-                end_angle=self.auto_collar_end,
                 interpolation=self.auto_collar_interpolation,
                 name="collar",
             )
+            # Relative, so set_parent writes no compensation into the channels:
+            # `align` already carries the collar's own orientation.
+            collar_ctrl.transform.set_parent(reach.align, relative=True)
 
         if self.limb_lock:
             # Built last because it needs the limb's IK tweak; lock_root still

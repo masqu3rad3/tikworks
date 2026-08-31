@@ -70,7 +70,11 @@ def test_has_only_the_behaviour_fields():
     assert names == {
         "stretch", "squash", "pole_pin", "anim_spaces",
         "limb_lock", "lock_from",
-        "auto_collar", "auto_collar_start", "auto_collar_end",
+        "auto_collar",
+        "auto_collar_lift_min_angle", "auto_collar_lift_max_angle",
+        "auto_collar_lift_min_output", "auto_collar_lift_max_output",
+        "auto_collar_swing_min_angle", "auto_collar_swing_max_angle",
+        "auto_collar_swing_min_output", "auto_collar_swing_max_output",
         "auto_collar_interpolation",
     }
 
@@ -238,32 +242,63 @@ def _collar_control(ctx):
 
 def test_auto_collar_defaults_to_off(scene):
     control = _ik_control(_arm_ctx(scene))
-    assert control.has_attr("autoCollar")
-    assert abs(control["autoCollar"].value) < 1e-6
+    assert control.has_attr("autoCollarLift")
+    assert control.has_attr("autoCollarSwing")
+    assert abs(control["autoCollarLift"].value) < 1e-6
+    assert abs(control["autoCollarSwing"].value) < 1e-6
+
+
+def test_the_old_auto_collar_attributes_are_gone(scene):
+    """One dial per axis, scaling the output. No master, no input-side scale."""
+    control = _ik_control(_arm_ctx(scene))
+    assert not control.has_attr("autoCollar")
+    assert not control.has_attr("autoCollarVertical")
+    assert not control.has_attr("autoCollarHorizontal")
 
 
 def test_auto_collar_fields_exist():
     names = set(get_module("arm").fields())
-    assert {"auto_collar", "auto_collar_start", "auto_collar_end",
+    assert {"auto_collar", "auto_collar_lift_min_angle",
+            "auto_collar_lift_max_output", "auto_collar_swing_max_angle",
             "auto_collar_interpolation"} <= names
 
 
 def test_auto_collar_can_be_switched_off(scene):
     control = _ik_control(_arm_ctx(scene, auto_collar=False))
-    assert not control.has_attr("autoCollar")
+    assert not control.has_attr("autoCollarLift")
 
 
-def test_auto_collar_on_adds_the_multipliers(scene):
-    control = _ik_control(_arm_ctx(scene))
-    assert abs(control["autoCollarVertical"].value - 0.5) < 1e-6
-    assert abs(control["autoCollarHorizontal"].value - 0.5) < 1e-6
+def test_the_arm_declares_a_neutral_guide():
+    assert "neutral" in get_module("arm").guides.roles
 
 
-def test_validate_rejects_a_degenerate_angle_range():
+def test_validate_rejects_a_neutral_on_the_boundary():
+    """The neutral must sit *strictly* inside each axis's input range.
+
+    The field bounds keep the sign right, but zero is assignable and still
+    degenerate: the middle ramp point would collide with an endpoint.
+    """
     module = get_module("arm")(name="arm")
-    module.auto_collar_start = 90.0
-    module.auto_collar_end = 30.0
-    assert any("angle" in problem for problem in module.validate())
+    module.auto_collar_lift_min_angle = 0.0
+    assert any("lift" in problem for problem in module.validate())
+    module.auto_collar_lift_min_angle = -60.0
+    module.auto_collar_swing_max_angle = 0.0
+    assert any("swing" in problem for problem in module.validate())
+
+
+def test_the_angle_fields_cannot_reach_the_drivers_ceiling():
+    """Off-plane angles saturate at +/-90, so a wider limit never completes.
+
+    The field bounds are the rigger-facing half of that guard; ReachAxis
+    validates the same thing for anything set programmatically.
+    """
+    fields = get_module("arm").fields()
+    for name in (
+        "auto_collar_lift_min_angle", "auto_collar_lift_max_angle",
+        "auto_collar_swing_min_angle", "auto_collar_swing_max_angle",
+    ):
+        field = fields[name]
+        assert abs(field.min) < 90.0 and abs(field.max) < 90.0, name
 
 
 def test_auto_collar_off_is_inert(scene):
@@ -282,7 +317,7 @@ def test_auto_collar_on_follows_the_hand(scene):
     ctx = _arm_ctx(scene)
     collar = _collar_control(ctx)
     control = _ik_control(ctx)
-    control["autoCollar"].value = 1.0
+    control["autoCollarLift"].value = 1.0
     before = tuple(collar.world_axis("x"))
     control.translate = (0, 20, 0)
     after = tuple(collar.world_axis("x"))
@@ -294,7 +329,8 @@ def test_wrist_roll_does_not_spin_the_collar(scene):
     ctx = _arm_ctx(scene)
     collar = _collar_control(ctx)
     control = _ik_control(ctx)
-    control["autoCollar"].value = 1.0
+    control["autoCollarLift"].value = 1.0
+    control["autoCollarSwing"].value = 1.0
     before = list(collar["worldMatrix[0]"].value)
     control.rotate = (90, 0, 0)
     after = list(collar["worldMatrix[0]"].value)
@@ -304,9 +340,52 @@ def test_wrist_roll_does_not_spin_the_collar(scene):
 
 def test_auto_collar_does_not_cycle(scene):
     ctx = _arm_ctx(scene)
-    _ik_control(ctx)["autoCollar"].value = 1.0
+    control = _ik_control(ctx)
+    control["autoCollarLift"].value = 1.0
+    control["autoCollarSwing"].value = 1.0
     cmds.dgdirty(allPlugs=True)
     assert not (cmds.cycleCheck(all=True) or [])
+
+
+def test_bind_pose_is_exact_with_the_automation_full_on(scene):
+    """The regression test for the rest-direction bug: the old code fails it.
+
+    The animator's scalars multiply the remap output, so no scalar value can
+    move the neutral -- and at the guide pose the arm IS on the neutral.
+    """
+    ctx = _arm_ctx(scene)
+    collar = _collar_control(ctx)
+    control = _ik_control(ctx)
+    before = list(collar["worldMatrix[0]"].value)
+    control["autoCollarLift"].value = 1.0
+    control["autoCollarSwing"].value = 1.0
+    after = list(collar["worldMatrix[0]"].value)
+    for first, second in zip(before, after):
+        assert abs(first - second) < 1e-4
+
+
+def test_raising_the_arm_never_dips_the_collar(scene):
+    """The original complaint, as a test.
+
+    The old mechanism blended the collar toward pointing at the hand, so from
+    an A-pose any weight above zero rotated it down, and the dip deepened as
+    the arm rose.
+    """
+    ctx = _arm_ctx(scene)
+    collar = _collar_control(ctx)
+    control = _ik_control(ctx)
+    control["autoCollarLift"].value = 1.0
+    # The automation drives a parent group, so the control's own channels stay
+    # zero -- how far the collar's own X has tilted up is the honest measure.
+    heights = []
+    for height in range(0, 15):
+        control.translate = (0.0, float(height), 0.0)
+        heights.append(collar.world_axis("x")[1])
+    rest = heights[0]  # zero offset is the bind pose, which is the neutral
+    readings = [value - rest for value in heights]
+    assert min(readings) > -1e-4, f"collar dipped: {readings}"
+    assert all(b >= a - 1e-6 for a, b in zip(readings, readings[1:])), readings
+    assert max(readings) > 0.05, readings
 
 
 # --------------------------------------------------------------- final sweep
