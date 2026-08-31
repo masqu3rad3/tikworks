@@ -1,7 +1,8 @@
 # The Session Owns the Guides — Design Spec
 
 Date: 2026-08-31
-Status: brainstormed with Arda Kutlu; awaiting spec review.
+Status: implemented (2026-08-31), plan in
+`docs/superpowers/plans/2026-08-31-session-owns-the-guides.md`.
 
 Revises `2026-08-31-guide-ownership-and-lockstep-design.md` §3.2, §3.3 and §6.3:
 the guide document moves out of the Maya scene and into the session. Everything

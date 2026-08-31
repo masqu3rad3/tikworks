@@ -274,3 +274,35 @@ def test_keeping_the_guides_does_not_dismiss_them(scene):
     Builder().build(document=scene.document, rig_name="afterlife", afterlife="keep")
     assert scene.dismissed is False
     assert scene.guide_nodes(handle.instance_id)
+
+
+def test_a_new_scene_leaves_the_modules_and_redraws_them(scene):
+    """The reported failure: New Scene emptied the Designer."""
+    handle = scene.add("fkchain", side="C", name="tail", segments=2)
+    root = scene.guide_nodes(handle.instance_id)[("root", 0)]
+    cmds.xform(root.long_name, worldSpace=True, translation=(2.0, 3.0, 4.0))
+    scene.sync()
+
+    cmds.file(new=True, force=True)
+
+    assert scene.get(handle.instance_id).name == "tail"   # never left
+    scene.sync()
+    restored = scene.guide_nodes(handle.instance_id)[("root", 0)]
+    placed = cmds.xform(restored.long_name, query=True, worldSpace=True, translation=True)
+    assert placed == pytest.approx([2.0, 3.0, 4.0])
+
+
+def test_deleting_scene_groups_cannot_destroy_a_module(scene):
+    """Nothing in the scene is authority, so nothing in it can take a module."""
+    handle = scene.add("fkchain", side="C", name="tail", segments=1)
+    for group in ("trigger_guides_grp", "trigger_modules_grp"):
+        if cmds.objExists(group):
+            cmds.delete(group)
+    assert scene.get(handle.instance_id).name == "tail"
+    scene.sync()
+    assert scene.guide_nodes(handle.instance_id)
+
+
+def test_the_scene_holds_no_module_nodes_at_all(scene):
+    scene.add("fkchain", side="C", name="tail", segments=1)
+    assert not cmds.objExists("trigger_modules_grp")

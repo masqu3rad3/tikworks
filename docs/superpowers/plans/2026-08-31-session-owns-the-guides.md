@@ -1,5 +1,7 @@
 # The Session Owns the Guides Implementation Plan
 
+**Status: complete** (2026-08-31). All 7 tasks landed; unit 1112, integration 196, UI 97 passing.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Move the guide document out of the Maya scene and into the session, so scene operations — deleting a group, File > New Scene — can no longer destroy the rig description.
@@ -35,7 +37,7 @@
 - `to_dict()` emits `self.guides.to_dict()`; `from_dict()` builds `GuideDocument.from_dict(...)`.
 - `is_modified` and the undo stack need no change — both go through `Document.to_dict()`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Replace the three guide tests added earlier in `tests/unit/test_document_trigger.py` with:
 
@@ -75,9 +77,9 @@ def test_editing_guides_shows_up_in_the_documents_state():
     assert document.to_dict() != before
 ```
 
-- [ ] **Step 2: Run it, expect `AttributeError: 'dict' object has no attribute 'modules'`.**
+- [x] **Step 2: Run it, expect `AttributeError: 'dict' object has no attribute 'modules'`.**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `core/document.py`:
 
@@ -94,11 +96,11 @@ from .guide_document import GuideDocument
 `to_dict`: `"guides": self.guides.to_dict(),`
 `from_dict`: `guides=GuideDocument.from_dict(data.get("guides") or {}),`
 
-- [ ] **Step 4: Run the test file and `test_import_boundaries.py`.** Both pass.
+- [x] **Step 4: Run the test file and `test_import_boundaries.py`.** Both pass.
 
-- [ ] **Step 5: Run the unit suite.** Anything reading `document.guides` as a dict fails here — fix those call sites to the object API.
+- [x] **Step 5: Run the unit suite.** Anything reading `document.guides` as a dict fails here — fix those call sites to the object API.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/python/tik/trigger/core/document.py tests/unit/test_document_trigger.py
@@ -119,7 +121,7 @@ git commit -m "feat(tik.trigger): the session document holds a live GuideDocumen
 - `capture_guides()` / `checkout_guides()` keep their names and meaning; both now work against `self.document.guides`.
 - The empty-scene guard in `capture_guides` is **deleted** — capture can no longer remove a module, so there is nothing to guard.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_a_session_hands_out_a_guide_scene_bound_to_itself():
@@ -162,9 +164,9 @@ def test_capture_against_an_empty_scene_leaves_the_modules_alone():
     assert [entry.name for entry in session.document.guides.modules] == ["tail"]
 ```
 
-- [ ] **Step 2: Run it, expect `AttributeError: 'Session' object has no attribute 'guides'`.**
+- [x] **Step 2: Run it, expect `AttributeError: 'Session' object has no attribute 'guides'`.**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Rename `_touch` to `touch` (keep `_touch = touch` if any caller remains), and add:
 
@@ -181,9 +183,9 @@ Rename `_touch` to `touch` (keep `_touch = touch` if any caller remains), and ad
 
 with `self._guides = None` in `__init__`. `capture_guides` drops its empty-scene guard and its `document_store.write_document` call; `checkout_guides` drops `write_document` and simply clears and regenerates.
 
-- [ ] **Step 4: Run the test file.** Some tests need Task 3 to pass; note which and move on.
+- [x] **Step 4: Run the test file.** Some tests need Task 3 to pass; note which and move on.
 
-- [ ] **Step 5: Commit** (may be red until Task 3 — commit together if so).
+- [x] **Step 5: Commit** (may be red until Task 3 — commit together if so).
 
 ---
 
@@ -205,7 +207,7 @@ The core of the change, and the biggest single edit.
 - `document_store` keeps only `read_stamp`, `write_stamp`, `read_dismissed`, `write_dismissed`.
 - `nodes.find_instances(scope="scene", document=None)` — the document is passed in.
 
-- [ ] **Step 1: Rewrite `GuideScene`'s document half**
+- [x] **Step 1: Rewrite `GuideScene`'s document half**
 
 ```python
     def __init__(self, events=None, session=None) -> None:
@@ -227,9 +229,9 @@ The core of the change, and the biggest single edit.
 
 Every write method (`create_guides`, `rename_instance`, `set_inputs`, `set_input`, `write_settings`, `remove`, `clear`, `write_layout`, the scene-group methods, `mirror`, `duplicate`, `import_`) replaces its `self._write(entry)` / `self.commit()` calls with `self._touch()`, keeping the `regenerate(...)` that follows.
 
-- [ ] **Step 2: Strip `document_store`** to the four label functions. Delete `module_node.py` and the two test files above.
+- [x] **Step 2: Strip `document_store`** to the four label functions. Delete `module_node.py` and the two test files above.
 
-- [ ] **Step 3: Hand the document to `find_instances`**
+- [x] **Step 3: Hand the document to `find_instances`**
 
 ```python
 def find_instances(scope="scene", document=None) -> list[ModuleInstance]:
@@ -237,12 +239,12 @@ def find_instances(scope="scene", document=None) -> list[ModuleInstance]:
 
 replacing the internal `read_document()` with the argument; callers that have no document pass `None` and get identity plus poses only.
 
-- [ ] **Step 4: Run the guide suites**
+- [x] **Step 4: Run the guide suites**
 
 `test_guides_trigger.py`, `test_guide_scene_trigger.py`, `test_connections_trigger.py`, `test_guides_reparent_trigger.py`, `test_snapshot_trigger.py`, `test_capture_trigger.py`, `test_regenerate_trigger.py`.
 Expect failures where a test constructs `GuideScene()` and expects scene persistence across instances — those now need one scene, or a session.
 
-- [ ] **Step 5: Commit with Task 2**
+- [x] **Step 5: Commit with Task 2**
 
 ```bash
 git add -A src/python/tik/trigger/guides src/python/tik/trigger/session.py tests/unit
@@ -259,7 +261,7 @@ git commit -m "refactor(tik.trigger): the session owns the guide document"
 - Modify: `src/python/tik/trigger/guides/scene.py` (`test_build`)
 - Test: `tests/integration/trigger/test_session_guides_build_trigger.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_the_builder_needs_no_document_in_the_scene(tmp_path):
@@ -272,13 +274,13 @@ def test_the_builder_needs_no_document_in_the_scene(tmp_path):
     assert not cmds.objExists("trigger_modules_grp")
 ```
 
-- [ ] **Step 2: Run it, expect the module holder to still exist (or the build to find nothing).**
+- [x] **Step 2: Run it, expect the module holder to still exist (or the build to find nothing).**
 
-- [ ] **Step 3: Implement.** `Builder.build(..., document=None)` forwards it to `find_instances`; `GuideScene.test_build` passes `self.document`; kinematics passes `ctx.session.document.guides` and drops its `document_store.write_document` call, keeping the clear + `regenerate_all`.
+- [x] **Step 3: Implement.** `Builder.build(..., document=None)` forwards it to `find_instances`; `GuideScene.test_build` passes `self.document`; kinematics passes `ctx.session.document.guides` and drops its `document_store.write_document` call, keeping the clear + `regenerate_all`.
 
-- [ ] **Step 4: Run the integration suite.**
+- [x] **Step 4: Run the integration suite.**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -am "refactor(tik.trigger): the Builder is handed the guide document"
@@ -292,11 +294,11 @@ git commit -am "refactor(tik.trigger): the Builder is handed the guide document"
 - Modify: `src/python/tik/trigger/ui/designer/window.py`, `properties.py`
 - Modify: `tests/ui/test_guide_designer.py`
 
-- [ ] **Step 1: Delete** `self.inherit_orientation` and its layout row, `_on_inherit_toggled`, the `useRefOri` binding in `_bind_properties`, the `useRefOri` block in `_set_current`, and every mention in the visibility tuples.
-- [ ] **Step 2: Delete** `_bind_properties`'s settings loop and `_plug_adapter` — with no `settings_plug` there is nothing to bind. The panel already writes through `write_settings`.
-- [ ] **Step 3: Delete** `test_multi_inherit_orientation_and_duplicate`, keeping any duplicate assertions it carried by moving them into a new test.
-- [ ] **Step 4: Run the UI suite.**
-- [ ] **Step 5: Commit**
+- [x] **Step 1: Delete** `self.inherit_orientation` and its layout row, `_on_inherit_toggled`, the `useRefOri` binding in `_bind_properties`, the `useRefOri` block in `_set_current`, and every mention in the visibility tuples.
+- [x] **Step 2: Delete** `_bind_properties`'s settings loop and `_plug_adapter` — with no `settings_plug` there is nothing to bind. The panel already writes through `write_settings`.
+- [x] **Step 3: Delete** `test_multi_inherit_orientation_and_duplicate`, keeping any duplicate assertions it carried by moving them into a new test.
+- [x] **Step 4: Run the UI suite.**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -am "refactor(tik.trigger): drop useRefOri and the settings plug binding"
@@ -310,7 +312,7 @@ git commit -am "refactor(tik.trigger): drop useRefOri and the settings plug bind
 - Modify: `src/python/tik/trigger/ui/main.py`
 - Test: `tests/ui/test_menus.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Replace `test_undo_on_the_designer_tab_goes_to_maya` with:
 
@@ -330,10 +332,10 @@ def test_undo_on_the_designer_tab_undoes_trigger_actions(window, monkeypatch):
     assert hits == ["session"]
 ```
 
-- [ ] **Step 2: Run it, expect `hits == []` (it calls Maya).**
-- [ ] **Step 3: Implement.** Delete the `_designer is not None` branch from `TriggerWindow.undo` and `_maya_undo`; undo is the session's on both tabs.
-- [ ] **Step 4: Run the UI suite.**
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run it, expect `hits == []` (it calls Maya).**
+- [x] **Step 3: Implement.** Delete the `_designer is not None` branch from `TriggerWindow.undo` and `_maya_undo`; undo is the session's on both tabs.
+- [x] **Step 4: Run the UI suite.**
+- [x] **Step 5: Commit**
 
 ```bash
 git commit -am "feat(tik.trigger): Ctrl+Z undoes Trigger actions on the Designer tab"
@@ -346,7 +348,7 @@ git commit -am "feat(tik.trigger): Ctrl+Z undoes Trigger actions on the Designer
 **Files:**
 - Test: `tests/integration/trigger/test_lockstep_trigger.py`
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 ```python
 def test_a_new_scene_leaves_the_modules_and_redraws_them(scene):
@@ -366,9 +368,9 @@ def test_a_new_scene_leaves_the_modules_and_redraws_them(scene):
 The `scene` fixture must become session-bound for this to mean anything:
 `Session().guides` rather than a bare `GuideScene()`.
 
-- [ ] **Step 2: Run it.** It may already pass once Task 3 lands — that is the point of writing it.
-- [ ] **Step 3: Run every suite.**
-- [ ] **Step 4: Commit**
+- [x] **Step 2: Run it.** It may already pass once Task 3 lands — that is the point of writing it.
+- [x] **Step 3: Run every suite.**
+- [x] **Step 4: Commit**
 
 ```bash
 git commit -am "test(tik.trigger): New Scene leaves the modules and redraws them"
