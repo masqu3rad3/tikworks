@@ -1,7 +1,9 @@
 # Twist, Ribbon and Limb Lock — Design Spec
 
 Date: 2026-08-31
-Status: brainstormed with Arda Kutlu; awaiting spec review.
+Status: implemented. Revised 2026-08-31 after testing on a real arm --
+see the "Corrections after implementation" section at the end for the three
+things this spec originally got wrong.
 Builds on `2026-08-30-trigger-simplification-design.md` (the `rig` object and
 layering), `2026-08-30-arm-module-and-module-ground-rules-design.md` (module
 ground rules) and `2026-08-29-pure-math-ribbon-design.md` (the `Ribbon`
@@ -490,3 +492,79 @@ pure; the new systems and modules live outside it and may use tik.maya.
 7. `Arm` wiring (`limb_lock`, `lock_target`, `output_names`) + integration test.
 
 Steps 1–3 and 4–5 are independent of 6–7 and may proceed in parallel.
+
+
+## 7. Corrections after implementation
+
+Three parts of this spec were wrong and were corrected against a built rig.
+They are recorded here because each was a plausible-looking design that a
+future reader might otherwise re-derive.
+
+### 7.1 The quatSlerp half-angle trick does not work (section 2.1)
+
+Already corrected in place. Matrix-derived twist is bounded to +/-180 by the
+representation, not by the wiring.
+
+### 7.2 Limb lock was invisible, and not inert when off
+
+**Swallowed by auto-collar.** `build_reach` drives the auto-collar group with
+a world-space matrix derived from its `rest_from`. That group sits *between*
+`collar_offset` and `collar_ctrl`, so it re-pinned the controller in world
+space and discarded the push entirely. With `auto_collar` defaulting to on,
+the lock appeared to do nothing at all.
+
+The arm now creates one buffer immediately after the socket, hangs the collar
+controller off it, and passes that same buffer to `build_reach` as
+`rest_from`, so the automation composes with the lock instead of overriding
+it.
+
+**Not inert at `limbLock = 0`.** Driving the target through
+`MatrixConstraint(blend.output, target, maintain_offset=True)` re-expresses
+the captured offset in the aim frame's basis, and that frame swings as the
+hand moves -- so the collar drifted with the lock fully off. The push is now
+applied as an explicit translation delta (`push - anchor`, in rig-root space)
+added onto `socket.translate`. Never route this through a rotating frame's
+matrix.
+
+**`lock_target` is gone.** The lock has exactly one sensible destination. The
+output mode was speculation about a body module that does not exist.
+
+**The tests that were missing.** The original suite asserted the lock does
+*nothing* when it should do nothing, and never asserted it does *something*
+when it should. Three tests now cover the shoulder moving, the shoulder-to-hand
+distance holding at `lockLength` across poses, and inertness at zero.
+
+### 7.3 Twist joints drifted off the segment
+
+Section 2.3 said position comes from the guide's projection and the joint is
+created with `match=guide_node`. Both were wrong.
+
+The bind chain is aligned to the *guides*, not aimed down the bone -- on a
+default arm the lowerarm's local X is only 0.98 aligned with the direction to
+the hand, and the hand's local translate is `(5, 0, 1)`. A joint parented to
+it with a plain local X offset therefore leaves the segment. `twist_dump.py`
+avoided this by zeroing rotation and joint orient after parenting, which this
+spec failed to carry over.
+
+Joints now ride an explicit `AimFrame` at the base, aimed at the end, up
+vector from the base. Per joint, a slot rides the frame at
+`distance * position`; its matrix relative to the bind parent is decomposed
+onto the joint's translate and swing, and the roll is added as a float
+afterwards so a channel-sourced twist stays unbounded.
+
+**Guides became the rig.** Instead of projecting a freely-placed guide,
+`position` is an authored guide attribute alongside `twistWeight`, and the
+twist guide's transform channels are railed off the end guide and locked. The
+guide is a handle on two numbers; base and end stay free to snap onto the
+segment they span.
+
+This needed a new `Module.wire_guides(guides)` hook, called on creation *and*
+after import, because a guide rig built only in `draw_guides` is lost on a
+`.trg` round trip -- the objection that killed the rail in section 2.4 the
+first time. The authored numbers persist as `guide_attrs`; `wire_guides`
+rebuilds the connections over them.
+
+**Sockets carry a build-time offset.** Inputs are connected with
+`maintain_offset=True`, so a base or end guide left at the module default
+bakes that offset in permanently. Snapping base and end onto the segment they
+span is the authored workflow, not a nicety.
