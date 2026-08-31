@@ -586,6 +586,13 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
     def _on_scene_event(self, name: str) -> None:
         if name == "SelectionChanged":
             return  # selection is not synced; structure changes are
+        # Muted throughout: sync() deletes and recreates joints, which fires the
+        # removal callback that brought us here and would re-enter.
+        with self.watcher.mute():
+            try:
+                self.guides.sync()
+            except Exception as error:  # noqa: BLE001 - keep the tool alive
+                self.events.log(f"Guide sync failed: {error}", level="warning")
         self.refresh()
 
     # ---------------------------------------------------------- properties

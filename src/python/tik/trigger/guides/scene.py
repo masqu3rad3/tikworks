@@ -26,6 +26,7 @@ from .capture import capture
 from .format import GuideFile, GuideInstance, make_record
 from .handle import GuideHandle, mirror_source
 from .nodes import INPUTS
+from . import regenerate as regenerate_module
 from .regenerate import regenerate, regenerate_all
 from .snapshot import snapshot
 
@@ -73,6 +74,44 @@ class GuideScene:
     def _primary_input_name(self, entry) -> Optional[str]:
         primary = registry.get_module(entry.module_type).primary_input()
         return primary.name if primary else None
+
+    def sync(self, regenerate_stale: bool = True):
+        """Capture, reconcile, and redraw whatever is structurally stale.
+
+        The order is the point (spec 5): capture runs first, so pose drift is
+        absorbed *before* reconcile sees it and can never be mistaken for a
+        reason to redraw a guide the rigger has just dragged.
+
+        Args:
+            regenerate_stale: False computes and reports without touching the
+                scene -- the checkpointed policy.
+
+        Returns:
+            The :class:`~tik.trigger.core.reconcile.GuideDiff` it acted on.
+        """
+        from tik.trigger.core.reconcile import GuideDiff
+
+        if self._syncing:
+            return GuideDiff()
+        self._syncing = True
+        try:
+            self.reload()
+            rendered = snapshot()
+            if capture(self.document, rendered):
+                for entry in self.document.modules:
+                    self._write(entry)
+            diff = self.diff()
+            if regenerate_stale and diff.structural:
+                with nodes.undo_chunk("Trigger lockstep redraw"):
+                    stale = [
+                        entry for entry in regenerate_module.ordered(self.document)
+                        if entry.instance_id in set(diff.structural)
+                    ]
+                    for entry in stale:
+                        regenerate(entry, self.document)
+            return diff
+        finally:
+            self._syncing = False
 
     def diff(self):
         """Reconcile the document against what the scene renders."""
