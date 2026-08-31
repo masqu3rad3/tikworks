@@ -149,7 +149,7 @@ This is the one interface outside the guide layer that this design changes.
 One route for every guide edit:
 
 1. mutate `session.document.guides`
-2. `session._touch()` — the undo push
+2. `session.touch()` — the undo push
 3. regenerate the affected module
 
 No commit step, no cache to invalidate, no second store to keep in step.
