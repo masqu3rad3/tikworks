@@ -206,3 +206,16 @@ def test_connections_survive_a_rename_in_maya(scene):
     cmds.rename(parent.root.long_name, "renamed_by_hand")
     scene.reload()
     assert scene.get(child.instance_id).inputs["root"] == f"{parent.key}.root"
+
+
+def test_maya_duplicating_a_module_reports_duplicates_instead_of_merging(scene):
+    """Duplicating a guide hierarchy copies trg_instance; that must not merge."""
+    handle = scene.add("fkchain", side="C", name="tail", segments=2)
+    root = scene.guide_nodes(handle.instance_id)[("root", 0)]
+    cmds.duplicate(root.long_name, renameChildren=True)
+    diff = scene.sync()
+    assert diff.duplicates, "the copied joints should be reported"
+    # the original module is untouched: not rebuilt, not merged, not malformed
+    assert diff.modules[handle.instance_id].needs_regenerate is False
+    assert scene.get(handle.instance_id).name == "tail"
+    assert len(scene.document.modules) == 1

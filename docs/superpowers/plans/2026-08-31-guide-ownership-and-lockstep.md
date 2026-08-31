@@ -1,5 +1,7 @@
 # Guide Ownership and Lockstep Implementation Plan
 
+**Status: complete** (2026-08-31). All 13 tasks landed; unit 1107, integration 172, UI 71 passing.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give every guide fact exactly one durable home in a uuid-keyed guide document, make guide joints a rebuildable rendering of it, and keep scene and document in lockstep so deleting a joint in Maya can never destroy a module.
@@ -47,7 +49,7 @@ The durable home for every guide fact. Pure data — no Maya, no registry lookup
   - `SCHEMA_VERSION = 1`
 - Note for later tasks: a connection source is `"<instance_id>.<output>"` for a module, or a bare Maya node name for a scene node. `core.schemas.split_source` still splits it correctly — Maya node names cannot contain `.`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/test_guide_document_trigger.py`:
 
@@ -170,12 +172,12 @@ def test_expand_guides_keeps_fixed_roles():
     assert entry.guide("collar").position == (1.0, 0.0, 0.0)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_guide_document_trigger.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'tik.trigger.core.guide_document'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/python/tik/trigger/core/guide_document.py`:
 
@@ -410,17 +412,17 @@ def expand_guides(entry: ModuleEntry, layout, count: int) -> None:
     ]
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_guide_document_trigger.py -q`
 Expected: PASS (9 tests)
 
-- [ ] **Step 5: Verify the layering rule still holds**
+- [x] **Step 5: Verify the layering rule still holds**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_import_boundaries.py -q`
 Expected: PASS — `guide_document.py` imports only `dataclasses` and `typing`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/python/tik/trigger/core/guide_document.py tests/unit/test_guide_document_trigger.py
@@ -451,7 +453,7 @@ Pure and registry-free: the document already records which guides a module shoul
 - `rendered` is a flat `list[RenderedGuide]` — the Maya side builds it in Task 7; nothing here touches Maya.
 - `RenderedGuide.parent` is `(instance_id, role, index)` of the DAG parent guide, or `None` for a guide parented to the holder. For a module's **root** guide this is the *inter-module* parent, and reconcile compares it against the module's primary input; for non-root guides it is the intra-module parent from the record.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/test_reconcile_trigger.py`:
 
@@ -602,12 +604,12 @@ def test_empty_document_and_empty_scene_is_clean():
     assert reconcile(GuideDocument(), []).is_clean
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_reconcile_trigger.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'tik.trigger.core.reconcile'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/python/tik/trigger/core/reconcile.py`:
 
@@ -803,17 +805,17 @@ def reconcile(
     return diff
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_reconcile_trigger.py -q`
 Expected: PASS (13 tests)
 
-- [ ] **Step 5: Verify the layering rule still holds**
+- [x] **Step 5: Verify the layering rule still holds**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_import_boundaries.py -q`
 Expected: PASS
 
-- [ ] **Step 6: Export both new modules from the core package**
+- [x] **Step 6: Export both new modules from the core package**
 
 Modify `src/python/tik/trigger/core/__init__.py` — add to the imports and `__all__`:
 
@@ -830,12 +832,12 @@ from .reconcile import GuideDiff, ModuleDiff, RenderedGuide, reconcile
 
 and add `"GuideDocument"`, `"GuideRecord"`, `"ModuleEntry"`, `"SceneGroup"`, `"expand_guides"`, `"GuideDiff"`, `"ModuleDiff"`, `"RenderedGuide"`, `"reconcile"` to `__all__`.
 
-- [ ] **Step 7: Run the whole unit suite**
+- [x] **Step 7: Run the whole unit suite**
 
 Run: `make tests-unit`
 Expected: PASS — no existing test touched.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/python/tik/trigger/core/reconcile.py tests/unit/test_reconcile_trigger.py src/python/tik/trigger/core/__init__.py
@@ -870,7 +872,7 @@ The scene-side home for a `ModuleEntry`: one node per module instance, carrying 
   - `settings_plug(instance_id, field_name)` — plug for two-way binding
 - New tags in `maya/tags.py`: `MODULE_NODE = "trg_module_node"` (kind value `"module_node"`), `ENTRY = "trg_entry"` (the serialized `ModuleEntry` dict minus the scalar settings mirrored as attributes).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/test_module_node_trigger.py`:
 
@@ -963,12 +965,12 @@ def test_find_all_returns_every_module_node():
     assert len(module_node.find_all()) == 3
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_module_node_trigger.py -q`
 Expected: FAIL — `ImportError: cannot import name 'module_node'`
 
-- [ ] **Step 3: Add the new tags**
+- [x] **Step 3: Add the new tags**
 
 Modify `src/python/tik/trigger/maya/tags.py` — add after `DESIGNER`:
 
@@ -978,7 +980,7 @@ ENTRY = "trg_entry"  # serialized ModuleEntry (module document node only)
 DOCUMENT = "trg_document"  # scene_groups / positions / collapse (holder only)
 ```
 
-- [ ] **Step 4: Write the implementation**
+- [x] **Step 4: Write the implementation**
 
 Create `src/python/tik/trigger/guides/module_node.py`:
 
@@ -1108,16 +1110,16 @@ def _sync_setting_attrs(node, module) -> None:
             node[name].value = value
 ```
 
-- [ ] **Step 5: Export it from the guides package**
+- [x] **Step 5: Export it from the guides package**
 
 Modify `src/python/tik/trigger/guides/__init__.py` — add `from . import module_node` and include `"module_node"` in `__all__`.
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_module_node_trigger.py -q`
 Expected: PASS (6 tests)
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/module_node.py src/python/tik/trigger/maya/tags.py src/python/tik/trigger/guides/__init__.py tests/unit/test_module_node_trigger.py
@@ -1143,7 +1145,7 @@ Assemble a `GuideDocument` from the module nodes plus the holder's document meta
   - `write_entry(entry, module=None) -> None`
   - `remove_entry(instance_id) -> None`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/test_document_store_trigger.py`:
 
@@ -1222,12 +1224,12 @@ def test_single_entry_write_and_read():
     assert document_store.read_entry("id1") is None
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_document_store_trigger.py -q`
 Expected: FAIL — `ImportError: cannot import name 'document_store'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/python/tik/trigger/guides/document_store.py`:
 
@@ -1316,12 +1318,12 @@ def remove_entry(instance_id: str) -> None:
     module_node.remove(instance_id)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_document_store_trigger.py -q`
 Expected: PASS (4 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/document_store.py tests/unit/test_document_store_trigger.py
@@ -1342,7 +1344,7 @@ The Maya half of reconcile's input. Scans guide joints and produces the pure `Re
 - Consumes: `RenderedGuide` (Task 2); `nodes` (existing); `tags`.
 - Produces: `snapshot() -> list[RenderedGuide]`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/test_snapshot_trigger.py`:
 
@@ -1407,12 +1409,12 @@ def test_untagged_joints_are_ignored():
     assert snapshot.snapshot() == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_snapshot_trigger.py -q`
 Expected: FAIL — `ImportError: cannot import name 'snapshot'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/python/tik/trigger/guides/snapshot.py`:
 
@@ -1485,12 +1487,12 @@ def snapshot() -> list:
     return found
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_snapshot_trigger.py -q`
 Expected: PASS (4 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/snapshot.py tests/unit/test_snapshot_trigger.py
@@ -1511,7 +1513,7 @@ The scene → document direction. Three rules from spec §4.2, all load-bearing:
 - Consumes: `snapshot` (Task 5), `document_store` (Task 4), `GuideDocument`.
 - Produces: `capture(document, rendered=None) -> bool` — mutates `document` in place, returns True when anything changed.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/test_capture_trigger.py`:
 
@@ -1580,12 +1582,12 @@ def test_capture_reports_no_change_when_nothing_moved():
     assert capture(doc, scene) is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_capture_trigger.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'tik.trigger.guides.capture'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/python/tik/trigger/guides/capture.py`:
 
@@ -1656,12 +1658,12 @@ def capture(document: GuideDocument, rendered: Optional[list] = None) -> bool:
     return changed
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_capture_trigger.py -q`
 Expected: PASS (7 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/capture.py tests/unit/test_capture_trigger.py
@@ -1682,7 +1684,7 @@ The document → scene direction. Scoped, never global. Step 4 of spec §4.3 dec
 - Consumes: `document_store` (Task 4), `capture` (Task 6), `GuideDraft` from `tik.trigger.maya.rig`, `nodes`, `registry`.
 - Produces: `regenerate(entry, document=None) -> dict` — `{(role, index): joint}`; `regenerate_all(document) -> None`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/test_regenerate_trigger.py`:
 
@@ -1789,12 +1791,12 @@ def test_regenerate_parents_the_root_under_its_primary_input_producer():
     assert root_parent.meta[tags.INSTANCE] == "producer"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_regenerate_trigger.py -q`
 Expected: FAIL — `ImportError: cannot import name 'regenerate'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/python/tik/trigger/guides/regenerate.py`:
 
@@ -1929,16 +1931,16 @@ def _ordered(document: GuideDocument) -> list:
     return ordered
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_regenerate_trigger.py -q`
 Expected: PASS (8 tests)
 
-- [ ] **Step 5: Remove the unused import**
+- [x] **Step 5: Remove the unused import**
 
 `regenerate_all` imports `order_by_connections` but uses the local `_ordered`. Delete the import line.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/regenerate.py tests/unit/test_regenerate_trigger.py
@@ -1960,7 +1962,7 @@ Node removal has no `scriptJob` equivalent, which is defect 1 in the spec. One s
 - Produces: `ApiCallbacks(callback)` with `.start()`, `.stop()`, `.active`; events `"NodeRemoved"` and `"ParentChanged"`.
 - `SceneWatcher` gains `api_callbacks=True` — installs `ApiCallbacks` alongside the scriptJobs and uninstalls both.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/test_observer_trigger.py`:
 
@@ -2033,12 +2035,12 @@ def test_no_callbacks_fire_after_stop():
     assert seen == []
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_observer_trigger.py -q`
 Expected: FAIL — `ImportError: cannot import name 'ApiCallbacks'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Append to `src/python/tik/trigger/maya/observer.py`:
 
@@ -2095,12 +2097,12 @@ class ApiCallbacks:
         return bool(self._ids)
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_observer_trigger.py -q`
 Expected: PASS (5 tests)
 
-- [ ] **Step 5: Wire it into SceneWatcher**
+- [x] **Step 5: Wire it into SceneWatcher**
 
 Modify `src/python/tik/shared/ui/scene_watcher.py`:
 
@@ -2144,16 +2146,16 @@ Modify `src/python/tik/shared/ui/scene_watcher.py`:
                 self._api.muted = False
 ```
 
-- [ ] **Step 6: Turn it on in the Designer**
+- [x] **Step 6: Turn it on in the Designer**
 
 Modify `src/python/tik/trigger/ui/designer/window.py` — add `api_callbacks=True` to the `SceneWatcher(...)` construction.
 
-- [ ] **Step 7: Run the unit and UI suites**
+- [x] **Step 7: Run the unit and UI suites**
 
 Run: `make tests-unit` then `make tests-ui`
 Expected: PASS — `api_callbacks` defaults to False, so the Qt stub path is unaffected.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/python/tik/trigger/maya/observer.py src/python/tik/shared/ui/scene_watcher.py src/python/tik/trigger/ui/designer/window.py tests/unit/test_observer_trigger.py
@@ -2180,14 +2182,14 @@ Point `GuideScene` and `GuideHandle` at the document instead of root-guide meta.
 - Delete from `scene.py`: `_rename_key`, `_forget_key`, `_write_root_meta`, `_write_guide_attrs`, `_sync_setting_attrs`, `read_layout`, `write_layout`, `settings_plug` (moves to `module_node`).
 - `nodes.instance_from_nodes` stops reading `tags.NAME`, `tags.SETTINGS`, `INPUTS`.
 
-- [ ] **Step 1: Update the existing tests to the new contract**
+- [x] **Step 1: Update the existing tests to the new contract**
 
 The current tests assert structure on the root guide. Rewrite those assertions to read the document. Run the suite first to see the full list:
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_guide_scene_trigger.py tests/unit/test_guides_trigger.py -q`
 Record every failure; each is a place structure was read off a joint.
 
-- [ ] **Step 2: Add the new behaviour test**
+- [x] **Step 2: Add the new behaviour test**
 
 Append to `tests/unit/test_guide_scene_trigger.py`:
 
@@ -2213,7 +2215,7 @@ def test_connections_survive_a_rename_in_maya(fresh_scene):
     assert scene.get(child.instance_id).inputs["root"].startswith(parent.instance_id)
 ```
 
-- [ ] **Step 3: Rewrite `scene.py` onto the document**
+- [x] **Step 3: Rewrite `scene.py` onto the document**
 
 Replace the settings/inputs/layout half of `GuideScene`. The shape:
 
@@ -2257,20 +2259,20 @@ Replace the settings/inputs/layout half of `GuideScene`. The shape:
 
 `add()` becomes: build the module, `expand_guides` its entry, `write_entry`, `regenerate`. `remove()` becomes: drop the entry from the document, `commit`, delete the joints. `set_inputs`/`write_settings` mutate the entry and `commit`. `settings_plug` delegates to `module_node.settings_plug`.
 
-- [ ] **Step 4: Rewrite `handle.py` onto the document**
+- [x] **Step 4: Rewrite `handle.py` onto the document**
 
 `GuideHandle` holds `(guides, instance_id)` and reads its entry through `guides.document.module(instance_id)`. `_refresh` raises `GuideError` when the entry is gone (not when the joints are). `name.setter` no longer calls `_rename_key`.
 
-- [ ] **Step 5: Strip `nodes.instance_from_nodes`**
+- [x] **Step 5: Strip `nodes.instance_from_nodes`**
 
 Remove the `tags.NAME` / `tags.SETTINGS` / `INPUTS` reads; it now returns identity and poses only. Callers that need settings go through the document.
 
-- [ ] **Step 6: Run the suites**
+- [x] **Step 6: Run the suites**
 
 Run: `make tests-unit`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/ tests/unit/test_guide_scene_trigger.py tests/unit/test_guides_trigger.py
@@ -2288,7 +2290,7 @@ The properties panel binds widgets two-way to `settings_plug()`. The plug now li
 - Modify: `src/python/tik/trigger/ui/designer/window.py`
 - Test: `tests/ui/test_designer_bindings.py` (existing — check), `tests/unit/test_guide_scene_trigger.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/test_guide_scene_trigger.py`:
 
@@ -2301,21 +2303,21 @@ def test_settings_plug_lives_on_the_module_node(fresh_scene):
     assert "_module" in plug.path
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/unit/test_guide_scene_trigger.py::test_settings_plug_lives_on_the_module_node -q`
 Expected: FAIL
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `GuideScene.settings_plug` delegates to `module_node.settings_plug`. `properties.py` needs no change — it already goes through `getattr(self.guides, "settings_plug", None)`. Verify `_plug_adapter` handles a `None` return (it currently catches `TriggerError`; add a `None` guard).
 
-- [ ] **Step 4: Run the suites**
+- [x] **Step 4: Run the suites**
 
 Run: `make tests-unit` then `make tests-ui`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/ui/designer/ tests/unit/test_guide_scene_trigger.py
@@ -2332,7 +2334,7 @@ The branch point of spec §9. Reconcile runs on every refresh and its result is 
 - Modify: `src/python/tik/trigger/ui/designer/window.py`
 - Test: `tests/ui/test_designer_status.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/ui/test_designer_status.py`:
 
@@ -2369,12 +2371,12 @@ def test_status_text_combines_both():
     assert diff_summary(diff) == "1 module(s) need redraw · 1 orphan guide(s)"
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" TIK_TESTS_NO_MAYA=1 QT_QPA_PLATFORM=offscreen mayapy -m pytest tests/ui/test_designer_status.py -q`
 Expected: FAIL — `ImportError: cannot import name 'diff_summary'`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Add to `window.py`, module level:
 
@@ -2393,12 +2395,12 @@ def diff_summary(diff) -> str:
 
 In `refresh()`, after the connection count, compute `diff = self.guides.diff()` and add `diff_summary(diff)` to the status. Guard it with `try/except` so a scene without Maya (the UI stub) still refreshes.
 
-- [ ] **Step 4: Run the suites**
+- [x] **Step 4: Run the suites**
 
 Run: `make tests-ui` then `make tests-unit`
 Expected: PASS
 
-- [ ] **Step 5: Commit — this is the substrate boundary**
+- [x] **Step 5: Commit — this is the substrate boundary**
 
 ```bash
 git add src/python/tik/trigger/ui/designer/window.py tests/ui/test_designer_status.py
@@ -2419,7 +2421,7 @@ The policy. Consumes the diff automatically: capture absorbs pose drift, regener
 **Interfaces:**
 - Produces: `GuideScene.sync() -> GuideDiff` — capture, reconcile, regenerate the structurally stale, return what it found.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/integration/trigger/test_lockstep_trigger.py`:
 
@@ -2520,12 +2522,12 @@ def test_orphans_are_reported_and_left_alone():
     assert cmds.objExists("ghost_guide")
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/integration/trigger/test_lockstep_trigger.py -q`
 Expected: FAIL — `AttributeError: 'GuideScene' object has no attribute 'sync'`
 
-- [ ] **Step 3: Implement `sync()`**
+- [x] **Step 3: Implement `sync()`**
 
 Add to `GuideScene`:
 
@@ -2564,7 +2566,7 @@ Add to `GuideScene`:
 
 Add `self._syncing = False` to `__init__`, and make every write path (`write_settings`, `set_inputs`, `add`, `remove`) end with a scoped `regenerate` inside the same undo chunk as the document write.
 
-- [ ] **Step 4: Wire it into the Designer's scene-event path**
+- [x] **Step 4: Wire it into the Designer's scene-event path**
 
 In `window.py:_on_scene_event`, replace the bare `self.refresh()` with:
 
@@ -2579,7 +2581,7 @@ In `window.py:_on_scene_event`, replace the bare `self.refresh()` with:
 
 The `mute()` is required: `sync()` deletes and recreates joints, which fires the removal callback, which would re-enter.
 
-- [ ] **Step 5: Run the suites**
+- [x] **Step 5: Run the suites**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/integration/trigger/test_lockstep_trigger.py -q`
 Expected: PASS (7 tests)
@@ -2587,7 +2589,7 @@ Expected: PASS (7 tests)
 Run: `make tests-unit` then `make tests-integration` then `make tests-ui`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/scene.py src/python/tik/trigger/ui/designer/window.py tests/integration/trigger/test_lockstep_trigger.py
@@ -2604,7 +2606,7 @@ The rule that holds lockstep together, plus the test the whole design rests on.
 - Modify: `src/python/tik/trigger/guides/scene.py`
 - Test: `tests/integration/trigger/test_lockstep_trigger.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/integration/trigger/test_lockstep_trigger.py`:
 
@@ -2646,21 +2648,21 @@ def test_document_survives_a_full_round_trip():
     assert placed == pytest.approx([6.0, 7.0, 8.0])
 ```
 
-- [ ] **Step 2: Run to verify they fail or pass**
+- [x] **Step 2: Run to verify they fail or pass**
 
 Run: `PYTHONPATH="D:/dev/tikworks/src/python" mayapy -m pytest tests/integration/trigger/test_lockstep_trigger.py -q`
 Note which fail; the `_syncing` guard from Task 12 may already cover the first.
 
-- [ ] **Step 3: Fix whatever the tests expose**
+- [x] **Step 3: Fix whatever the tests expose**
 
 The likely gap is that `capture` runs against a rendering `regenerate` is midway through building. Assert it: raise `GuideError("capture ran inside a regenerate")` if `capture` is entered while `self._regenerating` is set, and set that flag in `regenerate`.
 
-- [ ] **Step 4: Run the whole suite**
+- [x] **Step 4: Run the whole suite**
 
 Run: `make tests`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/ tests/integration/trigger/test_lockstep_trigger.py
