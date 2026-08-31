@@ -78,13 +78,13 @@ class Kinematics(Action):
         from tik.trigger.guides import document_store, regenerate
 
         document = getattr(ctx.session, "document", None)
-        stored = dict(getattr(document, "guides", {}) or {})
-        if not stored.get("modules"):
+        stored = getattr(document, "guides", None)
+        if stored is None or not stored.modules:
             raise ActionExecutionError(
                 "kinematics: no guides in this session and no guides file set."
             )
         guides.clear()
-        document_store.write_document(GuideDocument.from_dict(stored))
+        document_store.write_document(stored)
         guides.reload()
         regenerate.regenerate_all(guides.document)
         return guides.instances()

@@ -356,9 +356,11 @@ class Session:
             return False
         # poses first, but never redraw: capturing must not edit the scene
         scene.sync(regenerate_stale=False)
+        from tik.trigger.core.guide_document import GuideDocument
+
         captured = scene.document.to_dict()
-        changed = captured != self.document.guides
-        self.document.guides = captured
+        changed = captured != self.document.guides.to_dict()
+        self.document.guides = GuideDocument.from_dict(captured)
         document_store.write_stamp(self.session_id)
         return changed
 
@@ -402,7 +404,7 @@ class Session:
             )
         scene = self._guide_scene()
         scene.clear()
-        document_store.write_document(GuideDocument.from_dict(self.document.guides or {}))
+        document_store.write_document(self.document.guides)
         scene.reload()
         regenerate.regenerate_all(scene.document)
         document_store.write_stamp(self.session_id)

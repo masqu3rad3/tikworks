@@ -30,7 +30,7 @@ def test_capture_puts_the_scene_guides_into_the_document():
     session = Session()
     GuideScene().add("fkchain", side="C", name="tail", segments=2)
     assert session.capture_guides() is True
-    assert session.document.guides["modules"][0]["name"] == "tail"
+    assert session.document.guides.modules[0].name == "tail"
 
 
 def test_capture_stamps_the_scene_with_the_session():
@@ -105,7 +105,7 @@ def test_save_does_not_capture_another_sessions_guides(tmp_path):
     first.capture_guides()
     second = Session()
     second.save(tmp_path / "other.tr")
-    assert second.document.guides == {}
+    assert second.document.guides.modules == []
 
 
 def test_a_saved_session_round_trips_its_guides(tmp_path):
@@ -136,7 +136,7 @@ def test_capture_does_not_wipe_a_document_when_the_scene_is_empty(tmp_path):
     cmds.file(new=True, force=True)
     reopened = Session.open(str(path))
     assert reopened.capture_guides() is False
-    assert reopened.document.guides["modules"][0]["name"] == "tail"
+    assert reopened.document.guides.modules[0].name == "tail"
 
 
 def test_capture_records_a_deletion_when_the_scene_is_ours():
@@ -145,7 +145,7 @@ def test_capture_records_a_deletion_when_the_scene_is_ours():
     scene = GuideScene()
     handle = scene.add("fkchain", side="C", name="tail", segments=1)
     session.capture_guides()
-    assert session.document.guides["modules"]
+    assert session.document.guides.modules
     scene.remove(handle)
     session.capture_guides()
-    assert session.document.guides["modules"] == []
+    assert session.document.guides.modules == []

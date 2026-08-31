@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Iterator, Optional
 
 from .exceptions import SessionError, SessionLoadError, SessionSaveError
+from .guide_document import GuideDocument
 
 SCHEMA_VERSION = 5
 EXTENSION = ".tr"
@@ -66,10 +67,10 @@ class Document:
     schema: int = SCHEMA_VERSION
     meta: dict = field(default_factory=dict)
     actions: list[ActionNode] = field(default_factory=list)
-    #: Serialized ``GuideDocument``. The rig's guides travel with the session,
-    #: so a ``.tr`` is a self-contained rig description and there is no version
-    #: skew between it and a separate guides file.
-    guides: dict = field(default_factory=dict)
+    #: The rig's guides. A live ``GuideDocument``: the session is their only
+    #: store, so the Maya scene holds nothing but a rendering of them, and a
+    #: ``.tr`` is a self-contained rig description.
+    guides: GuideDocument = field(default_factory=GuideDocument)
 
     # ---------------------------------------------------------- serialize
     def to_dict(self) -> dict:
@@ -77,7 +78,7 @@ class Document:
             "schema": self.schema,
             "meta": dict(self.meta),
             "actions": [node.to_dict() for node in self.actions],
-            "guides": copy.deepcopy(self.guides),
+            "guides": self.guides.to_dict(),
         }
 
     @classmethod
@@ -93,7 +94,7 @@ class Document:
             schema=SCHEMA_VERSION,
             meta=dict(data.get("meta", {})),
             actions=[ActionNode.from_dict(item) for item in data.get("actions", [])],
-            guides=dict(data.get("guides") or {}),
+            guides=GuideDocument.from_dict(data.get("guides") or {}),
         )
 
     @classmethod
