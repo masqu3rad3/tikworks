@@ -7,6 +7,7 @@ from tik.trigger.core import (
     Action,
     BoolField,
     ChoiceField,
+    FieldGroup,
     FileField,
     ListField,
     StringField,
@@ -15,6 +16,8 @@ from tik.trigger.core import (
 from tik.trigger.core.exceptions import ActionExecutionError
 
 
+BUILD_OPTIONS = FieldGroup("Build Options", collapsed=True)
+
 @register_action("kinematics", category="build", icon="kinematics")
 class Kinematics(Action):
     """Import a guides file and build every module in it (or only the given roots)."""
@@ -22,10 +25,18 @@ class Kinematics(Action):
     label = "Kinematics"
 
     guides_file = FileField("", extensions=[".trg"], label="GuideLayout file")
-    guide_roots = ListField(item_type=str, help="Root guide names to build; empty = all")
+    guide_roots = ListField(
+        item_type=str, help="Root guide names to build; empty = all",
+        group=BUILD_OPTIONS,
+    )
     rig_name = StringField("trigger", label="Rig name")
-    after_build = ChoiceField("delete", choices=list(AFTERLIFE_MODES), label="GuideLayout after build")
-    auto_switchers = BoolField(True, help="Create automatic space switchers")
+    after_build = ChoiceField(
+        "delete", choices=list(AFTERLIFE_MODES), label="GuideLayout after build",
+        group=BUILD_OPTIONS,
+    )
+    auto_switchers = BoolField(
+        True, help="Create automatic space switchers", group=BUILD_OPTIONS
+    )
 
     def run(self, ctx) -> None:
         from tik.trigger.guides import GuideScene

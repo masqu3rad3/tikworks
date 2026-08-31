@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import tik.maya as tm
 from tik.trigger.core import (
+    FieldGroup,
     BoolField,
     FloatField,
     GuideLayout,
@@ -21,6 +22,10 @@ from tik.trigger.core import (
     register_module,
 )
 from tik.trigger.systems.twist import twist_plug
+
+
+DEFORMATION = FieldGroup("Deformation", collapsed=True)
+GUIDES = FieldGroup("Guides", collapsed=True)
 
 
 @register_module("ribbon")
@@ -38,12 +43,20 @@ class RibbonModule(Module):
 
     joint_count = IntField(5, min=1, max=40, label="Joint Count")
     mid_count = IntField(1, min=0, max=10, label="Mid Controllers")
-    degree = IntField(3, min=1, max=3)
-    scaleable = BoolField(True, help="Stretch-driven scaleX on the deform joints")
-    preserve_volume = BoolField(False, help="Counter-scale Y/Z by ratio ** -0.5")
+    degree = IntField(3, min=1, max=3, group=DEFORMATION)
+    scaleable = BoolField(
+        True, help="Stretch-driven scaleX on the deform joints", group=DEFORMATION
+    )
+    preserve_volume = BoolField(
+        False, help="Counter-scale Y/Z by ratio ** -0.5", group=DEFORMATION
+    )
     twist = BoolField(True, help="Drive the ribbon twist from the pinned inputs")
-    controller_size = FloatField(2.0, min=0.01, label="Controller Size")
-    spacing = FloatField(10.0, min=0.01, help="Default distance between the guides")
+    controller_size = FloatField(
+        2.0, min=0.01, label="Controller Size", group=GUIDES
+    )
+    spacing = FloatField(
+        10.0, min=0.01, help="Default distance between the guides", group=GUIDES
+    )
 
     @classmethod
     def output_names(cls, settings=None):

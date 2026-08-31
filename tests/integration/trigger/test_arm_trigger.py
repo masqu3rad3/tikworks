@@ -511,3 +511,42 @@ def test_pole_still_drives_the_solve(scene):
     before = elbow.world_position
     pole.translate = (0, 0, 12)
     assert (elbow.world_position - before).length() > 0.1
+
+
+
+# --------------------------------------------------------------- field groups
+
+
+def test_the_arm_groups_its_tuning_knobs():
+    fields = get_module("arm").fields()
+    assert fields["stretch"].group is None
+    assert fields["auto_collar"].group.label == "Auto Collar"
+    assert fields["auto_collar"].group.collapsed is True
+    assert fields["auto_collar_lift_angles"].group.label == "Auto Collar"
+    assert fields["lock_from"].group.label == "Limb Lock"
+    assert fields["lock_from"].group.collapsed is False
+    assert fields["anim_spaces"].group.label == "Spaces"
+
+
+def test_every_declared_group_is_a_shared_object():
+    """Two fields in one group must compare equal, not merely look alike."""
+    fields = get_module("arm").fields()
+    assert fields["auto_collar"].group == fields["auto_collar_interpolation"].group
+
+
+def test_anim_spaces_is_grouped_for_every_module():
+    """It is declared on the Module base, so every module gets the fold."""
+    for module_type in ("arm", "base", "fkchain", "ribbon", "twist"):
+        field = get_module(module_type).fields()["anim_spaces"]
+        assert field.group.label == "Spaces", module_type
+        assert field.group.collapsed is True
+
+
+def test_the_ribbon_and_twist_group_their_defaults():
+    ribbon = get_module("ribbon").fields()
+    assert ribbon["joint_count"].group is None
+    assert ribbon["preserve_volume"].group.label == "Deformation"
+    assert ribbon["spacing"].group.label == "Guides"
+    twist = get_module("twist").fields()
+    assert twist["count"].group is None
+    assert twist["extraction"].group.label == "Extraction"

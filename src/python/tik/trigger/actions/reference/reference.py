@@ -5,11 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Optional
 
-from tik.core.fields import DictField, FileField, ListField, StringField
+from tik.core.fields import DictField, FieldGroup, FileField, ListField, StringField
 from tik.trigger.core import Action, register_action
 from tik.trigger.core import versioning
 from tik.trigger.core.document import Document, ActionNode
 from tik.trigger.core.exceptions import SessionError
+
+
+SCOPE = FieldGroup("Scope", collapsed=True)
 
 
 @register_action("reference", category="structure", icon="reference")
@@ -24,7 +27,9 @@ class Reference(Action):
 
     file = FileField("", extensions=[".tr"], label="Session file")
     version = StringField("latest", help="'latest', 'pinned' or an explicit v###")
-    include = ListField(item_type=str, help="Action paths to include; empty = all")
+    include = ListField(
+        item_type=str, help="Action paths to include; empty = all", group=SCOPE
+    )
     overrides = DictField(help="{action path: {enabled: bool, settings: {...}}}", hidden=True)
 
     def run(self, ctx) -> None:  # expanded by the runner; nothing to do here

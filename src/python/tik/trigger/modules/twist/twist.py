@@ -28,6 +28,7 @@ from __future__ import annotations
 import tik.maya as tm
 from tik.maya import attribute
 from tik.trigger.core import (
+    FieldGroup,
     BoolField,
     ChoiceField,
     FloatField,
@@ -47,6 +48,10 @@ ALL_CHANNELS = ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz", "v")
 #: down the base's X, which is what makes X the twist axis by construction
 #: rather than by convention.
 END_FREE = ("tx",)
+
+
+EXTRACTION = FieldGroup("Extraction", collapsed=True)
+GUIDES = FieldGroup("Guides", collapsed=True)
 
 
 @register_module("twist")
@@ -82,17 +87,19 @@ class Twist(Module):
 
     count = IntField(3, min=1, max=20, help="Number of twist joints")
     twist_source = ChoiceField(
-        "end", choices=("start", "end"), label="Twist Source",
+        "end", choices=("start", "end"), label="Twist Source", group=EXTRACTION,
         help="'end' follows the child (forearm); 'start' counters the "
              "segment's own roll (upper arm)",
     )
     axis = ChoiceField("auto", choices=("auto", *AXES))
     extraction = ChoiceField(
-        "auto", choices=SOURCES,
+        "auto", choices=SOURCES, group=EXTRACTION,
         help="'channel' is unbounded but needs an FK-style driver; "
              "'matrix' works anywhere and wraps past 180 degrees",
     )
-    spacing = FloatField(10.0, min=0.01, help="Default guide distance, base to end")
+    spacing = FloatField(
+        10.0, min=0.01, help="Default guide distance, base to end", group=GUIDES
+    )
 
     @classmethod
     def output_names(cls, settings=None):

@@ -19,6 +19,7 @@ from tik.trigger.core import (
     ChoiceField,
     GuideLayout,
     Input,
+    FieldGroup,
     Module,
     Vector2Field,
     register_module,
@@ -26,6 +27,10 @@ from tik.trigger.core import (
 from tik.trigger.systems.limb import _derive_size, build_ikfk_limb
 from tik.trigger.systems.limb_lock import build_limb_lock
 from tik.trigger.systems.reach import ReachAxis, build_reach
+
+
+LIMB_LOCK = FieldGroup("Limb Lock")
+AUTO_COLLAR = FieldGroup("Auto Collar", collapsed=True)
 
 
 @register_module("arm")
@@ -45,44 +50,49 @@ class Arm(Module):
         "shoulder",
         choices=("shoulder", "collar"),
         label="Lock From",
+        group=LIMB_LOCK,
         help="'shoulder' displaces the arm chain and leaves the collar on the "
              "chest; 'collar' carries the clavicle along too",
     )
     limb_lock = BoolField(
         True,
         label="Limb Lock",
+        group=LIMB_LOCK,
         help="Hold the shoulder-to-hand distance while the hand anchors. "
              "Inert until the animator raises limbLock.",
     )
-    auto_collar = BoolField(True, help="Build the auto-collar network")
+    auto_collar = BoolField(
+        True, help="Build the auto-collar network", group=AUTO_COLLAR
+    )
     # Angles are measured from the `neutral` guide, so zero is where the
     # clavicle changes direction. Both limits stay inside +/-89: the driver's
     # off-plane angles saturate at 90, so a wider limit is never reached.
     auto_collar_lift_angles = Vector2Field(
         (-60.0, 75.0), min=-89.0, max=89.0, labels=("Lower", "Upper"),
-        label="Lift Angles",
+        label="Lift Angles", group=AUTO_COLLAR,
         help="Arm elevation either side of the neutral guide at full falloff. "
              "Both stay inside +/-89: the driver's off-plane angles saturate "
              "at 90, so a wider limit is never reached.",
     )
     auto_collar_lift_degrees = Vector2Field(
         (-6.0, 15.0), min=-90.0, max=90.0, labels=("Lower", "Upper"),
-        label="Lift Degrees",
+        label="Lift Degrees", group=AUTO_COLLAR,
         help="Collar rotation at each of those angles.",
     )
     auto_collar_swing_angles = Vector2Field(
         (-45.0, 60.0), min=-89.0, max=89.0, labels=("Back", "Front"),
-        label="Swing Angles",
+        label="Swing Angles", group=AUTO_COLLAR,
         help="Arm azimuth either side of the neutral guide at full falloff.",
     )
     auto_collar_swing_degrees = Vector2Field(
         (-6.0, 10.0), min=-90.0, max=90.0, labels=("Back", "Front"),
-        label="Swing Degrees",
+        label="Swing Degrees", group=AUTO_COLLAR,
         help="Collar rotation at each of those angles.",
     )
     auto_collar_interpolation = ChoiceField(
         "smooth", choices=("linear", "smooth", "spline"),
         label="Auto Collar Interpolation",
+        group=AUTO_COLLAR,
         help="Only 'smooth' is free of a slope discontinuity: 'linear' kinks "
              "at the neutral and both limits, 'spline' kinks at both limits.",
     )

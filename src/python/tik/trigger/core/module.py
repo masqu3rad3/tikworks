@@ -25,11 +25,15 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from tik.core.fields import Column, Schema, TableField
+from tik.core.fields import Column, FieldGroup, Schema, TableField
 from tik.core.side import Side
 
 from .manifest import GuideAttr, GuideLayout, Input, instance_key
 from .schemas import GuidePose, ModuleInstance, ParentRef
+
+
+SPACES = FieldGroup("Spaces", collapsed=True)
+"""Every module's animation spaces fold away; declared here, not per module."""
 
 
 class Module(Schema):
@@ -48,6 +52,7 @@ class Module(Schema):
     anim_spaces = TableField(
         [],
         label="Anim Spaces",
+        group=SPACES,
         help="Each row adds one animation space and one input port.",
         last=True,
         columns=(
