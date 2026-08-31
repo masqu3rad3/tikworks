@@ -481,11 +481,15 @@ class GuideScene:
             for _guide_instance, module, joints in built:
                 module.wire_guides(joints)
             self._entries_from_import(built)
+        # guide_nodes rather than the joints we built: a renamed module was
+        # redrawn, so the dict from before is full of deleted nodes
         return [
             nodes.instance_from_nodes(
-                module.instance_id, joints, entry=self.document.module(module.instance_id)
+                module.instance_id,
+                nodes.guide_nodes(module.instance_id),
+                entry=self.document.module(module.instance_id),
             )
-            for _gi, module, joints in built
+            for _gi, module, _joints in built
         ]
 
     def _entries_from_import(self, built) -> None:
@@ -498,20 +502,29 @@ class GuideScene:
 
         document = self.document
         entries = {}
+        renamed = []
+        # The file's keys, mapped to the ids we mint for them. Built from the
+        # *original* names, because that is what the file's own connections say.
+        original_keys = {}
         for guide_instance, module, _joints in built:
+            unique = self.unique_name(module.name, module.side.value)
+            if unique != module.name:
+                renamed.append(module.instance_id)
+                module.name = unique
             entry = ModuleEntry(
                 instance_id=module.instance_id, module_type=module.module_type,
                 name=module.name, side=module.side.value, settings=module.values(),
             )
             expand_guides(entry, module.guides, module.guide_count())
+            # appended as we go, so a two-module import uniquifies against itself
             document.modules.append(entry)
             entries[module.instance_id] = (entry, guide_instance)
-        keys = {entry.key: entry.instance_id for entry, _gi in entries.values()}
+            original_keys[guide_instance.key] = entry.instance_id
         for entry, guide_instance in entries.values():
             entry.inputs = {
                 name: (
-                    f"{keys[source.rpartition('.')[0]]}.{source.rpartition('.')[2]}"
-                    if "." in source and source.rpartition(".")[0] in keys
+                    f"{original_keys[source.rpartition('.')[0]]}.{source.rpartition('.')[2]}"
+                    if "." in source and source.rpartition(".")[0] in original_keys
                     else source
                 )
                 for name, source in guide_instance.inputs.items() if source
@@ -520,6 +533,10 @@ class GuideScene:
         capture(document, snapshot())
         for entry, _gi in entries.values():
             self._write(entry)
+        # a renamed module's joints still carry the file's name; redraw them so
+        # the scene matches the document it now belongs to
+        for instance_id in renamed:
+            regenerate(document.module(instance_id), document)
 
 
 

@@ -301,3 +301,28 @@ def test_a_vector_setting_round_trips_through_a_trg(guides, tmp_path):
     guides.import_(path)
     restored = guides.find("arm", "L").auto_collar_lift_angles
     assert tuple(restored) == (-30.0, 50.0)
+
+
+def test_importing_the_same_trg_twice_uniquifies_names(guides, tmp_path):
+    """A .trg is grafted, not opened: identity is reassigned on the way in."""
+    guides.add("fkchain", side="L", name="tail", segments=2)
+    path = guides.export(tmp_path / "lib")
+    original_id = guides.find("tail", "L").instance_id
+    imported = guides.import_(path)
+    keys = sorted(handle.key for handle in guides.instances())
+    assert keys == ["L_tail", "L_tail1"]
+    assert imported[0].instance_id != original_id
+    assert len({handle.instance_id for handle in guides.instances()}) == 2
+
+
+def test_importing_remaps_connections_onto_the_new_ids(guides, tmp_path):
+    parent = guides.add("fkchain", side="C", name="spine", segments=1)
+    child = guides.add("fkchain", side="L", name="tail", segments=1)
+    guides.connect(f"{child.key}.root", f"{parent.key}.root")
+    path = guides.export(tmp_path / "pair")
+    imported = guides.import_(path)
+    new_child = next(handle for handle in imported if handle.name.startswith("tail"))
+    new_parent = next(handle for handle in imported if handle.name.startswith("spine"))
+    # the copy points at its own copy of the producer, not the original
+    assert new_child.inputs["root"] == f"{new_parent.key}.root"
+    assert new_parent.instance_id != parent.instance_id
