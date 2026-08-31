@@ -116,3 +116,73 @@ def test_auto_falls_back_to_matrix_on_a_bad_rotate_order():
     plug = twist_plug(driver, reference, name="fore", axis="X", source="auto")
     driver.rotate = (200.0, 0, 0)
     assert abs(plug.value - (-160.0)) < 1e-3
+
+
+# ---------------------------------------------------------------- the module
+def test_twist_module_is_registered():
+    import tik.trigger as trigger
+    from tik.trigger.core import get_module
+    from tik.trigger.modules.twist.twist import Twist
+
+    # Other suites clear the registries, so discovery has to be re-run here.
+    trigger.load_plugins()
+    assert get_module("twist") is Twist
+
+
+def test_output_names_follow_the_count():
+    from tik.trigger.modules.twist.twist import Twist
+
+    assert Twist.output_names({"count": 3}) == ("twist0", "twist1", "twist2")
+
+
+def test_projected_position_ignores_sideways_drift():
+    """A guide dragged off the axis still reads its along-axis fraction."""
+    from tik.trigger.modules.twist.twist import projected_position
+
+    start = tm.Transform.create(name="s")
+    end = tm.Transform.create(name="e")
+    end.translate = (10, 0, 0)
+    probe = tm.Transform.create(name="p")
+    probe.translate = (2.5, 6, -3)  # far off the axis
+    assert abs(projected_position(start, end, probe) - 0.25) < 1e-6
+    probe.translate = (-4, 0, 0)  # behind the start, clamped
+    assert projected_position(start, end, probe) == 0.0
+
+
+def test_guide_weights_default_to_position():
+    from tik.trigger.modules.twist.twist import WEIGHT_ATTR, Twist
+
+    module = Twist(name="fore", settings={"count": 3})
+    assert module.guide_attrs["twist"][0].name == WEIGHT_ATTR
+
+
+def test_twist_builds_on_an_arm():
+    """The real shape: forearm twist between the arm's lowerarm and hand."""
+    from maya import cmds
+
+    import tik.trigger as trigger
+    from tik.trigger.guides import GuideScene
+    from tik.trigger.maya import Builder
+
+    trigger.load_plugins()
+    guides = GuideScene()
+    guides.clear()
+    body = guides.add("base", name="body")
+    arm = guides.add("arm", side="L", name="arm", parent=body)
+    twist = guides.add("twist", side="L", name="fore", parent=arm, count=3)
+    guides.connect("L_fore.base", "L_arm.lowerarm")
+    guides.connect("L_fore.end", "L_arm.hand")
+
+    report = Builder().build(rig_name="hero", afterlife="keep")
+    assert report.rigs[twist.instance_id]
+
+    for index in range(3):
+        joint = f"L_fore_twist{index}_jnt"
+        assert cmds.objExists(joint), f"{joint} was not built"
+        # driven rotation, and a parent that is the arm's own bind joint
+        assert cmds.listConnections(f"{joint}.rotateX", source=True, destination=False)
+        assert cmds.listRelatives(joint, parent=True)[0] == "L_arm_lowerarm_jnt"
+
+    # A negative weight must reverse the joint against the extracted angle.
+    ctx = report.rigs[twist.instance_id]
+    assert len(ctx.outputs) == 3

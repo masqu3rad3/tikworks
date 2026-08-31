@@ -28,7 +28,7 @@ from typing import Optional
 from tik.core.fields import Column, Schema, TableField
 from tik.core.side import Side
 
-from .manifest import GuideLayout, Input, instance_key
+from .manifest import GuideAttr, GuideLayout, Input, instance_key
 from .schemas import GuidePose, ModuleInstance, ParentRef
 
 
@@ -39,6 +39,9 @@ class Module(Schema):
     sided: bool = True
     guides: GuideLayout = GuideLayout("root")
     inputs: tuple[Input, ...] = (Input("root", primary=True),)
+    #: Per-guide authored attributes, keyed by guide role. Roles absent from
+    #: the mapping carry none, so existing modules are unaffected.
+    guide_attrs: dict[str, tuple[GuideAttr, ...]] = {}
     space_controls: tuple[str, ...] = ()  # controller roles that accept spaces
     outputs: tuple[str, ...] = ("root",)
     module_type: str = ""  # stamped by @register_module
@@ -118,6 +121,11 @@ class Module(Schema):
     def output_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
         """Outputs an instance exposes; override when a setting adds outputs (e.g. chain segments)."""
         return tuple(cls.outputs)
+
+    @classmethod
+    def attrs_for_role(cls, role: str) -> tuple[GuideAttr, ...]:
+        """Declared per-guide attributes for ``role`` (empty when none)."""
+        return tuple(cls.guide_attrs.get(role, ()))
 
     @classmethod
     def output_at_role(cls, role: str) -> Optional[str]:

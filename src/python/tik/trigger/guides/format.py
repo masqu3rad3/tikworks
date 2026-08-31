@@ -188,6 +188,7 @@ def make_record(
     instance: str,
     radius: float = 1.0,
     color: int = 17,
+    attrs: Optional[dict] = None,
     settings: Optional[dict] = None,
     module_name: Optional[str] = None,
 ) -> dict:
@@ -207,6 +208,8 @@ def make_record(
         "index": int(index),
         "instance": instance,
     }
+    if attrs:
+        record["attrs"] = {key: float(value) for key, value in attrs.items()}
     if settings is not None:  # root joint
         record["settings"] = dict(settings)
         record["module_name"] = module_name or name

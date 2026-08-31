@@ -25,6 +25,28 @@ class Input:
     help: str = ""
 
 
+@dataclass(frozen=True)
+class GuideAttr:
+    """A float attribute a module's guide carries, authored by the rigger.
+
+    Guides normally round-trip through the ``.trg`` by world position alone.
+    A module that needs per-guide *data* -- a twist weight, a falloff -- can
+    declare it here and the guide layer creates, exports and restores it.
+
+    Args:
+        name: Attribute long name, created on every guide of its role.
+        default: Value written at draw time. ``draw_guides`` may overwrite it
+            per guide.
+        keyable: Whether it shows in the channel box.
+        help: Tooltip text.
+    """
+
+    name: str
+    default: float = 0.0
+    keyable: bool = True
+    help: str = ""
+
+
 def instance_key(name: str, side: str) -> str:
     """Stable key used in files and connections: ``L_arm`` / ``body``."""
     side = str(side)

@@ -101,6 +101,10 @@ class GuideDraft:
             },
         )
         joint.color = SIDE_COLORS[self.side]
+        for declared in self.module.attrs_for_role(role):
+            attribute.add_float(
+                joint, declared.name, default=declared.default, keyable=declared.keyable
+            )
         self.created[(role, index)] = joint
         if is_root:
             self.root = joint

@@ -240,6 +240,8 @@ class GuideScene:
                 parent = node.parent
                 parent_name = parent.name if parent is not None and parent.meta.get(tags.KIND) == tags.GUIDE else None
                 is_root = role == root_role and index == 0
+                declared = module_cls.attrs_for_role(role)
+                attrs = {item.name: node[item.name].value for item in declared}
                 records.append(make_record(
                     name=node.name,
                     position=cmds.xform(node.long_name, query=True, worldSpace=True, translation=True),
@@ -253,6 +255,7 @@ class GuideScene:
                     instance=instance.instance_id,
                     radius=node.radius,
                     color=node.color or 17,
+                    attrs=attrs,
                     settings=dict(instance.settings) if is_root else None,
                     module_name=instance.name if is_root else None,
                 ))
@@ -275,6 +278,11 @@ class GuideScene:
                     joint.joint_orient = record.get("joint_orient", (0, 0, 0))
                     joint.rotate = tuple(record.get("rotation", (0, 0, 0)))
                     joint.color = record.get("color") or 17
+                    for item in module_cls.attrs_for_role(role):
+                        plug = tm.attribute.add_float(
+                            joint, item.name, default=item.default, keyable=item.keyable
+                        )
+                        plug.value = record.get("attrs", {}).get(item.name, item.default)
                     joint.meta.update({
                         tags.KIND: tags.GUIDE, tags.MODULE: module.module_type,
                         tags.INSTANCE: module.instance_id, tags.ROLE: role,

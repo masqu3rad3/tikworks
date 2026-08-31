@@ -192,3 +192,36 @@ def test_mirror_holds_for_every_rotation_order(guides, rotate_order):
 
 
 # ------------------------------------------------------------ spaces storage
+
+def test_guide_attrs_round_trip(guides, tmp_path):
+    """A per-guide authored attribute survives export and import."""
+    body = guides.add("base", name="body")
+    twist = guides.add("twist", name="fore", parent=body, count=3)
+    node = guides.guide_node(twist.instance_id, "twist", 1)
+    assert abs(node["twistWeight"].value - 0.5) < 1e-6  # default = position
+    node["twistWeight"].value = -0.42
+
+    path = guides.export(tmp_path / "hero")
+    record = next(
+        item for item in json.loads(path.read_text())["joints"]
+        if item["name"] == node.name
+    )
+    assert abs(record["attrs"]["twistWeight"] - (-0.42)) < 1e-6
+
+    guides.clear()
+    guides.import_(path)
+    restored = guides.guide_node(guides.find("fore").instance_id, "twist", 1)
+    assert abs(restored["twistWeight"].value - (-0.42)) < 1e-6
+
+
+def test_record_without_attrs_still_imports():
+    """Old .trg files carry no 'attrs' key and must keep loading."""
+    from tik.trigger.guides.format import make_record
+
+    record = make_record(
+        name="a_guide", position=(0, 0, 0), rotation=(0, 0, 0),
+        joint_orient=(0, 0, 0), parent=None, side="C", module="twist",
+        role="twist", index=0, instance="abc123",
+    )
+    assert "attrs" not in record
+    assert record.get("attrs", {}) == {}
