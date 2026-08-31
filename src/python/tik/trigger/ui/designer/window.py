@@ -83,8 +83,6 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
     where it goes.
     """
 
-    title_changed = QtCore.Signal(str)
-
     def __init__(self, parent=None, events=None, file_browser=None, binding_adapter=None,
                  scene=None) -> None:
         super().__init__(parent)
@@ -98,7 +96,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.events = self.guides.events
         self.file_browser = file_browser
         self.binding_adapter = binding_adapter
-        self.file_path: str = ""
+        # last guide-library file touched: a file-dialog convenience, not
+        # this view's identity -- the session owns the guides now
+        self.last_guide_file: str = ""
         self.bindings = BindingManager()
         self._current: Optional[GuideHandle] = None
         self._multi: list[GuideHandle] = []  # every selected module when they share a type
@@ -109,7 +109,6 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self._torn_down = False
         # SceneWatcher probes objectName() to notice a destroyed C++ object
         self.setObjectName("TriggerGuideDesigner")
-        self.setWindowTitle(self.title)
         self.resize(1240, 680)
         self._build_central()
         self._build_actions()
@@ -367,15 +366,10 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 handles.append(handle)
         return handles
 
-    @property
-    def title(self) -> str:
-        return f"Guide Designer — {Path(self.file_path).name}" if self.file_path else "Guide Designer"
-
     def set_file(self, path: str) -> None:
-        self.file_path = path
+        """Remember the guide library last imported or exported."""
+        self.last_guide_file = path
         self.status.set("file", Path(path).name if path else "")
-        self.setWindowTitle(self.title)
-        self.title_changed.emit(self.title)
 
     # --------------------------------------------------------------- refresh
     def refresh(self, *_args, keep_graph: bool = False) -> None:

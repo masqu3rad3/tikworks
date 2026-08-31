@@ -493,6 +493,10 @@ class TriggerWindow(MayaToolWindow):
         if view is None:
             return None
         view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
+        if guides_path and view.designer is not None:
+            # remembered for the Import dialog, not imported: opening the
+            # Designer from a path field should not change the rig
+            view.designer.set_file(guides_path)
         return view.designer
 
     def _hand_over_to(self, view) -> None:

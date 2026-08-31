@@ -204,7 +204,7 @@ class DesignerCommands:
             self.refresh()
 
     def export_file(self, path: Optional[str] = None, ask: bool = False, selected: bool = False) -> Optional[Path]:
-        path = path or ("" if ask else self.file_path) or self._pick("save")
+        path = path or ("" if ask else self.last_guide_file) or self._pick("save")
         if not path:
             return None
         handles = self.selected_handles() if selected else []
@@ -225,9 +225,9 @@ class DesignerCommands:
 
     def _pick(self, mode: str) -> str:
         if self.file_browser is not None:
-            return self.file_browser(mode, [GUIDE_EXTENSION], self.file_path) or ""
+            return self.file_browser(mode, [GUIDE_EXTENSION], self.last_guide_file) or ""
         if mode == "save":
-            path, _f = QtWidgets.QFileDialog.getSaveFileName(self, "Export guides", self.file_path, f"GuideLayout (*{GUIDE_EXTENSION})")
+            path, _f = QtWidgets.QFileDialog.getSaveFileName(self, "Export guides", self.last_guide_file, f"GuideLayout (*{GUIDE_EXTENSION})")
         else:
-            path, _f = QtWidgets.QFileDialog.getOpenFileName(self, "Import guides", self.file_path, f"GuideLayout (*{GUIDE_EXTENSION})")
+            path, _f = QtWidgets.QFileDialog.getOpenFileName(self, "Import guides", self.last_guide_file, f"GuideLayout (*{GUIDE_EXTENSION})")
         return path
