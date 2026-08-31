@@ -91,7 +91,9 @@ def _keys(tree):
 
 
 def test_window_shell(designer):
-    assert [action.text() for action in designer.menu_bar.actions()] == ["&File", "&Edit", "&View", "&Build", "&Help"]
+    # no menu bar of its own: the window owns the one bar, and a second
+    # QMenuBar inside a QMainWindow subtree takes the process down
+    assert not hasattr(designer, "menu_bar")
     assert designer.status.text("modules") == "0 module(s)"
     assert designer.tree_pane.isVisible() and designer.graph_pane.isVisible()
     designer.graph_action.setChecked(False)
@@ -108,13 +110,9 @@ def test_the_palette_opens(designer):
 
 def test_designer_is_a_page_not_a_window(designer):
     assert not isinstance(designer, QtWidgets.QMainWindow)
-    assert designer.menu_bar.parent() is designer          # built, not installed
-    assert designer.status_strip is not None
-    assert designer.title == "Guide Designer"
-    seen = []
-    designer.title_changed.connect(seen.append)
-    designer.set_file("C:/tmp/biped.trg")
-    assert seen == ["Guide Designer — biped.trg"]
+    assert designer.status_strip is not None                # built, not installed
+    # the view toggles it owns, for the graph's own shortcuts
+    assert designer.grid_action.isChecked() and designer.snap_action.isChecked()
     designer.teardown()
     designer.teardown()                                     # idempotent
 

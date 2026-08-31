@@ -25,6 +25,7 @@ from tik.trigger.core.exceptions import SessionError
 from tik.trigger.core.document import EXTENSION
 from tik.trigger.session import Session
 
+from .designer.widgets import SCENE_NODE
 from .session_view import DESIGNER_TAB, SessionView
 from .widgets import LogWidget
 
@@ -62,6 +63,7 @@ class TriggerWindow(MayaToolWindow):
         self.events.subscribe(LOG, self._on_log)
         self.events.subscribe(ERROR, self._on_error)
         self.new_session()
+        self._sync_menu_state()
 
     # ------------------------------------------------------------------ ui
     def _build_shell(self) -> None:
@@ -108,7 +110,18 @@ class TriggerWindow(MayaToolWindow):
         return action
 
     def _build_menus(self, bar) -> None:
-        file_menu = bar.addMenu("&File")
+        # Built with the bar as their C++ parent, not via ``bar.addMenu(str)``:
+        # that hands ownership to Python, and the menu dies with the local that
+        # held it -- leaving the bar showing titles backed by dead objects.
+        self._menus: dict = {}
+
+        def add_menu(title: str):
+            found = QtWidgets.QMenu(title, bar)
+            bar.addMenu(found)
+            self._menus[title] = found
+            return found
+
+        file_menu = add_menu("&File")
         self._action(file_menu, "New Session", self.new_session, "Ctrl+N")
         self._action(file_menu, "Open…", self.open_session, "Ctrl+O")
         self.recent_menu = file_menu.addMenu("Open Recent")
@@ -120,21 +133,29 @@ class TriggerWindow(MayaToolWindow):
         self._action(file_menu, "Import Actions…", self.import_actions)
         self._action(file_menu, "Export Actions…", self.export_actions)
         file_menu.addSeparator()
+        # a .trg is a guide *library* now, not this session's document, so it
+        # gets no save shortcut -- Ctrl+S saves the session, guides included
+        self._action(file_menu, "Import Guides…", lambda: self._designer_call("import_file"))
+        self._action(file_menu, "Export Guides…", lambda: self._designer_call("export_file", True))
+        file_menu.addSeparator()
         self._action(file_menu, "Close Tab", lambda: self.close_tab(self.tabs.currentIndex()), "Ctrl+W")
         self._action(file_menu, "Quit", self.close, "Ctrl+Q")
 
-        edit_menu = bar.addMenu("&Edit")
+        # One Edit menu for both views: the verbs mean the same thing, so they
+        # act on whichever of the two is in front rather than fighting over
+        # Ctrl+D / F2 / Del.
+        edit_menu = add_menu("&Edit")
         self._action(edit_menu, "Undo", self.undo, "Ctrl+Z")
         self._action(edit_menu, "Redo", self.redo, "Ctrl+Y")
         edit_menu.addSeparator()
-        self._action(edit_menu, "Add Action…", lambda: self._view_call("show_palette"), "Tab")
+        self._action(edit_menu, "Add…", lambda: self._either("show_palette", "show_palette"), "Tab")
         self._action(edit_menu, "Add Child Action…", lambda: self._view_call("add_child_via_palette"))
-        self._action(edit_menu, "Duplicate", lambda: self._view_call("duplicate_current"), "Ctrl+D")
-        self._action(edit_menu, "Rename", lambda: self._view_call("rename_current"), "F2")
-        self._action(edit_menu, "Delete", lambda: self._view_call("remove_current"), "Del")
+        self._action(edit_menu, "Duplicate", lambda: self._either("duplicate_current", "duplicate_current"), "Ctrl+D")
+        self._action(edit_menu, "Rename", lambda: self._either("rename_current", "rename_current"), "F2")
+        self._action(edit_menu, "Delete", lambda: self._either("remove_current", "delete_current"), "Del")
         self._action(edit_menu, "Enable / Disable", lambda: self._view_call("toggle_current"), "Ctrl+E")
 
-        session_menu = bar.addMenu("&Session")
+        session_menu = add_menu("&Session")
         self._action(session_menu, "Build Rig", lambda: self._view_call("build"), "Ctrl+B")
         self._action(session_menu, "Build Until Here", lambda: self._view_call("build_until", self._current_path()), "Ctrl+Shift+B")
         self._action(session_menu, "Run Step", lambda: self._view_call("run_step", self._current_path()), "Ctrl+R")
@@ -142,7 +163,36 @@ class TriggerWindow(MayaToolWindow):
         self._action(session_menu, "Validate", self.validate_session)
         self._action(session_menu, "Clear Statuses", lambda: self._view_call("clear_statuses"))
 
-        tools_menu = bar.addMenu("&Tools")
+        guides_menu = add_menu("&Guides")
+        self.guides_menu_action = guides_menu.menuAction()
+        self._action(guides_menu, "Add Module…", lambda: self._designer_call("show_palette"))
+        self._action(guides_menu, "Add Scene Nodes", lambda: self._designer_call("create_guides", SCENE_NODE))
+        guides_menu.addSeparator()
+        self._action(guides_menu, "Select Root", lambda: self._designer_call("select_root"))
+        self._action(guides_menu, "Select All Guides", lambda: self._designer_call("select_current"))
+        self._action(guides_menu, "Mirror", lambda: self._designer_call("mirror_current"), "Ctrl+M")
+        guides_menu.addSeparator()
+        self._action(guides_menu, "Connect Input…", lambda: self._designer_call("connect_dialog"))
+        self._action(guides_menu, "Disconnect Primary Input", lambda: self._designer_call("disconnect_primary"))
+        self._action(guides_menu, "Sever Connections", lambda: self._designer_call("sever_current"), "Ctrl+Shift+D")
+        guides_menu.addSeparator()
+        self._action(guides_menu, "Build Selected Guides", lambda: self._designer_call("test_build"))
+        self._action(guides_menu, "Build All Guides", lambda: self._designer_call("test_build", True))
+        guides_menu.addSeparator()
+        self._action(guides_menu, "Clear Scene Guides", lambda: self._designer_call("clear_guides"))
+        layout_menu = QtWidgets.QMenu("Layout", guides_menu)
+        guides_menu.addMenu(layout_menu)
+        self._menus["Layout"] = layout_menu
+        self._action(layout_menu, "Auto Layout", lambda: self._graph_call("auto_layout"), "Ctrl+L")
+        self._action(layout_menu, "Fit Graph", lambda: self._graph_call("fit"), "F")
+        layout_menu.addSeparator()
+        self._action(layout_menu, "Collapse: Header Only", lambda: self._graph_call("set_selected_mode", 0), "1")
+        self._action(layout_menu, "Collapse: Connected Plugs", lambda: self._graph_call("set_selected_mode", 1), "2")
+        self._action(layout_menu, "Collapse: Everything", lambda: self._graph_call("set_selected_mode", 2), "3")
+        layout_menu.addSeparator()
+        self._action(layout_menu, "Refresh", lambda: self._designer_call("refresh"), "F5")
+
+        tools_menu = add_menu("&Tools")
         self._action(tools_menu, "Guide Designer", lambda: self.open_guide_designer(), "Ctrl+G")
         tools_menu.addSeparator()
         self.shelf_action = self._action(tools_menu, "Show Action Shelf", self.toggle_shelf, "Ctrl+Shift+A", checkable=True)
@@ -151,7 +201,7 @@ class TriggerWindow(MayaToolWindow):
         tools_menu.addSeparator()
         self._action(tools_menu, "Settings…", self.open_settings)
 
-        help_menu = bar.addMenu("&Help")
+        help_menu = add_menu("&Help")
         self._action(help_menu, "Documentation", self.open_docs)
         self._action(help_menu, "About Trigger", self.about)
         self._update_recent_menu()
@@ -184,6 +234,43 @@ class TriggerWindow(MayaToolWindow):
     def session(self) -> Optional[Session]:
         view = self.current_view
         return view.session if view else None
+
+    @property
+    def _designer(self):
+        """The active session's Designer, but only while its tab is in front."""
+        view = self.current_view
+        if view is None or not view.on_designer_tab:
+            return None
+        return view.designer
+
+    def _designer_call(self, method: str, *args):
+        designer = self._designer
+        if designer is None:
+            return None
+        return getattr(designer, method)(*args)
+
+    def _graph_call(self, method: str, *args):
+        designer = self._designer
+        if designer is None:
+            return None
+        return getattr(designer.graph, method)(*args)
+
+    def _either(self, session_method: str, designer_method: str, *args):
+        """Run the verb on whichever view is in front."""
+        if self._designer is not None:
+            return self._designer_call(designer_method, *args)
+        return self._view_call(session_method, *args)
+
+    @staticmethod
+    def _maya_undo() -> None:
+        from maya import cmds
+
+        cmds.undo()
+
+    def _sync_menu_state(self) -> None:
+        """The Guides menu is only offered where it has a target."""
+        if hasattr(self, "guides_menu_action"):
+            self.guides_menu_action.setEnabled(self._designer is not None)
 
     def _view_call(self, method: str, *args):
         view = self.current_view
@@ -306,6 +393,11 @@ class TriggerWindow(MayaToolWindow):
 
     # ----------------------------------------------------------- commands
     def undo(self) -> None:
+        # Guide edits are scene edits, so on the Designer tab Ctrl+Z belongs to
+        # Maya's stack, not to the session's action history.
+        if self._designer is not None:
+            self._maya_undo()
+            return
         session = self.session
         if session is not None and session.undo():
             self._view_call("refresh")
@@ -428,12 +520,14 @@ class TriggerWindow(MayaToolWindow):
         view = self.current_view
         if view is not None and view.designer is not None:
             self._hand_over_to(view)
+        self._sync_menu_state()
         self._update_title()
 
     def _on_sub_tab_changed(self, view, index: int) -> None:
         """The first time a session's Designer opens, its guides get the scene."""
         if index == DESIGNER_TAB:
             self._hand_over_to(view)
+        self._sync_menu_state()
         self._update_title()
 
     def _drop_designer(self, view) -> None:

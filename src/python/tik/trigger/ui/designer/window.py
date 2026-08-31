@@ -7,9 +7,10 @@ selects joints in Maya on its own — use *Select guides* for that. Scene
 structure changes (new/removed/undone guides) reach the UI through a
 debounced ``SceneWatcher``; our own edits are muted.
 
-The designer is a page, not a window: it builds ``menu_bar`` and
-``status_strip`` and leaves the hosting to ``ui/main.py``, which shows it as a
-mode tab of the Trigger window.
+The designer is a page, not a window: it builds a ``status_strip`` and leaves
+the hosting to ``SessionView``, which shows it as a sub-tab of the session
+whose guides it edits. It builds no menu bar -- the window owns the one bar,
+and its Guides menu dispatches to whichever designer is in front.
 
 Everything the designer authors (connections, scene-node groups, node
 positions, collapse modes) lives in ``GuideScene`` / ``GuideScene.layout`` and is
@@ -78,8 +79,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
     """A plain widget on purpose.
 
     The designer is hosted as a *mode* of the Trigger window (``ui/main.py``).
-    It builds ``menu_bar`` and ``status_strip`` but installs neither, so the
-    host decides where they go.
+    It builds a ``status_strip`` but installs it nowhere, so the host decides
+    where it goes.
     """
 
     title_changed = QtCore.Signal(str)
@@ -111,7 +112,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.setWindowTitle(self.title)
         self.resize(1240, 680)
         self._build_central()
-        self._build_menus()
+        self._build_actions()
         self._build_status()
         theme.apply(self)
         self.watcher = SceneWatcher(
@@ -268,53 +269,35 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             action.setCheckable(True)
         return action
 
-    def _build_menus(self) -> None:
-        bar = self.menu_bar = QtWidgets.QMenuBar(self)
-        file_menu = bar.addMenu("&File")
-        self._action(file_menu, "Clear Scene Guides", self.clear_guides)
-        file_menu.addSeparator()
-        self._action(file_menu, "Import .trg…", lambda: self.import_file(), "Ctrl+O")
-        self._action(file_menu, "Export .trg…", lambda: self.export_file(ask=True), "Ctrl+S")
-        self._action(file_menu, "Export Selected…", lambda: self.export_file(ask=True, selected=True))
-        edit_menu = bar.addMenu("&Edit")
-        self._action(edit_menu, "Add Module…", self.show_palette, "Tab")
-        self._action(edit_menu, "Add Scene Nodes", lambda: self.create_guides(SCENE_NODE), "Ctrl+N")
-        edit_menu.addSeparator()
-        self._action(edit_menu, "Select Root", self.select_root)
-        self._action(edit_menu, "Select All Guides", self.select_current)
-        self._action(edit_menu, "Mirror", self.mirror_current, "Ctrl+M")
-        self._action(edit_menu, "Duplicate", self.duplicate_current, "Ctrl+D")
-        self._action(edit_menu, "Rename", lambda: self.name_edit.setFocus(), "F2")
-        self._action(edit_menu, "Delete", self.delete_current)
-        edit_menu.addSeparator()
-        self._action(edit_menu, "Connect Input…", self.connect_dialog)
-        self._action(edit_menu, "Disconnect Primary Input", self.disconnect_primary)
-        self._action(edit_menu, "Sever Connections", self.sever_current, "Ctrl+Shift+D")
-        view_menu = bar.addMenu("&View")
-        self.tree_action = self._action(view_menu, "Tree", lambda: self.set_pane_visible(self.tree_pane, self.tree_action.isChecked()), checkable=True)
-        self.graph_action = self._action(view_menu, "Graph", lambda: self.set_pane_visible(self.graph_pane, self.graph_action.isChecked()), checkable=True)
-        self.tree_action.setChecked(True)
-        self.graph_action.setChecked(True)
-        view_menu.addSeparator()
-        self.grid_action = self._action(view_menu, "Grid", lambda: self.graph.set_grid(self.grid_action.isChecked()), "G", checkable=True)
-        self.snap_action = self._action(view_menu, "Snap to Grid", lambda: self.graph.set_snap(self.snap_action.isChecked()), "Shift+G", checkable=True)
-        self.grid_action.setChecked(True)
-        self.snap_action.setChecked(True)
-        self._action(view_menu, "Auto Layout", self.graph.auto_layout, "Ctrl+L")
-        self._action(view_menu, "Fit Graph", self.graph.fit, "F")
-        view_menu.addSeparator()
-        self._action(view_menu, "Collapse: Header Only", lambda: self.graph.set_selected_mode(0), "1")
-        self._action(view_menu, "Collapse: Connected Plugs", lambda: self.graph.set_selected_mode(1), "2")
-        self._action(view_menu, "Collapse: Everything", lambda: self.graph.set_selected_mode(2), "3")
-        view_menu.addSeparator()
-        self._action(view_menu, "Refresh", self.refresh, "F5")
-        build_menu = bar.addMenu("&Build")
-        self._action(build_menu, "Build Selected", lambda: self.test_build(), "Ctrl+B")
-        self._action(build_menu, "Build All", lambda: self.test_build(all_modules=True), "Ctrl+Shift+B")
-        help_menu = bar.addMenu("&Help")
-        self._action(help_menu, "About Guide Designer", lambda: QtWidgets.QMessageBox.about(self, "Guide Designer", "Author module guides and connections; export a .trg for the Kinematics action."))
+    def _build_actions(self) -> None:
+        """The view toggles the designer owns.
+
+        It builds no menu bar: the window has one, and a second ``QMenuBar``
+        inside a ``QMainWindow`` subtree is not merely redundant -- it takes
+        the process down. The verbs live on the window's Guides menu, which
+        dispatches to whichever designer is in front.
+        """
+        def toggle(text, slot, shortcut=None):
+            action = QtWidgets.QAction(text, self)
+            action.setCheckable(True)
+            action.setChecked(True)
+            action.triggered.connect(slot)
+            if shortcut:
+                action.setShortcut(QtGui.QKeySequence(shortcut))
+                action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
+            return action
+
+        self.tree_action = toggle(
+            "Tree", lambda: self.set_pane_visible(self.tree_pane, self.tree_action.isChecked())
+        )
+        self.graph_action = toggle(
+            "Graph", lambda: self.set_pane_visible(self.graph_pane, self.graph_action.isChecked())
+        )
+        self.grid_action = toggle("Grid", lambda: self.graph.set_grid(self.grid_action.isChecked()), "G")
+        self.snap_action = toggle(
+            "Snap to Grid", lambda: self.graph.set_snap(self.snap_action.isChecked()), "Shift+G"
+        )
         for action in (self.grid_action, self.snap_action):
-            action.setShortcutContext(QtCore.Qt.WidgetWithChildrenShortcut)
             self.graph.addAction(action)
 
     def module_menu(self) -> QtWidgets.QMenu:
