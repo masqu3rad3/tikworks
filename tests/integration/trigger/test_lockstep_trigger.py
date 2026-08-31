@@ -306,3 +306,59 @@ def test_deleting_scene_groups_cannot_destroy_a_module(scene):
 def test_the_scene_holds_no_module_nodes_at_all(scene):
     scene.add("fkchain", side="C", name="tail", segments=1)
     assert not cmds.objExists("trigger_modules_grp")
+
+
+# ------------------------------------------------------- posing is not lost
+#
+# None of these call sync(). That is deliberate: nothing in Maya fires when a
+# guide is dragged, so the app does not sync either -- and a redraw that did not
+# capture first threw the rigger's posing away. Adding sync() to these tests
+# would hide exactly the bug they exist to catch.
+
+def _posed(scene, handle, pair=("segment", 0), where=(11.0, 2.0, 3.0)):
+    cmds.xform(scene.guide_nodes(handle.instance_id)[pair].long_name,
+               worldSpace=True, translation=where)
+    return where
+
+
+def _placed(scene, handle, pair=("segment", 0)):
+    return cmds.xform(scene.guide_nodes(handle.instance_id)[pair].long_name,
+                      query=True, worldSpace=True, translation=True)
+
+
+def test_changing_a_property_keeps_the_pose(scene):
+    handle = scene.add("fkchain", side="C", name="tail", segments=2)
+    where = _posed(scene, handle)
+    handle.spacing = 7.0
+    assert _placed(scene, handle) == pytest.approx(list(where))
+
+
+def test_growing_the_chain_keeps_the_pose_without_a_sync(scene):
+    handle = scene.add("fkchain", side="C", name="tail", segments=2)
+    where = _posed(scene, handle)
+    handle.segments = 5
+    assert _placed(scene, handle) == pytest.approx(list(where))
+
+
+def test_renaming_keeps_the_pose(scene):
+    handle = scene.add("fkchain", side="C", name="tail", segments=2)
+    where = _posed(scene, handle)
+    handle.name = "renamed"
+    assert _placed(scene, handle) == pytest.approx(list(where))
+
+
+def test_connecting_keeps_the_pose(scene):
+    parent = scene.add("fkchain", side="C", name="spine", segments=1)
+    child = scene.add("fkchain", side="L", name="tail", segments=2)
+    where = _posed(scene, child)
+    scene.connect(f"{child.key}.root", f"{parent.key}.root")
+    assert _placed(scene, child) == pytest.approx(list(where))
+
+
+def test_a_pose_reaches_the_document_without_a_sync(scene):
+    """The document is what gets saved, so it has to learn the pose too."""
+    handle = scene.add("fkchain", side="C", name="tail", segments=2)
+    where = _posed(scene, handle)
+    handle.spacing = 7.0
+    record = scene.document.module(handle.instance_id).guide("segment", 0)
+    assert record.position == pytest.approx(where)

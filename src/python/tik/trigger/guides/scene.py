@@ -58,6 +58,19 @@ class GuideScene:
         if self._session is not None:
             self._session.touch()
 
+    def _apply(self, entry) -> None:
+        """Persist an edit and redraw the module it touched.
+
+        Capture comes first, and that is the whole point: **nothing in Maya
+        fires when a guide is dragged**, so the document only learns a pose
+        when we go and read it. A redraw that skipped this would rebuild from
+        stale records and throw the rigger's posing away -- which is exactly
+        what changing any property used to do.
+        """
+        capture(self.document, snapshot())
+        self._touch()
+        regenerate(entry, self.document)
+
     def clear_rendering(self) -> None:
         """Delete every guide joint in the scene without touching the document.
 
@@ -262,8 +275,7 @@ class GuideScene:
         entry = self._entry(instance_id)
         with nodes.undo_chunk("Trigger rename module"):
             entry.name = name
-            self._touch()
-            regenerate(entry, self.document)
+            self._apply(entry)
 
     def reparent_guides(self, instance_id: str, parent: Optional[ParentRef]) -> None:
         """Hang an instance's root guide under another instance's guide (or the holder)."""
@@ -295,8 +307,7 @@ class GuideScene:
                 name: self.source_as_id(source)
                 for name, source in dict(inputs).items() if source
             }
-            self._touch()
-            regenerate(entry, self.document)
+            self._apply(entry)
 
     def set_input(self, instance_id: str, input_name: str, source: Optional[str]) -> None:
         """Connect or disconnect one input."""
@@ -306,8 +317,7 @@ class GuideScene:
                 entry.inputs[input_name] = self.source_as_id(source)
             else:
                 entry.inputs.pop(input_name, None)
-            self._touch()
-            regenerate(entry, self.document)
+            self._apply(entry)
 
     def read_settings(self, instance_id: str) -> dict:
         entry = self.document.module(instance_id)
@@ -329,8 +339,7 @@ class GuideScene:
         with nodes.undo_chunk("Trigger module settings"):
             entry.settings = module.values()
             expand_guides(entry, module.guides, module.guide_count())
-            self._touch()
-            regenerate(entry, self.document)
+            self._apply(entry)
 
     def _root_node(self, instance_id: str):
         """This module's root guide joint, from the document's module type."""
@@ -801,7 +810,26 @@ class GuideScene:
             for pose in instance.guides
         ]
         if existing is not None:
+            from tik.trigger.core.guide_document import expand_guides
+
+            # Capture *before* writing the mirrored poses, not after: this
+            # method sets poses deliberately, and the usual capture-then-redraw
+            # of ``_apply`` would overwrite them with what the scene still shows.
+            capture(self.document, snapshot())
             existing_entry = existing.entry
+            module_cls = registry.get_module(existing_entry.module_type)
+            module = module_cls(
+                instance_id=existing_entry.instance_id, name=existing_entry.name,
+                side=existing_entry.side, settings=instance.settings,
+            )
+            existing_entry.settings = module.values()
+            expand_guides(existing_entry, module.guides, module.guide_count())
+            existing_entry.inputs = {
+                name: self.source_as_id(
+                    mirror_source(source, handle.side.value, target_side.value)
+                )
+                for name, source in instance.inputs.items() if source
+            }
             for pose in poses:
                 record = existing_entry.guide(pose.role, pose.index)
                 if record is not None:
@@ -809,12 +837,7 @@ class GuideScene:
                     record.rotation = tuple(pose.rotation)
                     record.rotate_order = pose.rotate_order
             self._touch()
-            self.write_settings(existing.instance_id, instance.settings)
-            self.set_inputs(
-                existing.instance_id,
-                {name: mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()},
-            )
-            regenerate(existing.entry, self.document)
+            regenerate(existing_entry, self.document)
             return existing
         module = handle.module_class(name=instance.name, side=target_side, settings=instance.settings)
         mirrored_inputs = {name: mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()}
