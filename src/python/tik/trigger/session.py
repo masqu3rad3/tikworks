@@ -347,6 +347,13 @@ class Session:
         if not self.owns_scene_guides:
             return False
         scene = self._guide_scene()
+        if not document_store.read_stamp() and not scene.document.modules:
+            # An unstamped, guide-less scene was never this session's working
+            # copy -- reopening a saved file in a fresh scene, say. Capturing
+            # here would write emptiness over everything the session stores.
+            # An *unstamped scene with guides* is a first capture, and our own
+            # stamp means the scene is authoritative even when we emptied it.
+            return False
         # poses first, but never redraw: capturing must not edit the scene
         scene.sync(regenerate_stale=False)
         captured = scene.document.to_dict()
@@ -525,11 +532,16 @@ class Session:
         """Reset the scene and run every enabled action (optionally stopping after ``until``)."""
         until = until.path if isinstance(until, ActionHandle) else until
         self.events.log(f"Building {self.name}")
+        # The runner resets the scene, so the guides have to be in the document
+        # before it does. Saving already captures; building must too, or a rig
+        # built from an unsaved session has no guides at all.
+        self.capture_guides()
         return self._runner().run(self.document, self.directory, until=until, reset_scene=reset_scene, session=self)
 
     def run(self, path: str | ActionHandle) -> StepResult:
         """Run a single action in the current scene (no reset)."""
         path = path.path if isinstance(path, ActionHandle) else path
+        self.capture_guides()
         return self._runner().run(self.document, self.directory, only=path, reset_scene=False, session=self)[0]
 
     def steps(self, until: Optional[str] = None):

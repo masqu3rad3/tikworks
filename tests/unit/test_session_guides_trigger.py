@@ -126,3 +126,26 @@ def test_guide_work_makes_the_session_dirty(tmp_path):
     GuideScene().add("fkchain", side="C", name="tail", segments=1)
     session.capture_guides()
     assert session.is_modified is True
+
+
+def test_capture_does_not_wipe_a_document_when_the_scene_is_empty(tmp_path):
+    """Reopening a saved session in a fresh scene must not lose its guides."""
+    session = Session()
+    GuideScene().add("fkchain", side="C", name="tail", segments=1)
+    path = session.save(tmp_path / "hero.tr")
+    cmds.file(new=True, force=True)
+    reopened = Session.open(str(path))
+    assert reopened.capture_guides() is False
+    assert reopened.document.guides["modules"][0]["name"] == "tail"
+
+
+def test_capture_records_a_deletion_when_the_scene_is_ours():
+    """Our own stamp means the scene is authoritative, empty or not."""
+    session = Session()
+    scene = GuideScene()
+    handle = scene.add("fkchain", side="C", name="tail", segments=1)
+    session.capture_guides()
+    assert session.document.guides["modules"]
+    scene.remove(handle)
+    session.capture_guides()
+    assert session.document.guides["modules"] == []

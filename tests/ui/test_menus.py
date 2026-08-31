@@ -85,3 +85,26 @@ def test_undo_on_the_designer_tab_goes_to_maya(window, monkeypatch):
     view.sub_tabs.setCurrentIndex(SESSION_TAB)
     undo.trigger()
     assert hits == ["maya", "session"]
+
+
+def test_export_guides_asks_for_a_path(window):
+    """It once passed True as the *path*, which blew up inside pathlib."""
+    view = window.views[0]
+    view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
+    seen = {}
+    view.designer.export_file = lambda path=None, ask=False, selected=False: seen.update(
+        path=path, ask=ask, selected=selected
+    )
+    action = next(a for a in menu(window, "&File").actions() if a.text() == "Export Guides…")
+    action.trigger()
+    assert seen == {"path": None, "ask": True, "selected": False}
+
+
+def test_import_guides_takes_no_arguments(window):
+    view = window.views[0]
+    view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
+    seen = []
+    view.designer.import_file = lambda *args, **kwargs: seen.append((args, kwargs))
+    action = next(a for a in menu(window, "&File").actions() if a.text() == "Import Guides…")
+    action.trigger()
+    assert seen == [((), {})]

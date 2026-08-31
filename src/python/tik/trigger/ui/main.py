@@ -136,7 +136,7 @@ class TriggerWindow(MayaToolWindow):
         # a .trg is a guide *library* now, not this session's document, so it
         # gets no save shortcut -- Ctrl+S saves the session, guides included
         self._action(file_menu, "Import Guides…", lambda: self._designer_call("import_file"))
-        self._action(file_menu, "Export Guides…", lambda: self._designer_call("export_file", True))
+        self._action(file_menu, "Export Guides…", lambda: self._designer_call("export_file", ask=True))
         file_menu.addSeparator()
         self._action(file_menu, "Close Tab", lambda: self.close_tab(self.tabs.currentIndex()), "Ctrl+W")
         self._action(file_menu, "Quit", self.close, "Ctrl+Q")
@@ -243,11 +243,11 @@ class TriggerWindow(MayaToolWindow):
             return None
         return view.designer
 
-    def _designer_call(self, method: str, *args):
+    def _designer_call(self, method: str, *args, **kwargs):
         designer = self._designer
         if designer is None:
             return None
-        return getattr(designer, method)(*args)
+        return getattr(designer, method)(*args, **kwargs)
 
     def _graph_call(self, method: str, *args):
         designer = self._designer
@@ -255,11 +255,11 @@ class TriggerWindow(MayaToolWindow):
             return None
         return getattr(designer.graph, method)(*args)
 
-    def _either(self, session_method: str, designer_method: str, *args):
+    def _either(self, session_method: str, designer_method: str, *args, **kwargs):
         """Run the verb on whichever view is in front."""
         if self._designer is not None:
-            return self._designer_call(designer_method, *args)
-        return self._view_call(session_method, *args)
+            return self._designer_call(designer_method, *args, **kwargs)
+        return self._view_call(session_method, *args, **kwargs)
 
     @staticmethod
     def _maya_undo() -> None:
