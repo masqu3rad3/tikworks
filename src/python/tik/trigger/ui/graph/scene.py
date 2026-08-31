@@ -206,8 +206,12 @@ class GraphScene(QtWidgets.QGraphicsScene):
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         if event.key() in (QtCore.Qt.Key_Delete, QtCore.Qt.Key_Backspace):
-            self.delete_selected()
-            event.accept()
+            if self.delete_selected():
+                event.accept()
+                return
+            # Nothing here to delete -- a selected *module* is the designer's to
+            # remove, so let the key through rather than swallowing it.
+            event.ignore()
             return
         super().keyPressEvent(event)
 

@@ -624,3 +624,25 @@ def test_anim_spaces_renders_after_the_module_settings():
 
     names = list(get_module("toy_chain").fields())
     assert names[-1] == "anim_spaces"
+
+
+def test_delete_removes_a_module_selected_in_the_graph(designer):
+    """Delete used to be swallowed by the graph when a module was selected."""
+    designer.set_side("C")
+    created = designer.create_guides("toy_root")
+    key = created[0].key
+    designer.graph.select_key(key)
+    designer.graph.graph.setFocus()
+    assert designer.graph.graph.delete_selected() is False  # no wires or groups
+    designer.delete_current()
+    assert designer.guides.by_key(key) is None
+
+
+def test_delete_in_the_graph_still_cuts_a_selected_wire(designer):
+    designer.set_side("C")
+    designer.create_guides("toy_root")
+    designer.create_guides("toy_chain")
+    wires = designer.graph.graph.wires
+    assert wires, "the second module should be connected to the first"
+    wires[0].setSelected(True)
+    assert designer.graph.graph.delete_selected() is True

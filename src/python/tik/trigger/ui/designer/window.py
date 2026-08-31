@@ -257,7 +257,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.form.changed.connect(self._on_setting_changed)
         self.form.error.connect(lambda _name, message: self.events.log(message, level="warning"))
         self.scene_panel.changed.connect(self._on_scene_nodes_changed)
-        QtWidgets.QShortcut(QtGui.QKeySequence("Delete"), self.tree, self.delete_current)
+        # on the designer, not the tree: Delete has to work from the graph too
+        delete = QtWidgets.QShortcut(QtGui.QKeySequence("Delete"), self, self.delete_current)
+        delete.setContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
     def _action(self, menu, text, slot, shortcut=None, checkable=False):
         action = menu.addAction(text)
