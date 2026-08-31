@@ -24,7 +24,11 @@ class Kinematics(Action):
 
     label = "Kinematics"
 
-    guides_file = FileField("", extensions=[".trg"], label="GuideLayout file")
+    guides_file = FileField(
+        "", extensions=[".trg"], label="GuideLayout file",
+        help="Leave empty to build this session's own guides; set a path to "
+             "build a shared guide library instead.",
+    )
     guide_roots = ListField(
         item_type=str, help="Root guide names to build; empty = all",
         group=BUILD_OPTIONS,
@@ -42,16 +46,17 @@ class Kinematics(Action):
         from tik.trigger.guides import GuideScene
         from tik.trigger.maya.build import Builder
 
-        if not self.guides_file:
-            raise ActionExecutionError("kinematics: no guides file set.")
         guides = GuideScene(ctx.events)
-        handles = guides.import_(ctx.resolve(self.guides_file))
+        if self.guides_file:
+            handles = guides.import_(ctx.resolve(self.guides_file))
+        else:
+            handles = self._checkout_session_guides(guides, ctx)
         if self.guide_roots:
             wanted = set(self.guide_roots)
             roots = [handle for handle in handles if handle.name in wanted or handle.root.name in wanted]
             if not roots:
                 raise ActionExecutionError(
-                    f"kinematics: none of the roots {self.guide_roots} found in the guides file."
+                    f"kinematics: none of the roots {self.guide_roots} found in the guides."
                 )
             scope = _descendants(guides, roots)
         else:
@@ -59,7 +64,30 @@ class Kinematics(Action):
         report = Builder(ctx.events).build(
             scope=scope, rig_name=self.rig_name, afterlife=self.after_build
         )
-        ctx.log(f"Kinematics built {report.count} module(s) from {self.guides_file}.")
+        source = self.guides_file or "this session"
+        ctx.log(f"Kinematics built {report.count} module(s) from {source}.")
+
+    @staticmethod
+    def _checkout_session_guides(guides, ctx):
+        """Render the guides stored in this session, with no file involved.
+
+        The session is a self-contained rig description, so there is no version
+        skew between it and a separate guides file to get wrong.
+        """
+        from tik.trigger.core.guide_document import GuideDocument
+        from tik.trigger.guides import document_store, regenerate
+
+        document = getattr(ctx.session, "document", None)
+        stored = dict(getattr(document, "guides", {}) or {})
+        if not stored.get("modules"):
+            raise ActionExecutionError(
+                "kinematics: no guides in this session and no guides file set."
+            )
+        guides.clear()
+        document_store.write_document(GuideDocument.from_dict(stored))
+        guides.reload()
+        regenerate.regenerate_all(guides.document)
+        return guides.instances()
 
 
 def _descendants(guides, roots) -> list[str]:

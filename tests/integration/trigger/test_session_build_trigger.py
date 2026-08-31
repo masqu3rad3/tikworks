@@ -69,3 +69,30 @@ def test_kinematics_roots_filter(scene, tmp_path):
     rig.build()
     assert cmds.objExists("C_tail_grp") and not cmds.objExists("L_arm_grp")
     assert any("not found" in problem for problem in trigger.Session().add("kinematics", guides_file="nope.trg") and [] or []) or True
+
+
+def test_kinematics_builds_from_the_sessions_own_guides():
+    """No guides file: the rig description is self-contained."""
+    from tik.trigger.guides import GuideScene
+    from tik.trigger.session import Session
+
+    trigger.load_plugins()
+    cmds.file(new=True, force=True)
+    session = Session()
+    GuideScene().add("base", side="C", name="body")
+    session.capture_guides()
+    session.add("kinematics", rig_name="fromsession")
+    session.build()
+    assert cmds.objExists("fromsession_rig")
+
+
+def test_kinematics_without_guides_or_a_file_reports_clearly():
+    from tik.trigger.core.exceptions import ActionExecutionError
+    from tik.trigger.session import Session
+
+    trigger.load_plugins()
+    cmds.file(new=True, force=True)
+    session = Session()
+    session.add("kinematics", rig_name="empty")
+    with pytest.raises(ActionExecutionError, match="no guides"):
+        session.build()
