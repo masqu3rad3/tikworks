@@ -15,6 +15,8 @@ from tik.core.fields import (
     NodeRefField,
     Schema,
     StringField,
+    Vector2Field,
+    Vector3Field,
     VectorField,
 )
 from tik.core.side import Side
@@ -281,3 +283,61 @@ def test_schema_keeps_group_as_a_label_string():
 def test_field_groups_compare_by_value():
     assert FieldGroup("A") == FieldGroup("A")
     assert FieldGroup("A", collapsed=True) != FieldGroup("A")
+
+
+# ------------------------------------------------------------- vector fields
+
+
+class Vectors(Schema):
+    pair = Vector2Field((-60.0, 75.0), min=-89.0, max=89.0, labels=("Lower", "Upper"))
+    triple = Vector3Field((0.0, 1.0, 0.0), labels=("X", "Y", "Z"))
+
+
+def test_vector2_holds_two_floats():
+    thing = Vectors()
+    assert thing.pair == (-60.0, 75.0)
+    thing.pair = (-10, 20)
+    assert thing.pair == (-10.0, 20.0)
+
+
+def test_vector2_rejects_the_wrong_arity():
+    thing = Vectors()
+    with pytest.raises(FieldValidationError):
+        thing.pair = (1.0, 2.0, 3.0)
+
+
+def test_vector_bounds_apply_to_every_component():
+    thing = Vectors()
+    with pytest.raises(FieldValidationError):
+        thing.pair = (-95.0, 10.0)
+    with pytest.raises(FieldValidationError):
+        thing.pair = (-10.0, 95.0)
+
+
+def test_vector_size_and_labels_reach_the_schema():
+    schema = Vectors.schema()
+    assert schema["pair"]["type"] == "vector"
+    assert schema["pair"]["size"] == 2
+    assert schema["pair"]["labels"] == ["Lower", "Upper"]
+    assert schema["triple"]["size"] == 3
+    json.dumps(schema)
+
+
+def test_labels_default_to_none():
+    class Bare(Schema):
+        up = Vector3Field()
+
+    assert Bare.schema()["up"]["labels"] is None
+
+
+def test_a_vector_round_trips_through_values_and_apply():
+    thing = Vectors()
+    thing.pair = (-30.0, 45.0)
+    restored = Vectors()
+    restored.apply(thing.values())
+    assert restored.pair == (-30.0, 45.0)
+
+
+def test_vector2_rejects_a_size_override():
+    with pytest.raises(TypeError):
+        Vector2Field((0.0, 0.0), size=3)

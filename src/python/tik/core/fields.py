@@ -190,8 +190,18 @@ class VectorField(Field):
 
     type_name = "vector"
 
-    def __init__(self, default=(0.0, 0.0, 0.0), *, size: int = 3, **kwargs) -> None:
+    def __init__(
+        self,
+        default=(0.0, 0.0, 0.0),
+        *,
+        size: int = 3,
+        labels: Optional[Sequence[str]] = None,
+        **kwargs,
+    ) -> None:
         self.size = size
+        # Per-component captions. Presentation only -- validation never uses
+        # them -- but the form has no other way to say which slot is which.
+        self.labels = list(labels) if labels is not None else None
         super().__init__(tuple(float(item) for item in default), **kwargs)
 
     def coerce(self, value):
@@ -217,7 +227,26 @@ class VectorField(Field):
         data = super().to_schema()
         data["default"] = list(self.default)
         data["size"] = self.size
+        data["labels"] = list(self.labels) if self.labels else None
         return data
+
+
+class Vector2Field(VectorField):
+    """Two floats on one row -- a range, a min/max pair, a UV."""
+
+    def __init__(self, default=(0.0, 0.0), **kwargs) -> None:
+        if "size" in kwargs:
+            raise TypeError("Vector2Field has a fixed size of 2.")
+        super().__init__(default, size=2, **kwargs)
+
+
+class Vector3Field(VectorField):
+    """Three floats on one row -- a position, an axis, an RGB."""
+
+    def __init__(self, default=(0.0, 0.0, 0.0), **kwargs) -> None:
+        if "size" in kwargs:
+            raise TypeError("Vector3Field has a fixed size of 3.")
+        super().__init__(default, size=3, **kwargs)
 
 
 class ListField(Field):
