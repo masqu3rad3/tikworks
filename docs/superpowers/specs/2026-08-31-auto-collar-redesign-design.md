@@ -269,6 +269,15 @@ arm folded across the chest — where the clamped output would jump from the
 upper limit to the lower one. The off-plane form is monotone, is exactly
 +/-90 at the poles, has no branch cut anywhere, and degrades gracefully.
 
+**The price of no branch cut is a +/-90 ceiling.** These angles saturate at
++/-90 whatever the arm does, so an axis limit at or beyond 90 is never
+reached and its falloff never completes — the rig would creep across its
+whole range instead of settling. `ReachAxis.validate` rejects such a limit
+rather than building a rig that quietly never saturates, and section 4.1's
+defaults sit well inside the bound. This was measured during
+implementation; an earlier draft of this spec proposed a 120 degree default
+that cannot work.
+
 Each `hypot` is one `distanceBetween` with two of the three components
 wired and `point2` left at the origin. `atan2` is a core node from Maya
 2024 onward: `input1 = y`, `input2 = x`, output is a `doubleAngle`, and
@@ -380,23 +389,29 @@ and `auto_collar_interpolation`:
 | field | default | meaning |
 |---|---|---|
 | `auto_collar` | `True` | build the network at all |
-| `auto_collar_lift_min_angle` | `-45.0` | arm elevation at full downward falloff |
-| `auto_collar_lift_max_angle` | `120.0` | arm elevation at full upward falloff |
+| `auto_collar_lift_min_angle` | `-60.0` | arm elevation at full downward falloff |
+| `auto_collar_lift_max_angle` | `75.0` | arm elevation at full upward falloff |
 | `auto_collar_lift_min_output` | `-6.0` | collar degrees at `lift_min_angle` |
 | `auto_collar_lift_max_output` | `15.0` | collar degrees at `lift_max_angle` |
 | `auto_collar_swing_min_angle` | `-45.0` | arm azimuth at full backward falloff |
-| `auto_collar_swing_max_angle` | `90.0` | arm azimuth at full forward falloff |
+| `auto_collar_swing_max_angle` | `60.0` | arm azimuth at full forward falloff |
 | `auto_collar_swing_min_output` | `-6.0` | collar degrees at `swing_min_angle` |
 | `auto_collar_swing_max_output` | `10.0` | collar degrees at `swing_max_angle` |
 | `auto_collar_interpolation` | `"smooth"` | shared by both sides of both axes |
 
+Every angle field is bounded to `+/-89`, because the driver's angles cannot
+exceed `+/-90` (section 3.3) and a limit at the bound is unreachable.
+
 Defaults are starting points, not anatomy. Life gives roughly 15 degrees of
 clavicular elevation across 180 degrees of humeral elevation; animators
 consistently want more than life, so riggers are expected to push these.
+The lift defaults saturate with the arm 75 degrees above the neutral and 60
+below, which brackets the range a clavicle actually contributes to.
 
-`Arm.validate()` gains `min_angle < 0 < max_angle` on each axis. The
-neutral must lie strictly inside the input range or the middle ramp point
-is degenerate. It also gains the cycle rule in section 7.
+`Arm.validate()` delegates to `ReachAxis.validate` on each axis, which
+checks that the neutral lies strictly inside the input range — otherwise
+the middle ramp point collides with an endpoint — and that both limits stay
+inside `+/-90`. It also gains the cycle rule in section 7.
 
 ### 4.2 The neutral guide
 

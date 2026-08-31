@@ -1145,13 +1145,15 @@ Replace `auto_collar_start` and `auto_collar_end` with:
 ```python
     auto_collar = BoolField(True, help="Build the auto-collar network")
     auto_collar_lift_min_angle = FloatField(
-        -45.0, min=-180.0, max=0.0, label="Lift Lower Angle",
+        -60.0, min=-89.0, max=0.0, label="Lift Lower Angle",
         help="Arm elevation, relative to the neutral guide, at full "
-             "downward falloff. Must be below zero.",
+             "downward falloff. Must be below zero and inside -89.",
     )
     auto_collar_lift_max_angle = FloatField(
-        120.0, min=0.0, max=180.0, label="Lift Upper Angle",
-        help="Arm elevation at full upward falloff. Must be above zero.",
+        75.0, min=0.0, max=89.0, label="Lift Upper Angle",
+        help="Arm elevation at full upward falloff. Must be above zero and "
+             "inside 89: the driver's angles saturate at 90, so a wider "
+             "limit is never reached.",
     )
     auto_collar_lift_min_output = FloatField(
         -6.0, min=-90.0, max=90.0, label="Lift Lower Degrees",
@@ -1162,13 +1164,14 @@ Replace `auto_collar_start` and `auto_collar_end` with:
         help="Collar rotation at the upper angle.",
     )
     auto_collar_swing_min_angle = FloatField(
-        -45.0, min=-180.0, max=0.0, label="Swing Back Angle",
+        -45.0, min=-89.0, max=0.0, label="Swing Back Angle",
         help="Arm azimuth, relative to the neutral guide, at full backward "
-             "falloff. Must be below zero.",
+             "falloff. Must be below zero and inside -89.",
     )
     auto_collar_swing_max_angle = FloatField(
-        90.0, min=0.0, max=180.0, label="Swing Forward Angle",
-        help="Arm azimuth at full forward falloff. Must be above zero.",
+        60.0, min=0.0, max=89.0, label="Swing Forward Angle",
+        help="Arm azimuth at full forward falloff. Must be above zero and "
+             "inside 89.",
     )
     auto_collar_swing_min_output = FloatField(
         -6.0, min=-90.0, max=90.0, label="Swing Back Degrees",
