@@ -787,6 +787,10 @@ git commit -m "feat(tik.trigger): the scene is a checkout of one session at a ti
 
 # Addendum: the shell inversion (2026-08-31, after first use)
 
+**Status: complete.** Tasks 7-10 landed, plus two fixes found on the way:
+a build that clears the guides now keeps them cleared, and the Designer no
+longer pretends to own a `.trg`.
+
 Tasks 5–6 above kept the window-level mode bar and made its pages follow the
 active session tab. In use that reads as inverted: the mode bar sits *above* the
 sessions, sessions are reachable from only one mode, and one document has two
@@ -823,11 +827,11 @@ own `file_path`/`title`/`set_file`.
 - `SessionView.sub_tab_changed` — signal `(int)`, so the window can re-point the status strip.
 - `SessionView.teardown()` — tears the Designer down; called by `close_tab`.
 
-- [ ] **Step 1: Write the failing test** — a `SessionView` with a stub factory; assert the Designer is not built until the sub-tab is selected, is built once, and that `teardown()` releases it.
-- [ ] **Step 2: Run it, see it fail.**
-- [ ] **Step 3:** Wrap the existing pipeline splitter in page 0 of a `QTabWidget`; page 1 is a placeholder that swaps for the Designer on first activation.
-- [ ] **Step 4: Run the UI suite.**
-- [ ] **Step 5: Commit.**
+- [x] **Step 1: Write the failing test** — a `SessionView` with a stub factory; assert the Designer is not built until the sub-tab is selected, is built once, and that `teardown()` releases it.
+- [x] **Step 2: Run it, see it fail.**
+- [x] **Step 3:** Wrap the existing pipeline splitter in page 0 of a `QTabWidget`; page 1 is a placeholder that swaps for the Designer on first activation.
+- [x] **Step 4: Run the UI suite.**
+- [x] **Step 5: Commit.**
 
 ---
 
@@ -843,11 +847,11 @@ as a **Guides** menu, and its file verbs join **File** as *Import Guides…* /
 Designer's view toggles are disabled while the Session sub-tab is active, so the
 bar never offers a verb that has no target.
 
-- [ ] **Step 1: Write the failing test** — assert one menu bar; `File` contains Save (Ctrl+S) and Import/Export Guides; `Guides` exists and is disabled on the Session sub-tab, enabled on the Designer sub-tab.
-- [ ] **Step 2: Run it, see it fail.**
-- [ ] **Step 3:** Add `GuideDesigner.build_menus(bar)` that populates a given bar instead of owning one; call it from the window.
-- [ ] **Step 4: Run the UI suite.**
-- [ ] **Step 5: Commit.**
+- [x] **Step 1: Write the failing test** — assert one menu bar; `File` contains Save (Ctrl+S) and Import/Export Guides; `Guides` exists and is disabled on the Session sub-tab, enabled on the Designer sub-tab.
+- [x] **Step 2: Run it, see it fail.**
+- [x] **Step 3:** Add `GuideDesigner.build_menus(bar)` that populates a given bar instead of owning one; call it from the window.
+- [x] **Step 4: Run the UI suite.**
+- [x] **Step 5: Commit.**
 
 ---
 
@@ -857,11 +861,11 @@ bar never offers a verb that has no target.
 - Modify: `src/python/tik/trigger/ui/main.py`
 - Test: `tests/ui/test_pipeline_ui.py`, `tests/ui/test_designer_per_session.py`
 
-- [ ] **Step 1: Update the tests** to the flat shell — `window.tabs` is the central widget, there is no `mode_bar`, `window.menu_bar` is the one bar.
-- [ ] **Step 2: Run them, see them fail.**
-- [ ] **Step 3:** Delete the mode machinery listed above; `setCentralWidget(self.tabs)`; one `_build_menus`; one status strip that the active sub-view writes into.
-- [ ] **Step 4: Run every suite.**
-- [ ] **Step 5: Commit.**
+- [x] **Step 1: Update the tests** to the flat shell — `window.tabs` is the central widget, there is no `mode_bar`, `window.menu_bar` is the one bar.
+- [x] **Step 2: Run them, see them fail.**
+- [x] **Step 3:** Delete the mode machinery listed above; `setCentralWidget(self.tabs)`; one `_build_menus`; one status strip that the active sub-view writes into.
+- [x] **Step 4: Run every suite.**
+- [x] **Step 5: Commit.**
 
 ---
 
@@ -874,11 +878,11 @@ bar never offers a verb that has no target.
 Switching session tabs is the hand-over. Switching sub-tabs within a session
 changes nothing about the scene, so it must not trigger one.
 
-- [ ] **Step 1: Write the failing test** — switching session tabs calls `Session.hand_over(outgoing, incoming)`; switching sub-tabs does not.
-- [ ] **Step 2: Run it, see it fail.**
-- [ ] **Step 3:** Move the hand-off from designer activation to `tabs.currentChanged`; check out on first Designer activation too, for a tab whose guides were never projected.
-- [ ] **Step 4: Run every suite.**
-- [ ] **Step 5: Commit.**
+- [x] **Step 1: Write the failing test** — switching session tabs calls `Session.hand_over(outgoing, incoming)`; switching sub-tabs does not.
+- [x] **Step 2: Run it, see it fail.**
+- [x] **Step 3:** Move the hand-off from designer activation to `tabs.currentChanged`; check out on first Designer activation too, for a tab whose guides were never projected.
+- [x] **Step 4: Run every suite.**
+- [x] **Step 5: Commit.**
 
 ## Done when
 
