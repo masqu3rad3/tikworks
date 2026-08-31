@@ -782,3 +782,107 @@ git commit -m "feat(tik.trigger): the scene is a checkout of one session at a ti
 - A scene belonging to another session is reported, never silently adopted.
 - Importing the same `.trg` twice gives uniquely named modules with correctly remapped connections.
 - `make tests` passes.
+
+---
+
+# Addendum: the shell inversion (2026-08-31, after first use)
+
+Tasks 5–6 above kept the window-level mode bar and made its pages follow the
+active session tab. In use that reads as inverted: the mode bar sits *above* the
+sessions, sessions are reachable from only one mode, and one document has two
+menu bars. Spec §6.4 is revised; these tasks implement the revision.
+
+**Target shell**
+
+```
+  File  Edit  Session  Guides  View  Build  Help      <- one menu bar
+ ┌──────────────┬─────────────────┐
+ │ something.tr │ somethingElse.tr│                   <- session tabs, outermost
+ ├──────────────┴─────────────────┴────────────────┐
+ │  Session │ Guide Designer                       │  <- sub-tabs, per session
+```
+
+**What gets deleted:** the mode bar, `menu_stack`, `status_stack`, `add_mode`,
+`_mode_menus`, `_activate_mode`, `TRIGGER_MODE`/`DESIGNER_MODE`, the
+`designer_menus`/`designer_pages`/`designer_status` stacks, `_designers`,
+`designer_for`, `active_designer`, `_show_active_designer`, and the Designer's
+own `file_path`/`title`/`set_file`.
+
+---
+
+### Task 7: `SessionView` hosts its own Designer
+
+**Files:**
+- Modify: `src/python/tik/trigger/ui/session_view.py`
+- Test: `tests/ui/test_session_subtabs.py`
+
+**Interfaces:**
+- `SessionView.sub_tabs` — a `QTabWidget` with pages "Session" and "Guide Designer".
+- `SessionView.designer` — built lazily on first activation of the Designer page; `None` before.
+- `SessionView.designer_factory` — injection point so the Qt tests can supply a Maya-free Designer.
+- `SessionView.sub_tab_changed` — signal `(int)`, so the window can re-point the status strip.
+- `SessionView.teardown()` — tears the Designer down; called by `close_tab`.
+
+- [ ] **Step 1: Write the failing test** — a `SessionView` with a stub factory; assert the Designer is not built until the sub-tab is selected, is built once, and that `teardown()` releases it.
+- [ ] **Step 2: Run it, see it fail.**
+- [ ] **Step 3:** Wrap the existing pipeline splitter in page 0 of a `QTabWidget`; page 1 is a placeholder that swaps for the Designer on first activation.
+- [ ] **Step 4: Run the UI suite.**
+- [ ] **Step 5: Commit.**
+
+---
+
+### Task 8: One menu bar
+
+**Files:**
+- Modify: `src/python/tik/trigger/ui/main.py`, `src/python/tik/trigger/ui/designer/window.py`
+- Test: `tests/ui/test_menus.py`
+
+The Designer stops building a `QMenuBar`. Its verbs move onto the window's bar
+as a **Guides** menu, and its file verbs join **File** as *Import Guides…* /
+*Export Guides…* (no `Ctrl+S` — that saves the session). The Guides menu and the
+Designer's view toggles are disabled while the Session sub-tab is active, so the
+bar never offers a verb that has no target.
+
+- [ ] **Step 1: Write the failing test** — assert one menu bar; `File` contains Save (Ctrl+S) and Import/Export Guides; `Guides` exists and is disabled on the Session sub-tab, enabled on the Designer sub-tab.
+- [ ] **Step 2: Run it, see it fail.**
+- [ ] **Step 3:** Add `GuideDesigner.build_menus(bar)` that populates a given bar instead of owning one; call it from the window.
+- [ ] **Step 4: Run the UI suite.**
+- [ ] **Step 5: Commit.**
+
+---
+
+### Task 9: Flatten the window
+
+**Files:**
+- Modify: `src/python/tik/trigger/ui/main.py`
+- Test: `tests/ui/test_pipeline_ui.py`, `tests/ui/test_designer_per_session.py`
+
+- [ ] **Step 1: Update the tests** to the flat shell — `window.tabs` is the central widget, there is no `mode_bar`, `window.menu_bar` is the one bar.
+- [ ] **Step 2: Run them, see them fail.**
+- [ ] **Step 3:** Delete the mode machinery listed above; `setCentralWidget(self.tabs)`; one `_build_menus`; one status strip that the active sub-view writes into.
+- [ ] **Step 4: Run every suite.**
+- [ ] **Step 5: Commit.**
+
+---
+
+### Task 10: The hand-off moves to the session tab
+
+**Files:**
+- Modify: `src/python/tik/trigger/ui/main.py`
+- Test: `tests/ui/test_designer_per_session.py`
+
+Switching session tabs is the hand-over. Switching sub-tabs within a session
+changes nothing about the scene, so it must not trigger one.
+
+- [ ] **Step 1: Write the failing test** — switching session tabs calls `Session.hand_over(outgoing, incoming)`; switching sub-tabs does not.
+- [ ] **Step 2: Run it, see it fail.**
+- [ ] **Step 3:** Move the hand-off from designer activation to `tabs.currentChanged`; check out on first Designer activation too, for a tab whose guides were never projected.
+- [ ] **Step 4: Run every suite.**
+- [ ] **Step 5: Commit.**
+
+## Done when
+
+- The window shows one menu bar, session tabs, and Session / Guide Designer inside each.
+- Guides are reachable without leaving the session you are working on.
+- Switching session tabs hands the scene over; switching sub-tabs does not.
+- `make tests` passes.
