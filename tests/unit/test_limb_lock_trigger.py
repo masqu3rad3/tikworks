@@ -35,7 +35,7 @@ def test_attribute_order_and_defaults():
     rig, socket, chain_root, driver, control, target = _setup(distance=10.0)
     build_limb_lock(
         rig, socket=socket, chain_root=chain_root, driver=driver,
-        control=control, target=target,
+        control=control, target=target, follows=socket,
     )
     added = cmds.listAttr(control.long_name, userDefined=True)
     ordered = [name for name in added
@@ -49,7 +49,7 @@ def test_current_length_is_locked_visible_and_live():
     rig, socket, chain_root, driver, control, target = _setup(distance=10.0)
     build_limb_lock(
         rig, socket=socket, chain_root=chain_root, driver=driver,
-        control=control, target=target,
+        control=control, target=target, follows=socket,
     )
     path = control["currentLength"].path
     assert cmds.getAttr(path, lock=True)
@@ -64,7 +64,7 @@ def test_locking_at_the_current_pose_moves_nothing():
     rig, socket, chain_root, driver, control, target = _setup(distance=10.0)
     build_limb_lock(
         rig, socket=socket, chain_root=chain_root, driver=driver,
-        control=control, target=target,
+        control=control, target=target, follows=socket,
     )
     driver.translate = (2 + 13.0, 3.0, 0)
     before = target.world_position
@@ -78,7 +78,7 @@ def test_lock_holds_the_length():
     rig, socket, chain_root, driver, control, target = _setup(distance=10.0)
     lock = build_limb_lock(
         rig, socket=socket, chain_root=chain_root, driver=driver,
-        control=control, target=target,
+        control=control, target=target, follows=socket,
     )
     control["lockLength"].value = 10.0
     control["limbLock"].value = 1.0
@@ -91,7 +91,7 @@ def test_no_cycle():
     rig, socket, chain_root, driver, control, target = _setup()
     build_limb_lock(
         rig, socket=socket, chain_root=chain_root, driver=driver,
-        control=control, target=target,
+        control=control, target=target, follows=socket,
     )
     control["limbLock"].value = 1.0
     target.world_position  # force an evaluation
@@ -99,10 +99,12 @@ def test_no_cycle():
 
 
 # ------------------------------------------------------------------ the arm
-def test_arm_declares_the_lock_field():
+def test_arm_declares_the_lock_fields():
     from tik.trigger.modules.arm.arm import Arm
 
     assert Arm.limb_lock.default is True
+    assert Arm.lock_from.default == "shoulder"
+    assert set(Arm.lock_from.choices) == {"shoulder", "collar"}
     assert not hasattr(Arm, "lock_target")
 
 
@@ -111,6 +113,8 @@ def _armed(**settings):
     from tik.trigger.guides import GuideScene
     from tik.trigger.maya import Builder
 
+    # a fresh file, so a test may build more than one variant
+    cmds.file(new=True, force=True)
     trigger.load_plugins()
     guides = GuideScene()
     guides.clear()
@@ -182,3 +186,61 @@ def test_arm_lock_is_inert_when_off():
         assert (shoulder.world_position - rest).length() < 1e-3, (
             f"the shoulder drifted at {target} with the lock off"
         )
+
+
+def test_shoulder_mode_moves_the_shoulder_but_not_the_collar():
+    """The default: a shoulder-to-wrist lock leaves the clavicle on the chest."""
+    ctx = _armed(limb_lock=True, lock_from="shoulder")
+    control = ctx.controller_by_role("ik").transform
+    collar = ctx.outputs["collar"]
+    shoulder = ctx.outputs["upperarm"]
+
+    control.world_position = (30, 15, 0)
+    collar_before, shoulder_before = collar.world_position, shoulder.world_position
+    control["limbLock"].value = 1.0
+
+    assert (shoulder.world_position - shoulder_before).length() > 1.0
+    assert (collar.world_position - collar_before).length() < 1e-3, (
+        "the collar should not move in shoulder mode"
+    )
+
+
+def test_collar_mode_carries_the_collar_along():
+    ctx = _armed(limb_lock=True, lock_from="collar")
+    control = ctx.controller_by_role("ik").transform
+    collar = ctx.outputs["collar"]
+    shoulder = ctx.outputs["upperarm"]
+
+    control.world_position = (30, 15, 0)
+    collar_before, shoulder_before = collar.world_position, shoulder.world_position
+    control["limbLock"].value = 1.0
+
+    assert (shoulder.world_position - shoulder_before).length() > 1.0
+    assert (collar.world_position - collar_before).length() > 1.0, (
+        "the collar should travel with the push in collar mode"
+    )
+
+
+def test_both_modes_hold_the_shoulder_to_hand_length():
+    for mode in ("shoulder", "collar"):
+        ctx = _armed(limb_lock=True, lock_from=mode)
+        control = ctx.controller_by_role("ik").transform
+        shoulder = ctx.outputs["upperarm"]
+        hand = ctx.controller_by_role("ik_tweak").transform
+        rest = control["lockLength"].value
+        control["limbLock"].value = 1.0
+        for pose in ((30, 15, 0), (24, -9, 7)):
+            control.world_position = pose
+            held = (hand.world_position - shoulder.world_position).length()
+            assert abs(held - rest) < 1e-2, f"{mode} at {pose}: {held} != {rest}"
+
+
+def test_both_modes_are_cycle_free():
+    for mode in ("shoulder", "collar"):
+        ctx = _armed(limb_lock=True, lock_from=mode)
+        control = ctx.controller_by_role("ik").transform
+        control["limbLock"].value = 1.0
+        control.world_position = (28, 9, 4)
+        for node in ctx.outputs.values():
+            node.world_position
+        assert (cmds.cycleCheck(all=True, list=True) or []) == [], mode

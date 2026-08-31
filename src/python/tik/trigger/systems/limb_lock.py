@@ -24,6 +24,12 @@ constraint off that frame; because the frame swings as the hand moves, the
 maintained offset was re-expressed in a rotating basis and dragged the collar
 even at ``limbLock = 0``. Never route this through a rotating frame's matrix.
 
+**What moves.** ``target`` is the caller's choice. Pushing the limb's own
+parent moves the shoulder and leaves the collar on the chest, which is what a
+shoulder-to-wrist lock should look like. Pushing the module's socket instead
+carries the collar along with it. The system does not care which; it only
+requires that nothing else drives the target's translation.
+
 **The cycle.** ``lock_root`` is *positioned* at the chain root but *driven*
 from the socket, which is upstream of the push. Measuring from anything the
 push moves would make root -> measure -> push -> root a DG cycle. The
@@ -61,6 +67,7 @@ class LimbLock:
     current_plug: Any = None
     length_plug: Any = None
     target: Any = None
+    rest: Any = None
 
 
 def _root_space_translate(node, rig_root, name: str):
@@ -86,6 +93,7 @@ def build_limb_lock(
     driver,
     control,
     target,
+    follows,
     name: str = "",
 ) -> LimbLock:
     """Build the limb lock network.
@@ -100,10 +108,11 @@ def build_limb_lock(
             ``lockLength`` with the wrong number.
         driver: What the rig follows at the far end (the IK tweak).
         control: Where the three animator attributes are added.
-        target: The buffer everything in the module hangs off. It must sit
-            between the socket and its consumers, including the auto-collar's
-            ``rest_from``, or a world-pinned group downstream will discard the
-            push.
+        target: The buffer the push displaces. It must sit above everything
+            the lock is meant to move, and nothing else may drive its
+            translation -- this function owns those channels.
+        follows: What ``target`` rides when the lock is off. Whatever drives
+            it must be upstream of ``target``, or the graph cycles.
         name: Extra name token.
 
     Returns:
@@ -165,6 +174,14 @@ def build_limb_lock(
     (blended + result.measure.distance) >> result.push["translateX"]
 
     # --- apply it as a translation, never as a matrix ---------------------
+    # Where the target sits with no lock at all. A dedicated transform rather
+    # than reading `follows` directly, because the two need not share a space.
+    result.rest = tm.Transform.create(
+        name=rig.name(name, "lockRest"), parent=rig.groups.rig.long_name
+    )
+    result.rest.snap_to(target)
+    tm.MatrixConstraint.create(follows, result.rest, maintain_offset=True)
+
     push_at = _root_space_translate(result.push, rig.rig_root, rig.name(name, "lockPushAt"))
     anchor_at = _root_space_translate(
         result.anchor, rig.rig_root, rig.name(name, "lockAnchorAt")
@@ -174,15 +191,18 @@ def build_limb_lock(
     push_at >> delta["input3D[0]"]
     anchor_at >> delta["input3D[1]"]
 
+    rest_at = _root_space_translate(
+        result.rest, rig.rig_root, rig.name(name, "lockRestAt")
+    )
     total = tm.create_node("plusMinusAverage", name=rig.name(name, "lockTotal"))
     total["operation"].value = SUM
-    socket["translate"] >> total["input3D[0]"]
+    rest_at >> total["input3D[0]"]
     delta["output3D"] >> total["input3D[1]"]
     total["output3D"] >> target["translate"]
 
-    # Translation is ours; the target still takes its orientation from the
-    # socket so the collar keeps following the chest.
+    # Translation is ours; orientation and scale still come from whatever the
+    # target normally rides.
     tm.MatrixConstraint.create(
-        socket, target, maintain_offset=True, skip_translate="xyz"
+        follows, target, maintain_offset=True, skip_translate="xyz"
     )
     return result

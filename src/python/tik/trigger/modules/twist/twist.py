@@ -13,8 +13,14 @@ plain local offset drifts off the segment.
 
 **Position and weight are authored, not derived.** A twist guide is a handle
 on two numbers -- ``position`` along the segment and ``twistWeight`` -- and its
-transform channels are locked, driven by ``position`` off the end guide. Base
-and end guides stay free to snap wherever the rigger wants them.
+transform channels are locked, driven by ``position`` off the end guide.
+
+**The guides constrain the shape they describe.** The base guide is free: the
+rigger places and orients it, and its X axis is the segment. The end guide
+moves in ``translateX`` only, so the segment cannot be anything but the base's
+X axis and the twist axis cannot drift off it. Aiming is therefore done by
+orienting the base, which is a single, visible decision rather than an
+invariant a rigger has to remember.
 """
 
 from __future__ import annotations
@@ -36,7 +42,11 @@ from tik.trigger.systems.twist import AXES, SOURCES, dominant_axis, twist_plug
 
 WEIGHT_ATTR = "twistWeight"
 POSITION_ATTR = "position"
-LOCKED_CHANNELS = ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz", "v")
+ALL_CHANNELS = ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz", "v")
+#: The end guide is a length handle and nothing else: the segment always runs
+#: down the base's X, which is what makes X the twist axis by construction
+#: rather than by convention.
+END_FREE = ("tx",)
 
 
 @register_module("twist")
@@ -130,7 +140,21 @@ class Twist(Module):
             for channel in "XYZ":
                 node[POSITION_ATTR] >> mult[f"input2{channel}"]
             mult["output"] >> node["translate"]
-            attribute.lock_and_hide(node, LOCKED_CHANNELS)
+            attribute.lock_and_hide(node, ALL_CHANNELS)
+
+        base = guides.get(("base", 0))
+        if base is not None:
+            attribute.lock_and_hide(base, ("sx", "sy", "sz", "v"))
+        if end["tx"].locked:
+            return
+        # Enforce the invariant before locking it: whatever a pose or an
+        # import wrote into the off-axis channels is not part of the model.
+        end.translate = (end.translate[0], 0.0, 0.0)
+        end.rotate = (0.0, 0.0, 0.0)
+        end.scale = (1.0, 1.0, 1.0)
+        attribute.lock_and_hide(
+            end, tuple(channel for channel in ALL_CHANNELS if channel not in END_FREE)
+        )
 
     # ---------------------------------------------------------------- build
     def build(self, rig) -> None:

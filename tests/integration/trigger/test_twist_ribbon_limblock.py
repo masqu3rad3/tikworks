@@ -30,23 +30,25 @@ def rigged(guides):
     guides.connect("L_upper.start", "L_arm.upperarm")
     guides.connect("L_upper.end", "L_arm.lowerarm")
 
-    # Snap each span's ends onto the segment it covers. Sockets connect with
-    # maintain_offset, so a guide left at the module default bakes that offset
-    # in permanently -- this is the authored "snap base, snap end" workflow.
-    def snap(instance, role, arm_role):
-        cmds.xform(
-            guides.guide_node(instance.instance_id, role, 0).long_name,
-            ws=True,
-            t=cmds.xform(
-                guides.guide_node(arm.instance_id, arm_role, 0).long_name,
-                q=True, ws=True, t=True,
-            ),
-        )
+    # Cover each span. Sockets connect with maintain_offset, so a guide left
+    # at the module default bakes that offset in permanently.
+    def arm_guide(role):
+        return guides.guide_node(arm.instance_id, role, 0)
 
-    snap(fore, "base", "elbow")
-    snap(fore, "end", "hand")
-    snap(upper, "start", "shoulder")
-    snap(upper, "end", "elbow")
+    # Twist: place the base, aim it down the segment, dial the length. Its end
+    # guide moves in translateX only, so aiming is the base's job.
+    start, finish = arm_guide("elbow"), arm_guide("hand")
+    base = guides.guide_node(fore.instance_id, "base", 0)
+    base.world_position = start.world_position
+    base.aim_at(finish)
+    guides.guide_node(fore.instance_id, "end", 0)["translateX"].value = (
+        start.distance_to(finish)
+    )
+
+    # Ribbon guides are free, so they simply snap onto their span.
+    for role, arm_role in (("start", "shoulder"), ("end", "elbow")):
+        node = guides.guide_node(upper.instance_id, role, 0)
+        node.world_position = arm_guide(arm_role).world_position
     report = Builder().build(rig_name="hero", afterlife="keep")
     return report, arm, fore, upper
 

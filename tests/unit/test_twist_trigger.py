@@ -210,18 +210,18 @@ def _arm_with_twist(count=3):
     fore = guides.add("twist", side="L", name="fore", parent=arm, count=count)
     guides.connect("L_fore.base", "L_arm.lowerarm")
     guides.connect("L_fore.end", "L_arm.hand")
-    # The authored workflow: snap base and end onto the segment they span.
-    # Sockets are connected with maintain_offset, so a guide left at the
-    # module default would bake that offset in permanently.
-    for role, source in (("base", "elbow"), ("end", "hand")):
-        cmds.xform(
-            guides.guide_node(fore.instance_id, role, 0).long_name,
-            ws=True,
-            t=cmds.xform(
-                guides.guide_node(arm.instance_id, source, 0).long_name,
-                q=True, ws=True, t=True,
-            ),
-        )
+    # The authored workflow: place the base on the segment start, aim it down
+    # the segment, then dial the end guide's length. The end guide moves in
+    # translateX only, so aiming is the base's job. Sockets connect with
+    # maintain_offset, so a guide left at the module default bakes that
+    # offset in permanently.
+    elbow = guides.guide_node(arm.instance_id, "elbow", 0)
+    wrist = guides.guide_node(arm.instance_id, "hand", 0)
+    base = guides.guide_node(fore.instance_id, "base", 0)
+    end = guides.guide_node(fore.instance_id, "end", 0)
+    base.world_position = elbow.world_position
+    base.aim_at(wrist)
+    end["translateX"].value = elbow.distance_to(wrist)
     report = Builder().build(rig_name="hero", afterlife="keep")
     return report.rigs[arm.instance_id], report.rigs[fore.instance_id]
 
@@ -271,3 +271,26 @@ def test_twist_joints_keep_their_fraction_along_the_segment():
     for index, fraction in enumerate(fractions):
         expected = (index + 1) / 4.0
         assert abs(fraction - expected) < 1e-2, f"twist{index}: {fraction} != {expected}"
+
+
+def test_end_guide_moves_only_along_x():
+    """X is the twist axis by construction: the end guide is a length handle."""
+    import tik.trigger as trigger
+    from tik.trigger.guides import GuideScene
+
+    trigger.load_plugins()
+    guides = GuideScene()
+    guides.clear()
+    handle = guides.add("twist", name="fore", count=2)
+    end = guides.guide_node(handle.instance_id, "end", 0)
+
+    assert not end["tx"].locked, "length must stay adjustable"
+    for channel in ("ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz"):
+        assert end[channel].locked, f"{channel} should be locked on the end guide"
+    assert end.translate[1] == 0.0 and end.translate[2] == 0.0
+
+    # the base stays free to place and orient; only scale is meaningless
+    base = guides.guide_node(handle.instance_id, "base", 0)
+    for channel in ("tx", "ty", "tz", "rx", "ry", "rz"):
+        assert not base[channel].locked, f"{channel} should stay free on the base"
+    assert base["sx"].locked

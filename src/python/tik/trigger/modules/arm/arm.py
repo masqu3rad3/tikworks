@@ -41,6 +41,13 @@ class Arm(Module):
     stretch = BoolField(True, help="Build the stretch network")
     squash = BoolField(True, help="Build the compress-side network")
     pole_pin = BoolField(False, help="Lock the elbow to the pole control")
+    lock_from = ChoiceField(
+        "shoulder",
+        choices=("shoulder", "collar"),
+        label="Lock From",
+        help="'shoulder' displaces the arm chain and leaves the collar on the "
+             "chest; 'collar' carries the clavicle along too",
+    )
     limb_lock = BoolField(
         True,
         label="Limb Lock",
@@ -86,12 +93,15 @@ class Arm(Module):
 
         socket = rig.socket("root", match=collar_guide)
 
-        # Everything in the arm hangs off this buffer rather than the socket
-        # directly, so limb lock has one place to push. Without the lock it is
-        # an inert pass-through driven straight from the socket.
-        hang_from = rig.group("lock", "push", under="socket")
+        # Two places the lock can push, both inert pass-throughs otherwise.
+        # `hang_from` carries the collar with it; `limb_from` moves only the
+        # arm chain, leaving the clavicle on the chest. build_limb_lock owns
+        # the translation of whichever one it targets, so only the other gets
+        # a full constraint here.
+        locks_collar = self.limb_lock and self.lock_from == "collar"
+        hang_from = rig.group("lock", "collar", under="socket")
         hang_from.snap_to(socket)
-        if not self.limb_lock:
+        if not locks_collar:
             tm.MatrixConstraint.create(socket, hang_from, maintain_offset=True)
 
         # deform skeleton — created in final position, never reparented -------
@@ -119,10 +129,15 @@ class Arm(Module):
         attribute.lock_and_hide(collar_ctrl, ("sx", "sy", "sz", "v"))
 
         # the limb -------------------------------------------------------------
+        limb_from = rig.group("lock", "limb", under="rig")
+        limb_from.snap_to(collar_ctrl.transform)
+        if locks_collar or not self.limb_lock:
+            tm.MatrixConstraint.create(collar_ctrl, limb_from, maintain_offset=True)
+
         limb = build_ikfk_limb(
             rig,
             limb_guides,
-            parent=collar_ctrl,
+            parent=limb_from,
             bind_joints=bind_joints,
             soft_ik=True,  # never optional for an IK solution
             stretch=self.stretch,
@@ -151,13 +166,17 @@ class Arm(Module):
         if self.limb_lock:
             # Built last because it needs the limb's IK tweak; lock_root still
             # reads the raw socket, which is what keeps the graph acyclic.
+            target, follows = (
+                (hang_from, socket) if locks_collar else (limb_from, collar_ctrl)
+            )
             build_limb_lock(
                 rig,
                 socket=socket,
                 chain_root=limb.ik_joints[0],
                 driver=limb.ik_tweak.transform,
                 control=limb.ik_control,
-                target=hang_from,
+                target=target,
+                follows=follows,
             )
 
         rig.output("collar", collar_jnt)
