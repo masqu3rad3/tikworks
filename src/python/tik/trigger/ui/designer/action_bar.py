@@ -57,10 +57,17 @@ class DesignerActionBar(QtWidgets.QFrame):
         self.drift_pill.setVisible(False)
         layout.addWidget(self.drift_pill)
 
-        rule = QtWidgets.QFrame()
-        rule.setFrameShape(QtWidgets.QFrame.VLine)
-        rule.setObjectName("BarRule")
-        layout.addWidget(rule)
+        # a QFrame.VLine here does not paint under QSS `color:` and ignores
+        # `max-width`; a plain QFrame with an explicit fixed width is what
+        # actually renders a crisp 1px divider
+        # a QFrame.VLine here does not paint under QSS `color:` and ignores
+        # `max-width`; a plain QFrame with an explicit fixed width is what
+        # actually renders a crisp 1px divider
+        self.rule = QtWidgets.QFrame()
+        self.rule.setObjectName("BarRule")
+        self.rule.setMinimumWidth(1)
+        self.rule.setMaximumWidth(1)
+        layout.addWidget(self.rule)
 
         layout.addWidget(self._caption("SESSION"))
         self.build_all_button = QtWidgets.QPushButton("▶  Build all")
@@ -83,7 +90,7 @@ class DesignerActionBar(QtWidgets.QFrame):
         return label
 
     # ------------------------------------------------------------- state
-    def set_selection(self, keys: list) -> None:
+    def set_selection(self, keys: list[str]) -> None:
         """Name what the selection group is pointed at, and enable it or not.
 
         The label is why the buttons are greyed out -- today they simply are,

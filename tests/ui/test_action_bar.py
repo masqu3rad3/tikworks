@@ -9,6 +9,7 @@ from tik.trigger.ui.designer.action_bar import DesignerActionBar
 @pytest.fixture
 def bar(qapp):
     widget = DesignerActionBar()
+    widget.show()
     yield widget
     widget.deleteLater()
 
@@ -50,6 +51,16 @@ def test_the_auto_checkbox_reports_but_does_not_echo(bar):
 
 def test_drift_shows_a_pill_only_when_there_is_drift(bar):
     bar.set_drift(0)
-    assert not bar.drift_pill.isVisible() or bar.drift_pill.text() == ""
+    assert not bar.drift_pill.isVisible()
+    assert bar.drift_pill.text() == ""
     bar.set_drift(3)
+    assert bar.drift_pill.isVisible()
     assert "3" in bar.drift_pill.text()
+
+
+def test_the_scope_rule_is_a_hairline_not_a_bar(bar):
+    """A QFrame.VLine renders 5px wide under this theme; the divider that
+    keeps 'Build all' from reading as 'build what I picked' must not.
+    """
+    bar.layout().activate()
+    assert bar.rule.width() == 1

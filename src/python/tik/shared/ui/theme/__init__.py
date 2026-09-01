@@ -63,7 +63,7 @@ QSplitter::handle:vertical { height: 6px; border-top: 1px solid #303030; border-
 #FilterPillClose:hover { color: #ffffff; }
 #BuildBar { background-color: #1e1e1e; border-top: 1px solid #353535; }
 #BuildBar QPushButton { width: auto; min-width: 110px; }
-#BarRule { color: #353535; max-width: 1px; }
+#BarRule { background-color: #4f4f4f; min-width: 1px; max-width: 1px; border: none; }
 #BuildBar QPushButton[quiet="true"] { color: #8f8f8f; }
 #BuildBar QPushButton[alert="true"] { border-color: #FE7E00; color: #e0c8a8; }
 #BuildBar #FilterPillLabel { background-color: #3a2e1f; border: 1px solid #FE7E00; border-radius: 9px; padding: 2px 10px; }
