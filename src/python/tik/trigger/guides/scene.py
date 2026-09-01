@@ -41,6 +41,12 @@ class GuideScene:
         # unbound: a free-standing document for scripting, that no session sees
         self._own = None if session is not None else GuideDocument()
         self._syncing = False
+        # Governs ONE thing: whether a scene event may start a sync. It must
+        # never gate the capture in _apply -- "a write always captures first;
+        # Auto only decides whether the scene may start a sync" (spec 3.1).
+        # Nothing in Maya fires when a guide is dragged, so a write that skipped
+        # capture would redraw from stale records and discard the posing.
+        self.auto_sync = True
 
     # ------------------------------------------------------- the document
     @property

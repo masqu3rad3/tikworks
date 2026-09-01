@@ -572,6 +572,11 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
     def _on_scene_event(self, name: str) -> None:
         if name == "SelectionChanged":
             return  # selection is not synced; structure changes are
+        if not self.guides.auto_sync:
+            # Look, do not touch: report the drift and leave the document alone
+            # until the rigger presses Sync.
+            self._show_drift(self.guides.diff())
+            return
         # Muted throughout: sync() deletes and recreates joints, which fires the
         # removal callback that brought us here and would re-enter.
         with self.watcher.mute():
@@ -580,6 +585,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             except Exception as error:  # noqa: BLE001 - keep the tool alive
                 self.events.log(f"Guide sync failed: {error}", level="warning")
         self.refresh()
+
+    def _show_drift(self, diff) -> None:
+        """Report unabsorbed scene changes. Wired to the bar in Task 7."""
 
     # ---------------------------------------------------------- properties
     def _set_current(self, handle: Optional[GuideHandle], group: Optional[list[GuideHandle]] = None) -> None:

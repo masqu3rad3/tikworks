@@ -362,3 +362,24 @@ def test_a_pose_reaches_the_document_without_a_sync(scene):
     handle.spacing = 7.0
     record = scene.document.module(handle.instance_id).guide("segment", 0)
     assert record.position == pytest.approx(where)
+
+
+def test_auto_sync_off_still_captures_before_a_write(scene):
+    """The fence for spec 3.1.
+
+    Auto governs the *watcher*, never capture-before-regenerate. If capture ever
+    moves behind the flag, changing a property throws the posing away again --
+    the exact bug this codebase already shipped once.
+    """
+    scene.auto_sync = False
+    handle = scene.add("fkchain", side="C", name="tail", segments=2)
+    joint = scene.guide_nodes(handle.instance_id)[("segment", 0)]
+    cmds.xform(joint.long_name, worldSpace=True, translation=(9.0, 0.0, 0.0))
+    scene.write_settings(handle.instance_id, {"segments": 3})
+    moved = scene.guide_nodes(handle.instance_id)[("segment", 0)]
+    placed = cmds.xform(moved.long_name, query=True, worldSpace=True, translation=True)
+    assert placed == pytest.approx([9.0, 0.0, 0.0])
+
+
+def test_auto_sync_defaults_to_on(scene):
+    assert scene.auto_sync is True
