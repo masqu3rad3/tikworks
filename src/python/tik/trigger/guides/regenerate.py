@@ -102,11 +102,18 @@ def regenerate(entry: ModuleEntry, document: Optional[GuideDocument] = None) -> 
             joint = created.get(record.pair)
             if joint is None:
                 continue
-            # radius, colour and orient are not a pose (spec 4.3 step 5) -- an
-            # unposed guide still has them, so they land before the posed guard.
-            joint.radius = record.radius
-            joint.color = record.color
-            joint.joint_orient = record.joint_orient
+            # radius, colour and orient are not a pose (spec 4.3 step 5), so
+            # an authored one applies even to an unposed guide -- before the
+            # posed guard below. But each is Optional exactly like position:
+            # None means "never authored", so draw_guides' own choice (e.g.
+            # the module's per-side colour from create_guide_joint) must be
+            # left alone rather than stamped over with a stale default.
+            if record.radius is not None:
+                joint.radius = record.radius
+            if record.color is not None:
+                joint.color = record.color
+            if record.joint_orient is not None:
+                joint.joint_orient = record.joint_orient
             for name, value in record.attrs.items():
                 if joint.has_attr(name):
                     joint[name].value = value

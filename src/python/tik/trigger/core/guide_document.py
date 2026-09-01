@@ -11,7 +11,10 @@ Maya node names cannot contain a dot.
 
 An unposed :class:`GuideRecord` (``position is None``) means "no authored pose
 yet" -- regenerate places it wherever the module's ``draw_guides`` puts it,
-never at the origin.
+never at the origin. The same rule now covers ``joint_orient``, ``radius`` and
+``color``: ``None`` means "never authored", so regenerate leaves whatever the
+module's own ``draw_guides`` (or ``create_guide_joint``) chose -- side colour
+included -- rather than stamping a default over it.
 """
 
 from __future__ import annotations
@@ -36,9 +39,13 @@ class GuideRecord:
     position: Optional[tuple] = None
     rotation: Optional[tuple] = None
     rotate_order: int = 0
-    joint_orient: tuple = (0.0, 0.0, 0.0)
-    radius: float = 1.0
-    color: int = 17
+    #: ``None`` means "never authored"; regenerate leaves draw_guides' choice.
+    joint_orient: Optional[tuple] = None
+    #: ``None`` means "never authored"; regenerate leaves draw_guides' choice.
+    radius: Optional[float] = None
+    #: ``None`` means "never authored"; regenerate leaves draw_guides' choice
+    #: (e.g. the module's per-side colour), rather than overwriting it.
+    color: Optional[int] = None
     #: Values of the module's declared ``guide_attrs`` for this guide.
     attrs: dict = field(default_factory=dict)
     #: ``(role, index)`` of this guide's parent *within the same module*.
@@ -60,7 +67,7 @@ class GuideRecord:
             "position": list(self.position) if self.position is not None else None,
             "rotation": list(self.rotation) if self.rotation is not None else None,
             "rotate_order": self.rotate_order,
-            "joint_orient": list(self.joint_orient),
+            "joint_orient": list(self.joint_orient) if self.joint_orient is not None else None,
             "radius": self.radius,
             "color": self.color,
             "attrs": dict(self.attrs),
@@ -72,15 +79,18 @@ class GuideRecord:
         parent = data.get("parent")
         position = data.get("position")
         rotation = data.get("rotation")
+        joint_orient = data.get("joint_orient")
+        radius = data.get("radius")
+        color = data.get("color")
         return cls(
             role=data["role"],
             index=int(data.get("index", 0)),
             position=None if position is None else _triple(position),
             rotation=None if rotation is None else _triple(rotation),
             rotate_order=int(data.get("rotate_order", 0)),
-            joint_orient=_triple(data.get("joint_orient")),
-            radius=float(data.get("radius", 1.0)),
-            color=int(data.get("color", 17)),
+            joint_orient=None if joint_orient is None else _triple(joint_orient),
+            radius=None if radius is None else float(radius),
+            color=None if color is None else int(color),
             attrs={key: float(value) for key, value in (data.get("attrs") or {}).items()},
             parent=(str(parent[0]), int(parent[1])) if parent else None,
         )

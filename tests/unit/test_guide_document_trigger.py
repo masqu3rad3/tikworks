@@ -22,6 +22,37 @@ def test_record_pair_and_posed():
     assert posed.posed is True
 
 
+def test_record_radius_colour_orient_default_to_unauthored():
+    """Concrete defaults would be indistinguishable from an authored value --
+    same trap as pose, same fix: None means 'never authored'."""
+    record = GuideRecord(role="root")
+    assert record.radius is None
+    assert record.color is None
+    assert record.joint_orient is None
+
+
+def test_record_radius_colour_orient_round_trip_through_dict():
+    unauthored = GuideRecord(role="root")
+    data = unauthored.to_dict()
+    assert data["radius"] is None
+    assert data["color"] is None
+    assert data["joint_orient"] is None
+    restored = GuideRecord.from_dict(data)
+    assert restored.radius is None
+    assert restored.color is None
+    assert restored.joint_orient is None
+
+    authored = GuideRecord(role="root", radius=2.5, color=6, joint_orient=(1.0, 2.0, 3.0))
+    data = authored.to_dict()
+    assert data["radius"] == 2.5
+    assert data["color"] == 6
+    assert data["joint_orient"] == [1.0, 2.0, 3.0]
+    restored = GuideRecord.from_dict(data)
+    assert restored.radius == pytest.approx(2.5)
+    assert restored.color == 6
+    assert restored.joint_orient == (1.0, 2.0, 3.0)
+
+
 def test_entry_key_follows_side():
     assert ModuleEntry("id1", "arm", "arm", "L").key == "L_arm"
     assert ModuleEntry("id2", "spine", "spine", "C").key == "spine"

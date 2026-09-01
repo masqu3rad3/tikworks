@@ -145,6 +145,21 @@ def test_only_the_root_guide_carries_the_breadcrumb():
         assert (tags.ENTRY in joint.meta) is ((role, index) == (root_role, 0))
 
 
+def test_unauthored_colour_keeps_the_modules_side_colour_on_regenerate():
+    """Regression fence (fix round 2): a record with no authored colour must not
+    overwrite what draw_guides/create_guide_joint chose for the module's side --
+    an L module regenerated from bare records must not turn centre-yellow."""
+    from tik.trigger.guides import nodes
+
+    entry = ModuleEntry("id1", "fkchain", "arm", "L", settings={"segments": 1})
+    expand_guides(entry, registry.get_module("fkchain").guides, 1)
+    for record in entry.guides:
+        assert record.color is None  # never authored
+    joints = regenerate.regenerate(entry)
+    root = joints[(registry.get_module("fkchain").guides.root, 0)]
+    assert root.color == nodes.SIDE_COLORS["L"]
+
+
 def test_regenerate_applies_radius_colour_and_orient_even_when_unposed():
     """Radius, colour and orient are not a pose (spec 4.3 step 5), so they must
     land even on a guide the document has never seen posed -- the case that
