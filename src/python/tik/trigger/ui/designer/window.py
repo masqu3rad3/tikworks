@@ -594,7 +594,17 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.refresh()
 
     def _show_drift(self, diff) -> None:
-        """Report unabsorbed scene changes. Wired to the bar in Task 7."""
+        """Report scene changes the document has not absorbed.
+
+        Structural staleness *and* pose drift, unlike ``diff_summary``, which
+        deliberately omits drift: that describes a redraw about to happen,
+        this describes the rigger's own work -- dragging a guide fires
+        nothing in Maya -- waiting to be picked up by a sync.
+        """
+        if diff is None:  # the stub scene in tests has nothing to reconcile
+            self.action_bar.set_drift(0)
+            return
+        self.action_bar.set_drift(len(set(diff.structural) | set(diff.drifted)))
 
     # ---------------------------------------------------------- properties
     def _set_current(self, handle: Optional[GuideHandle], group: Optional[list[GuideHandle]] = None) -> None:

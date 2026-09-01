@@ -682,3 +682,26 @@ def test_delete_in_the_graph_still_cuts_a_selected_wire(designer):
     assert wires, "the second module should be connected to the first"
     wires[0].setSelected(True)
     assert designer.graph.graph.delete_selected() is True
+
+
+def test_drift_counts_structure_and_pose_together(designer):
+    """The pill reports work the document has not been told about -- posing included."""
+    from tik.trigger.core.reconcile import GuideDiff, ModuleDiff
+
+    diff = GuideDiff(modules={
+        "a": ModuleDiff("a", missing=[("root", 0)]),  # structural
+        "b": ModuleDiff("b", drifted=[("root", 0)]),  # pose only
+    })
+    designer._show_drift(diff)
+    assert "2" in designer.action_bar.drift_pill.text()
+
+
+def test_drift_deduplicates_a_module_that_is_both(designer):
+    """A module both structurally stale and drifted counts once, not twice."""
+    from tik.trigger.core.reconcile import GuideDiff, ModuleDiff
+
+    diff = GuideDiff(modules={
+        "a": ModuleDiff("a", missing=[("root", 0)], drifted=[("root", 0)]),
+    })
+    designer._show_drift(diff)
+    assert "1" in designer.action_bar.drift_pill.text()
