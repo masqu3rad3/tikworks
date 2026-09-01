@@ -63,7 +63,8 @@ QSplitter::handle:vertical { height: 6px; border-top: 1px solid #303030; border-
 #FilterPillClose:hover { color: #ffffff; }
 #BuildBar { background-color: #1e1e1e; border-top: 1px solid #353535; }
 #BuildBar QPushButton { width: auto; min-width: 110px; }
-#BarRule { background-color: #4f4f4f; min-width: 1px; max-width: 1px; border: none; }
+#BuildBar QPushButton#SyncButton { min-width: 92px; }
+#BarRule { background-color: #353535; min-width: 1px; max-width: 1px; border: none; }
 #BuildBar QPushButton[quiet="true"] { color: #8f8f8f; }
 #BuildBar QPushButton[alert="true"] { border-color: #FE7E00; color: #e0c8a8; }
 #BuildBar #FilterPillLabel { background-color: #3a2e1f; border: 1px solid #FE7E00; border-radius: 9px; padding: 2px 10px; }
@@ -74,9 +75,16 @@ QProgressBar::chunk { background-color: #FE7E00; border-radius: 2px; }
 CollapsibleGroup > QToolButton { background-color: #2f2f2f; color: #e6e6e6; font-weight: bold; text-align: left; padding: 4px 8px; border: 1px solid #353535; border-radius: 3px; }
 CollapsibleGroup > QToolButton:hover { background-color: #383838; }
 #SearchPalette { background-color: #0f0f0f; border: 1px solid #353535; border-radius: 6px; }
-QTabBar::tab { background-color: #1f1f1f; color: #8a8a8a; padding: 5px 12px; border: 1px solid #303030; border-bottom: none; border-top-left-radius: 3px; border-top-right-radius: 3px; }
-QTabBar::tab:selected { background-color: #2a2a2a; color: #ececec; border-top: 2px solid #FE7E00; }
+QTabBar::tab { background-color: #1f1f1f; color: #8a8a8a; padding: 5px 12px; margin-right: 2px; border: 1px solid #303030; border-bottom: none; border-top-left-radius: 3px; border-top-right-radius: 3px; }
+/* the base theme's own :selected rule (above, in theme.qss) still contributes
+   a gradient border-color and 1px border-width on every side; re-asserting
+   the full border here (not just border-top) is what keeps that gradient
+   from bleeding onto the selected tab's left/right edges */
+QTabBar::tab:selected { background-color: #2a2a2a; color: #ececec; border: 1px solid #303030; border-top: 2px solid #FE7E00; border-bottom: none; }
 QTabWidget::pane { border: 1px solid #303030; }
+/* the Guide Designer's sub-tab strip, inset from the session tab strip above it */
+QTabWidget#SessionSubTabs::tab-bar { left: 14px; }
+QTabWidget#SessionSubTabs QTabBar { border-bottom: 1px solid #303030; }
 QToolButton { background-color: transparent; border: 1px solid transparent; border-radius: 3px; padding: 2px 6px; color: #c0c0c0; }
 QToolButton:hover { background-color: #353535; border-color: #454545; }
 QMenuBar::item { padding: 4px 10px; }

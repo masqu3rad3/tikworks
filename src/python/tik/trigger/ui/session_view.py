@@ -129,6 +129,9 @@ class SessionView(QtWidgets.QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         self.sub_tabs = QtWidgets.QTabWidget()
+        # named so the theme can inset this strip from the session tab strip
+        # above it without touching every QTabWidget in the tool
+        self.sub_tabs.setObjectName("SessionSubTabs")
         self.sub_tabs.setDocumentMode(True)
         outer.addWidget(self.sub_tabs)
 

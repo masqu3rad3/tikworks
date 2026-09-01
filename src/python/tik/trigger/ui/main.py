@@ -269,9 +269,9 @@ class TriggerWindow(MayaToolWindow):
             return None
         target = getattr(designer, method, None)
         if target is None:
-            # e.g. "snapshot_guides" before Task 9 lands the method: a menu
-            # command for a verb that does not exist yet should log, not
-            # traceback, so the tool stays usable while it is being built out
+            # a menu command for a verb the active Designer does not expose
+            # (e.g. a stub scene without export_file) should log, not
+            # traceback, so the tool stays usable
             self.events.log(f"'{method}' is not available yet.", level="warning")
             return None
         return target(*args, **kwargs)

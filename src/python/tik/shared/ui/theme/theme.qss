@@ -1,5 +1,5 @@
 /*-----QWidget------------------------------------------------------------------------------------------------------------------------------------*/
-QWidget { background-color: rgb(36,36,36); color: white; selection-background-color: #FE7E00; font-family: "Roboto"; }
+QWidget { background-color: rgb(36,36,36); color: white; selection-background-color: #FE7E00; font-family: "Roboto", "Segoe UI", sans-serif; }
 
 
 /*-----QGroupBox------------------------------------------------------------------------------------------------------------------------------------*/

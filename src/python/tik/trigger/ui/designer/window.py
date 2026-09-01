@@ -632,9 +632,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.icon.clear()
             self.inputs_caption.setVisible(False)
             self.status.set_activity("Select a module, or add one from the shelf (Tab to search).")
-            self.action_bar.set_selection(
-                [handle.key for handle in (self._multi or ([handle] if handle else []))]
-            )
+            self.action_bar.set_selection([])
             return
         entry = handle.entry
         module_cls = handle.module_class

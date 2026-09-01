@@ -44,6 +44,7 @@ class DesignerActionBar(QtWidgets.QFrame):
 
         layout.addWidget(self._caption("SCENE"))
         self.sync_button = QtWidgets.QPushButton("Sync")
+        self.sync_button.setObjectName("SyncButton")
         self.sync_button.setToolTip("Read the guides in the scene into this session")
         layout.addWidget(self.sync_button)
         self.auto_check = QtWidgets.QCheckBox("Auto")
@@ -57,9 +58,6 @@ class DesignerActionBar(QtWidgets.QFrame):
         self.drift_pill.setVisible(False)
         layout.addWidget(self.drift_pill)
 
-        # a QFrame.VLine here does not paint under QSS `color:` and ignores
-        # `max-width`; a plain QFrame with an explicit fixed width is what
-        # actually renders a crisp 1px divider
         # a QFrame.VLine here does not paint under QSS `color:` and ignores
         # `max-width`; a plain QFrame with an explicit fixed width is what
         # actually renders a crisp 1px divider
