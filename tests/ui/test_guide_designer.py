@@ -1,5 +1,7 @@
 """Guide Designer v3 + binding + graph, driven by a stub scene (no Maya)."""
 
+from pathlib import Path
+
 import pytest
 
 from tik.shared.ui.binding import BindingManager, bind
@@ -105,6 +107,30 @@ def test_auto_sync_survives_a_relaunch(designer, qapp):
     designer.set_auto_sync(False)
     stored = QtCore.QSettings("tikworks", "trigger").value("designer/auto_sync")
     assert stored in (False, "false")
+
+    # "Survives a relaunch" means a *second*, independently-constructed
+    # Designer picks the setting back up -- not just that the raw value was
+    # written.
+    def adapter_factory(plug_path):
+        FakeAdapter.store.setdefault(plug_path, 2 if plug_path.endswith("segments") else True)
+        return FakeAdapter(plug_path)
+
+    relaunched = GuideDesigner(scene=StubScene(), binding_adapter=adapter_factory)
+    try:
+        assert relaunched.guides.auto_sync is False
+        assert relaunched.action_bar.auto_check.isChecked() is False
+    finally:
+        relaunched.close()
+
+
+def test_qsettings_is_sandboxed_away_from_the_real_machine(_qsettings_sandbox, qapp):
+    """The suite must never touch the developer's real ``tikworks/trigger`` store."""
+    settings = QtCore.QSettings("tikworks", "trigger")
+    settings.setValue("designer/auto_sync", True)
+    settings.sync()
+    ini_path = Path(settings.fileName())
+    assert ini_path.is_relative_to(Path(_qsettings_sandbox))
+    assert ini_path.is_file()
 
 
 def _keys(tree):

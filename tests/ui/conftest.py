@@ -19,8 +19,55 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _qsettings_sandbox(tmp_path_factory):
+    """Keep ``QSettings("tikworks", "trigger")`` off the developer's real machine.
+
+    That is the same org/app the running Trigger tool persists its designer
+    preferences under (spec 3.2). Left alone, ``tests/ui`` writes for real --
+    to the Windows registry here, an ini file under ``~/.config`` elsewhere --
+    and a UI test run has been observed to flip the *live* app's default
+    ``auto_sync`` setting. ``qapp`` below requests this fixture explicitly
+    (rather than relying on autouse-ordering) so the redirect is in place
+    before anything constructs a ``QSettings`` object.
+
+    ``setDefaultFormat(IniFormat)`` + ``setPath(IniFormat, ...)`` alone is not
+    enough: every call site in this codebase uses the two-arg convenience
+    constructor ``QSettings(organization, application)``, which Qt documents
+    as equivalent to ``QSettings(NativeFormat, UserScope, organization,
+    application)`` -- it ignores ``setDefaultFormat()`` outright, and
+    ``NativeFormat`` (the Windows registry, a macOS plist) ignores
+    ``setPath()`` too, since neither backend is path-based. So the two-arg
+    constructor itself is intercepted below and rerouted to the redirected
+    ``IniFormat`` store, with no change to production code.
+    """
+    if QtWidgets is None:
+        yield None
+        return
+    from tik.shared.ui.Qt import QtCore
+
+    directory = tmp_path_factory.mktemp("qsettings")
+    real_qsettings = QtCore.QSettings
+    real_qsettings.setDefaultFormat(real_qsettings.IniFormat)
+    real_qsettings.setPath(real_qsettings.IniFormat, real_qsettings.UserScope, str(directory))
+
+    class _SandboxedQSettings(real_qsettings):
+        def __init__(self, *args, **kwargs):
+            if len(args) == 2 and not kwargs and all(isinstance(a, str) for a in args):
+                organization, application = args
+                super().__init__(real_qsettings.IniFormat, real_qsettings.UserScope, organization, application)
+            else:
+                super().__init__(*args, **kwargs)
+
+    QtCore.QSettings = _SandboxedQSettings
+    try:
+        yield directory
+    finally:
+        QtCore.QSettings = real_qsettings
+
+
 @pytest.fixture(scope="session")
-def qapp():
+def qapp(_qsettings_sandbox):
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     yield app
 
