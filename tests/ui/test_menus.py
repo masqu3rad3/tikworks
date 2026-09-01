@@ -182,3 +182,26 @@ def test_auto_sync_binding_is_two_way_and_does_not_recurse(window):
     assert designer_calls == [False, True]  # exactly the user's click, no ping-pong
     assert designer.guides.auto_sync is True
     assert designer.action_bar.auto_check.isChecked() is True
+
+
+def test_auto_sync_stays_bound_after_closing_and_reopening_a_tab(window):
+    """Regression: a closed tab's Designer can be collected and its address
+    reused by a later Designer. Dedup keyed on id(designer) would then see
+    that id as "already connected" and skip wiring the new instance's
+    signal, so the menu would silently stop tracking the bar. Goes through
+    the real tab lifecycle (new_session / close_tab), not internals.
+    """
+    window.new_session()
+    closed_view = window.views[-1]
+    closed_view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
+    assert closed_view.designer is not None
+    window.close_tab(window.tabs.indexOf(closed_view))
+
+    window.new_session()
+    reopened_view = window.views[-1]
+    reopened_view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
+    designer = reopened_view.designer
+    assert designer is not None
+
+    designer.set_auto_sync(False)
+    assert window.auto_sync_action.isChecked() is False

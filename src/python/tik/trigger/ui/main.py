@@ -54,10 +54,6 @@ class TriggerWindow(MayaToolWindow):
         self.designer_factory = designer_factory
         # which session tab's guides are currently in the scene
         self._checked_out_view = None
-        # Designers are built lazily (SessionView.ensure_designer), one per
-        # session tab, so auto_sync_changed gets wired the first time each
-        # Designer's tab is actually shown rather than once at construction
-        self._auto_sync_connected_ids: set[int] = set()
         self.recent_files: list[str] = []
         self.setWindowTitle(f"Trigger {VERSION}")
         self.resize(1180, 720)
@@ -308,11 +304,22 @@ class TriggerWindow(MayaToolWindow):
             self._on_designer_auto_sync_changed(designer.guides.auto_sync)
 
     def _connect_designer_auto_sync(self, designer) -> None:
-        """Wire the Auto Sync menu action to ``designer``'s signal, once."""
-        if id(designer) in self._auto_sync_connected_ids:
+        """Wire the Auto Sync menu action to ``designer``'s signal, once.
+
+        Marked on the Designer itself rather than tracked by id() in a
+        window-level set: tabs are closable (``close_tab`` ->
+        ``_drop_designer`` -> ``view.teardown()``), and once a closed tab's
+        Designer is garbage-collected, CPython is free to reuse its address
+        for a later Designer -- an id-set would then see that id as "already
+        connected" and silently never wire the new instance's signal. A
+        fresh Designer never carries this attribute regardless of what
+        address it landed on, so there is nothing to go stale and nothing to
+        prune.
+        """
+        if getattr(designer, "_menu_auto_sync_bound", False):
             return
         designer.auto_sync_changed.connect(self._on_designer_auto_sync_changed)
-        self._auto_sync_connected_ids.add(id(designer))
+        designer._menu_auto_sync_bound = True
 
     def _on_designer_auto_sync_changed(self, on: bool) -> None:
         """Mirror the Designer's setting without reporting it back as a click.
