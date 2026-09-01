@@ -1697,3 +1697,186 @@ The suites cannot catch a bar that is laid out wrong. In a real Maya session:
 git add tests/ui/stub.py CLAUDE.md
 git commit -m "test(tik.trigger): the UI stub matches the scene it stands in for"
 ```
+
+---
+
+### Task 11: Visual parity with the mockups
+
+The mockups read better than the shipped UI, and this task closes the gap rather than leaving
+it as taste. It is last because it needs the new bar in place, but its **Step 2 font fix is
+tool-wide and should be verified first** — every screenshot after it changes.
+
+**Files:**
+- Create: `tools/uishot.py`
+- Modify: `src/python/tik/shared/ui/theme/theme.qss`, `src/python/tik/trigger/ui/designer/window.py`, `src/python/tik/trigger/ui/main.py`
+- Reference: the mockup artboards at
+  `C:/Users/kutlu/AppData/Local/Temp/claude/D--dev-tikworks/b2d5dc24-b040-4aec-897e-a45f4af00ca9/scratchpad/designer-bar/*.dc.html`
+  and the published canvas <https://claude.ai/code/artifact/12479ad4-4aed-40a1-b493-58395c070185>
+
+**Interfaces:**
+- Produces: `tools/uishot.py` — `python tools/uishot.py <out.png> [--widget designer|bar|window]`,
+  runnable headless under `mayapy` *and* pasteable into a live Maya session.
+
+**Two facts established before this plan was written — do not re-derive them, and do not
+"fix" the second:**
+
+1. **The tool renders in Tahoma 8.** `theme.qss` says `font-family: "Roboto"` with no fallback
+   stack, and Roboto is not installed on this machine (nor in Maya's font database, checked:
+   187 families, `Roboto: False`, `Segoe UI: True`). Qt therefore falls back to its default,
+   Tahoma. The mockups used Roboto with a Segoe UI fallback. This is the single biggest
+   contributor to the difference in look.
+2. **`letter-spacing` DOES work in Qt Style Sheets.** Measured: `SELECTION` is 49px without it
+   and 58px with it, and `font().letterSpacing()` reads back `1.0`. An earlier suspicion that
+   Qt ignored it was wrong. Leave the caption tracking alone.
+
+**Screenshots: headless shows layout, live Maya shows type.** The headless `mayapy` +
+`QT_QPA_PLATFORM=offscreen` environment has **zero** fonts (`QFontDatabase.families()` returns
+an empty list), so text renders as tofu boxes there. Headless captures are still valid for
+geometry, margins, alignment and colour — just never for typography. For type, run the same
+script inside the live Maya session.
+
+- [ ] **Step 1: Write the screenshot harness**
+
+Create `tools/uishot.py`:
+
+```python
+"""Grab a Trigger UI widget to a PNG, for comparing against the design mockups.
+
+Two environments, two purposes:
+
+* headless (``mayapy tools/uishot.py out.png``) has **no fonts at all**, so text
+  comes out as tofu. Use it for geometry: margins, alignment, control heights,
+  colour.
+* inside a running Maya, the same ``capture()`` has the real font stack. Use it
+  for anything about type.
+
+Not a test: nothing here asserts. It produces an image for a human -- or a model
+with eyes -- to compare against the mockups.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+
+
+def capture(out_path: str, which: str = "bar", width: int = 1240, height: int = 760) -> str:
+    """Render one widget offscreen and save it. Returns the path."""
+    from tik.shared.ui import theme
+    from tik.shared.ui.Qt import QtWidgets
+
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    if which == "bar":
+        from tik.trigger.ui.designer.action_bar import DesignerActionBar
+
+        widget = DesignerActionBar()
+        widget.set_selection(["L_arm"])
+        widget.resize(width, widget.sizeHint().height())
+    else:
+        from tik.trigger.ui.designer import GuideDesigner
+
+        widget = GuideDesigner()
+        widget.resize(width, height)
+    theme.apply(widget)
+    widget.show()
+    app.processEvents()
+    widget.grab().save(out_path)
+    widget.close()
+    return out_path
+
+
+if __name__ == "__main__":
+    os.environ.setdefault("TIK_TESTS_NO_MAYA", "1")
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "python"))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("out")
+    parser.add_argument("--widget", default="bar", choices=("bar", "designer"))
+    args = parser.parse_args()
+    print("saved:", capture(args.out, args.widget))
+```
+
+The `designer` mode needs a `GuideScene`, which needs Maya — headless it will only work if the
+Designer is constructed with the UI test stub. Wire it the way `tests/ui/conftest.py` does, or
+restrict `designer` mode to the live-Maya path and say so in the docstring. Do not leave a mode
+that raises.
+
+- [ ] **Step 2: Fix the font fallback**
+
+In `src/python/tik/shared/ui/theme/theme.qss`, first rule:
+
+```
+QWidget { background-color: rgb(36,36,36); color: white; selection-background-color: #FE7E00; font-family: "Roboto", "Segoe UI", sans-serif; }
+```
+
+Roboto is still preferred — a studio that installs it gets it. Everyone else now lands on Segoe
+UI instead of Tahoma.
+
+Verify in the live Maya session rather than headless (headless has no fonts to resolve):
+
+```python
+from PySide6 import QtGui, QtWidgets
+from tik.shared.ui import theme
+label = QtWidgets.QLabel("Build all")
+label.setStyleSheet(theme.stylesheet())
+label.show(); QtWidgets.QApplication.processEvents()
+print(QtGui.QFontInfo(label.font()).family())   # expect: Segoe UI
+label.close()
+```
+
+Expected: `Segoe UI`, not `Tahoma`.
+
+- [ ] **Step 3: Capture the bar and compare it against the mockup**
+
+```bash
+PYTHONPATH=src/python mayapy tools/uishot.py <scratch>/bar_real.png --widget bar
+```
+
+Open `bar_real.png` beside `OptionB.dc.html`'s bar and check, in this order — geometry first,
+because the headless capture is trustworthy for it:
+
+| Property | Mockup |
+|---|---|
+| Bar height | 34px content + 1px top rule |
+| Margins | `10, 7, 10, 7` |
+| Spacing between controls | `8` |
+| Button min width | `110` (`Sync` `92`) |
+| Caption colour / size | `#7b7b7b`, 10px, 1px tracking |
+| Group rule | 1px `#353535`, full bar height |
+| Primary button | `#FE7E00` ground, `#1a1a1a` text |
+
+Fix what differs **in the widget**, not in the mockup. Record each difference found and what
+changed, so Step 6 can report something concrete.
+
+- [ ] **Step 4: Check the tab strips the user called out**
+
+The session tabs and sub-tabs were named specifically. Compare `Main.dc.html`'s chrome against
+a live-Maya capture of the real window:
+
+| Property | Mockup |
+|---|---|
+| Tab padding | `5px 12px` |
+| Selected tab | `#2a2a2a` ground, `#ececec` text, 2px `#FE7E00` top border |
+| Unselected tab | `#1f1f1f` ground, `#8a8a8a` text, 1px `#303030` border, no bottom border |
+| Tab strip ground | `#151515` |
+| Gap between tabs | 2px |
+| Sub-tab strip | inset 14px from the left, 1px `#303030` bottom rule |
+
+`QTabWidget.setDocumentMode(True)` is already set on the session tabs (`main.py`) and changes
+how the frame paints — if the strip cannot be made to match with document mode on, note that
+rather than fighting it, and say which of the two looks better.
+
+- [ ] **Step 5: Run the suites**
+
+Run: `make tests-ui && make tests-unit`
+Expected: PASS. The font change touches every widget, so a UI test asserting a pixel width or
+a `sizeHint` may legitimately need updating — update it, and say which and why. A test failing
+because text got wider is a real signal, not noise to suppress.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add tools/uishot.py src/python/tik/shared/ui/theme/theme.qss src/python/tik/trigger/ui/designer/window.py src/python/tik/trigger/ui/main.py
+git commit -m "fix(tik.shared): the theme falls back to Segoe UI instead of Tahoma"
+```
