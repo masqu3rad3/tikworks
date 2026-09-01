@@ -23,8 +23,10 @@ tool, it exists to compare paint against the mockups.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import sys
+import weakref
 from pathlib import Path
 
 TESTS_UI = str(Path(__file__).resolve().parent.parent / "tests" / "ui")
@@ -69,6 +71,46 @@ def _stub_scene():
     return StubScene()
 
 
+@contextlib.contextmanager
+def _patched_session_guides():
+    """Make every ``Session.guides`` hand out a ``StubScene`` -- then put it back.
+
+    ``Session.guides`` is a property that lazily builds a real (Maya-only)
+    ``GuideScene`` on first access and caches it on the instance. Patched the
+    same way ``tests/ui/conftest.py`` patches it, but *not* left patched: a
+    rigger can paste this tool into a live Maya session with a real Trigger
+    session already open, and an unrestored patch would make every
+    ``Session`` in that process -- the ones already open and every one
+    created afterwards -- silently hand out a fake scene forever, with sync,
+    capture and regenerate all running against nothing until Maya restarts.
+    The ``try/finally`` here is what makes ``--widget window`` safe to use
+    live rather than something that only happens to work headless.
+
+    Stubs are kept in a ``WeakKeyDictionary`` keyed on the ``Session``
+    itself, not ``id(session)``: an id can be recycled once a ``Session`` is
+    garbage collected, which would hand a later, unrelated ``Session`` a
+    stale stub -- the same class of bug already removed from ``main.py``
+    elsewhere in this feature.
+    """
+    from tik.trigger.session import Session
+
+    original = Session.__dict__["guides"]  # the real property, not its value
+    scenes: "weakref.WeakKeyDictionary" = weakref.WeakKeyDictionary()
+
+    def guides(self):
+        if self not in scenes:
+            scene = _stub_scene()
+            scene.session = self
+            scenes[self] = scene
+        return scenes[self]
+
+    Session.guides = property(guides)
+    try:
+        yield
+    finally:
+        Session.guides = original
+
+
 def _designer_widget():
     """A ``GuideDesigner`` over a ``StubScene`` -- never a real ``GuideScene``."""
     _guard_api_callbacks()
@@ -80,25 +122,13 @@ def _designer_widget():
 def _window_widget():
     """A ``TriggerWindow`` whose sessions hand out ``StubScene``s for their guides.
 
-    ``Session.guides`` normally builds a real (Maya-only) ``GuideScene`` lazily
-    on first access. Patched the same way ``tests/ui/conftest.py`` patches it,
-    so opening a session's Guide Designer sub-tab here never needs Maya.
+    Must be called inside :func:`_patched_session_guides` -- this only
+    builds the window and the designer factory, it does not itself patch or
+    restore ``Session.guides``.
     """
     _guard_api_callbacks()
-    from tik.trigger.session import Session
     from tik.trigger.ui.designer import GuideDesigner
     from tik.trigger.ui.main import TriggerWindow
-
-    scenes: dict = {}
-
-    def guides(self):
-        if id(self) not in scenes:
-            scene = _stub_scene()
-            scene.session = self
-            scenes[id(self)] = scene
-        return scenes[id(self)]
-
-    Session.guides = property(guides)
 
     def factory(scene=None):
         return GuideDesigner(scene=scene if scene is not None else _stub_scene())
@@ -116,23 +146,27 @@ def capture(out_path: str, which: str = "bar", width: int = 1240, height: int = 
     from tik.shared.ui.Qt import QtWidgets
 
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-    if which == "bar":
-        from tik.trigger.ui.designer.action_bar import DesignerActionBar
+    # only "window" touches Session.guides; the patch stays live for the
+    # window's whole construct/show/grab/close lifecycle, then comes off
+    guard = _patched_session_guides() if which == "window" else contextlib.nullcontext()
+    with guard:
+        if which == "bar":
+            from tik.trigger.ui.designer.action_bar import DesignerActionBar
 
-        widget = DesignerActionBar()
-        widget.set_selection(["L_arm"])
-        widget.resize(width, widget.sizeHint().height())
-    elif which == "designer":
-        widget = _designer_widget()
-        widget.resize(width, height)
-    else:  # "window"
-        widget = _window_widget()
-        widget.resize(width, height)
-    theme.apply(widget)
-    widget.show()
-    app.processEvents()
-    widget.grab().save(out_path)
-    widget.close()
+            widget = DesignerActionBar()
+            widget.set_selection(["L_arm"])
+            widget.resize(width, widget.sizeHint().height())
+        elif which == "designer":
+            widget = _designer_widget()
+            widget.resize(width, height)
+        else:  # "window"
+            widget = _window_widget()
+            widget.resize(width, height)
+        theme.apply(widget)
+        widget.show()
+        app.processEvents()
+        widget.grab().save(out_path)
+        widget.close()
     return out_path
 
 
