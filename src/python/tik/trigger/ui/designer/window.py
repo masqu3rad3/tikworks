@@ -601,9 +601,6 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         this describes the rigger's own work -- dragging a guide fires
         nothing in Maya -- waiting to be picked up by a sync.
         """
-        if diff is None:  # the stub scene in tests has nothing to reconcile
-            self.action_bar.set_drift(0)
-            return
         self.action_bar.set_drift(len(set(diff.structural) | set(diff.drifted)))
 
     # ---------------------------------------------------------- properties

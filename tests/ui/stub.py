@@ -18,6 +18,7 @@ from tik.trigger.core import registry
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import instance_key
+from tik.trigger.core.reconcile import GuideDiff
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 from tik.trigger.guides.format import GuideFile
 from tik.trigger.guides.handle import GuideHandle, mirror_source
@@ -384,9 +385,9 @@ class StubScene:
         return None
 
     def diff(self):
-        """No scene to reconcile against; the double just records the call."""
+        """Stands in for a clean scene: nothing stale, nothing drifted."""
         self.calls.append(("diff",))
-        return None
+        return GuideDiff()
 
     def find_instances(self, scope="scene") -> list:
         """The one scene scan the handles share; tests count calls to it."""
