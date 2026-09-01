@@ -380,9 +380,14 @@ class StubScene:
         return list(getattr(self, "selected_names", []))
 
     def sync(self, regenerate_stale: bool = True):
-        """No scene to reconcile against; the double just records the call."""
+        """No scene to reconcile against; the double just records the call.
+
+        Matches ``GuideScene.sync()``'s contract -- callers now use this
+        return value instead of a second ``diff()`` walk, so the stub must
+        hand back a ``GuideDiff`` too, not ``None``.
+        """
         self.calls.append(("sync",))
-        return None
+        return GuideDiff()
 
     def diff(self):
         """Stands in for a clean scene: nothing stale, nothing drifted."""

@@ -267,14 +267,7 @@ class TriggerWindow(MayaToolWindow):
         designer = self._designer
         if designer is None:
             return None
-        target = getattr(designer, method, None)
-        if target is None:
-            # a menu command for a verb the active Designer does not expose
-            # (e.g. a stub scene without export_file) should log, not
-            # traceback, so the tool stays usable
-            self.events.log(f"'{method}' is not available yet.", level="warning")
-            return None
-        return target(*args, **kwargs)
+        return getattr(designer, method)(*args, **kwargs)
 
     def _graph_call(self, method: str, *args):
         designer = self._designer

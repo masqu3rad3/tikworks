@@ -28,6 +28,11 @@ class DesignerActionBar(QtWidgets.QFrame):
         # the Session sub-tab's build bar wears the same object name; one look
         # for both sub-tabs is the point
         self.setObjectName("BuildBar")
+        # tracked so the "up to date" trailing label -- Auto off and nothing
+        # to sync -- can be derived from both without either setter needing
+        # to know the other's last value
+        self._auto = True
+        self._drift = 0
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(10, 7, 10, 7)
         layout.setSpacing(8)
@@ -57,6 +62,13 @@ class DesignerActionBar(QtWidgets.QFrame):
         self.drift_pill.setObjectName("FilterPillLabel")
         self.drift_pill.setVisible(False)
         layout.addWidget(self.drift_pill)
+        # Spec 2.3: with Auto off and nothing to sync, say so rather than
+        # leaving the SCENE group silent -- same grey as the rest of the
+        # chrome, no pill, no new colour.
+        self.up_to_date_label = QtWidgets.QLabel("up to date")
+        self.up_to_date_label.setObjectName("PanelSubtitle")
+        self.up_to_date_label.setVisible(False)
+        layout.addWidget(self.up_to_date_label)
 
         # a QFrame.VLine here does not paint under QSS `color:` and ignores
         # `max-width`; a plain QFrame with an explicit fixed width is what
@@ -117,6 +129,8 @@ class DesignerActionBar(QtWidgets.QFrame):
             self.auto_check.blockSignals(False)
         self.sync_button.setProperty("quiet", bool(on))
         self._repolish(self.sync_button)
+        self._auto = bool(on)
+        self._update_up_to_date()
 
     def set_drift(self, count: int) -> None:
         """Report scene changes the document has not been told about."""
@@ -126,6 +140,12 @@ class DesignerActionBar(QtWidgets.QFrame):
         )
         self.sync_button.setProperty("alert", bool(count))
         self._repolish(self.sync_button)
+        self._drift = int(count)
+        self._update_up_to_date()
+
+    def _update_up_to_date(self) -> None:
+        """Spec 2.3: say the scene is clean only when Auto cannot say it for us."""
+        self.up_to_date_label.setVisible(not self._auto and not self._drift)
 
     @staticmethod
     def _repolish(widget) -> None:

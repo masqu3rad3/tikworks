@@ -11,12 +11,20 @@ from __future__ import annotations
 
 from tik.shared.ui.Qt import QtWidgets
 
-#: What a module without a breadcrumb loses. Kept as prose, not a table: it is
-#: read once, under pressure, by someone who has already lost their session.
+#: What a module without a breadcrumb loses, on top of the always-true loss
+#: below. Kept as prose, not a table: it is read once, under pressure, by
+#: someone who has already lost their session.
 LOSSES = (
     "names fall back to the module type, settings reset to their defaults, "
-    "input connections are lost, and the graph will be auto-laid out"
+    "and input connections are lost"
 )
+
+#: What every snapshot loses, breadcrumb or not: ``scene_recovery`` never
+#: populates ``positions``/``collapse``/``scene_groups`` (spec 4/5 cover
+#: guides, not Designer chrome), so this is not a per-module loss the way
+#: ``LOSSES`` is -- it is true of the whole document the moment there is
+#: anything to snapshot at all.
+GRAPH_LOSSES = "the graph is auto-laid out, and named scene-nodes groups are not restored"
 
 
 class SnapshotDialog(QtWidgets.QDialog):
@@ -53,7 +61,10 @@ class SnapshotDialog(QtWidgets.QDialog):
         layout.addWidget(self.recovered_label)
 
         # Only ever shown when something really is lost: a permanently visible
-        # warning teaches people to stop reading warnings.
+        # warning teaches people to stop reading warnings. Graph layout and
+        # scene-nodes groups are lost for every module the moment there is
+        # anything to snapshot, so "nothing lost" means no modules at all --
+        # not merely that none of them are missing a breadcrumb.
         self.losses_group = QtWidgets.QWidget()
         losses_layout = QtWidgets.QVBoxLayout(self.losses_group)
         losses_layout.setContentsMargins(0, 0, 0, 0)
@@ -65,7 +76,7 @@ class SnapshotDialog(QtWidgets.QDialog):
         self.losses_label.setObjectName("FilterPillLabel")
         self.losses_label.setWordWrap(True)
         losses_layout.addWidget(self.losses_label)
-        self.losses_group.setVisible(bool(report.partial or report.unknown_types))
+        self.losses_group.setVisible(bool(report.modules))
         layout.addWidget(self.losses_group)
 
         buttons = QtWidgets.QHBoxLayout()
@@ -101,7 +112,10 @@ class SnapshotDialog(QtWidgets.QDialog):
         return "\n".join(lines)
 
     def _losses_text(self) -> str:
-        parts = []
+        # Always true for every module in the report, whether or not it has
+        # a breadcrumb -- said once, up front, rather than folded into the
+        # per-module sentence below where it would read as a partial-only loss.
+        parts = [f"For every module, {GRAPH_LOSSES}."]
         if self.report.partial:
             count = len(self.report.partial)
             parts.append(

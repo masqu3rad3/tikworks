@@ -11,7 +11,8 @@ SIDE = "trg_side"
 NAME = "trg_name"  # user facing instance name (root guide only)
 SETTINGS = "trg_settings"  # settings dict (root guide only)
 DESIGNER = "trg_designer"  # Guide Designer layout dict (guide holder only)
-ENTRY = "trg_entry"  # serialized ModuleEntry (module document node only)
+ENTRY = "trg_entry"  # serialized ModuleEntry, stamped on the root guide joint by
+# regenerate(); read only by Snapshot Guides From Scene (guides/from_scene.py)
 DOCUMENT = "trg_document"  # scene groups / positions / collapse (guide holder only)
 SESSION = "trg_session"  # id of the session whose guides are checked out
 DISMISSED = "trg_dismissed"  # the guides are deliberately not rendered

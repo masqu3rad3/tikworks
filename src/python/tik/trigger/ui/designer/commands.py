@@ -205,13 +205,17 @@ class DesignerCommands:
 
     def sync_now(self) -> None:
         """Pull the scene into the session, whatever the Auto setting says."""
+        diff = None
         with self.watcher.mute():
             try:
-                self.guides.sync()
+                diff = self.guides.sync()
             except Exception as error:  # noqa: BLE001 - keep the tool alive
                 self.events.log(f"Guide sync failed: {error}", level="warning")
         self.refresh()
-        self._show_drift(self.guides.diff())
+        # sync() already walked the scene once; a second diff() would walk it
+        # again for a number that redraw already made stale by definition --
+        # use what sync() handed back instead
+        self._show_drift(diff if diff is not None else self.guides.diff())
 
     def snapshot_guides(self) -> None:
         """Rebuild this session's modules from the guides in the scene.
@@ -235,13 +239,30 @@ class DesignerCommands:
         self.events.log(f"Snapshot restored {len(report.modules)} module(s).")
 
     def set_auto_sync(self, on: bool) -> None:
-        """One setting, three front doors: the checkbox, the menu, and here."""
+        """One setting, three front doors: the checkbox, the menu, and here.
+
+        A genuine toggle syncs immediately -- turning Auto on should not
+        leave the document behind the scene until the next event happens to
+        fire. Construction restores the same flag through ``_apply_auto_sync``
+        alone, deliberately without this sync (see its docstring).
+        """
+        self._apply_auto_sync(on)
+        if on:
+            self.sync_now()
+
+    def _apply_auto_sync(self, on: bool) -> None:
+        """Set the flag and its two mirrors (bar, menu), without syncing.
+
+        Split out of ``set_auto_sync`` so construction can restore the stored
+        preference without running a full ``sync()`` -- a sync captures,
+        possibly regenerates and calls ``session.touch()``, which used to
+        flip a freshly opened, untouched session to "modified" before the
+        rigger had done anything, and prompted "discard changes?" on close.
+        """
         self.guides.auto_sync = bool(on)
         self.action_bar.set_auto_sync(on)
         self.auto_sync_changed.emit(bool(on))
         QtCore.QSettings("tikworks", "trigger").setValue("designer/auto_sync", bool(on))
-        if on:
-            self.sync_now()
 
     def export_file(self, path: Optional[str] = None, ask: bool = False, selected: bool = False) -> Optional[Path]:
         path = path or ("" if ask else self.last_guide_file) or self._pick("save")

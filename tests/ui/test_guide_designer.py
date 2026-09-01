@@ -5,9 +5,12 @@ from pathlib import Path
 import pytest
 
 from tik.shared.ui.binding import BindingManager, bind
-from tik.shared.ui.Qt import QtCore, QtWidgets
+from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.trigger.core import clear_registries, register_module
+from tik.trigger.core.guide_document import ModuleEntry
+from tik.trigger.core.reconcile import GuideDiff
 from tik.trigger.core.schemas import ParentRef
+from tik.trigger.session import Session
 from tik.trigger.ui.graph import WireItem
 from tik.trigger.ui.designer import GuideDesigner
 from stub import StubScene
@@ -121,6 +124,41 @@ def test_auto_sync_survives_a_relaunch(designer, qapp):
         assert relaunched.action_bar.auto_check.isChecked() is False
     finally:
         relaunched.close()
+
+
+def test_opening_a_designer_does_not_modify_a_clean_session(qapp):
+    """Task 9 regression.
+
+    __init__ used to restore the stored Auto preference through
+    ``set_auto_sync(True)``, which ends in ``sync_now()`` -> ``guides.sync()``.
+    In production ``GuideScene.sync()`` captures the scene into
+    ``session.document.guides`` and calls ``session.touch()`` -- so merely
+    opening a Designer tab could flip a freshly opened, untouched session to
+    "modified" and prompt "discard changes?" on close. ``StubScene.sync()``
+    is otherwise a silent no-op, so it is wired here to mutate the session
+    the way a real capture would -- without that, this test could not fail
+    on the old behaviour.
+    """
+    session = Session()
+
+    def _sync_like_a_real_capture(regenerate_stale=True):
+        session.document.guides.modules.append(
+            ModuleEntry(instance_id="ghost", module_type="fkchain", name="ghost", side="C")
+        )
+        session.touch()
+        return GuideDiff()
+
+    scene = StubScene()
+    scene.session = session
+    scene.sync = _sync_like_a_real_capture
+
+    assert session.is_modified is False
+    designer = GuideDesigner(scene=scene)
+    try:
+        assert "sync" not in [call[0] for call in scene.calls]
+        assert session.is_modified is False
+    finally:
+        designer.close()
 
 
 def test_a_leaked_auto_sync_setting_does_not_survive_this_test(qapp):
@@ -723,3 +761,61 @@ def test_drift_deduplicates_a_module_that_is_both(designer):
     })
     designer._show_drift(diff)
     assert "1" in designer.action_bar.drift_pill.text()
+
+
+def test_becoming_visible_again_picks_up_pose_drift_with_auto_off(designer):
+    """Task 1 regression: dragging a guide fires no SceneWatcher event, so
+    with Auto off the pill was otherwise stuck until a structural change
+    happened to occur too. showEvent is where the rigger actually looks
+    back at the Designer, so it must recompute the pill.
+    """
+    from tik.trigger.core.reconcile import GuideDiff, ModuleDiff
+
+    designer.set_auto_sync(False)
+    dragged = GuideDiff(modules={"a": ModuleDiff("a", drifted=[("root", 0)])})
+    designer.guides.diff = lambda: dragged
+
+    designer.showEvent(QtGui.QShowEvent())
+
+    assert "1" in designer.action_bar.drift_pill.text()
+
+
+def test_becoming_visible_again_is_a_no_op_with_auto_on(designer):
+    """Auto on: the sync path already keeps the pill current, so a show
+    event must not run a scan of its own."""
+    from tik.trigger.core.reconcile import GuideDiff, ModuleDiff
+
+    calls = []
+
+    def _spy_diff():
+        calls.append(1)
+        return GuideDiff(modules={"a": ModuleDiff("a", drifted=[("root", 0)])})
+
+    designer.guides.diff = _spy_diff
+    designer.showEvent(QtGui.QShowEvent())
+    assert calls == []
+    assert designer.action_bar.drift_pill.text() == ""
+
+
+def test_activating_the_designer_sub_tab_also_refreshes_drift(qapp):
+    """Mirrors the showEvent fix in SessionView, for the first activation
+    where the page is already current when the Designer gets built into it."""
+    from tik.trigger.core.reconcile import GuideDiff, ModuleDiff
+    from tik.trigger.session import Session
+    from tik.trigger.ui.session_view import DESIGNER_TAB, SessionView
+
+    session = Session()
+    stale = GuideDiff(modules={"a": ModuleDiff("a", drifted=[("root", 0)])})
+
+    def designer_factory(scene):
+        scene.diff = lambda: stale
+        designer = GuideDesigner(scene=scene)
+        designer.set_auto_sync(False)
+        return designer
+
+    view = SessionView(session, designer_factory=designer_factory)
+    try:
+        view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
+        assert "1" in view.designer.action_bar.drift_pill.text()
+    finally:
+        view.teardown()

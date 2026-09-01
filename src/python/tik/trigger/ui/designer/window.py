@@ -136,11 +136,14 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         watcher = self.watcher
         self.destroyed.connect(lambda *_args: watcher.uninstall())
         # QSettings hands back a string on some platforms, so normalise rather
-        # than trusting the type. After the watcher, not right after
-        # _build_central: set_auto_sync(True) syncs immediately, and that
-        # needs self.watcher to already exist.
+        # than trusting the type. Restored via _apply_auto_sync, not
+        # set_auto_sync: the latter runs a full sync(), which captures,
+        # can regenerate, and calls session.touch() -- opening a Designer
+        # would then mark a freshly loaded, untouched session "modified"
+        # before the rigger did anything. refresh() below is enough to paint
+        # the document that is already there.
         stored = QtCore.QSettings("tikworks", "trigger").value("designer/auto_sync", True)
-        self.set_auto_sync(stored not in (False, "false", "0", 0))
+        self._apply_auto_sync(stored not in (False, "false", "0", 0))
         self.refresh()
 
     # ------------------------------------------------------------------ ui
@@ -602,6 +605,30 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         nothing in Maya -- waiting to be picked up by a sync.
         """
         self.action_bar.set_drift(len(set(diff.structural) | set(diff.drifted)))
+
+    def refresh_drift(self) -> None:
+        """Recompute the drift pill for whatever the scene looks like now.
+
+        With Auto off, ``_on_scene_event`` only ever sees ``SceneWatcher``
+        events (new/removed guides, scene open, undo/redo) -- dragging a
+        guide fires none of those, so the pose-drift half of the pill was
+        otherwise unreachable except by coincidence. The real workflow is
+        "drag guides in the viewport, look back at the Designer", so this is
+        called from ``showEvent`` (and mirrored in ``SessionView`` for the
+        sub-tab switch, since a page hidden behind another tab does not
+        always get a synchronous show event the first time it is built) --
+        one ``diff()`` per look, not a timer and not every ``SelectionChanged``,
+        which would mean a full scene snapshot on every viewport click.
+        With Auto on this is a no-op: the sync path already keeps the pill
+        current there.
+        """
+        if self._torn_down or self.guides.auto_sync:
+            return
+        self._show_drift(self.guides.diff())
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        super().showEvent(event)
+        self.refresh_drift()
 
     # ---------------------------------------------------------- properties
     def _set_current(self, handle: Optional[GuideHandle], group: Optional[list[GuideHandle]] = None) -> None:

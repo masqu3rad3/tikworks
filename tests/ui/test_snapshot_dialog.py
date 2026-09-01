@@ -19,10 +19,19 @@ def report(complete=2, partial=0):
     return RecoveryReport(modules=modules, guide_count=4 * len(modules))
 
 
-def test_a_lossless_scene_says_nothing_was_lost(qapp):
+def test_a_fully_recovered_scene_still_admits_the_graph_is_lost(qapp):
+    """``scene_recovery`` never restores positions/collapse/scene-groups, for
+    any module -- a complete-breadcrumb scene is not exempt, so the losses
+    block must stay up even when every module recovered its name and settings.
+    """
     dialog = SnapshotDialog(report(complete=2))
     assert "2 modules" in dialog.found_label.text()
-    assert not dialog.losses_group.isVisible() or dialog.losses_group.isHidden()
+    assert not dialog.losses_group.isHidden()
+    text = dialog.losses_label.text().lower()
+    assert "graph" in text
+    assert "scene-nodes" in text
+    # nothing partial here: no per-module settings/connections loss to report
+    assert "settings" not in text
     dialog.deleteLater()
 
 
@@ -33,6 +42,13 @@ def test_an_older_scene_lists_what_it_cannot_recover(qapp):
     assert "2" in text
     assert "settings" in text.lower()
     assert "connections" in text.lower()
+    dialog.deleteLater()
+
+
+def test_an_empty_scene_has_nothing_to_admit_losing(qapp):
+    """No modules found means no graph to have laid out either."""
+    dialog = SnapshotDialog(RecoveryReport())
+    assert dialog.losses_group.isHidden()
     dialog.deleteLater()
 
 

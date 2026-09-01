@@ -58,6 +58,24 @@ def test_drift_shows_a_pill_only_when_there_is_drift(bar):
     assert "3" in bar.drift_pill.text()
 
 
+def test_up_to_date_shows_only_when_auto_is_off_and_drift_is_clean(bar):
+    """Spec 2.3: a trailing 'up to date' only when Auto cannot say it for us."""
+    # default state: Auto on, no drift -- the label stays hidden
+    assert not bar.up_to_date_label.isVisible()
+
+    bar.set_auto_sync(False)
+    assert bar.up_to_date_label.isVisible()  # Auto off, scene already clean
+
+    bar.set_drift(2)
+    assert not bar.up_to_date_label.isVisible()  # drift trumps "up to date"
+
+    bar.set_drift(0)
+    assert bar.up_to_date_label.isVisible()  # clean again, Auto still off
+
+    bar.set_auto_sync(True)
+    assert not bar.up_to_date_label.isVisible()  # Auto handles it now
+
+
 def test_the_scope_rule_is_a_hairline_not_a_bar(bar):
     """A QFrame.VLine renders 5px wide under this theme; the divider that
     keeps 'Build all' from reading as 'build what I picked' must not.

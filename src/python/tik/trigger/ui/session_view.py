@@ -111,7 +111,12 @@ class SessionView(QtWidgets.QWidget):
 
     def _on_sub_tab_changed(self, index: int) -> None:
         if index == DESIGNER_TAB:
-            self.ensure_designer()
+            designer = self.ensure_designer()
+            # Belt-and-suspenders alongside GuideDesigner.showEvent: on the
+            # very first activation the page is already the current tab when
+            # the widget gets built and added to it, so Qt may never deliver
+            # a separate show event for it. Cheap and idempotent either way.
+            designer.refresh_drift()
         self.sub_tab_changed.emit(index)
 
     @property
