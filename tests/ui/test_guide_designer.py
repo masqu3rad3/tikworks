@@ -80,6 +80,33 @@ def designer(qapp):
     window.close()
 
 
+def test_the_action_buttons_left_the_properties_panel(designer):
+    """They belong to the window now, not to a 270px column."""
+    assert not hasattr(designer, "select_button")
+    assert designer.action_bar is not None
+    assert designer.action_bar.parent() is not designer.properties
+
+
+def test_selecting_a_module_names_it_in_the_bar(designer):
+    handle = designer.guides.add("toy_chain", name="tail", side="L")
+    designer.refresh()
+    designer._set_current(handle)
+    assert designer.action_bar.selection_label.text().endswith("L_tail")
+
+
+def test_the_bar_spans_the_window_not_a_pane(designer):
+    """It is a sibling of the splitter, so it is as wide as the page."""
+    layout = designer.layout()
+    assert layout.indexOf(designer.action_bar) > layout.indexOf(designer.splitter)
+
+
+def test_auto_sync_survives_a_relaunch(designer, qapp):
+    """A working habit, not rig data: it belongs to the user, not the .tr."""
+    designer.set_auto_sync(False)
+    stored = QtCore.QSettings("tikworks", "trigger").value("designer/auto_sync")
+    assert stored in (False, "false")
+
+
 def _keys(tree):
     found = []
     iterator = QtWidgets.QTreeWidgetItemIterator(tree)
@@ -455,8 +482,11 @@ def test_export_import_and_test_build(designer, tmp_path, monkeypatch):
                         lambda *handles, **kwargs: calls.append(("build", len(handles))) or Report())
     report = designer.test_build(all_modules=True)
     assert calls[-1] == ("build", 0) and report.count == 1
-    designer.build_all_button.click()
-    assert designer.build_all_button.text() == "Build all" and designer.test_button.text() == "Build selected"
+    designer.action_bar.build_all_button.click()
+    assert (
+        designer.action_bar.build_all_button.text() == "▶  Build all"
+        and designer.action_bar.build_selected_button.text() == "Build selected"
+    )
 
 
 def test_grid_snap_default_and_free_placement(designer):

@@ -43,6 +43,7 @@ if TYPE_CHECKING:  # the scene layer imports Maya; the UI only needs the name
 from ..graph import GraphView
 from ..palette import PaletteEntry, SearchPalette
 from ..session_view import pane
+from .action_bar import DesignerActionBar
 from .commands import DesignerCommands
 from .properties import DesignerProperties
 from .widgets import (
@@ -82,6 +83,11 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
     It builds a ``status_strip`` but installs it nowhere, so the host decides
     where it goes.
     """
+
+    # One setting, two front doors: the bar's checkbox here, the window's menu
+    # action in Task 8. Defined on the widget itself (not the commands mixin)
+    # so Qt's meta-object system actually sees it.
+    auto_sync_changed = QtCore.Signal(bool)
 
     def __init__(self, parent=None, events=None, file_browser=None, binding_adapter=None,
                  scene=None) -> None:
@@ -129,6 +135,12 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         # in a closure so nothing touches self during destruction.
         watcher = self.watcher
         self.destroyed.connect(lambda *_args: watcher.uninstall())
+        # QSettings hands back a string on some platforms, so normalise rather
+        # than trusting the type. After the watcher, not right after
+        # _build_central: set_auto_sync(True) syncs immediately, and that
+        # needs self.watcher to already exist.
+        stored = QtCore.QSettings("tikworks", "trigger").value("designer/auto_sync", True)
+        self.set_auto_sync(stored not in (False, "false", "0", 0))
         self.refresh()
 
     # ------------------------------------------------------------------ ui
@@ -207,16 +219,6 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.scene_panel = SceneNodesPanel(picker=self._selected_scene_nodes)
         self.scene_panel.setVisible(False)
         props.addWidget(self.scene_panel, 1)
-        buttons = QtWidgets.QHBoxLayout()
-        buttons.addStretch(1)
-        self.select_button = QtWidgets.QPushButton("Select guides")
-        self.mirror_button = QtWidgets.QPushButton("Mirror")
-        self.test_button = QtWidgets.QPushButton("Build selected")
-        self.build_all_button = QtWidgets.QPushButton("Build all")
-        self.build_all_button.setObjectName("PrimaryButton")
-        for button in (self.select_button, self.mirror_button, self.test_button, self.build_all_button):
-            buttons.addWidget(button)
-        props.addLayout(buttons)
         self.splitter.addWidget(self.properties)
 
         for index, stretch in enumerate((0, 1, 2, 1)):
@@ -228,7 +230,10 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.splitter.setSizes([170, 280, 520, 270])
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.splitter)
+        layout.setSpacing(0)
+        layout.addWidget(self.splitter, 1)
+        self.action_bar = DesignerActionBar(self)
+        layout.addWidget(self.action_bar)
 
         self.palette = SearchPalette(palette_entries, self, colors=MODULE_COLORS)
         self.palette.chosen.connect(lambda key, _child: self.create_guides(key))
@@ -243,10 +248,12 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.graph.external_selection_changed.connect(self._on_external_selection)
         self.graph.node_menu_requested.connect(lambda _key, pos: self.module_menu().exec(pos))
         self.graph.edited.connect(lambda: self.refresh(keep_graph=True))
-        self.select_button.clicked.connect(self.select_current)
-        self.mirror_button.clicked.connect(self.mirror_current)
-        self.test_button.clicked.connect(lambda: self.test_build())
-        self.build_all_button.clicked.connect(lambda: self.test_build(all_modules=True))
+        self.action_bar.select_requested.connect(self.select_current)
+        self.action_bar.mirror_requested.connect(self.mirror_current)
+        self.action_bar.build_selected_requested.connect(lambda: self.test_build())
+        self.action_bar.build_all_requested.connect(lambda: self.test_build(all_modules=True))
+        self.action_bar.sync_requested.connect(self.sync_now)
+        self.action_bar.auto_sync_toggled.connect(self.set_auto_sync)
         self.name_edit.editingFinished.connect(self._rename_current)
         self.form.changed.connect(self._on_setting_changed)
         self.form.error.connect(lambda _name, message: self.events.log(message, level="warning"))
@@ -618,6 +625,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.icon.clear()
             self.inputs_caption.setVisible(False)
             self.status.set_activity("Select a module, or add one from the shelf (Tab to search).")
+            self.action_bar.set_selection(
+                [handle.key for handle in (self._multi or ([handle] if handle else []))]
+            )
             return
         entry = handle.entry
         module_cls = handle.module_class
@@ -647,6 +657,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.status.set_activity(f"{len(self._multi)} × {module_cls.display_label()} selected")
         else:
             self.status.set_activity(f"{handle.key} — {module_cls.display_label()}")
+        self.action_bar.set_selection(
+            [handle.key for handle in (self._multi or ([handle] if handle else []))]
+        )
 
 
     # -------------------------------------------------------------- teardown

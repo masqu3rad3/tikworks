@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from tik.core.side import Side
-from tik.shared.ui.Qt import QtGui, QtWidgets
+from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.guides import EXTENSION as GUIDE_EXTENSION
@@ -202,6 +202,25 @@ class DesignerCommands:
             return None
         finally:
             self.refresh()
+
+    def sync_now(self) -> None:
+        """Pull the scene into the session, whatever the Auto setting says."""
+        with self.watcher.mute():
+            try:
+                self.guides.sync()
+            except Exception as error:  # noqa: BLE001 - keep the tool alive
+                self.events.log(f"Guide sync failed: {error}", level="warning")
+        self.refresh()
+        self._show_drift(self.guides.diff())
+
+    def set_auto_sync(self, on: bool) -> None:
+        """One setting, three front doors: the checkbox, the menu, and here."""
+        self.guides.auto_sync = bool(on)
+        self.action_bar.set_auto_sync(on)
+        self.auto_sync_changed.emit(bool(on))
+        QtCore.QSettings("tikworks", "trigger").setValue("designer/auto_sync", bool(on))
+        if on:
+            self.sync_now()
 
     def export_file(self, path: Optional[str] = None, ask: bool = False, selected: bool = False) -> Optional[Path]:
         path = path or ("" if ask else self.last_guide_file) or self._pick("save")

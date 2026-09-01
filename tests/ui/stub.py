@@ -42,6 +42,9 @@ class StubScene:
         self._scene_jobs: dict = {}
         self._cache: Optional[list] = None
         self._document_cache = None
+        # matches GuideScene's default (spec 3.1): governs whether a scene
+        # event may start a sync, nothing else
+        self.auto_sync = True
 
     # ------------------------------------------------------------ document
     @property
@@ -374,6 +377,16 @@ class StubScene:
 
     def selected_node_names(self) -> list[str]:
         return list(getattr(self, "selected_names", []))
+
+    def sync(self, regenerate_stale: bool = True):
+        """No scene to reconcile against; the double just records the call."""
+        self.calls.append(("sync",))
+        return None
+
+    def diff(self):
+        """No scene to reconcile against; the double just records the call."""
+        self.calls.append(("diff",))
+        return None
 
     def find_instances(self, scope="scene") -> list:
         """The one scene scan the handles share; tests count calls to it."""
