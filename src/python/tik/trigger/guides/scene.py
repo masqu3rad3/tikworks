@@ -155,6 +155,16 @@ class GuideScene:
             self.document, snapshot(), primary_input_of=self._primary_input_name
         )
 
+    def snapshot_from_scene(self) -> tuple:
+        """Read the scene into a fresh document. Commits nothing.
+
+        The caller shows the report first: replacing the module list is
+        destructive, so it never happens as a side effect of looking.
+        """
+        from .from_scene import read
+
+        return read()
+
     def inputs_as_keys(self, entry) -> dict:
         """``{input: "<key>.<output>"}`` -- uuid sources resolved for display."""
         keys = {item.instance_id: item.key for item in self.document.modules}

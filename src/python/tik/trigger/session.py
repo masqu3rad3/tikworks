@@ -367,6 +367,17 @@ class Session:
         document_store.write_stamp(self.session_id)
         return self.document.guides.to_dict() != before
 
+    def snapshot_guides_from_scene(self, document) -> None:
+        """Replace this session's guides with ``document`` in one undo step.
+
+        Read by the caller (``GuideScene.snapshot_from_scene``) so this module
+        stays importable without Maya. No regenerate follows: the joints in the
+        scene already *are* the rendering, and redrawing them would teleport
+        guides that are exactly where the rigger left them.
+        """
+        self.document.guides = document
+        self.touch()
+
     @staticmethod
     def hand_over(outgoing: Optional["Session"], incoming: "Session") -> None:
         """Move the scene's checkout from one session to another.

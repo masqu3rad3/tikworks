@@ -64,6 +64,23 @@ def test_a_settings_change_undoes():
     assert session.document.guides.module(handle.instance_id).settings["segments"] == 2
 
 
+def test_snapshot_replaces_the_guides_in_one_undo_step():
+    """A real divergence: a module the document knows but the scene never drew."""
+    session = Session()
+    session.guides.add("fkchain", side="C", name="original", segments=1)
+    extra = session.guides.add("fkchain", side="C", name="extra", segments=1)
+    # its guides never rendered again -- exactly what Snapshot must drop
+    session.guides.delete_guides(extra.instance_id)
+    assert [entry.name for entry in session.document.guides.modules] == ["original", "extra"]
+
+    document, _report = session.guides.snapshot_from_scene()
+    session.snapshot_guides_from_scene(document)
+    assert [entry.name for entry in session.document.guides.modules] == ["original"]
+
+    session.undo()
+    assert [entry.name for entry in session.document.guides.modules] == ["original", "extra"]
+
+
 # --------------------------------------------------------------- the scene
 def test_guides_survive_a_new_scene():
     """The failure this whole design exists to remove."""
