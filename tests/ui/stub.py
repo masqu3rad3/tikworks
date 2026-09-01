@@ -254,9 +254,6 @@ class StubScene:
         self._instances[instance_id].inputs = {k: v for k, v in inputs.items() if v}
         self._invalidate()
 
-    def settings_plug(self, instance_id: str, field_name: str) -> str:
-        return f"{instance_id}.{field_name}"
-
     # -------------------------------------------------------- connections
     def connect(self, target: str, source: str) -> None:
         key, _dot, input_name = target.rpartition(".")

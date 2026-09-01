@@ -123,6 +123,24 @@ def test_auto_sync_survives_a_relaunch(designer, qapp):
         relaunched.close()
 
 
+def test_a_leaked_auto_sync_setting_does_not_survive_this_test(qapp):
+    """Paired with the test below: this one leaves ``auto_sync`` False in the
+    QSettings store, with nothing tearing it down. Without function-scoped
+    isolation (``_qsettings_isolated`` in conftest.py), the next test would
+    silently inherit it -- which is exactly the false pass that motivated
+    that fixture. Declaration order matters here: this must run immediately
+    before ``test_the_next_test_still_sees_the_default_auto_sync``."""
+    QtCore.QSettings("tikworks", "trigger").setValue("designer/auto_sync", False)
+    QtCore.QSettings("tikworks", "trigger").sync()
+
+
+def test_the_next_test_still_sees_the_default_auto_sync(qapp):
+    """A fresh store per test function: the previous test's leaked ``False``
+    must not have survived to this one."""
+    stored = QtCore.QSettings("tikworks", "trigger").value("designer/auto_sync", True)
+    assert stored not in (False, "false", "0", 0)
+
+
 def test_qsettings_is_sandboxed_away_from_the_real_machine(_qsettings_sandbox, qapp):
     """The suite must never touch the developer's real ``tikworks/trigger`` store."""
     settings = QtCore.QSettings("tikworks", "trigger")

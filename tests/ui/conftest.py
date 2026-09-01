@@ -73,6 +73,34 @@ def qapp(_qsettings_sandbox):
 
 
 @pytest.fixture(autouse=True)
+def _qsettings_isolated(_qsettings_sandbox):
+    """Give every test *function* a clean ``QSettings`` store.
+
+    ``_qsettings_sandbox`` above is session-scoped -- the registry/plist
+    redirect only needs to happen once -- but that means the ini-backed
+    store it points at persists for the life of the whole test run. A test
+    that writes ``designer/auto_sync`` (or any other key) leaks it into
+    every test that runs after it in the same session: exactly the
+    order-dependent flakiness that let a test assuming a fresh ``True``
+    default silently read a ``False`` an earlier test left behind.
+
+    Requesting ``_qsettings_sandbox`` (rather than relying on autouse
+    ordering) guarantees the redirect is already active before this clears
+    anything, so the clear still never touches the real registry. Clearing
+    before the test body runs -- not just after -- also protects the first
+    test in a run against whatever an earlier `pytest` invocation's
+    interpreter state (or a fixture ordering surprise) might have written.
+    """
+    if QtWidgets is None or _qsettings_sandbox is None:
+        yield
+        return
+    from tik.shared.ui.Qt import QtCore
+
+    QtCore.QSettings("tikworks", "trigger").clear()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def stub_session_guides(monkeypatch):
     """Give every ``Session`` a ``StubScene`` for its guides.
 
