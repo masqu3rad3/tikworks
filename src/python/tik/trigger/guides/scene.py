@@ -542,6 +542,16 @@ class GuideScene:
                 name=module.name, side=module.side.value, settings=module.values(),
             )
             expand_guides(entry, module.guides, module.guide_count())
+            # radius/colour/orient aren't captured from the scene (spec 4.2 gap),
+            # so the .trg file is their only source -- fill them in directly from
+            # what the file recorded, for regenerate to re-apply from here on.
+            for pair, record in guide_instance.joints.items():
+                target = entry.guide(*pair)
+                if target is None:
+                    continue
+                target.radius = float(record.get("radius", 1.0))
+                target.color = int(record.get("color") or 17)
+                target.joint_orient = tuple(record.get("joint_orient", (0.0, 0.0, 0.0)))
             # appended as we go, so a two-module import uniquifies against itself
             document.modules.append(entry)
             entries[module.instance_id] = (entry, guide_instance)

@@ -324,6 +324,21 @@ def test_imported_guides_end_up_with_a_breadcrumb(guides, tmp_path):
     assert root.meta[tags.ENTRY]["name"] == "tail"
 
 
+def test_guide_radius_and_colour_round_trip_through_a_trg(guides, tmp_path):
+    """Radius/colour are scene-only (no capture support yet); the .trg is their sole carrier."""
+    handle = guides.add("fkchain", name="tail", segments=1)
+    node = guides.guide_node(handle.instance_id, "root", 0)
+    node.radius = 2.5
+    node.color = 6
+
+    path = guides.export(tmp_path / "hero")
+    guides.clear()
+    restored = guides.import_(path)[0]
+    new_node = guides.guide_node(restored.instance_id, "root", 0)
+    assert new_node.radius == pytest.approx(2.5)
+    assert new_node.color == 6
+
+
 def test_importing_remaps_connections_onto_the_new_ids(guides, tmp_path):
     parent = guides.add("fkchain", side="C", name="spine", segments=1)
     child = guides.add("fkchain", side="L", name="tail", segments=1)

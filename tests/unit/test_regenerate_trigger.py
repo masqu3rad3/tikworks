@@ -143,3 +143,20 @@ def test_only_the_root_guide_carries_the_breadcrumb():
     root_role = registry.get_module("fkchain").guides.root
     for (role, index), joint in joints.items():
         assert (tags.ENTRY in joint.meta) is ((role, index) == (root_role, 0))
+
+
+def test_regenerate_applies_radius_colour_and_orient_even_when_unposed():
+    """Radius, colour and orient are not a pose (spec 4.3 step 5), so they must
+    land even on a guide the document has never seen posed -- the case that
+    would catch a fix placed on the wrong side of the ``posed`` guard."""
+    entry = chain_entry(2)
+    record = entry.guide("segment", 1)
+    assert not record.posed
+    record.radius = 3.0
+    record.color = 13
+    record.joint_orient = (10.0, 20.0, 30.0)
+    joints = regenerate.regenerate(entry)
+    joint = joints[("segment", 1)]
+    assert joint.radius == pytest.approx(3.0)
+    assert joint.color == 13
+    assert tuple(round(value, 3) for value in joint.joint_orient) == (10.0, 20.0, 30.0)

@@ -102,6 +102,11 @@ def regenerate(entry: ModuleEntry, document: Optional[GuideDocument] = None) -> 
             joint = created.get(record.pair)
             if joint is None:
                 continue
+            # radius, colour and orient are not a pose (spec 4.3 step 5) -- an
+            # unposed guide still has them, so they land before the posed guard.
+            joint.radius = record.radius
+            joint.color = record.color
+            joint.joint_orient = record.joint_orient
             for name, value in record.attrs.items():
                 if joint.has_attr(name):
                     joint[name].value = value
