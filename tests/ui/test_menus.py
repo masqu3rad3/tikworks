@@ -107,3 +107,78 @@ def test_import_guides_takes_no_arguments(window):
     action = next(a for a in menu(window, "&File").actions() if a.text() == "Import Guides…")
     action.trigger()
     assert seen == [((), {})]
+
+
+def test_redraw_views_keeps_f5_and_sync_takes_f6(window):
+    guides = items(menu(window, "&Guides"))
+    assert "Sync From Scene" in guides
+    sync_action = next(a for a in menu(window, "&Guides").actions() if a.text() == "Sync From Scene")
+    assert sync_action.shortcut().toString() == "F6"
+
+    layout_menu = next(
+        a.menu() for a in menu(window, "&Guides").actions()
+        if a.menu() is not None and a.text() == "Layout"
+    )
+    layout_entries = items(layout_menu)
+    assert "Redraw Views" in layout_entries
+    assert "Refresh" not in layout_entries
+    redraw = next(a for a in layout_menu.actions() if a.text() == "Redraw Views")
+    assert redraw.shortcut().toString() == "F5"
+
+
+def test_snapshot_is_a_menu_command_not_a_button(window):
+    entries = items(menu(window, "&Guides"))
+    assert "Snapshot Guides From Scene…" in entries
+
+
+def test_auto_sync_action_is_checkable_and_starts_on(window):
+    assert window.auto_sync_action.isCheckable()
+    assert window.auto_sync_action.isChecked()
+
+
+def test_snapshot_command_before_task_9_logs_instead_of_tracebacking(window, monkeypatch):
+    """snapshot_guides is added in Task 9; clicking it now must not raise."""
+    view = window.views[0]
+    view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
+    assert not hasattr(view.designer, "snapshot_guides")
+    logged = []
+    monkeypatch.setattr(window.events, "log", lambda message, level="info": logged.append((message, level)))
+    action = next(a for a in menu(window, "&Guides").actions() if a.text() == "Snapshot Guides From Scene…")
+    action.trigger()  # must not raise
+    assert logged and logged[0][1] == "warning"
+
+
+def test_auto_sync_binding_is_two_way_and_does_not_recurse(window):
+    """Designer -> menu and menu -> Designer, without ping-ponging."""
+    view = window.views[0]
+    view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
+    designer = view.designer
+
+    # starts in step: the Designer syncs its stored default before the
+    # window ever connects, so entering the Designer tab must pull the menu
+    # up to date with it, not just leave the menu's own construction-time default
+    assert window.auto_sync_action.isChecked() is designer.guides.auto_sync
+
+    # every hop through set_auto_sync is recorded, so a bounce back would
+    # show up as an extra, unexpected call
+    designer_calls = []
+    original = designer.set_auto_sync
+
+    def _tracking_set_auto_sync(on):
+        designer_calls.append(on)
+        return original(on)
+
+    designer.set_auto_sync = _tracking_set_auto_sync
+
+    # Designer -> menu: toggling the Designer's own setting updates the menu
+    designer.set_auto_sync(False)
+    assert window.auto_sync_action.isChecked() is False
+    assert designer_calls == [False]  # the mirrored update did not call back in
+
+    # menu -> Designer: toggling the menu action updates the Designer (and,
+    # through it, the action bar's checkbox)
+    window.auto_sync_action.trigger()  # checkable action: trigger() toggles it
+    assert window.auto_sync_action.isChecked() is True
+    assert designer_calls == [False, True]  # exactly the user's click, no ping-pong
+    assert designer.guides.auto_sync is True
+    assert designer.action_bar.auto_check.isChecked() is True

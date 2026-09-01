@@ -54,6 +54,10 @@ class TriggerWindow(MayaToolWindow):
         self.designer_factory = designer_factory
         # which session tab's guides are currently in the scene
         self._checked_out_view = None
+        # Designers are built lazily (SessionView.ensure_designer), one per
+        # session tab, so auto_sync_changed gets wired the first time each
+        # Designer's tab is actually shown rather than once at construction
+        self._auto_sync_connected_ids: set[int] = set()
         self.recent_files: list[str] = []
         self.setWindowTitle(f"Trigger {VERSION}")
         self.resize(1180, 720)
@@ -180,6 +184,20 @@ class TriggerWindow(MayaToolWindow):
         self._action(guides_menu, "Build Selected Guides", lambda: self._designer_call("test_build"))
         self._action(guides_menu, "Build All Guides", lambda: self._designer_call("test_build", True))
         guides_menu.addSeparator()
+        # The four verbs that cross the session/scene line, together: pull from
+        # the scene, rebuild from the scene, wipe the scene.
+        self._action(guides_menu, "Sync From Scene", lambda: self._designer_call("sync_now"), "F6")
+        self.auto_sync_action = self._action(
+            guides_menu, "Auto Sync",
+            lambda: self._designer_call("set_auto_sync", self.auto_sync_action.isChecked()),
+            checkable=True,
+        )
+        self.auto_sync_action.setChecked(True)
+        self._action(
+            guides_menu, "Snapshot Guides From Scene…",
+            lambda: self._designer_call("snapshot_guides"),
+        )
+        guides_menu.addSeparator()
         self._action(guides_menu, "Clear Scene Guides", lambda: self._designer_call("clear_guides"))
         layout_menu = QtWidgets.QMenu("Layout", guides_menu)
         guides_menu.addMenu(layout_menu)
@@ -191,7 +209,12 @@ class TriggerWindow(MayaToolWindow):
         self._action(layout_menu, "Collapse: Connected Plugs", lambda: self._graph_call("set_selected_mode", 1), "2")
         self._action(layout_menu, "Collapse: Everything", lambda: self._graph_call("set_selected_mode", 2), "3")
         layout_menu.addSeparator()
-        self._action(layout_menu, "Refresh", lambda: self._designer_call("refresh"), "F5")
+        # Was "Refresh". It redraws the UI from the document; "Sync From Scene"
+        # (above, in &Guides) runs the other way -- scene into the document.
+        # Two neighbouring commands that both read as "update" is exactly the
+        # ambiguity this whole piece of work exists to remove. The underlying
+        # method stays `refresh`; only the label and shortcut assignment move.
+        self._action(layout_menu, "Redraw Views", lambda: self._designer_call("refresh"), "F5")
 
         tools_menu = add_menu("&Tools")
         self._action(tools_menu, "Guide Designer", lambda: self.open_guide_designer(), "Ctrl+G")
@@ -248,7 +271,14 @@ class TriggerWindow(MayaToolWindow):
         designer = self._designer
         if designer is None:
             return None
-        return getattr(designer, method)(*args, **kwargs)
+        target = getattr(designer, method, None)
+        if target is None:
+            # e.g. "snapshot_guides" before Task 9 lands the method: a menu
+            # command for a verb that does not exist yet should log, not
+            # traceback, so the tool stays usable while it is being built out
+            self.events.log(f"'{method}' is not available yet.", level="warning")
+            return None
+        return target(*args, **kwargs)
 
     def _graph_call(self, method: str, *args):
         designer = self._designer
@@ -263,9 +293,39 @@ class TriggerWindow(MayaToolWindow):
         return self._view_call(session_method, *args, **kwargs)
 
     def _sync_menu_state(self) -> None:
-        """The Guides menu is only offered where it has a target."""
+        """The Guides menu is only offered where it has a target.
+
+        Also where the Auto Sync menu action gets bound to whatever Designer
+        just became active: a Designer is built lazily, one per session tab,
+        so there is no single spot at window construction to wire this -- it
+        happens here, every time the active tab (session or sub-tab) changes.
+        """
         if hasattr(self, "guides_menu_action"):
             self.guides_menu_action.setEnabled(self._designer is not None)
+        designer = self._designer
+        if designer is not None:
+            self._connect_designer_auto_sync(designer)
+            self._on_designer_auto_sync_changed(designer.guides.auto_sync)
+
+    def _connect_designer_auto_sync(self, designer) -> None:
+        """Wire the Auto Sync menu action to ``designer``'s signal, once."""
+        if id(designer) in self._auto_sync_connected_ids:
+            return
+        designer.auto_sync_changed.connect(self._on_designer_auto_sync_changed)
+        self._auto_sync_connected_ids.add(id(designer))
+
+    def _on_designer_auto_sync_changed(self, on: bool) -> None:
+        """Mirror the Designer's setting without reporting it back as a click.
+
+        Blocked the same way ``DesignerActionBar.set_auto_sync`` blocks its
+        checkbox -- without this the menu action and the Designer would
+        ping-pong through ``set_auto_sync``.
+        """
+        self.auto_sync_action.blockSignals(True)
+        try:
+            self.auto_sync_action.setChecked(bool(on))
+        finally:
+            self.auto_sync_action.blockSignals(False)
 
     def _view_call(self, method: str, *args):
         view = self.current_view
