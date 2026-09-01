@@ -532,15 +532,11 @@ class GuideScene:
 
         document = self.document
         entries = {}
-        renamed = []
         # The file's keys, mapped to the ids we mint for them. Built from the
         # *original* names, because that is what the file's own connections say.
         original_keys = {}
         for guide_instance, module, _joints in built:
-            unique = self.unique_name(module.name, module.side.value)
-            if unique != module.name:
-                renamed.append(module.instance_id)
-                module.name = unique
+            module.name = self.unique_name(module.name, module.side.value)
             entry = ModuleEntry(
                 instance_id=module.instance_id, module_type=module.module_type,
                 name=module.name, side=module.side.value, settings=module.values(),
@@ -563,10 +559,15 @@ class GuideScene:
         capture(document, snapshot())
         for entry, _gi in entries.values():
             self._touch()
-        # a renamed module's joints still carry the file's name; redraw them so
-        # the scene matches the document it now belongs to
-        for instance_id in renamed:
-            regenerate(document.module(instance_id), document)
+        # Every imported entry gets a regenerate, producers before consumers:
+        # a renamed module needs its joints redrawn under the new name, and
+        # every module needs one so its root guide picks up the entry
+        # breadcrumb that only regenerate stamps (spec 4.1). Poses were just
+        # captured above, so this redraw lands exactly where the file put them.
+        imported_ids = set(entries)
+        for ordered_entry in regenerate_module.ordered(document):
+            if ordered_entry.instance_id in imported_ids:
+                regenerate(ordered_entry, document)
 
 
 

@@ -60,6 +60,27 @@ def _producer_guide(entry: ModuleEntry, document: Optional[GuideDocument]):
     return found.get((role, 0)) or found.get((producer_cls.guides.root, 0))
 
 
+def _stamp_breadcrumb(entry: ModuleEntry, created: dict) -> None:
+    """Park the module's identity on its root guide, for Snapshot to find.
+
+    WRITTEN here, READ only by Snapshot (spec 4.1). Capture, reconcile, build,
+    the Designer and the Builder never consult it, so the document stays the
+    sole authority and a stale or hand-edited tag can corrupt nothing.
+
+    Poses are deliberately absent (spec 4.2): a guide moves when a rigger drags
+    it, with no document write and so no regenerate to refresh this tag. What is
+    kept here changes *only* through a document write, and every document write
+    ends in a regenerate -- so the breadcrumb can never be staler than the joints
+    it sits on.
+    """
+    root = nodes.root_guide(created, entry.module_type)
+    if root is None:
+        return
+    data = entry.to_dict()
+    data.pop("guides", None)
+    root.meta[tags.ENTRY] = data
+
+
 def regenerate(entry: ModuleEntry, document: Optional[GuideDocument] = None) -> dict:
     """Rebuild ``entry``'s guide joints. Returns ``{(role, index): joint}``."""
     module = _module_for(entry)
@@ -94,6 +115,7 @@ def regenerate(entry: ModuleEntry, document: Optional[GuideDocument] = None) -> 
                 cmds.xform(joint.long_name, worldSpace=True, rotation=record.rotation)
         # after the poses land, so a guide rig can take over the channels
         module.wire_guides(created)
+        _stamp_breadcrumb(entry, created)
     return created
 
 

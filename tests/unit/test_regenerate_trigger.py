@@ -113,3 +113,33 @@ def test_regenerate_restores_guide_attrs():
     record.attrs = {"twistWeight": 0.75}
     joints = regenerate.regenerate(entry)
     assert joints[("twist", 0)]["twistWeight"].value == pytest.approx(0.75)
+
+
+def test_regenerate_stamps_the_entry_on_the_root_guide():
+    """Snapshot's only way back: what the module *is*, parked on its root joint."""
+    entry = chain_entry(2, name="tail")
+    entry.inputs["parent"] = "other-id.root"
+    joints = regenerate.regenerate(entry)
+    root = joints[(registry.get_module("fkchain").guides.root, 0)]
+    stored = root.meta[tags.ENTRY]
+    assert stored["name"] == "tail"
+    assert stored["module_type"] == "fkchain"
+    assert stored["settings"]["segments"] == 2
+    assert stored["inputs"]["parent"] == "other-id.root"
+
+
+def test_the_breadcrumb_never_carries_poses():
+    """A guide moves with no document write, so a stored pose would rot in place."""
+    entry = chain_entry(2)
+    entry.guide("segment", 0).position = (12.0, 3.0, 0.0)
+    joints = regenerate.regenerate(entry)
+    root = joints[(registry.get_module("fkchain").guides.root, 0)]
+    assert "guides" not in root.meta[tags.ENTRY]
+
+
+def test_only_the_root_guide_carries_the_breadcrumb():
+    entry = chain_entry(3)
+    joints = regenerate.regenerate(entry)
+    root_role = registry.get_module("fkchain").guides.root
+    for (role, index), joint in joints.items():
+        assert (tags.ENTRY in joint.meta) is ((role, index) == (root_role, 0))

@@ -9,9 +9,9 @@ from maya.api import OpenMaya
 
 import tik.maya as tm
 import tik.trigger as trigger
-from tik.trigger.guides import GuideScene
+from tik.trigger.guides import GuideScene, nodes
 from tik.trigger.core import get_module
-from tik.trigger.maya import Builder
+from tik.trigger.maya import Builder, tags
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.guides import GuideFile, GuideScene
 
@@ -312,6 +312,16 @@ def test_importing_the_same_trg_twice_uniquifies_names(guides, tmp_path):
     assert keys == ["L_tail", "L_tail1"]
     assert imported[0].instance_id != original_id
     assert len({handle.instance_id for handle in guides.instances()}) == 2
+
+
+def test_imported_guides_end_up_with_a_breadcrumb(guides, tmp_path):
+    """The .trg path draws joints itself; the breadcrumb must still arrive."""
+    guides.add("fkchain", name="tail", segments=2)
+    path = guides.export(tmp_path / "lib")
+    guides.clear()
+    restored = guides.import_(path)[0]
+    root = nodes.root_guide(nodes.guide_nodes(restored.instance_id), "fkchain")
+    assert root.meta[tags.ENTRY]["name"] == "tail"
 
 
 def test_importing_remaps_connections_onto_the_new_ids(guides, tmp_path):
