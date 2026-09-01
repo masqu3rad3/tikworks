@@ -213,6 +213,27 @@ class DesignerCommands:
         self.refresh()
         self._show_drift(self.guides.diff())
 
+    def snapshot_guides(self) -> None:
+        """Rebuild this session's modules from the guides in the scene.
+
+        Reads and reports first: replacing the module list is destructive, so it
+        never happens as a side effect of opening the dialog.
+        """
+        from .snapshot_dialog import SnapshotDialog
+
+        document, report = self.guides.snapshot_from_scene()
+        dialog = SnapshotDialog(report, self)
+        if dialog.exec() != QtWidgets.QDialog.Accepted:
+            return
+        session = self.guides.session
+        if session is None:
+            self.events.log("Snapshot needs a session.", level="warning")
+            return
+        session.snapshot_guides_from_scene(document)
+        self.refresh()
+        self._show_drift(self.guides.diff())
+        self.events.log(f"Snapshot restored {len(report.modules)} module(s).")
+
     def set_auto_sync(self, on: bool) -> None:
         """One setting, three front doors: the checkbox, the menu, and here."""
         self.guides.auto_sync = bool(on)

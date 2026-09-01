@@ -46,6 +46,9 @@ class StubScene:
         # matches GuideScene's default (spec 3.1): governs whether a scene
         # event may start a sync, nothing else
         self.auto_sync = True
+        # mirrors GuideScene.session: None for a free-standing double, or set
+        # by a test to the Session that owns it -- snapshot_guides reads this
+        self.session = None
 
     # ------------------------------------------------------------ document
     @property
@@ -388,6 +391,15 @@ class StubScene:
         """Stands in for a clean scene: nothing stale, nothing drifted."""
         self.calls.append(("diff",))
         return GuideDiff()
+
+    def snapshot_from_scene(self):
+        """An empty, lossless read by default; a test overrides this to shape
+        the ``RecoveryReport`` the snapshot command sees."""
+        from tik.trigger.core.guide_document import GuideDocument
+        from tik.trigger.core.scene_recovery import RecoveryReport
+
+        self.calls.append(("snapshot_from_scene",))
+        return GuideDocument(), RecoveryReport()
 
     def find_instances(self, scope="scene") -> list:
         """The one scene scan the handles share; tests count calls to it."""

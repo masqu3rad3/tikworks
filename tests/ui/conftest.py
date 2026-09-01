@@ -95,7 +95,11 @@ def stub_session_guides(monkeypatch):
     scenes: dict = {}
 
     def guides(self):
-        return scenes.setdefault(id(self), StubScene())
+        if id(self) not in scenes:
+            scene = StubScene()
+            scene.session = self  # mirrors GuideScene(session=self) in production
+            scenes[id(self)] = scene
+        return scenes[id(self)]
 
     monkeypatch.setattr(Session, "guides", property(guides))
     yield

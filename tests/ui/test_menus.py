@@ -2,6 +2,9 @@
 
 import pytest
 
+from tik.trigger.core.guide_document import GuideDocument, ModuleEntry
+from tik.trigger.core.scene_recovery import RecoveredModule, RecoveryReport
+from tik.trigger.ui.designer.snapshot_dialog import SnapshotDialog
 from tik.trigger.ui.main import TriggerWindow
 from tik.trigger.ui.session_view import DESIGNER_TAB, SESSION_TAB
 
@@ -136,16 +139,32 @@ def test_auto_sync_action_is_checkable_and_starts_on(window):
     assert window.auto_sync_action.isChecked()
 
 
-def test_snapshot_command_before_task_9_logs_instead_of_tracebacking(window, monkeypatch):
-    """snapshot_guides is added in Task 9; clicking it now must not raise."""
+def test_snapshot_menu_command_reports_then_replaces_the_session(window, monkeypatch):
+    """The menu action reaches the real command, which is destructive only
+    once the dialog is accepted -- and only then does the session change."""
     view = window.views[0]
     view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
-    assert not hasattr(view.designer, "snapshot_guides")
-    logged = []
-    monkeypatch.setattr(window.events, "log", lambda message, level="info": logged.append((message, level)))
+    # This test really replaces the session's document, which leaves it
+    # modified; the fixture's teardown then closes the window, and a modified
+    # session makes closeEvent pop a real, blocking "discard changes?"
+    # QMessageBox. Answer it without a dialog so teardown cannot hang.
+    monkeypatch.setattr(window, "ask_discard", lambda session: True)
+    designer = view.designer
+    entry = ModuleEntry(instance_id="new-id", module_type="fkchain", name="arm", side="L")
+    found = RecoveryReport(
+        modules=[RecoveredModule("new-id", "L_arm", "fkchain", True, 4)], guide_count=4,
+    )
+    document = GuideDocument(modules=[entry])
+    designer.guides.snapshot_from_scene = lambda: (document, found)
     action = next(a for a in menu(window, "&Guides").actions() if a.text() == "Snapshot Guides From Scene…")
-    action.trigger()  # must not raise
-    assert logged and logged[0][1] == "warning"
+
+    monkeypatch.setattr(SnapshotDialog, "exec", lambda self: SnapshotDialog.Rejected)
+    action.trigger()
+    assert view.session.document.guides.modules == []
+
+    monkeypatch.setattr(SnapshotDialog, "exec", lambda self: SnapshotDialog.Accepted)
+    action.trigger()
+    assert view.session.document.guides is document
 
 
 def test_auto_sync_binding_is_two_way_and_does_not_recurse(window):
