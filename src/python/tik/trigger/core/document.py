@@ -1,4 +1,4 @@
-"""The session document: a tree of actions (``.tr`` schema 4)."""
+"""The session document: actions and guides (``.tr`` schema 5)."""
 
 from __future__ import annotations
 

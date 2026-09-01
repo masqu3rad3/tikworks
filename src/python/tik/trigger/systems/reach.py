@@ -2,7 +2,7 @@
 
 Auto-clavicle is shoulder reach; the same system serves a hip. It is named
 for the behaviour rather than the anatomy, and it names no animator-facing
-attribute itself -- the module supplies a prefix, because wording is policy.
+attribute itself -- the module supplies a prefix, because wording is policy::
 
     frame       static transform at `origin`, X aimed at the neutral point,
                 up from `rest_from`  ->  both neutrals are zero by construction

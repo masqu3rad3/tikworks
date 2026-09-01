@@ -22,3 +22,4 @@ object-oriented design, and robust node tracking to Maya scripting.
 
    Working with Nodes <guides/working_with_nodes>
    Working with Plugs and Attributes <guides/working_with_plugs>
+   Rig Constructs <guides/rig_constructs>

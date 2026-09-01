@@ -19,15 +19,31 @@ extensions = [
     'sphinx.ext.doctest',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
+    # Google-style Args:/Returns:/Raises: sections are the house docstring
+    # style (AI/documentation_rules.md). Without napoleon they render as
+    # block quotes and definition lists, which is where most of the build's
+    # docutils warnings came from.
+    'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
     'sphinx_toolbox.collapse',
     'sphinxcontrib.youtube',
     'autoapi.extension',
 ]
 
-autoapi_dirs = ['../../src/python/', '../../src/python/tik/core/', '../../src/python/tik/maya/', '../../src/python/tik/shared/']
+# One tree, rooted at the package itself. Listing sub-packages as well would
+# document them twice, under both their real dotted path and a truncated one,
+# which is what made cross-references ambiguous.
+autoapi_dirs = ['../../src/python/tik']
 autoapi_type = 'python'
-autoapi_ignore = ['*setup*', '*shiboken*', '*PySide2*', '*PySide6*', '*PyQt5*', '*PyQt6*', '*external/**/*']
+autoapi_ignore = [
+    '*setup*',
+    '*shiboken*',
+    '*PySide2*',
+    '*PySide6*',
+    '*PyQt5*',
+    '*PyQt6*',
+    '*external/**/*',
+]
 autoapi_file_patterns = ['*.py']
 add_module_names = False
 autoapi_member_order = 'groupwise'

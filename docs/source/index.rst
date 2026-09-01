@@ -23,7 +23,7 @@ and predictable:
    ↑
    tik.shared      # reusable infrastructure and UX
    ↑
-   tik.trigger     # rigging language and framework (coming soon)
+   tik.trigger     # rigging language and framework (IN DEVELOPMENT)
    ↑
    tik.tools       # user-facing tools and workflows (coming soon)
 
@@ -33,8 +33,9 @@ and predictable:
 - **tik.trigger** is the rigging framework, building on the lower layers.
 - **tik.tools** are concrete user-facing tools and workflows.
 
-Currently, **tik.maya** is the fully developed and documented component. Future components
-will build on this foundation as they are implemented.
+**tik.maya** is the fully developed component. **tik.trigger** — modules, guides
+and the session pipeline — is under active development and documented here as it
+lands. **tik.tools** will follow.
 
 .. tip::
    **Why TikWorks?** Maya scripting is powerful but verbose. TikWorks brings modern
@@ -46,6 +47,12 @@ will build on this foundation as they are implemented.
    :caption: tik.maya
 
    tik_maya/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: tik.trigger
+
+   tik_trigger/index
 
 .. toctree::
    :maxdepth: 2

@@ -12,7 +12,8 @@ from maya import cmds
 def add_aliases(aliases):
     """Attach alias properties to a class.
 
-    Example Usage:
+    Example::
+
         @add_aliases({
             "alias_name": "original_property_name",
             ...

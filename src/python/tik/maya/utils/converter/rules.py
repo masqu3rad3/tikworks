@@ -994,7 +994,7 @@ class TransformFreezeRule(ConversionRule):
 
 
 class NodeAddAttrRule(ConversionRule):
-    """Convert node.add_attr(name, **kwargs) to cmds.addAttr(...)."""
+    """Convert ``node.add_attr(name, **kwargs)`` to ``cmds.addAttr(...)``."""
 
     name = "node_add_attr"
     category = "node_methods"
