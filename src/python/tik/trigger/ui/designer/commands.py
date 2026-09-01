@@ -212,9 +212,10 @@ class DesignerCommands:
             except Exception as error:  # noqa: BLE001 - keep the tool alive
                 self.events.log(f"Guide sync failed: {error}", level="warning")
         self.refresh()
-        # sync() already walked the scene once; a second diff() would walk it
-        # again for a number that redraw already made stale by definition --
-        # use what sync() handed back instead
+        # sync() itself rescans after regenerate when it actually redrew
+        # anything, so its return value already reflects the post-fix scene
+        # -- a second diff() here would just repeat a walk sync() already
+        # did (or, worse, did twice) for the same answer
         self._show_drift(diff if diff is not None else self.guides.diff())
 
     def snapshot_guides(self) -> None:

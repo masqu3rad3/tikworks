@@ -116,6 +116,40 @@ def test_sync_on_a_clean_scene_changes_nothing(scene):
     assert after == before  # nothing was rebuilt
 
 
+def test_sync_return_value_reflects_what_it_just_fixed(scene):
+    """Regression: ``GuideDiff.structural`` is a property over fixed
+    ``ModuleDiff`` records computed *before* regenerate ran -- nothing
+    recomputes it just because the loop that follows mutated the scene. A
+    manual Sync that finds and fixes structurally stale modules must not
+    hand back a diff that still calls them stale: the drift pill reads this
+    return value directly, and a Sync button that appears to have done
+    nothing is worse than the extra scan needed to prove it worked.
+    """
+    handle = scene.add("fkchain", side="C", name="tail", segments=3)
+    cmds.delete(scene.guide_nodes(handle.instance_id)[("segment", 1)].long_name)
+    diff = scene.sync()
+    assert diff.structural == []  # sync() just redrew it -- the return value must say so
+    assert diff.drifted == []
+    assert scene.diff().is_clean  # and a fresh scan agrees: not a stale answer
+
+
+def test_sync_on_a_dismissed_document_still_reports_outstanding_staleness(scene):
+    """``dismissed`` forces ``regenerate_stale`` off (afterlife='delete'), so
+    the rendering legitimately stays absent -- the returned diff must keep
+    saying so, not get rescanned into a false "clean". Companion to
+    ``test_a_build_that_deletes_the_guides_keeps_them_deleted`` above, which
+    already covers this through a build; this drives it directly through
+    ``dismissed`` so the contract does not depend on ``Builder``.
+    """
+    handle = scene.add("fkchain", side="C", name="tail", segments=1)
+    for joint in list(scene.guide_nodes(handle.instance_id).values()):
+        cmds.delete(joint.long_name)
+    scene.dismissed = True  # the policy a build with afterlife='delete' sets
+    diff = scene.sync()
+    assert diff.structural == [handle.instance_id]  # unregenerated: still the pre-sync truth
+    assert scene.guide_nodes(handle.instance_id) == {}  # confirms nothing was redrawn
+
+
 def test_a_settings_change_undoes_with_the_session(scene):
     """Structure is a session edit, so Trigger's undo takes it back.
 

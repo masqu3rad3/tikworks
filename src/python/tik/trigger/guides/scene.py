@@ -126,7 +126,14 @@ class GuideScene:
                 scene -- the checkpointed policy.
 
         Returns:
-            The :class:`~tik.trigger.core.reconcile.GuideDiff` it acted on.
+            The :class:`~tik.trigger.core.reconcile.GuideDiff`. Reflects the
+            scene as it now stands: if regenerate actually redrew anything,
+            the diff is recomputed afterwards so callers (the drift pill)
+            never see staleness this same call just fixed. When nothing was
+            regenerated -- nothing was stale, or ``dismissed`` forced the
+            redraw off -- the original diff comes back unchanged, which is
+            already accurate (``dismissed`` legitimately still reports its
+            outstanding staleness).
         """
         from tik.trigger.core.reconcile import GuideDiff
 
@@ -149,6 +156,11 @@ class GuideScene:
                     ]
                     for entry in stale:
                         regenerate(entry, self.document)
+                # GuideDiff.structural is a property over fixed ModuleDiff
+                # records -- nothing recomputes it just because the loop
+                # above mutated the scene. Rescan once, only here, so the
+                # diff we return matches what regenerate actually did.
+                diff = self.diff()
             return diff
         finally:
             self._syncing = False
