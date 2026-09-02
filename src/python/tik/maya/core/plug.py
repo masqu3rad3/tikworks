@@ -53,7 +53,7 @@ class Plug:
         Returns:
             str: The full path to this attribute.
         """
-        return f"{self._node.name}.{self._attr}"
+        return f"{self._node.partial_name}.{self._attr}"
 
     @property
     def node(self):
@@ -204,7 +204,7 @@ class Plug:
         Returns:
             bool: True if the attribute exists on the node, False otherwise.
         """
-        return cmds.attributeQuery(self.attr, node=self._node.name, exists=True)
+        return cmds.attributeQuery(self.attr, node=self._node.partial_name, exists=True)
 
     def create(self, **kwargs):
         """Add a new attribute to the node.
@@ -618,28 +618,42 @@ class Plug:
     def _create_power_node_single(self, other) -> "Plug":
         """Create a power node for single-value power operation.
 
+        For Maya 2025+, uses the native 'power' node.
+        For Maya 2024 and older, uses 'multiplyDivide' with operation=3 (power),
+        which computes ``input1 ^ input2`` per component.
+
         Args:
             other: The right-hand operand (Plug or numeric value) for the exponent.
 
         Returns:
             Plug: The output plug of the power node.
         """
-        node = cmds.createNode("power", name="power#")
+        if NodeNames.uses_native_math_nodes:
+            node = cmds.createNode("power", name="power#")
+            input_attr = "input"
+            exponent_attr = "exponent"
+            output_attr = "output"
+        else:
+            node = cmds.createNode("multiplyDivide", name="multiplyDivide_power#")
+            cmds.setAttr(f"{node}.operation", 3)  # 3 = Power
+            input_attr = "input1X"
+            exponent_attr = "input2X"
+            output_attr = "outputX"
 
         # Connect input (left operand - self / base)
-        cmds.connectAttr(self.path, f"{node}.input", force=True)
+        cmds.connectAttr(self.path, f"{node}.{input_attr}", force=True)
 
         # Connect or set exponent (right operand - other)
         if isinstance(other, Plug):
-            cmds.connectAttr(other.path, f"{node}.exponent", force=True)
+            cmds.connectAttr(other.path, f"{node}.{exponent_attr}", force=True)
         elif isinstance(other, (int, float)):
-            cmds.setAttr(f"{node}.exponent", float(other))
+            cmds.setAttr(f"{node}.{exponent_attr}", float(other))
         else:
             raise TypeError(
                 f"Right operand must be a Plug or numeric value, got {type(other)}"
             )
 
-        return self._create_plug(node, "output")
+        return self._create_plug(node, output_attr)
 
     def _create_modulo_node_single(self, other) -> "Plug":
         """Create a modulo node for single-value modulo operation.
@@ -1101,6 +1115,99 @@ class Plug:
         cmds.connectAttr(self.path, f"{node}.modulus", force=True)
 
         return self._create_plug(node, "output")
+
+    # ------------------------------------------------- comparison helpers
+    def _condition(self, operation: int, other, if_true, if_false) -> "Plug":
+        """Build a ``condition`` node comparing ``self`` against ``other``.
+
+        ``condition`` exists on every supported Maya, so these helpers need no
+        version branch (native ``min``/``max``/``clampRange`` are 2025+).
+
+        Args:
+            operation: The ``condition.operation`` value.
+            other: Right-hand side of the comparison (Plug or numeric).
+            if_true: Result when the comparison holds (Plug or numeric).
+            if_false: Result otherwise (Plug or numeric).
+
+        Returns:
+            Plug: The ``outColorR`` plug of the condition node.
+        """
+        node = cmds.createNode("condition", name="condition#")
+        cmds.setAttr(f"{node}.operation", operation)
+        cmds.connectAttr(self.path, f"{node}.firstTerm", force=True)
+        for attr, value in (
+            ("secondTerm", other),
+            ("colorIfTrueR", if_true),
+            ("colorIfFalseR", if_false),
+        ):
+            if isinstance(value, Plug):
+                cmds.connectAttr(value.path, f"{node}.{attr}", force=True)
+            elif isinstance(value, (int, float)):
+                cmds.setAttr(f"{node}.{attr}", float(value))
+            else:
+                raise TypeError(
+                    f"'{attr}' must be a Plug or numeric value, got {type(value)}"
+                )
+        return self._create_plug(node, "outColorR")
+
+    def minimum(self, other) -> "Plug":
+        """Return a plug carrying ``min(self, other)``.
+
+        Args:
+            other: The other operand (Plug or numeric value).
+
+        Returns:
+            Plug: The smaller of the two.
+        """
+        return self._condition(4, other, self, other)  # 4 = Less Than
+
+    def maximum(self, other) -> "Plug":
+        """Return a plug carrying ``max(self, other)``.
+
+        Args:
+            other: The other operand (Plug or numeric value).
+
+        Returns:
+            Plug: The larger of the two.
+        """
+        return self._condition(2, other, self, other)  # 2 = Greater Than
+
+    def clamped(self, low, high) -> "Plug":
+        """Return a plug carrying ``min(max(self, low), high)``.
+
+        Args:
+            low: Lower bound (Plug or numeric value).
+            high: Upper bound (Plug or numeric value).
+
+        Returns:
+            Plug: The bounded value.
+        """
+        return self.maximum(low).minimum(high)
+
+    def lerp(self, other, weight) -> "Plug":
+        """Return a plug carrying ``self + (other - self) * weight``.
+
+        Args:
+            other: The value at ``weight`` 1.0 (Plug or numeric value).
+            weight: Blend weight (Plug or numeric value).
+
+        Returns:
+            Plug: The interpolated value.
+        """
+        return self + (other - self) * weight
+
+    def gt(self, threshold, if_true, if_false) -> "Plug":
+        """Return ``if_true`` when ``self > threshold``, else ``if_false``.
+
+        Args:
+            threshold: Value compared against (Plug or numeric value).
+            if_true: Result when the comparison holds.
+            if_false: Result otherwise.
+
+        Returns:
+            Plug: The selected value.
+        """
+        return self._condition(2, threshold, if_true, if_false)  # 2 = Greater Than
 
     def __repr__(self):
         """Return a debug-friendly representation."""

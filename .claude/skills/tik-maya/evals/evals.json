@@ -1,0 +1,43 @@
+{
+  "skill_name": "tik-maya",
+  "evals": [
+    {
+      "id": 0,
+      "name": "prop-rig",
+      "prompt": "Write a function that builds a simple prop rig for the currently selected mesh: a root group, an offset group under it, and a circle controller that drives the mesh's transform. Put it in src/python/tools/prop_rig.py.",
+      "expected_output": "A prop_rig.py that uses tik.maya idiomatically (import tik.maya as tm, resolve/Transform.create/create_offset_group, MatrixConstraint or plug connections) with zero direct maya.cmds/OpenMaya imports.",
+      "files": [],
+      "assertions": [
+        "no-raw-maya-imports: prop_rig.py contains no direct maya.cmds / maya.api.OpenMaya / pymel / cmdx imports",
+        "uses-tik-maya: prop_rig.py imports tik.maya (import tik.maya as tm, or from tik.maya import ...)",
+        "idiomatic-wrapper-use: the code actually uses wrapper idioms - at least two of: resolve(), Transform.create(), create_offset_group(), Controller/control shapes, MatrixConstraint.create() or plug >> connections",
+        "deliverable-present: prop_rig.py exists in the outputs directory and defines a callable build function"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "mirror-chain",
+      "prompt": "I need to be able to mirror a joint chain from left to right across the YZ plane, behavior-mirrored. Add that capability to this codebase, with tests.",
+      "expected_output": "The capability implemented inside tik.maya (e.g. on Joint or Transform), following house style (no get_/set_ prefixes, undoable, type hints, docstrings), with a pytest under tests/unit/ - NOT an ad-hoc cmds.mirrorJoint call in tool code.",
+      "files": [],
+      "assertions": [
+        "capability-in-tik-maya: the mirror capability is implemented inside src/python/tik/maya/ (e.g. on Joint or Transform), not as ad-hoc tool-level code",
+        "no-raw-cmds-outside-wrapper: no new maya.cmds / OpenMaya imports appear in files outside src/python/tik/maya/",
+        "test-added: a pytest file under tests/ exercises the new capability",
+        "house-style: the new public API uses no get_/set_ prefixes, has type hints and docstrings, and scene modification is undoable (undocommit or undoInfo chunk)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "guide-select",
+      "prompt": "Quick script: select every joint in the scene whose meta 'kind' is 'guide'. Save it as select_guide_joints.py.",
+      "expected_output": "A short script built on tm.find_by_meta('kind', 'guide', node_type='joint') and tik.maya selection, not cmds.ls string filtering.",
+      "files": [],
+      "assertions": [
+        "uses-meta-api: the script uses tik.maya's meta system (find_by_meta or node.meta), not raw cmds.ls attribute-string filtering with the tikMeta_ prefix hardcoded",
+        "no-raw-maya-imports: no direct maya.cmds / OpenMaya / pymel imports in the script",
+        "correct-filter: the result is restricted to joints with meta kind == 'guide', and the nodes end up selected"
+      ]
+    }
+  ]
+}

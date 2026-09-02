@@ -1,5 +1,7 @@
 import pytest
 from maya import cmds
+
+import tik.maya as tm
 from tik.maya.roles.controller import Controller, replace_curve
 from tik.maya.types.transform import Transform
 from tik.maya.utils.control_shapes import ControlShapeLibrary
@@ -283,3 +285,20 @@ class TestController:
         assert ctrl.name == "getattr_ctrl"
         # Access 'delete' which is on Node
         assert hasattr(ctrl, "delete")
+
+
+def test_controller_plugs_pass_through_to_its_transform():
+    """``control["tx"]`` reads the transform's plug.
+
+    __getattr__ cannot cover indexing: Python looks dunder methods up on the
+    type, so without __getitem__ a controller cannot be indexed or connected.
+    Writes and type-checked APIs still need ``.transform`` — the role does not
+    proxy __setattr__, and isinstance checks see a Controller, not a Transform.
+    """
+    control = Controller.create(name="passthrough_ctrl", shape="Circle")
+    driven = tm.Transform.create(name="passthrough_driven")
+
+    assert control["translateX"].value == control.transform["translateX"].value
+    control["translateX"] >> driven["translateX"]
+    control.transform.translate_x = 3.0
+    assert round(driven.translate_x, 4) == 3.0

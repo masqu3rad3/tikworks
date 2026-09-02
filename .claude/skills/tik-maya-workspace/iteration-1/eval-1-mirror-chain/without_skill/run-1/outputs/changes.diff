@@ -1,0 +1,80 @@
+diff --git a/src/tik/maya/types/joint.py b/src/tik/maya/types/joint.py
+index f36fbab..e77bc11 100644
+--- a/src/tik/maya/types/joint.py
++++ b/src/tik/maya/types/joint.py
+@@ -1,7 +1,8 @@
+ import maya.cmds as cmds
+ 
+ from ..core.apicommon import create_node_with_dag_modifier
+-from ..core.registry import register
++from ..core.decorators import keepselection
++from ..core.registry import register, resolve
+ from .transform import Transform
+ 
+ 
+@@ -9,6 +10,12 @@ from .transform import Transform
+ class Joint(Transform):
+     """Wrapper for joint nodes."""
+ 
++    _MIRROR_PLANES = {
++        "YZ": "mirrorYZ",
++        "XY": "mirrorXY",
++        "XZ": "mirrorXZ",
++    }
++
+     @classmethod
+     def create(cls, name=None, parent=None, position=None, orientation=None, scale=None, radius=None):
+         """Create and wrap a new joint node."""
+@@ -37,3 +44,50 @@ class Joint(Transform):
+     def orient(self, xyz=(0, 0, 0)):
+         """Orient the joint using the provided XYZ values."""
+         cmds.joint(self.name, e=True, orientation=xyz)
++
++    @keepselection
++    def mirror(self, plane="YZ", behavior=True, search=None, replace=None):
++        """Mirror this joint and its descendant chain across a world plane.
++
++        The whole sub-hierarchy rooted at this joint is duplicated and
++        mirrored about the requested plane. The plane is expressed in the
++        space of this joint's parent and passes through its origin — for an
++        unparented chain that is the world origin. The mirrored chain is
++        created under the same parent as this joint. Defaults mirror
++        left-to-right across the YZ plane with mirrored behavior (identical
++        local rotation values on source and mirror produce symmetric motion).
++
++        Args:
++            plane (str, optional): Plane to mirror across, in parent space.
++                One of "YZ", "XY" or "XZ" (case-insensitive). Defaults to "YZ".
++            behavior (bool, optional): If True, mirror the joint behavior
++                (rotation axes are flipped so animation mirrors). If False,
++                only the orientation is mirrored. Defaults to True.
++            search (str, optional): Substring to search for in the joint
++                names when naming the mirrored chain (e.g. "L_"). Must be
++                provided together with `replace`. Defaults to None.
++            replace (str, optional): Replacement substring for the mirrored
++                joint names (e.g. "R_"). Must be provided together with
++                `search`. Defaults to None.
++
++        Returns:
++            list[Joint]: The newly created mirrored joints. The first
++                element is the mirrored root of the chain.
++
++        Raises:
++            ValueError: If `plane` is not one of "YZ", "XY", "XZ", or if
++                only one of `search` / `replace` is provided.
++        """
++        plane_flag = self._MIRROR_PLANES.get(str(plane).upper())
++        if plane_flag is None:
++            valid = ", ".join(self._MIRROR_PLANES)
++            raise ValueError(f"Invalid mirror plane '{plane}'. Must be one of: {valid}.")
++        if (search is None) != (replace is None):
++            raise ValueError("'search' and 'replace' must be provided together.")
++
++        kwargs = {plane_flag: True, "mirrorBehavior": behavior}
++        if search is not None:
++            kwargs["searchReplace"] = (search, replace)
++
++        new_names = cmds.mirrorJoint(self.long_name, **kwargs)
++        return [resolve(name) for name in new_names]
+ M src/tik/maya/types/joint.py
+?? tests/unit/test_joint_mirror.py

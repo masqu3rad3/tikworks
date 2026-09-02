@@ -1,0 +1,219 @@
+diff --git a/src/tik/maya/types/joint.py b/src/tik/maya/types/joint.py
+index f36fbab..62818af 100644
+--- a/src/tik/maya/types/joint.py
++++ b/src/tik/maya/types/joint.py
+@@ -1,9 +1,17 @@
+ import maya.cmds as cmds
+ 
+ from ..core.apicommon import create_node_with_dag_modifier
+-from ..core.registry import register
++from ..core.decorators import keepselection, protected
++from ..core.registry import register, resolve
+ from .transform import Transform
+ 
++# Maps a plane token to the corresponding cmds.mirrorJoint flag.
++_MIRROR_PLANE_FLAGS = {
++    "XY": "mirrorXY",
++    "YZ": "mirrorYZ",
++    "XZ": "mirrorXZ",
++}
++
+ 
+ @register("joint")
+ class Joint(Transform):
+@@ -37,3 +45,53 @@ class Joint(Transform):
+     def orient(self, xyz=(0, 0, 0)):
+         """Orient the joint using the provided XYZ values."""
+         cmds.joint(self.name, e=True, orientation=xyz)
++
++    @protected
++    @keepselection
++    def mirror(
++        self,
++        plane: str = "YZ",
++        behavior: bool = True,
++        search: str = None,
++        replace: str = None,
++    ) -> "list[Joint]":
++        """Mirror this joint and all of its descendants across a world plane.
++
++        Duplicates the chain rooted at this joint and reflects it across the
++        given plane through the world origin. With ``behavior`` enabled the
++        duplicates are behavior-mirrored: applying identical local rotation
++        values to matching joints on both sides produces mirror-symmetric
++        motion (the standard setup for left/right limbs).
++
++        Args:
++            plane: Mirror plane, one of ``"YZ"``, ``"XY"``, ``"XZ"``
++                (case-insensitive). ``"YZ"`` (default) mirrors left-to-right
++                across the X axis.
++            behavior: Mirror joint behavior (opposed rotation axes) rather
++                than just orientation. Defaults to True.
++            search: Substring to replace in the mirrored joint names.
++            replace: Replacement for ``search`` (e.g. ``search="L_"``,
++                ``replace="R_"``). Must be provided together with ``search``.
++
++        Returns:
++            list[Joint]: Wrappers for the mirrored joints, root first, in the
++            order Maya reports them.
++
++        Raises:
++            ValueError: If ``plane`` is not a valid mirror plane, or only one
++                of ``search`` / ``replace`` is provided.
++        """
++        plane_flag = _MIRROR_PLANE_FLAGS.get(str(plane).upper())
++        if plane_flag is None:
++            valid_planes = ", ".join(sorted(_MIRROR_PLANE_FLAGS))
++            raise ValueError(
++                f"Invalid mirror plane '{plane}'. Expected one of: {valid_planes}."
++            )
++        if (search is None) != (replace is None):
++            raise ValueError("'search' and 'replace' must be provided together.")
++
++        kwargs = {plane_flag: True, "mirrorBehavior": behavior}
++        if search is not None:
++            kwargs["searchReplace"] = (search, replace)
++        mirrored_names = cmds.mirrorJoint(self.long_name, **kwargs) or []
++        return [resolve(name) for name in mirrored_names]
+diff --git a/tests/unit/test_joint.py b/tests/unit/test_joint.py
+index 56d17af..7847035 100644
+--- a/tests/unit/test_joint.py
++++ b/tests/unit/test_joint.py
+@@ -64,3 +64,132 @@ def test_create_joint_with_parent():
+     parents = cmds.listRelatives(child.name, parent=True)
+     assert parents and parents[0] == parent.name
+ 
++
++def _build_left_arm_chain():
++    """Build a small left-side joint chain with non-trivial orients."""
++    shoulder = Joint.create(
++        name='L_shoulder', position=(2, 5, 0), orientation=(0, -10, 15)
++    )
++    elbow = Joint.create(
++        name='L_elbow', parent=shoulder, position=(3, 0, 0), orientation=(0, 20, -10)
++    )
++    wrist = Joint.create(name='L_wrist', parent=elbow, position=(3, 0, 0))
++    return shoulder, elbow, wrist
++
++
++def _world_translation(name):
++    """Return the world-space translation of a node as a tuple."""
++    return tuple(cmds.xform(name, query=True, worldSpace=True, translation=True))
++
++
++def test_mirror_chain_yz_returns_joints():
++    """Mirroring returns Joint wrappers for the whole duplicated chain."""
++    shoulder, _elbow, _wrist = _build_left_arm_chain()
++
++    mirrored = shoulder.mirror(plane='YZ', behavior=True, search='L_', replace='R_')
++
++    assert len(mirrored) == 3
++    assert all(isinstance(jnt, Joint) for jnt in mirrored)
++    assert [jnt.name for jnt in mirrored] == ['R_shoulder', 'R_elbow', 'R_wrist']
++    # Hierarchy of the mirrored chain matches the original.
++    assert cmds.listRelatives('R_elbow', parent=True) == ['R_shoulder']
++    assert cmds.listRelatives('R_wrist', parent=True) == ['R_elbow']
++    # Original chain is untouched.
++    assert cmds.objExists('L_shoulder')
++    assert cmds.listRelatives('L_elbow', parent=True) == ['L_shoulder']
++
++
++def test_mirror_chain_yz_positions_are_reflected():
++    """Every mirrored joint sits at the X-negated world position."""
++    shoulder, elbow, wrist = _build_left_arm_chain()
++
++    shoulder.mirror(search='L_', replace='R_')
++
++    for left, right in (
++        (shoulder.name, 'R_shoulder'),
++        (elbow.name, 'R_elbow'),
++        (wrist.name, 'R_wrist'),
++    ):
++        left_pos = _world_translation(left)
++        right_pos = _world_translation(right)
++        expected = (-left_pos[0], left_pos[1], left_pos[2])
++        assert right_pos == pytest.approx(expected, abs=1e-4)
++
++
++def test_mirror_behavior_produces_symmetric_motion():
++    """Behavior mirroring: identical rotation values pose both sides
++    mirror-symmetrically — the defining property of a behavior mirror."""
++    shoulder, elbow, wrist = _build_left_arm_chain()
++
++    shoulder.mirror(behavior=True, search='L_', replace='R_')
++
++    # Pose both chains with the same local rotation values.
++    for left, right in ((shoulder.name, 'R_shoulder'), (elbow.name, 'R_elbow')):
++        cmds.setAttr(f'{left}.rotate', 25, 40, 10)
++        cmds.setAttr(f'{right}.rotate', 25, 40, 10)
++
++    left_wrist = _world_translation(wrist.name)
++    right_wrist = _world_translation('R_wrist')
++    expected = (-left_wrist[0], left_wrist[1], left_wrist[2])
++    assert right_wrist == pytest.approx(expected, abs=1e-4)
++
++
++def test_mirror_without_behavior_keeps_reflected_positions():
++    """Orientation-only mirror still reflects positions across the plane."""
++    shoulder, _elbow, wrist = _build_left_arm_chain()
++
++    mirrored = shoulder.mirror(behavior=False, search='L_', replace='R_')
++
++    assert len(mirrored) == 3
++    left_wrist = _world_translation(wrist.name)
++    right_wrist = _world_translation('R_wrist')
++    expected = (-left_wrist[0], left_wrist[1], left_wrist[2])
++    assert right_wrist == pytest.approx(expected, abs=1e-4)
++
++
++def test_mirror_from_mid_chain_only_mirrors_descendants():
++    """Mirroring a mid-chain joint duplicates only that joint and below."""
++    shoulder, _elbow, _wrist = _build_left_arm_chain()
++
++    mirrored = shoulder.children[0].mirror(search='L_', replace='R_')
++
++    assert [jnt.name for jnt in mirrored] == ['R_elbow', 'R_wrist']
++    assert not cmds.objExists('R_shoulder')
++    # The mirrored sub-chain stays under the original parent.
++    assert cmds.listRelatives('R_elbow', parent=True) == [shoulder.name]
++
++
++def test_mirror_plane_is_case_insensitive():
++    """Plane tokens are accepted in any case."""
++    shoulder, _elbow, _wrist = _build_left_arm_chain()
++
++    mirrored = shoulder.mirror(plane='yz', search='L_', replace='R_')
++
++    assert len(mirrored) == 3
++
++
++def test_mirror_invalid_plane_raises():
++    """An unknown plane token raises ValueError."""
++    joint = Joint.create(name='badPlaneJoint')
++    with pytest.raises(ValueError):
++        joint.mirror(plane='XW')
++
++
++def test_mirror_search_without_replace_raises():
++    """Providing only one of search/replace raises ValueError."""
++    joint = Joint.create(name='searchOnlyJoint')
++    with pytest.raises(ValueError):
++        joint.mirror(search='L_')
++    with pytest.raises(ValueError):
++        joint.mirror(replace='R_')
++
++
++def test_mirror_keeps_selection():
++    """Mirroring does not clobber the caller's selection."""
++    shoulder, _elbow, wrist = _build_left_arm_chain()
++    cmds.select(wrist.name)
++
++    shoulder.mirror(search='L_', replace='R_')
++
++    assert cmds.ls(selection=True) == [wrist.name]
++
+
+--- git status --short ---
+ A src/python/tools/prop_rig.py
+ M src/tik/maya/types/joint.py
+ M tests/unit/test_joint.py

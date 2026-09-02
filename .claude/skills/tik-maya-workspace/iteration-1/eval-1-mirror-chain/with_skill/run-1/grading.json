@@ -1,0 +1,25 @@
+{
+  "expectations": [
+    {
+      "text": "capability-in-tik-maya: the mirror capability is implemented inside src/python/tik/maya/ (e.g. on Joint or Transform), not as ad-hoc tool-level code",
+      "passed": true,
+      "evidence": "Joint.mirror() added to src/tik/maya/types/joint.py (the worktree snapshot's tik.maya location - path caveat: eval worktrees were based on main-era layout). NOTES.md cites the skill's layering rules for choosing the type layer."
+    },
+    {
+      "text": "no-raw-cmds-outside-wrapper: no new maya.cmds / OpenMaya imports appear in files outside src/python/tik/maya/",
+      "passed": true,
+      "evidence": "Only joint.py (inside tik.maya, where cmds is legal) and tests/unit/test_joint.py changed; tests use cmds for independent scene assertions, matching the existing test file's established convention."
+    },
+    {
+      "text": "test-added: a pytest file under tests/ exercises the new capability",
+      "passed": true,
+      "evidence": "9 tests appended to tests/unit/test_joint.py incl. the defining behavior-mirror symmetry check on a chain with non-trivial joint orients; agent ran full unit suite under mayapy: 546 passed, 0 failed."
+    },
+    {
+      "text": "house-style: the new public API uses no get_/set_ prefixes, has type hints and docstrings, and scene modification is undoable (undocommit or undoInfo chunk)",
+      "passed": true,
+      "evidence": "mirror() - verb method, no prefixes; typed signature with -> list[Joint]; full Google-style docstring with Raises; @protected + @keepselection; single cmds.mirrorJoint call is natively undoable. Minor nit: `search: str = None` should be Optional[str]."
+    }
+  ],
+  "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0}
+}

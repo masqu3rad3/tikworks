@@ -4,16 +4,33 @@ from functools import partial
 
 from maya import cmds
 
+from .core import attribute, naming
 from .core.dagnode import DagNode
+from .core.meta import META_PREFIX, find_by_meta
 from .core.node import Node
 from .core.registry import resolve
 from .core.scene import *  # noqa: F401, F403
 from .core.scene import proxy_wrapper
 from .core.shapenode import ShapeNode
+from .constructs import (
+    AimFrame,
+    AngleBetween,
+    ChainLengths,
+    MatrixBlend,
+    MatrixConstraint,
+    MatrixSpline,
+    MatrixSwitch,
+    Measure,
+    Remap,
+    Ribbon,
+    SoftIk,
+    SpaceSwitch,
+)
 from .types.blendshape import BlendShape
 from .types.skincluster import SkinCluster
 from .types.camera import Camera
 from .types.curve import Curve
+from .types.ikhandle import IkHandle
 from .types.joint import Joint
 from .types.light import Light
 from .types.locator import Locator
@@ -26,6 +43,7 @@ __all__ = [
     "DagNode",
     "ShapeNode",
     "Joint",
+    "IkHandle",
     "Transform",
     "Mesh",
     "Curve",
@@ -36,6 +54,22 @@ __all__ = [
     "BlendShape",
     "SkinCluster",
     "resolve",
+    "find_by_meta",
+    "attribute",
+    "naming",
+    "AimFrame",
+    "AngleBetween",
+    "ChainLengths",
+    "MatrixBlend",
+    "MatrixConstraint",
+    "MatrixSpline",
+    "MatrixSwitch",
+    "Measure",
+    "SpaceSwitch",
+    "Remap",
+    "Ribbon",
+    "SoftIk",
+    "META_PREFIX",
 ]
 
 # --- MODULE LEVEL GETATTR (PEP 562) ---

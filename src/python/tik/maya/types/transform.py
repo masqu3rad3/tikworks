@@ -208,6 +208,81 @@ class Transform(DagNode):
     def scale_z(self, value):
         self["scaleZ"].set(value)
 
+    @property
+    def world_position(self):
+        """Get or set the world-space position (rotate pivot) as an MVector."""
+        return self.world_translation
+
+    @world_position.setter
+    def world_position(self, value):
+        fn_transform = OpenMaya.MFnTransform(self.dag_path)
+        fn_transform.setTranslation(
+            OpenMaya.MVector(value[0], value[1], value[2]), OpenMaya.MSpace.kWorld
+        )
+
+    def distance_to(self, other) -> float:
+        """Return the world-space distance to ``other``."""
+        other = resolve(other) if isinstance(other, str) else other
+        return (self.world_position - other.world_position).length()
+
+    def world_axis(self, axis: str = "x"):
+        """Return the normalized world ``axis`` of this transform.
+
+        Args:
+            axis: ``"x"``, ``"y"`` or ``"z"``.
+
+        Returns:
+            MVector: The unit axis in world space.
+        """
+        row = {"x": 0, "y": 4, "z": 8}[axis.lower()]
+        matrix = self["worldMatrix[0]"].value
+        vector = OpenMaya.MVector(matrix[row], matrix[row + 1], matrix[row + 2])
+        vector.normalize()
+        return vector
+
+    @staticmethod
+    def between(first, second, ratio: float = 0.5):
+        """Return the world position ``ratio`` of the way from first to second."""
+        first = resolve(first) if isinstance(first, str) else first
+        second = resolve(second) if isinstance(second, str) else second
+        start, end = first.world_position, second.world_position
+        return start + (end - start) * ratio
+
+    def align_to(self, target, position=True, rotation=True):
+        """Match world position and/or rotation of ``target``."""
+        self.snap_to(target, position=position, rotation=rotation, scale=False)
+
+    def aim_at(
+        self,
+        target,
+        aim_vector=(1, 0, 0),
+        up_vector=(0, 1, 0),
+        world_up=(0, 1, 0),
+        world_up_object=None,
+    ):
+        """Rotate this transform so ``aim_vector`` points at ``target``.
+
+        Uses a temporary aimConstraint which is deleted afterwards, so the
+        result is plain rotation values.
+        """
+        target = resolve(target) if isinstance(target, str) else target
+        kwargs = {
+            "aimVector": tuple(aim_vector),
+            "upVector": tuple(up_vector),
+            "worldUpVector": tuple(world_up),
+            "worldUpType": "vector",
+        }
+        if world_up_object is not None:
+            up_node = (
+                resolve(world_up_object)
+                if isinstance(world_up_object, str)
+                else world_up_object
+            )
+            kwargs["worldUpType"] = "object"
+            kwargs["worldUpObject"] = up_node.long_name
+        constraint = cmds.aimConstraint(target.long_name, self.long_name, **kwargs)
+        cmds.delete(constraint)
+
     def snap_to(self, target, position=True, rotation=True, scale=False):
         """Snap this transform to another transform's position,
         rotation, and/or scale."""

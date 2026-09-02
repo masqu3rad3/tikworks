@@ -1,331 +1,154 @@
 Quickstart
 ==========
 
-This guide gets you working with tik.maya in five minutes.
-
-Installation
-------------
-
-tik.maya is part of the TikWorks repository. Add the ``src`` directory to your Maya Python path:
+Ten minutes, one Script Editor tab. Every snippet below runs as written in an
+empty scene, in order.
 
 .. code-block:: python
 
-   import sys
-   sys.path.append("/path/to/tikworks/src")
-
    import tik.maya as tm
 
-Dynamic cmds Wrapping
+Create and wrap nodes
 ---------------------
 
-**tik.maya dynamically wraps the entire maya.cmds module**, allowing you to use it as a 
-drop-in replacement for ``maya.cmds`` with minimal changes to existing scripts:
+Type classes have a ``create()``. Existing nodes are wrapped with
+:func:`~tik.maya.core.registry.resolve`, which looks at the Maya node type and
+picks the most specific wrapper it knows.
 
 .. code-block:: python
 
-   # Traditional approach
-   import maya.cmds as cmds
-   
-   # Simply change the import!
-   import tik.maya as tm
-   
-   # Now all your cmds calls work through tik.maya
-   tm.polyCube(name="myCube")
-   tm.xform("myCube", translation=(1, 2, 3))
-   tm.setAttr("myCube.translateX", 5.0)
+   grp = tm.Transform.create(name="rig_grp")           # Transform
+   jnt = tm.Joint.create(name="hip_jnt", parent=grp)   # Joint, already parented
+   loc = tm.Locator.create(name="aim_loc")             # Locator (the *shape*)
 
-Under the hood, tik.maya uses `PEP 562 <https://peps.python.org/pep-0562/>`_ (module-level 
-``__getattr__``) to intercept attribute access. When you call ``tm.polyCube()``, it 
-dynamically proxies to ``maya.cmds.polyCube()`` while intelligently wrapping inputs and outputs.
+   cube = tm.polyCube(name="body_geo")[0]              # any cmds command, wrapped result
+   same = tm.resolve("body_geo")                       # wrap something that exists
+   print(type(same))                                   # <class 'tik.maya.types.transform.Transform'>
 
-**Key benefits:**
+Two details are worth knowing on day one:
 
-- **Seamless migration:** Existing scripts can switch namespaces with minimal changes
-- **Automatic type resolution:** Commands that return nodes automatically return typed tik.maya wrappers
-- **Selective overrides:** Critical functions like ``createNode`` use optimized OpenMaya API implementations for better performance
-- **Input cleaning:** tik.maya objects are automatically converted to strings for Maya commands
-- **Output wrapping:** Maya node names are automatically wrapped as tik.maya objects when appropriate
+- Shape types (``Locator``, ``Mesh``, ``Curve``, ``Camera``...) wrap the shape
+  node. Their parent transform is one property away: ``loc.transform``.
+- ``resolve("body_geo")`` on a transform gives you a ``Transform``;
+  ``resolve("body_geoShape")`` gives you a ``Mesh``. Ask for what you mean.
+
+Read and write attributes
+-------------------------
+
+Square brackets give you a :class:`~tik.maya.core.plug.Plug`. The plug is where
+values, lock state and connections live.
 
 .. code-block:: python
 
-   # Example: This returns a tik.maya.Transform object, not a string
-   cube = tm.polyCube(name="myCube")[0]
-   print(type(cube))  # <class 'tik.maya.types.transform.Transform'>
-   
-   # You can immediately use object-oriented methods
-   cube.translate = (1, 2, 3)
-   cube["visibility"].value = False
+   cube["translateX"].value = 5.0
+   print(cube["translateX"].value)          # 5.0
 
-.. tip::
-   **Want to see more?** Check out the ``snippets/comparisons/`` folder in the repository 
-   for many side-by-side examples comparing ``maya.cmds`` and ``tik.maya`` approaches. 
-   Example ``08_cylinder_rig`` demonstrates how an entire rigging script can work by 
-   simply changing ``import maya.cmds as cmds`` to ``import tik.maya as tm``!
+   cube["translate"].value = (1, 2, 3)      # compound attributes take a tuple
+   print(cube["translate"].value)           # [(1.0, 2.0, 3.0)]  -- cmds.getAttr's shape
 
-Wrapping Existing Nodes
------------------------
+   cube["scaleY"].locked = True
+   cube["scaleY"].visible = False           # gone from the channel box
+   print(cube["scaleY"].keyable)            # False
 
-Use :func:`tik.maya.resolve` to wrap any existing Maya node:
+Transforms also expose the usual channels as properties. Long and short names
+both work, and vectors come back as ``MVector``:
 
 .. code-block:: python
 
-   import tik.maya as tm
+   cube.translate = (0, 10, 0)
+   cube.ty                                  # 10.0
+   cube.rotate_z = 45
+   cube.translate                           # MVector(0, 10, 0)
 
-   # Wrap a node by name
-   cube = tm.resolve("pCube1")
-
-   # The returned object is typed — Transform, Mesh, Joint, etc.
-   print(type(cube))  # <class 'tik.maya.types.transform.Transform'>
-
-tik.maya automatically returns the correct wrapper class based on the Maya node type.
-
-Working with Attributes
------------------------
-
-Access attributes using bracket notation:
-
-.. code-block:: python
-
-   # Get a Plug object for the attribute
-   plug = cube["translateX"]
-
-   # Read and write values
-   plug.value = 5.0
-   print(plug.value)  # 5.0
-
-   # Or use the property shortcut on transforms
-   cube.translate_x = 10.0
-
-Attribute plugs have useful properties:
-
-.. code-block:: python
-
-   # Lock/unlock
-   cube["translateX"].locked = True
-   cube["translateX"].lock()    # equivalent
-
-   # Visibility in channel box
-   cube["translateX"].visible = False
-
-   # Keyable state
-   cube["translateX"].keyable = False
-
-Plugs also support mathematical operators to create dependency graph nodes:
-
-.. code-block:: python
-
-   # Arithmetic operations create Maya nodes automatically
-   driver = tm.Transform.create(name="driver")
-   follower = tm.Transform.create(name="follower")
-   
-   driver["tx"].value = 10.0
-   
-   # Create addDL and multDL nodes, then connect to follower
-   (driver["tx"] * 2.0 + 5) >> follower["ty"]
-   print(follower["ty"].value)  # 25.0
-
-.. tip::
-   For comprehensive coverage of plug operations including all mathematical operators,
-   connections, and advanced patterns, see :doc:`guides/working_with_plugs`.
-
-Connecting Attributes
----------------------
-
-Use the ``>>`` operator for connections:
-
-.. code-block:: python
-
-   locator = tm.resolve("locator1")
-   cube = tm.resolve("pCube1")
-
-   # Connect translate
-   locator["translate"] >> cube["translate"]
-
-   # Chain connections
-   a["output"] >> b["input"] >> c["input"]
-
-Or use the explicit method:
-
-.. code-block:: python
-
-   locator["translateX"].connect(cube["translateX"])
-
-Creating Nodes
+Connect things
 --------------
 
-Use the ``create()`` class method on type classes:
+``>>`` connects left to right and returns the right-hand plug, so connections
+chain. ``<<`` goes the other way. ``//`` disconnects.
 
 .. code-block:: python
 
-   # Create a transform
-   grp = tm.Transform.create(name="myGroup")
+   loc.transform["translate"] >> cube["translate"]
+   loc.transform["rotateY"] >> cube["rotateY"] >> jnt["rotateY"]
 
-   # Create a joint
-   jnt = tm.Joint.create(name="arm_jnt")
+   loc.transform["translate"] // cube["translate"]    # broken again (source // destination)
 
-   # Create a locator (returns the shape node)
-   loc = tm.Locator.create(name="myLocator")
-   loc.transform.translate = (1, 2, 3)  # Access parent transform
+   cube["rotateY"].get_input(plug=True)                # <Plug 'aim_loc.rotateY'>
 
-   # Create geometry (pass the Maya command as first argument)
-   sphere = tm.Mesh.create("polySphere", name="mySphere")
-   plane = tm.Nurbs.create("nurbsPlane", name="myPlane")
-
-.. note::
-   Shape types like ``Locator``, ``Mesh``, and ``Curve`` return shape node wrappers.
-   Access the parent transform via the ``.transform`` property.
-
-DAG Hierarchy
--------------
-
-Navigate the scene hierarchy:
-
-.. code-block:: python
-
-   transform = tm.resolve("pCube1")
-
-   # Get parent
-   parent = transform.parent
-
-   # Set parent
-   transform.parent = tm.resolve("group1")
-
-   # Get children
-   for child in transform.children:
-       print(child.name)
-
-   # Get shapes
-   for shape in transform.shapes:
-       print(shape.name, type(shape))
-
-Transform Operations
---------------------
-
-Common transform operations are built in:
-
-.. code-block:: python
-
-   # Read transforms
-   print(cube.translate)    # MVector
-   print(cube.rotate)       # MVector
-   print(cube.scale)        # MVector
-
-   # Write transforms
-   cube.translate = (1, 2, 3)
-   cube.rotate = (0, 45, 0)
-   cube.scale = (2, 2, 2)
-
-   # Snap to another transform
-   cube.snap_to(target, position=True, rotation=True)
-
-   # Freeze transformations
-   cube.freeze(translate=True, rotate=True, scale=True)
-
-   # Get matrices
-   local_matrix = cube.matrix
-   world_matrix = cube.world_matrix
-
-Node Lifecycle
---------------
-
-.. code-block:: python
-
-   # Check existence
-   if cube.exists():
-       print("Node exists")
-
-   # Rename (reference stays valid!)
-   cube.rename("newCubeName")
-   print(cube.name)  # "newCubeName"
-
-   # Delete
-   cube.delete()
-
-Adding Custom Attributes
-------------------------
-
-.. code-block:: python
-
-   # Add an attribute
-   cube.add_attr("customFloat", attributeType="float", defaultValue=0.0)
-
-   # Access it
-   cube["customFloat"].value = 1.5
-
-   # Delete it
-   cube.delete_attr("customFloat")
-
-Working with Shapes
+Do maths with plugs
 -------------------
 
-tik.maya provides shape-specific functionality:
+Arithmetic on plugs creates utility nodes and hands you the output plug. The
+expression reads like the formula because it is the formula.
 
 .. code-block:: python
 
-   # Mesh operations
-   mesh = tm.resolve("pCubeShape1")
-   vertices = mesh.vertices(space="world")
-   nearby = mesh.vertices_in_radius((0, 0, 0), radius=1.0)
-   mesh.unlock_normals(soften=True)
+   driver = tm.Transform.create(name="driver")
+   follower = tm.Transform.create(name="follower")
 
-   # Curve operations
-   curve = tm.resolve("curveShape1")
-   cvs = curve.cvs(space="world")
+   driver["tx"].value = 10
+   (driver["tx"] * 2.0 + 5) >> follower["ty"]
+   print(follower["ty"].value)                          # 25.0
 
-Advanced Example: Controllers and Panels
-----------------------------------------
+   driver["tx"].value = 20
+   print(follower["ty"].value)                          # 45.0  -- it is live
 
-This example combines a controller role, the control shape library, hierarchy
-utilities, and a panel construct to build a small rig preview setup. The shape
-library returns a list of available shape names that you can pass into
-``Controller.create``. The panel accepts a camera name, camera shape, or wrapper
-(``"persp"`` refers to Maya's default perspective camera) along with a window
-resolution in pixels.
+Vectors work too, component-wise, and a few helpers cover what operators cannot
+express:
 
 .. code-block:: python
 
-   import tik.maya as tm
-   from tik.maya.roles.controller import Controller
-   from tik.maya.utils.control_shapes import ControlShapeLibrary
-   from tik.maya.constructs import Panel
+   (driver["translate"] * (1, 1, 0)) >> follower["translate"]   # drop Z
 
-   # Build a simple joint chain
-   root_joint = tm.Joint.create(name="spine_root")
-   mid_joint = tm.Joint.create(name="spine_mid", parent=root_joint)
-   end_joint = tm.Joint.create(name="spine_end", parent=mid_joint)
+   ratio = driver["tx"] / 10.0
+   ratio.clamped(0.0, 1.0) >> follower["sx"]                    # min(max(x, 0), 1)
+   driver["ty"].gt(5.0, 1.0, 0.0) >> follower["visibility"]     # if ty > 5 then 1 else 0
 
-   # Browse available shapes in the library
-   shape_library = ControlShapeLibrary.get_instance()
-   available_shapes = shape_library.list_shapes()
-   print(available_shapes)  # ["Circle", "Square", "CubePin", ...]
+Build a hierarchy and place things
+----------------------------------
 
-   # Create a controller with a library shape
-   if not available_shapes:
-       raise RuntimeError("No control shapes found in the library.")
-   shape_name = available_shapes[0]
-   ctrl = Controller.create(name="spine_ctrl", shape=shape_name, size=2.0)
-   ctrl.color = (0.9, 0.2, 0.2)
+.. code-block:: python
 
-   # Align and connect to the joint chain
-   ctrl.transform.snap_to(root_joint, position=True, rotation=True)
-   ctrl.transform["translate"] >> root_joint["translate"]
-   ctrl.transform["rotate"] >> root_joint["rotate"]
+   jnt.parent = grp                 # reparent, world position preserved
+   jnt.parent                       # <Transform 'rig_grp'>
+   grp.children                     # [<Joint 'hip_jnt'>]
 
-   # Lock scale attributes to prevent unintended joint scaling
-   # collect_hierarchy returns wrapped DAG nodes under the root.
-   for joint in root_joint.collect_hierarchy(node_types=["joint"], include_self=True):
-       for axis in ["scaleX", "scaleY", "scaleZ"]:
-           joint[axis].locked = True
-           joint[axis].visible = False
+   jnt.snap_to(cube)                # position and rotation, world space
+   jnt.aim_at(loc.transform)        # bake an aim, no constraint left behind
+   jnt.freeze(translate=False, rotate=True, scale=False)   # cmds.makeIdentity, apply=True
 
-   # Spawn a dedicated preview panel
-   panel = Panel(camera="persp", resolution=(1280, 720), title="Rig Preview")
-   panel.display_textures = True
-   panel.grid = False
+   cube.world_position              # MVector, the rotate pivot in world space
+   jnt.distance_to(cube)            # a float
 
-Next Steps
+Lifecycle
+---------
+
+.. code-block:: python
+
+   cube.rename("torso_geo")         # the variable still works
+   cube.exists()                    # True
+   cube.duplicate()                 # a new wrapper for the copy
+   cube.delete()
+   cube.exists()                    # False
+
+Scene queries
+-------------
+
+``tm.ls`` and ``tm.select`` are the ``cmds`` commands with wrapped results and
+unwrapped arguments:
+
+.. code-block:: python
+
+   for node in tm.ls(type="joint"):
+       node["radius"].value = 0.5
+
+   tm.select(grp, jnt)              # tik.maya objects are fine as arguments
+
+Where next
 ----------
 
-- Read :doc:`why_tik_maya` to understand the design philosophy
-- Explore :doc:`/architecture/core_concepts` for the architecture
-- Browse the :doc:`/autoapi/index` for complete API details
+- :doc:`guides/nodes` for what a wrapper is and how the registry chooses a class.
+- :doc:`guides/plugs` for every operator, the compound rules, and how connections
+  are queried.
+- :doc:`guides/constructs` to stop building space switches by hand.
+- :doc:`cheatsheet` when you know the ``cmds`` spelling and want the tik.maya one.

@@ -62,9 +62,10 @@ class Benchmark:
         self.results: Dict[str, BenchmarkResult] = {}
 
     def measure(self, name: str, iterations: int = 10, warmup: int = 2):
-        """
-        A context manager or decorator to measure a block of code.
-        Usage as Context Manager:
+        """Measure a block of code, as a context manager or a decorator.
+
+        Example::
+
             with benchmark.measure("My Test", iterations=50):
                 do_something()
         """

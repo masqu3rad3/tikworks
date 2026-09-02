@@ -20,7 +20,8 @@ def register(node_type: str) -> Callable[[Type[T]], Type[T]]:
     Returns:
         A decorator function that registers the class.
 
-    Example:
+    Example::
+
         @register("transform")
         class Transform(DagNode):
             pass

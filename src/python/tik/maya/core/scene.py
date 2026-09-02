@@ -46,6 +46,12 @@ def proxy_wrapper(func_name, *args, **kwargs):
     return result
 
 
+def ensure_plugin(plugin_name: str) -> None:
+    """Load ``plugin_name`` if it is not loaded yet (quietly)."""
+    if not cmds.pluginInfo(plugin_name, query=True, loaded=True):
+        cmds.loadPlugin(plugin_name, quiet=True)
+
+
 @alias("ls")
 def list_scene_nodes(*args, **kwargs):
     """Wrapper for cmds.ls to list scene nodes of a specific type."""

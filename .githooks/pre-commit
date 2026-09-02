@@ -1,0 +1,51 @@
+#!/bin/sh
+#
+# Reject commits that introduce unresolved merge-conflict markers.
+#
+# Commit 61ecaf7 put markers into Makefile, make.bat and
+# tests/integration/invoke.py in one go, and they were found one at a time
+# over the following days. This catches that at the moment it happens.
+#
+# Enable it once per clone (hooks themselves are not cloned):
+#
+#     git config core.hooksPath .githooks
+#
+# To commit anyway -- a doc that quotes markers, say -- use:
+#
+#     git commit --no-verify
+#
+# shellcheck shell=sh
+
+# Only the marker lines git itself writes, at the start of a line:
+#   <<<<<<< ours
+#   ||||||| base      (diff3 style)
+#   >>>>>>> theirs
+#
+# "=======" is deliberately NOT checked: it is also how reStructuredText
+# underlines a heading, and docs/ is full of those. A real conflict always
+# carries an opening and a closing marker too, so nothing is missed.
+markers='^(<{7}|\|{7}|>{7})( |$)'
+
+# Added lines only, so a pre-existing marker in an untouched part of a file
+# does not block unrelated work -- and an *introduced* one still cannot slip
+# through, which is the case that actually bit this repo.
+offenders=$(
+	git diff --cached --name-only --diff-filter=ACM |
+		while IFS= read -r file; do
+			if git diff --cached -U0 -- "$file" |
+				grep -qE "^\+${markers#^}"; then
+				printf '%s\n' "$file"
+			fi
+		done
+)
+
+[ -z "$offenders" ] && exit 0
+
+printf '\nUnresolved merge-conflict markers in staged changes:\n\n'
+printf '%s\n' "$offenders" | while IFS= read -r file; do
+	printf '  %s\n' "$file"
+	# Line numbers from the staged content, which is what would be committed.
+	git show ":$file" | grep -nE "$markers" | sed 's/^/      /'
+done
+printf '\nResolve them, or commit with --no-verify if they are intentional.\n\n'
+exit 1

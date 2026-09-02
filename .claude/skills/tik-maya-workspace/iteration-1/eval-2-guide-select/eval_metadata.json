@@ -1,0 +1,10 @@
+{
+  "eval_id": 2,
+  "eval_name": "guide-select",
+  "prompt": "Quick script: select every joint in the scene whose meta 'kind' is 'guide'. Save it as select_guide_joints.py.",
+  "assertions": [
+    "uses-meta-api: the script uses tik.maya's meta system (find_by_meta or node.meta), not raw cmds.ls attribute-string filtering with the tikMeta_ prefix hardcoded",
+    "no-raw-maya-imports: no direct maya.cmds / OpenMaya / pymel imports in the script",
+    "correct-filter: the result is restricted to joints with meta kind == 'guide', and the nodes end up selected"
+  ]
+}
