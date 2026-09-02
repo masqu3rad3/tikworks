@@ -1,218 +1,166 @@
-Why tik.maya?
-=============
+Why not just cmds?
+==================
 
-Maya scripting with ``maya.cmds`` is powerful but has pain points that compound in
-larger projects. tik.maya addresses these directly while maintaining Maya's flexibility.
+``maya.cmds`` is fine for a ten-line script. The trouble starts when the script
+grows into a tool: every node is a string, every attribute is a string with a
+dot in it, and every connection is a function call with two of those strings.
+tik.maya exists because three specific things kept going wrong.
 
-The Problem with ``maya.cmds``
+Names are not identities
+------------------------
+
+``cmds`` gives you names, and names change. Rename a node, move it under a
+namespace, reparent it so its long path changes, and every variable that held
+the old string is now pointing at nothing.
+
+.. tab-set::
+
+   .. tab-item:: maya.cmds
+
+      .. code-block:: python
+
+         cube = cmds.polyCube(name="myCube")[0]
+         cmds.rename(cube, "hip_geo")
+         cmds.setAttr(f"{cube}.translateX", 10)   # RuntimeError: myCube does not exist
+
+   .. tab-item:: tik.maya
+
+      .. code-block:: python
+
+         cube = tm.polyCube(name="myCube")[0]
+         cube.rename("hip_geo")
+         cube.translate_x = 10                     # fine: the wrapper follows the node
+
+A wrapper holds an OpenMaya ``MObject`` and the node's UUID. The ``MObject`` is
+the fast path; if it goes stale (undo can do that), the wrapper looks the node up
+again by UUID. You get API-level speed with a safety net.
+
+Every operation is three calls
 ------------------------------
 
-**String-based node references break easily**
+Locking an attribute and hiding it from the channel box is a routine rigging
+chore. In ``cmds`` it is repetitive enough that everyone writes a helper for it,
+and every studio's helper is slightly different.
+
+.. tab-set::
+
+   .. tab-item:: maya.cmds
+
+      .. code-block:: python
+
+         for attr in ("scaleX", "scaleY", "scaleZ"):
+             cmds.setAttr(f"{ctrl}.{attr}", lock=True)
+             cmds.setAttr(f"{ctrl}.{attr}", keyable=False, channelBox=False)
+
+   .. tab-item:: tik.maya
+
+      .. code-block:: python
+
+         for attr in ("sx", "sy", "sz"):
+             ctrl[attr].locked = True
+             ctrl[attr].visible = False
+
+         # or, since this is what everybody wants anyway:
+         tm.attribute.lock_and_hide(ctrl, ("sx", "sy", "sz"))
+
+Node networks are invisible in the code
+---------------------------------------
+
+The maths of a rig lives in utility nodes. Written with ``cmds`` it is a wall of
+``createNode``, ``setAttr`` and ``connectAttr`` in which the actual formula is
+nowhere to be seen. tik.maya lets you write the formula and creates the nodes for
+you.
+
+.. tab-set::
+
+   .. tab-item:: maya.cmds
+
+      .. code-block:: python
+
+         mult = cmds.createNode("multDoubleLinear")
+         cmds.connectAttr(f"{driver}.translateX", f"{mult}.input1")
+         cmds.setAttr(f"{mult}.input2", 2.0)
+         add = cmds.createNode("addDoubleLinear")
+         cmds.connectAttr(f"{mult}.output", f"{add}.input1")
+         cmds.setAttr(f"{add}.input2", 5.0)
+         cmds.connectAttr(f"{add}.output", f"{follower}.translateY")
+
+   .. tab-item:: tik.maya
+
+      .. code-block:: python
+
+         (driver["tx"] * 2.0 + 5) >> follower["ty"]
+
+The nodes are exactly the ones you would have made by hand, the graph is the
+same, and the line says what it computes.
+
+You can switch one import at a time
+-----------------------------------
+
+tik.maya does not ask you to rewrite anything. Every ``cmds`` function is
+reachable through ``tm``: ``tm.polyCube``, ``tm.xform``, ``tm.skinCluster`` all
+call the real command. Arguments that are tik.maya objects are turned into names
+on the way in, and commands that create nodes hand you wrappers on the way out.
 
 .. code-block:: python
 
-   # Using maya.cmds
-   import maya.cmds as cmds
+   import tik.maya as tm      # was: import maya.cmds as cmds
 
-   cube = cmds.polyCube(name="myCube")[0]
-   cmds.setAttr(f"{cube}.translateX", 5)
+   geo = tm.polyCylinder(radius=2, height=10, name="main_geo")[0]   # a Transform
+   tm.xform(geo, translation=(0, 5, 0))                              # a cmds call, unchanged
+   geo["visibility"].locked = True                                    # an object call, new
 
-   # If something renames the node...
-   cmds.rename(cube, "renamedCube")
+The repository's ``snippets/comparisons/08_cylinder_rig`` folder holds a spline
+IK cylinder rig written once against ``cmds`` and once against ``tm`` with
+nothing but the import changed. Migration is a decision you make per line, not
+per project.
 
-   # Your reference is now broken
-   cmds.setAttr(f"{cube}.translateX", 10)  # Error! "myCube" doesn't exist
+Where cmds still wins
+---------------------
 
-**Verbose, repetitive code**
+- **Raw speed in inner loops.** Wrapping has a cost. For a loop over 50,000
+  vertices, drop to OpenMaya directly; tik.maya does the same internally where it
+  matters, in ``Mesh.vertices()`` for example.
+- **Commands tik.maya does not know return nodes for.** The passthrough wraps the
+  output of a fixed list of node-creating commands (``polyCube``, ``duplicate``,
+  ``listRelatives``, ``group``, and so on). Anything else returns whatever
+  ``cmds`` returned. Pass a wrapper's ``.name`` or ``.long_name`` into ``cmds``
+  when you need to.
 
-.. code-block:: python
+The comparison in one table
+---------------------------
 
-   # Lock and hide attributes requires multiple calls
-   cmds.setAttr("pCube1.scaleX", lock=True)
-   cmds.setAttr("pCube1.scaleX", keyable=False)
-   cmds.setAttr("pCube1.scaleX", channelBox=False)
+.. list-table::
+   :header-rows: 1
+   :widths: 22 26 26 26
 
-**No type safety**
+   * -
+     - ``maya.cmds``
+     - ``maya.api.OpenMaya``
+     - ``tik.maya``
+   * - Node identity
+     - Strings. Break on rename.
+     - ``MObject`` / ``MDagPath``. Robust, verbose.
+     - ``MObject`` with a UUID fallback. Robust, one line.
+   * - Attribute access
+     - ``getAttr`` / ``setAttr`` with dotted strings
+     - ``MPlug`` and function sets
+     - ``node["attr"].value``
+   * - Connections
+     - ``connectAttr(a, b, force=True)``
+     - ``MDGModifier.connect``
+     - ``a >> b``
+   * - Utility networks
+     - Create, set, connect, repeat
+     - The same, lower level
+     - ``(a * 2 + b) >> c``
+   * - Undo
+     - Yes
+     - Only if you write the command
+     - Yes. API-level edits go through an undo bridge.
+   * - Editor support
+     - None. Typos surface at runtime.
+     - Some
+     - Completion, type hints, readable errors
 
-.. code-block:: python
-
-   # Typos only discovered at runtime
-   cmds.setAttr("pCube1.tranlsateX", 5)  # Misspelled!
-
-How tik.maya Solves This
--------------------------
-
-MObject Tracking with UUID Backup
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-tik.maya tracks nodes using :class:`maya.api.OpenMaya.MObject` handles for performance,
-with UUID as a backup for restoration. References stay valid through renames,
-namespacing, and re-parenting.
-
-.. code-block:: python
-
-   import tik.maya as tm
-
-   cube = tm.resolve("myCube")
-   cube.translate_x = 5
-
-   # Rename works seamlessly
-   cube.rename("renamedCube")
-   cube.translate_x = 10  # Still works!
-
-Under the hood, tik.maya uses MObject as the primary handle for speed. If the MObject
-becomes stale (e.g., after undo/redo), tik.maya reconstructs it from the stored UUID,
-providing a fast path with a safe fallback.
-
-Flexible Dynamic Wrapping
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-tik.maya's architecture brings **fine-tuning, speed, elegance, and extensibility** 
-together through dynamic wrapping:
-
-.. code-block:: python
-
-   # Works as a drop-in replacement for maya.cmds
-   import tik.maya as tm  # Instead of: import maya.cmds as cmds
-   
-   # All cmds functions work automatically
-   cube = tm.polyCube(name="myCube")[0]
-   tm.xform(cube, translation=(1, 2, 3))
-   tm.setAttr(f"{cube}.visibility", 0)
-
-**But with key advantages:**
-
-- **Automatic object wrapping:** Node-returning commands give you typed objects, not strings
-- **Selective overrides:** Performance-critical functions like ``createNode`` use optimized OpenMaya API
-- **Extensible design:** Add custom behavior without modifying Maya
-- **Zero migration cost:** Change your import statement and existing scripts work
-
-.. code-block:: python
-
-   # You also get the object-oriented benefits
-   cube.translate = (5, 6, 7)
-   cube["visibility"].value = False
-   cube["visibility"].locked = True
-   
-   # And mathematical operators for dependency networks
-   driver = tm.spaceLocator()[0]
-   (driver["translateX"] * 2.0 + 5) >> cube["translateY"]
-
-This flexible structure means you can migrate gradually — use ``tm.polyCube()`` just 
-like ``cmds.polyCube()`` when convenient, or embrace the object-oriented API when it 
-makes sense. See the ``snippets/comparisons/08_cylinder_rig/`` example to see how an 
-entire rigging script works with just an import change!
-
-Concise, Readable Code
-~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Lock and hide in one line
-   cube["scaleX"].locked = True
-   cube["scaleX"].visible = False
-
-   # Or batch operations
-   for attr in ["scaleX", "scaleY", "scaleZ"]:
-       cube[attr].locked = True
-       cube[attr].visible = False
-
-   # Connect with operators
-   driver["translate"] >> cube["translate"]
-
-Pythonic and Type-Safe
-~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Properties for state, methods for actions
-   cube.visibility = False
-   cube.freeze(translate=True, rotate=True)
-
-   # Automatic type resolution
-   mesh = tm.resolve("pCubeShape1")  # Returns Mesh
-   joint = tm.resolve("joint1")      # Returns Joint
-
-   # IDE autocomplete and type hints work
-   cube.  # Shows: translate, rotate, freeze(), snap_to(), etc.
-
-Procedural Math Networks
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Build dependency graphs using Python operators:
-
-.. code-block:: python
-
-   driver = tm.Transform.create(name="driver")
-   follower = tm.Transform.create(name="follower")
-
-   # Arithmetic creates and connects utility nodes automatically
-   (driver["tx"] * 2.0 + 5) >> follower["ty"]
-
-Side-by-Side Comparison
------------------------
-
-**Connecting attributes:**
-
-.. code-block:: python
-
-   # maya.cmds
-   cmds.connectAttr("driver.translateX", "driven.translateX", force=True)
-   cmds.connectAttr("driver.translateY", "driven.translateY", force=True)
-   cmds.connectAttr("driver.translateZ", "driven.translateZ", force=True)
-
-   # tik.maya
-   driver["translate"] >> driven["translate"]
-
-**Creating and positioning:**
-
-.. code-block:: python
-
-   # maya.cmds
-   loc = cmds.spaceLocator(name="myLocator")[0]
-   cmds.setAttr(f"{loc}.translate", 1, 2, 3, type="double3")
-
-   # tik.maya
-   loc = tm.Locator.create(name="myLocator")
-   loc.transform.translate = (1, 2, 3)
-
-When to Use What
-----------------
-
-**Use tik.maya when:**
-
-- Building tools that manipulate scene objects
-- Writing rigging scripts needing reliable references
-- You want maintainable, readable code
-
-**Consider raw API when:**
-
-- Performance-critical inner loops (though tik.maya is fast)
-- Operations tik.maya doesn't wrap yet
-
-.. note::
-   tik.maya and ``cmds`` coexist. Use ``node.name`` to pass tik.maya objects
-   to ``cmds`` functions.
-
-Summary
--------
-
-+---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
-| Pain Point                | ``maya.cmds``                    | ``maya.api.OpenMaya``               | **tik.maya**                              |
-+===========================+==================================+=====================================+===========================================+
-| Node references           | Strings — break on rename        | MObject/MDagPath handles — robust   | MObj/UUID-backed — survives renames       |
-+---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
-| Code verbosity            | Multiple calls per operation     | Verbose boilerplate (fn sets, plugs)| Concise properties and methods            |
-+---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
-| Performance               | Moderate                         | Fastest (No Undo / Not crash safe)  | Fast (With Undo support and more stable)  |
-+---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
-| Type safety               | None — errors at runtime         | Stronger typing via API classes     | IDE completion, type hints                |
-+---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
-| API style                 | Procedural, flag-heavy           | Low-level, explicit, handle-based   | Pythonic, object-oriented                 |
-+---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
-| Debugging                 | String matching errors           | Object inspection via function sets | Object inspection, clear errors           |
-+---------------------------+----------------------------------+-------------------------------------+-------------------------------------------+
-
-tik.maya combines the simplicity of ``maya.cmds`` with the robustness of
-``maya.api.OpenMaya``, wrapped in a Pythonic interface. Write less code,
-catch errors earlier, and stop worrying about node names.
+Next: :doc:`quickstart`.
