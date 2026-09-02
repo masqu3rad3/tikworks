@@ -38,7 +38,7 @@ Attribute handle. Central to everything.
 - Properties: `value` (get/set), `attr`, `path`, `node`, `mplug`, `type`, `children`,
   `visible`, `keyable`, `locked`
 - Methods: `get(**kw)` / `set(value, **kw)` (kwargs forwarded to get/setAttr),
-  `exists()`, `create(**kw)`, `delete()`, `rename(new)`, `lock()` / `unlock()`,
+  `exists()`, `create(attr_type=None, **kw)`, `delete()`, `rename(new)`, `lock()` / `unlock()`,
   `connect(other, force=True)`, `disconnect(other=None)`,
   `get_input(plug=False)`, `list_inputs(plugs=False)`, `list_outputs(plugs=False)`,
   `find_proxy_plugs()`
@@ -46,6 +46,21 @@ Attribute handle. Central to everything.
   `+ - * / ** %` (and reflected forms) build utility nodes and return the output plug —
   scalar and compound (vector) plugs both handled
 - Compound access: `plug["childAttr"]`
+- **`create()` is the ONLY attribute creator** — there is no `tm.attribute` module.
+  Index a node with a name that does not exist yet, then create it; returns the plug.
+  Types: `float` `int` `bool` `enum` `angle` `distance` `time` `string` `matrix`
+  (the first seven default to `keyable=True`, unlike `cmds.addAttr`).
+  Kwarg aliases: `default` `min` `max` `soft_min` `soft_max` `items` (enum labels);
+  `proxy=<Plug or path>` makes a proxy and derives its own type; every other kwarg is
+  forwarded to `cmds.addAttr` verbatim, so `create(attributeType="double3")` works.
+  ```python
+  stretch = ctrl["stretch"].create("float", default=0.0, min=0.0, max=1.0)
+  ctrl["space"].create("enum", items=["world", "local"], default=1)
+  ctrl["notes"].create("string", default="rev 2")   # default applied post-addAttr
+  fk_ctrl["ikFk"].create(proxy=stretch)
+  ```
+- Lock/hide is plug state, not a helper: `plug.locked = True`, `plug.visible = False`.
+  Loop over `tm.TRANSFORM_CHANNELS` / `tm.ALL_CHANNELS` for the channel-box set.
 
 ### `core/scene.py` — module-level scene functions
 `list_scene_nodes(*a, **kw)` (alias `ls` — wraps every result),
@@ -64,12 +79,6 @@ rename (attribute-based). Mapping API: `node.meta[key]`, `get`, `keys`, `items`,
 `update`, `clear`, `in`, plus `as_dict()` — one listAttr + one getAttr per key,
 much cheaper than `meta[key]` in a loop.
 `find_by_meta(key, value=<any>, node_type=None)` → wrapped nodes.
-
-### `core/attribute.py` — attribute-adding helpers
-`add_float(node, name, default=, min=, max=, keyable=)`, `add_int`, `add_bool`,
-`add_enum(node, name, items, default=0)`, `add_string`, `add_separator(node)`,
-`lock_and_hide(node, attrs=...)`, `unlock(node, attrs=None, show=True)`.
-All return `Plug`s. Accept wrappers or names.
 
 ### `core/naming.py`
 `format_name(*tokens, prefix=, suffix=, side=, sep="_")` — joins non-empty tokens as

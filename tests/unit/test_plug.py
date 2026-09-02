@@ -148,6 +148,98 @@ def test_attribute_exists():
     plug.delete()
     assert plug.exists() is False
 
+
+class TestPlugCreate:
+    """``Plug.create`` is the one typed attribute creator."""
+
+    def test_returns_the_plug_so_it_can_be_assigned(self):
+        node = Node.create("transform", name="holder")
+        plug = node["stretch"].create("float", default=1.0)
+        assert plug is not None
+        assert plug.attr == "stretch"
+        assert plug.value == 1.0
+
+    def test_float_takes_hard_limits_and_is_keyable_by_default(self):
+        """``addAttr`` defaults keyable to False; an animator attribute is not."""
+        node = Node.create("transform", name="holder")
+        plug = node["stretch"].create("float", default=1.0, min=0.0, max=2.0)
+        assert cmds.attributeQuery("stretch", node=node.name, minimum=True) == [0.0]
+        assert cmds.attributeQuery("stretch", node=node.name, maximum=True) == [2.0]
+        assert plug.keyable
+
+    def test_soft_range_slides_without_capping_the_value(self):
+        """The slider spans the soft range; a typed value may go past it."""
+        node = Node.create("transform", name="holder")
+        plug = node["amount"].create(
+            "float", default=0.0, min=-2.0, max=2.0, soft_min=0.0, soft_max=1.0
+        )
+        assert cmds.attributeQuery("amount", node=node.name, softMin=True) == [0.0]
+        assert cmds.attributeQuery("amount", node=node.name, softMax=True) == [1.0]
+        plug.value = 1.7
+        assert plug.value == pytest.approx(1.7)
+        plug.value = -1.4
+        assert plug.value == pytest.approx(-1.4)
+
+    def test_without_a_soft_range_none_is_authored(self):
+        node = Node.create("transform", name="holder")
+        node["plain"].create("float", default=1.0, min=0.0, max=2.0)
+        assert not cmds.attributeQuery("plain", node=node.name, softMaxExists=True)
+
+    def test_int_bool_and_enum(self):
+        node = Node.create("transform", name="holder")
+        assert node["count"].create("int", default=4).value == 4
+        assert node["flag"].create("bool", default=True).value is True
+        enum_plug = node["space"].create("enum", items=["world", "local"], default=1)
+        assert enum_plug.value == 1
+        assert cmds.attributeQuery("space", node=node.name, listEnum=True) == [
+            "world:local"
+        ]
+
+    def test_string_default_is_applied_after_creation(self):
+        """``addAttr`` cannot default a string, so ``create`` sets it."""
+        node = Node.create("transform", name="holder")
+        assert node["notes"].create("string", default="rev 2").value == "rev 2"
+        assert node["blank"].create("string").value in (None, "")
+
+    def test_proxy_mirrors_its_source_both_ways(self):
+        source = Node.create("transform", name="source")
+        holder = Node.create("transform", name="holder")
+        src_plug = source["stretch"].create("float", default=0.25)
+        proxy = holder["stretch"].create(proxy=src_plug)
+        assert proxy.value == 0.25
+        proxy.value = 0.75
+        assert src_plug.value == 0.75
+
+    def test_raw_addattr_flags_still_pass_through(self):
+        node = Node.create("transform", name="holder")
+        plug = node["raw"].create(attributeType="double", keyable=True)
+        assert plug.exists()
+        assert plug.keyable
+
+    def test_unknown_type_is_rejected(self):
+        node = Node.create("transform", name="holder")
+        with pytest.raises(ValueError, match="Unknown attribute type"):
+            node["oops"].create("vector3")
+
+    def test_a_type_is_required(self):
+        node = Node.create("transform", name="holder")
+        with pytest.raises(ValueError, match="attr_type"):
+            node["oops"].create(default=1.0)
+
+    def test_channels_lock_and_hide_through_plug_state(self):
+        node = Node.create("transform", name="holder")
+        for channel in ("sx", "sy", "sz", "v"):
+            plug = node[channel]
+            plug.locked = True
+            plug.visible = False
+        assert node["sx"].locked
+        assert not node["sx"].visible
+        assert not node["tx"].locked
+        node["sx"].locked = False
+        node["sx"].visible = True
+        assert not node["sx"].locked
+        assert node["sx"].visible
+
 def test_rename_attribute_updates_plug_attr_name():
     """Test renaming an attribute updates the Plug's attribute name."""
     transform = cmds.createNode("transform", name="attrRenameTest")

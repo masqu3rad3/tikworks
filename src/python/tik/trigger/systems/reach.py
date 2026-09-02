@@ -47,7 +47,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 import tik.maya as tm
-from tik.maya import attribute
 
 
 @dataclass(frozen=True)
@@ -287,7 +286,7 @@ def build_reach(
     align = tm.Transform.create(name=rig.name(name, "align"), parent=group.long_name)
     align.align_to(origin)
 
-    attribute.add_separator(control, "auto_")
+    rig.separator(control, "auto_")
     plugs = {}
     for label, axis, channel, numerator, others, in_sign, out_sign in (
         # Lift reads the frame's Y, which is the socket's up on either side, so
@@ -299,9 +298,8 @@ def build_reach(
         # positive rotation about the frame's Y tilts its X toward -Z.
         ("Swing", swing, "rotateY", "Z", ("X", "Y"), azimuth_sign, -azimuth_sign),
     ):
-        scalar = attribute.add_float(
-            control, f"{prefix}{label}",
-            default=0.0, min=-2.0, max=2.0, soft_min=0.0, soft_max=1.0,
+        scalar = control[f"{prefix}{label}"].create(
+            "float", default=0.0, min=-2.0, max=2.0, soft_min=0.0, soft_max=1.0
         )
         angle = _signed_angle(rig, components, numerator, others, f"{name}{label}Angle")
         if in_sign < 0:

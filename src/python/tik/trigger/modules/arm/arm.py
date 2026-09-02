@@ -13,7 +13,6 @@ anticipate them.
 from __future__ import annotations
 
 import tik.maya as tm
-from tik.maya import attribute
 from tik.trigger.core import (
     BoolField,
     ChoiceField,
@@ -176,7 +175,10 @@ class Arm(Module):
         )
         tm.MatrixConstraint.create(hang_from, collar_ctrl.offset, maintain_offset=True)
         tm.MatrixConstraint.create(collar_ctrl, collar_jnt, maintain_offset=True)
-        attribute.lock_and_hide(collar_ctrl, ("sx", "sy", "sz", "v"))
+        for channel in ("sx", "sy", "sz", "v"):
+            plug = collar_ctrl[channel]
+            plug.locked = True
+            plug.visible = False
 
         # the limb -------------------------------------------------------------
         limb_from = rig.group("lock", "limb", under="rig")

@@ -48,7 +48,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import tik.maya as tm
-from tik.maya import attribute
 
 SUBTRACT = 2
 SUM = 1
@@ -130,14 +129,14 @@ def build_limb_lock(
     tm.MatrixConstraint.create(socket, result.lock_root, maintain_offset=True)
 
     # --- attributes, in channel-box order --------------------------------
-    attribute.add_separator(control, "lock_")
-    result.lock_plug = attribute.add_float(
-        control, "limbLock", default=0.0, min=0.0, max=1.0
+    rig.separator(control, "lock_")
+    result.lock_plug = control["limbLock"].create(
+        "float", default=0.0, min=0.0, max=1.0
     )
-    result.current_plug = attribute.add_float(control, "currentLength", default=0.0)
+    result.current_plug = control["currentLength"].create("float", default=0.0)
     rest_length = result.lock_root.distance_to(driver)
-    result.length_plug = attribute.add_float(
-        control, "lockLength", default=rest_length, min=0.0
+    result.length_plug = control["lockLength"].create(
+        "float", default=rest_length, min=0.0
     )
     result.length_plug.value = rest_length
 
@@ -147,7 +146,7 @@ def build_limb_lock(
     result.measure.distance >> result.current_plug
     # Connected first, then locked without hiding: it stays visible in the
     # channel box and copyable, which is the whole point of exposing it.
-    attribute.lock_and_hide(control, ("currentLength",), hide=False)
+    result.current_plug.locked = True
 
     # --- the push ---------------------------------------------------------
     # The frame sits at the driver and aims back at the unpushed root, so a

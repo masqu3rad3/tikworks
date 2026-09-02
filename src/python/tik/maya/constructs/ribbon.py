@@ -18,7 +18,6 @@ from typing import Optional, Sequence
 
 from maya import cmds
 
-from ..core import attribute
 from ..core.decorators import undo
 from ..core.plug import Plug
 from ..core.registry import resolve
@@ -121,11 +120,11 @@ class Ribbon:
         self.end_plug = Transform.create(name=f"{self.name}_end_plug", parent=self.group.long_name)
         self.start_plug.translate = (-half, 0, 0)
         self.end_plug.translate = (half, 0, 0)
-        self.start_twist = attribute.add_float(self.start_plug, "twist")
-        self.end_twist = attribute.add_float(self.end_plug, "twist")
+        self.start_twist = self.start_plug["twist"].create("float")
+        self.end_twist = self.end_plug["twist"].create("float")
         if scaleable:
-            self.scale_switch = attribute.add_float(
-                self.start_plug, "scaleSwitch", default=1.0, min=0.0, max=1.0
+            self.scale_switch = self.start_plug["scaleSwitch"].create(
+                "float", default=1.0, min=0.0, max=1.0
             )
 
     def _create_up_frame(self) -> None:

@@ -12,9 +12,8 @@ from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
 import tik.maya as tm
-from maya import cmds
 from tik.core.side import Side
-from tik.maya import attribute, naming
+from tik.maya import naming
 from tik.maya.roles.controller import Controller
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.schemas import ModuleInstance
@@ -102,8 +101,8 @@ class GuideDraft:
         )
         joint.color = SIDE_COLORS[self.side]
         for declared in self.module.attrs_for_role(role):
-            attribute.add_float(
-                joint, declared.name, default=declared.default, keyable=declared.keyable
+            joint[declared.name].create(
+                "float", default=declared.default, keyable=declared.keyable
             )
         self.created[(role, index)] = joint
         if is_root:
@@ -166,12 +165,15 @@ class ModuleRig:
         rig = tm.Transform.create(name=self.name("rig", suffix="grp"), parent=limb.long_name)
         bind = tm.Transform.create(name=self.name("bind", suffix="grp"), parent=limb.long_name)
 
-        attribute.add_separator(limb, "visibility_")
-        attribute.add_bool(limb, "controlVisibility", default=True) >> control["visibility"]
-        attribute.add_bool(limb, "rigVisibility", default=False) >> rig["visibility"]
-        attribute.add_bool(limb, "bindVisibility", default=True) >> bind["visibility"]
+        self.separator(limb, "visibility_")
+        limb["controlVisibility"].create("bool", default=True) >> control["visibility"]
+        limb["rigVisibility"].create("bool", default=False) >> rig["visibility"]
+        limb["bindVisibility"].create("bool", default=True) >> bind["visibility"]
         for group in (limb, socket, control, rig, bind):
-            attribute.lock_and_hide(group, attribute.TRANSFORM_ATTRS)
+            for channel in tm.TRANSFORM_CHANNELS:
+                plug = group[channel]
+                plug.locked = True
+                plug.visible = False
         tags.tag(
             limb,
             **{
@@ -229,6 +231,25 @@ class ModuleRig:
         return node
 
     # ------------------------------------------------------------ outputs
+    def separator(self, node, name: str) -> tm.Plug:
+        """A locked ``----------`` row in the channel box, above a group of attrs.
+
+        Purely a channel-box layout convention, which is why it lives here and
+        not in tik.maya: the rig decides how an animator's attributes are laid
+        out. Accepts a controller or any node.
+
+        Args:
+            node: The node (or role) carrying the attribute.
+            name: Attribute name for the row, e.g. ``"stretch_"``.
+
+        Returns:
+            tm.Plug: The separator plug.
+        """
+        plug = node_of(node)[name].create("enum", items=["----------"], keyable=False)
+        plug.visible = True
+        plug.locked = True
+        return plug
+
     def controller(
         self,
         name: str,
@@ -294,18 +315,19 @@ class ModuleRig:
             mirror=main.meta.get(tags.MIRROR, tags.WORLD),
             offset=False,
         )
-        visible = attribute.add_bool(
-            main.transform, "tweakVis", default=False, keyable=False
+        visible = main.transform["tweakVis"].create(
+            "bool", default=False, keyable=False
         )
-        cmds.setAttr(visible.path, channelBox=True)
+        visible.visible = True
         visible >> tweak.transform["visibility"]
-        locked = [
-            attr
-            for attr in attribute.ALL_CHANNELS
-            if cmds.getAttr(f"{main.transform.long_name}.{attr}", lock=True)
-        ]
-        if locked:
-            attribute.lock_and_hide(tweak.transform, locked)
+        # The tweak inherits whatever the main has locked: an animator should
+        # not reach a channel through the tweak that the main denies them.
+        for channel in tm.ALL_CHANNELS:
+            if not main.transform[channel].locked:
+                continue
+            plug = tweak.transform[channel]
+            plug.locked = True
+            plug.visible = False
         return tweak
 
     def controller_by_role(self, role: str) -> Optional[Controller]:

@@ -1,5 +1,5 @@
-Metadata, attribute helpers, naming and decorators
-==================================================
+Metadata, attributes, naming and decorators
+===========================================
 
 The small things that keep coming up in rig code, collected in one place. All of
 them live in ``tik.maya.core`` and most are re-exported from ``tik.maya``.
@@ -38,34 +38,54 @@ tik.trigger's scene tags (``trg_kind``, ``trg_instance``, ``trg_role`` ...) are
 exactly this mechanism. ``as_dict()`` reads every key with one ``listAttr`` and
 one ``getAttr`` per key, so prefer it when you need several values.
 
-Attribute helpers: ``tm.attribute``
------------------------------------
+Creating attributes: ``plug.create()``
+--------------------------------------
 
-Creating animator attributes correctly takes several flags every time. These
-helpers take a node or a name, return the new
-:class:`~tik.maya.core.plug.Plug`, and get the flags right.
+An attribute *is* a :class:`~tik.maya.core.plug.Plug`, so indexing a node with a
+name that does not exist yet gives you the handle to create it. ``create()``
+takes a friendly type name, returns the plug, and gets the ``addAttr`` flags
+right -- including ``keyable=True``, which ``cmds.addAttr`` leaves off.
 
 .. code-block:: python
 
-   from tik.maya import attribute
+   stretch = ctrl["stretch"].create("float", default=1.0, min=0.0, max=2.0)
+   ctrl["soft"].create("float", default=0.0, min=0.0, soft_max=10.0)
+   ctrl["segments"].create("int", default=3, min=1)
+   ctrl["showPole"].create("bool", default=True)
+   ctrl["space"].create("enum", items=["world", "chest", "root"], default=0)
+   ctrl["notes"].create("string", default="rev 2")
 
-   attribute.add_separator(ctrl, "settings")                   # a locked "----------" enum row
-   stretch = attribute.add_float(ctrl, "stretch", default=1.0, min=0.0, max=2.0)
-   attribute.add_float(ctrl, "soft", default=0.0, min=0.0, soft_max=10.0)
-   attribute.add_int(ctrl, "segments", default=3, min=1)
-   attribute.add_bool(ctrl, "showPole", default=True)
-   attribute.add_enum(ctrl, "space", ["world", "chest", "root"], default=0)
-   attribute.add_string(ctrl, "notes", default="rev 2")
+   other_ctrl["stretch"].create(proxy=stretch)   # a proxy of 'stretch' elsewhere
 
-   attribute.lock_and_hide(ctrl, ["sx", "sy", "sz", "v"])   # default: all nine channels + v
-   attribute.unlock(ctrl, ["sx", "sy", "sz"])
-   attribute.drive(stretch, [upper["sx"], lower["sx"]])     # one source into many targets
-   attribute.add_proxy(other_ctrl, stretch)                 # a proxy of 'stretch' on other_ctrl
+The type names are ``float``, ``int``, ``bool``, ``enum``, ``angle``,
+``distance``, ``time``, ``string`` and ``matrix``. Alongside ``default``,
+``min``, ``max``, ``soft_min``, ``soft_max`` and ``items``, any raw
+``cmds.addAttr`` flag is forwarded untouched, so nothing is out of reach::
+
+   node["custom"].create(attributeType="double3")
 
 ``soft_min`` and ``soft_max`` set the slider range without capping the value;
 an animator can still type past them, up to ``min`` and ``max``.
-``TRANSFORM_ATTRS`` and ``ALL_CHANNELS`` are the tuples ``lock_and_hide``
-defaults to.
+
+Locking and hiding
+------------------
+
+State lives on the plug, so there is no separate helper. ``TRANSFORM_CHANNELS``
+(the nine transform channels) and ``ALL_CHANNELS`` (those plus ``v``) are
+exported from ``tik.maya``.
+
+.. code-block:: python
+
+   for channel in ("sx", "sy", "sz", "v"):
+       plug = ctrl[channel]
+       plug.locked = True
+       plug.visible = False
+
+   for channel in tm.ALL_CHANNELS:      # everything an animator could grab
+       ctrl[channel].locked = True
+
+   stretch >> upper["sx"]               # one source into many targets
+   stretch >> lower["sx"]
 
 Naming: ``tm.naming``
 ---------------------

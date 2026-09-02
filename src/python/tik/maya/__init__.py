@@ -4,8 +4,10 @@ from functools import partial
 
 from maya import cmds
 
-from .core import attribute, naming
+from .core import naming
+from .core.constants import ALL_CHANNELS, TRANSFORM_CHANNELS
 from .core.dagnode import DagNode
+from .core.plug import Plug
 from .core.meta import META_PREFIX, find_by_meta
 from .core.node import Node
 from .core.registry import resolve
@@ -41,6 +43,7 @@ from .types.transform import Transform
 __all__ = [
     "Node",
     "DagNode",
+    "Plug",
     "ShapeNode",
     "Joint",
     "IkHandle",
@@ -55,8 +58,9 @@ __all__ = [
     "SkinCluster",
     "resolve",
     "find_by_meta",
-    "attribute",
     "naming",
+    "TRANSFORM_CHANNELS",
+    "ALL_CHANNELS",
     "AimFrame",
     "AngleBetween",
     "ChainLengths",

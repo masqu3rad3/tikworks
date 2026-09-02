@@ -40,7 +40,7 @@ def test_ratio_plug():
 def test_ratio_plug_with_scale():
     start, end = _pair()
     holder = tm.Transform.create(name="holder")
-    scale_plug = tm.attribute.add_float(holder, "globalScale", default=2.0)
+    scale_plug = holder["globalScale"].create("float", default=2.0)
     measure = Measure.create(start, end)
     ratio = measure.ratio_plug(scale_plug)
     end.translate = (6, 8, 0)

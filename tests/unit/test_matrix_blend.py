@@ -42,7 +42,7 @@ def test_weight_is_continuous():
 def test_weights_accept_plugs():
     a, b = _pair()
     holder = tm.Transform.create(name="blend_holder")
-    switch = tm.attribute.add_float(holder, "ikFk", default=1.0, min=0.0, max=1.0)
+    switch = holder["ikFk"].create("float", default=1.0, min=0.0, max=1.0)
     blend = tm.MatrixBlend.create(a, [b], [switch], name="pair_plug")
     assert cmds.listConnections(
         blend.weight_plug(0).path, source=True, destination=False

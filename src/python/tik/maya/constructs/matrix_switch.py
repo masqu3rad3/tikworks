@@ -13,7 +13,6 @@ from typing import Iterable, Optional, Sequence
 from maya import cmds
 from maya.api import OpenMaya
 
-from ..core import attribute
 from ..core.decorators import undo
 from ..core.plug import Plug
 from ..core.registry import resolve
@@ -69,8 +68,8 @@ class MatrixSwitch:
         driven = _node(driven)
         name = name or f"{driven.name}_switch"
         if control is None:
-            control = attribute.add_int(
-                driven, "switch", default=0, min=0, max=max(len(drivers) - 1, 0)
+            control = driven["switch"].create(
+                "int", default=0, min=0, max=max(len(drivers) - 1, 0)
             )
 
         rest_matrix = OpenMaya.MMatrix(driven["worldMatrix[0]"].value)

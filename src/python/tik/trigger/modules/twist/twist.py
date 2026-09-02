@@ -26,7 +26,6 @@ invariant a rigger has to remember.
 from __future__ import annotations
 
 import tik.maya as tm
-from tik.maya import attribute
 from tik.trigger.core import (
     FieldGroup,
     BoolField,
@@ -43,7 +42,6 @@ from tik.trigger.systems.twist import AXES, SOURCES, dominant_axis, twist_plug
 
 WEIGHT_ATTR = "twistWeight"
 POSITION_ATTR = "position"
-ALL_CHANNELS = ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz", "v")
 #: The end guide is a length handle and nothing else: the segment always runs
 #: down the base's X, which is what makes X the twist axis by construction
 #: rather than by convention.
@@ -147,11 +145,17 @@ class Twist(Module):
             for channel in "XYZ":
                 node[POSITION_ATTR] >> mult[f"input2{channel}"]
             mult["output"] >> node["translate"]
-            attribute.lock_and_hide(node, ALL_CHANNELS)
+            for channel in tm.ALL_CHANNELS:
+                plug = node[channel]
+                plug.locked = True
+                plug.visible = False
 
         base = guides.get(("base", 0))
         if base is not None:
-            attribute.lock_and_hide(base, ("sx", "sy", "sz", "v"))
+            for channel in ("sx", "sy", "sz", "v"):
+                plug = base[channel]
+                plug.locked = True
+                plug.visible = False
         if end["tx"].locked:
             return
         # Enforce the invariant before locking it: whatever a pose or an
@@ -159,9 +163,12 @@ class Twist(Module):
         end.translate = (end.translate[0], 0.0, 0.0)
         end.rotate = (0.0, 0.0, 0.0)
         end.scale = (1.0, 1.0, 1.0)
-        attribute.lock_and_hide(
-            end, tuple(channel for channel in ALL_CHANNELS if channel not in END_FREE)
-        )
+        for channel in tm.ALL_CHANNELS:
+            if channel in END_FREE:
+                continue
+            plug = end[channel]
+            plug.locked = True
+            plug.visible = False
 
     # ---------------------------------------------------------------- build
     def build(self, rig) -> None:

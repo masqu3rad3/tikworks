@@ -12,7 +12,6 @@ from typing import Any, Optional
 import tik.maya as tm
 from maya import cmds
 from tik.core.side import Side
-from tik.maya import attribute
 from tik.trigger.core import registry
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import GuideError
@@ -499,8 +498,8 @@ class GuideScene:
                     joint.rotate = tuple(record.get("rotation", (0, 0, 0)))
                     joint.color = record.get("color") or 17
                     for item in module_cls.attrs_for_role(role):
-                        plug = tm.attribute.add_float(
-                            joint, item.name, default=item.default, keyable=item.keyable
+                        plug = joint[item.name].create(
+                            "float", default=item.default, keyable=item.keyable
                         )
                         plug.value = record.get("attrs", {}).get(item.name, item.default)
                     joint.meta.update({

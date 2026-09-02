@@ -50,8 +50,8 @@ tik.maya
        :mod:`tik.maya.constructs.panel`
    * - ``node.meta``, ``find_by_meta``
      - :mod:`tik.maya.core.meta`
-   * - ``attribute`` and ``naming`` helpers, decorators
-     - :mod:`tik.maya.core.attribute`, :mod:`tik.maya.core.naming`,
+   * - attributes, ``naming`` helpers, decorators
+     - :mod:`tik.maya.core.plug`, :mod:`tik.maya.core.naming`,
        :mod:`tik.maya.core.decorators`
    * - the shape library
      - :mod:`tik.maya.utils.control_shapes`

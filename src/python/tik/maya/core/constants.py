@@ -1,6 +1,12 @@
 """Constants for the Tik Maya Core module."""
 from maya import cmds
 
+#: The nine transform channels, in channel-box order.
+TRANSFORM_CHANNELS = ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz")
+
+#: The transform channels plus visibility.
+ALL_CHANNELS = TRANSFORM_CHANNELS + ("v",)
+
 NODE_FACTORIES = [
     # --- General Creation & Management ---
     # 'createNode', # CreateNode is handled specially in scene.py

@@ -7,7 +7,7 @@ import tik.maya as tm
 
 def _driver(value=0.0):
     node = tm.Transform.create(name="remap_driver")
-    return tm.attribute.add_float(node, "angle", default=value)
+    return node["angle"].create("float", default=value)
 
 
 def test_below_the_input_minimum_is_the_output_minimum():

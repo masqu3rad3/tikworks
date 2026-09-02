@@ -47,7 +47,9 @@ The shape of one
            tm.MatrixConstraint.create(socket, controller.offset, maintain_offset=True)
            tm.MatrixConstraint.create(controller, joint, maintain_offset=True)
            if self.lock_scale:
-               tm.attribute.lock_and_hide(controller, ("sx", "sy", "sz"))
+               for channel in ("sx", "sy", "sz"):
+                   controller[channel].locked = True
+                   controller[channel].visible = False
 
            rig.output("root", joint)
            rig.output("tip", tip)
