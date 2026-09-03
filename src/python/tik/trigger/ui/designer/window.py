@@ -22,26 +22,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
-from tik.core.side import Side
 from tik.shared.ui import theme
-from tik.shared.ui.binding import BindingManager, MayaAttributeAdapter, bind
+from tik.shared.ui.binding import BindingManager
 from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.filter_bar import FilterBar
 from tik.shared.ui.icons import glyph_icon, initials
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.scene_watcher import SceneWatcher
 from tik.shared.ui.status import StatusFields
-from tik.shared.ui.tile_grid import TileEntry, TileGrid
-from tik.trigger.core import registry
+from tik.shared.ui.tile_grid import TileGrid
 from tik.trigger.core.schemas import split_source
-from tik.trigger.core.exceptions import TriggerError
-from tik.trigger.guides import EXTENSION as GUIDE_EXTENSION
 
 if TYPE_CHECKING:  # the scene layer imports Maya; the UI only needs the name
     from tik.trigger.guides import GuideHandle
 
 from ..graph import GraphView
-from ..palette import PaletteEntry, SearchPalette
+from ..palette import SearchPalette
 from ..session_view import pane
 from .action_bar import DesignerActionBar
 from .commands import DesignerCommands
@@ -49,7 +45,6 @@ from .properties import DesignerProperties
 from .widgets import (
     MIME_MODULE,
     MODULE_COLORS,
-    SCENE_NODE,
     GuideTree,
     InputRow,
     SceneNodesPanel,
@@ -250,7 +245,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.graph.selection_changed.connect(self._on_graph_selection)
         self.graph.external_selection_changed.connect(self._on_external_selection)
         self.graph.node_menu_requested.connect(lambda _key, pos: self.module_menu().exec(pos))
-        self.graph.edited.connect(lambda: self.refresh(keep_graph=True))
+        self.graph.edited.connect(self.refresh)
         self.action_bar.select_requested.connect(self.select_current)
         self.action_bar.mirror_requested.connect(self.mirror_current)
         self.action_bar.build_selected_requested.connect(lambda: self.test_build())
@@ -378,7 +373,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.status.set("file", Path(path).name if path else "")
 
     # --------------------------------------------------------------- refresh
-    def refresh(self, *_args, keep_graph: bool = False) -> None:
+    def refresh(self, *_args) -> None:
         if self._syncing:
             return
         self._syncing = True

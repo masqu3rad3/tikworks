@@ -6,18 +6,7 @@ write the current selection through ``self.guides``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
-
-from tik.shared.ui.binding import MayaAttributeAdapter, bind
-from tik.shared.ui.Qt import QtWidgets
-from tik.trigger.core import registry
 from tik.trigger.core.exceptions import TriggerError
-from tik.trigger.core.schemas import split_source
-
-from .widgets import SCENE_NODE
-
-if TYPE_CHECKING:
-    from tik.trigger.guides import GuideHandle
 
 
 class DesignerProperties:

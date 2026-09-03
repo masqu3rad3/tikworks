@@ -71,7 +71,7 @@ field, so a bad value fails at assignment rather than at build time:
 
    step = rig["build_rig"]
    step.rig_name = "hero"                     # validated by the StringField
-   step.set(auto_switchers=False, after_build="delete")
+   step.set(after_build="delete")
    step.enabled = False
    step.settings                              # effective values: defaults + stored
    step.reset("rig_name")                     # back to the default

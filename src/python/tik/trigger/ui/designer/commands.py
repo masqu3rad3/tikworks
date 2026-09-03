@@ -16,8 +16,7 @@ from tik.trigger.core import registry
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.guides import EXTENSION as GUIDE_EXTENSION
 
-from ..palette import SearchPalette
-from .widgets import SCENE_NODE, module_entries
+from .widgets import SCENE_NODE
 
 if TYPE_CHECKING:
     from tik.trigger.guides import GuideHandle

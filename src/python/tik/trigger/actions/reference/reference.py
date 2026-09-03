@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 from tik.core.fields import DictField, FieldGroup, FileField, ListField, StringField
 from tik.trigger.core import Action, register_action

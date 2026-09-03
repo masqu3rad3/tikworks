@@ -15,22 +15,16 @@ from tik.trigger.core.schemas import split_source
 
 from .constants import (
     COLUMN_GAP,
-    GLYPH_WIDTH,
     GRID,
     HEADER,
-    MODE_CONNECTED,
     MODE_FULL,
-    MODE_MINIMAL,
     NODE_WIDTH,
     PORT_RADIUS,
-    PORT_SPACE,
     ROW,
     ROW_GAP,
-    WIRE_PRIMARY,
-    WIRE_SECONDARY,
     WORLD,
 )
-from .items import NodeItem, Port, WireItem
+from .items import NodeItem, WireItem
 from .scene import GraphScene
 
 

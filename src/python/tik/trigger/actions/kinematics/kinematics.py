@@ -5,7 +5,6 @@ from __future__ import annotations
 from tik.trigger.core import (
     AFTERLIFE_MODES,
     Action,
-    BoolField,
     ChoiceField,
     FieldGroup,
     FileField,
@@ -37,9 +36,6 @@ class Kinematics(Action):
     after_build = ChoiceField(
         "delete", choices=list(AFTERLIFE_MODES), label="GuideLayout after build",
         group=BUILD_OPTIONS,
-    )
-    auto_switchers = BoolField(
-        True, help="Create automatic space switchers", group=BUILD_OPTIONS
     )
 
     def run(self, ctx) -> None:

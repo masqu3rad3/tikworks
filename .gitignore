@@ -34,3 +34,5 @@ develop-eggs/
 
 # Misc
 /dump
+# Coverage
+.coverage

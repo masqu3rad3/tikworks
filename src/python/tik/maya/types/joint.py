@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Optional, Sequence
+from typing import Iterable, Sequence
 
 import maya.cmds as cmds
 from maya.api import OpenMaya

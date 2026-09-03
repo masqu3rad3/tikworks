@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
-from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
+from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.trigger.core import versioning
 
 STATE_STYLES = {

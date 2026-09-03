@@ -7,23 +7,7 @@ from typing import Optional
 from tik.shared.ui import theme
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 
-from .constants import (
-    COLUMN_GAP,
-    GLYPH_WIDTH,
-    GRID,
-    HEADER,
-    MODE_CONNECTED,
-    MODE_FULL,
-    MODE_MINIMAL,
-    NODE_WIDTH,
-    PORT_RADIUS,
-    PORT_SPACE,
-    ROW,
-    ROW_GAP,
-    WIRE_PRIMARY,
-    WIRE_SECONDARY,
-    WORLD,
-)
+from .constants import GRID, MODE_FULL
 from .items import NodeItem, Port, WireItem
 
 

@@ -28,7 +28,6 @@ from __future__ import annotations
 import tik.maya as tm
 from tik.trigger.core import (
     FieldGroup,
-    BoolField,
     ChoiceField,
     FloatField,
     GuideAttr,

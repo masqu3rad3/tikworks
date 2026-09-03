@@ -18,7 +18,6 @@ from tik.trigger.core.steps import (
     REFERENCE_TYPE,
     STEP_FAILED,
     STEP_FINISHED,
-    STEP_SKIPPED,
     STEP_STARTED,
     Plan,
     Step,

@@ -21,13 +21,12 @@ from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 from tik.trigger.maya import tags
 from tik.trigger.maya.rig import GuideDraft
 
-from . import document_store, nodes
+from . import nodes
 from .capture import capture
-from .format import GuideFile, GuideInstance, make_record
+from .format import GuideFile, make_record
 from .handle import GuideHandle, mirror_source
-from .nodes import INPUTS
 from . import regenerate as regenerate_module
-from .regenerate import regenerate, regenerate_all
+from .regenerate import regenerate
 from .snapshot import snapshot
 
 
@@ -770,8 +769,8 @@ class GuideScene:
 
     def scene_node_group(self, node: str) -> Optional[str]:
         """The group that lists scene node ``node`` (first match)."""
-        for name, nodes in self.scene_groups().items():
-            if node in nodes:
+        for name, members in self.scene_groups().items():
+            if node in members:
                 return name
         return None
 

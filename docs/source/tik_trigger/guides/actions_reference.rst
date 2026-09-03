@@ -68,10 +68,6 @@ ones under the given roots.
      - ``delete``
      - What happens to the guides once the rig is built. Anything but ``keep``
        is recorded as deliberate, so the next sync does not redraw them.
-   * - ``auto_switchers`` *(Build Options)*
-     - bool
-     - ``True``
-     - Create automatic space switchers.
 
 With ``guides_file`` empty the action clears the scene's guide rendering, redraws
 the session's own guide document, and builds from that: no separate file, no

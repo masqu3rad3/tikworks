@@ -1,7 +1,5 @@
 """Controller shape library UI widget for TikWorks Maya tools."""
 
-import sys
-
 # Lazy loading of Maya-dependent code.
 # This allows tik.trigger to be imported in headless/test environments
 # without requiring Maya.

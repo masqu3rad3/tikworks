@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Optional
 
-from tik.shared.ui import theme
-from tik.shared.ui.icons import glyph_icon
-from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
+from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.shared.ui.tile_grid import TileEntry
 from tik.trigger.core import registry
 

@@ -110,7 +110,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.linked_note.setVisible(handle.is_linked)
         self.reset_button.setVisible(handle.is_linked)
         self.guides_button.setVisible(self._guides_field_name() is not None)
-        self.save_button.setVisible(type(self._action).save_from_scene is not registry.get_action(handle.type).__mro__[-2].save_from_scene if False else self._has_save(action_cls))
+        self.save_button.setVisible(self._has_save(action_cls))
         if handle.is_linked:
             self.linked_note.setText("Referenced action — edits here are stored as overrides in this session.")
             self._refresh_override_marks()

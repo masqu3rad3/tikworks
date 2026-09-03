@@ -13,7 +13,6 @@ from tik.shared.ui.Qt import QtCompat, QtWidgets
 LOG = logging.getLogger(__name__)
 
 try:  # Maya only
-    from maya import cmds  # noqa: F401
     from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 
     HAS_MAYA = True
