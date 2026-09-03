@@ -158,6 +158,7 @@ class TriggerWindow(MayaToolWindow):
 
         session_menu = add_menu("&Session")
         self._action(session_menu, "Build Rig", lambda: self._view_call("build"), "Ctrl+B")
+        self._action(session_menu, "Build & Publish", lambda: self._view_call("build_and_publish"), "Ctrl+Shift+P")
         self._action(session_menu, "Build Until Here", lambda: self._view_call("build_until", self._current_path()), "Ctrl+Shift+B")
         self._action(session_menu, "Run Step", lambda: self._view_call("run_step", self._current_path()), "Ctrl+R")
         session_menu.addSeparator()
