@@ -80,22 +80,16 @@ class TestInstall:
         undo.install()
         assert cmds.pluginInfo(undo.PLUGIN_NAME, query=True, loaded=True)
 
-    def test_falls_back_to_disk_when_not_on_the_plugin_path(self, monkeypatch):
-        """A raw checkout with no module installed still works, but loudly."""
+    def test_raises_when_not_on_the_plugin_path(self, monkeypatch):
+        """No fallback to an absolute path: that is the prompt the .mod avoids."""
         monkeypatch.setenv("MAYA_PLUG_IN_PATH", "")
-        monkeypatch.setattr(undo, "_warned", False)
-        warnings = []
-        monkeypatch.setattr(cmds, "warning", lambda msg: warnings.append(msg))
         _unload()
         try:
-            undo.install()
-            assert cmds.pluginInfo(undo.PLUGIN_NAME, query=True, loaded=True)
-            assert warnings, "an untrusted-path load must warn"
+            with pytest.raises(RuntimeError, match="MAYA_PLUG_IN_PATH"):
+                undo.install()
+            assert not cmds.pluginInfo(undo.PLUGIN_NAME, query=True, loaded=True)
         finally:
             _unload()
-
-    def test_finds_the_plugin_directory(self):
-        assert undo._plugin_directory() == PLUGIN_DIR
 
 
 class TestCommit:
@@ -126,53 +120,3 @@ class TestCommit:
         from tik.maya.core import apicommon
 
         assert apicommon.undocommit is undo.commit
-
-
-class TestPluginDirectoryLayouts:
-    """The fallback has to find the plug-in area in both deployed shapes.
-
-    The release layout cannot be exercised from a checkout, so the module is
-    loaded out of a fabricated tree of each shape instead.
-    """
-
-    @staticmethod
-    def _install_package(parent):
-        """Write tik/maya/core/undo.py under `parent` and import it."""
-        import importlib.util
-
-        source = Path(undo.__file__)
-        core = parent / "tik" / "maya" / "core"
-        core.mkdir(parents=True)
-        target = core / source.name
-        target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-
-        spec = importlib.util.spec_from_file_location("_undo_layout_probe", target)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
-
-    @staticmethod
-    def _install_plugin_area(parent):
-        """Write a plug-in area under `parent`."""
-        plugins = parent / "plugins" / "python"
-        plugins.mkdir(parents=True)
-        (plugins / undo.PLUGIN_NAME).write_text("", encoding="utf-8")
-        return plugins
-
-    def test_release_layout(self, tmp_path):
-        """<module>/tik beside <module>/plugins/python."""
-        module = self._install_package(tmp_path)
-        plugins = self._install_plugin_area(tmp_path)
-        assert module._plugin_directory() == plugins
-
-    def test_dev_layout(self, tmp_path):
-        """<repo>/src/python/tik, with the area two levels up at src/."""
-        src = tmp_path / "src"
-        (src / "python").mkdir(parents=True)
-        module = self._install_package(src / "python")
-        plugins = self._install_plugin_area(src)
-        assert module._plugin_directory() == plugins
-
-    def test_returns_none_when_there_is_no_plugin_area(self, tmp_path):
-        module = self._install_package(tmp_path)
-        assert module._plugin_directory() is None
