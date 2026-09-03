@@ -170,3 +170,88 @@ def test_reference_include_and_missing_and_cycle(tmp_path):
     with pytest.raises(SessionError) as info:
         Runner().plan(doc, str(tmp_path))
     assert "cycle" in str(info.value)
+
+
+# ---------------------------------------------------------------- phases
+from tik.trigger.core.document import BUILD, PUBLISH
+
+
+def _both_phases():
+    doc = Document()
+    doc.add(ActionNode("a", "mark", settings={"tag": "A"}))
+    doc.add(ActionNode("b", "mark", settings={"tag": "B"}))
+    doc.add(ActionNode("fbx", "mark", settings={"tag": "FBX"}), phase=PUBLISH)
+    doc.add(ActionNode("ma", "mark", settings={"tag": "MA"}), phase=PUBLISH)
+    return doc
+
+
+def test_plan_is_per_phase():
+    doc = _both_phases()
+    runner = Runner()
+    assert [step.path for step in runner.plan(doc, "D:/x").steps] == ["a", "b"]
+    assert [step.path for step in runner.plan(doc, "D:/x", phase=PUBLISH).steps] == ["fbx", "ma"]
+    assert {step.phase for step in runner.plan(doc, "D:/x", phase=PUBLISH).steps} == {PUBLISH}
+
+
+def test_build_alone_never_runs_publish():
+    Runner().run(_both_phases(), "D:/x")
+    assert _marks() == ["a", "b"]
+
+
+def test_build_and_publish_runs_one_continuous_sequence():
+    results = Runner().run(_both_phases(), "D:/x", publish=True)
+    assert _marks() == ["a", "b", "fbx", "ma"]
+    assert [item.path for item in results] == ["a", "b", "fbx", "ma"]
+    assert [item.phase for item in results] == [BUILD, BUILD, PUBLISH, PUBLISH]
+
+
+def test_build_and_publish_resets_the_scene_exactly_once(monkeypatch):
+    resets = []
+    monkeypatch.setattr("tik.trigger.maya.runner.new_scene", lambda: resets.append(1))
+    Runner().run(_both_phases(), "D:/x", publish=True)
+    assert len(resets) == 1
+
+
+def test_progress_spans_both_phases():
+    seen = []
+    events = EventBus()
+    events.subscribe("progress", lambda current=0, total=0, label="", **_kw: seen.append((current, total)))
+    Runner(events).run(_both_phases(), "D:/x", publish=True)
+    assert seen == [(1, 4), (2, 4), (3, 4), (4, 4)]
+
+
+def test_until_cannot_be_combined_with_publish():
+    with pytest.raises(SessionError):
+        Runner().run(_both_phases(), "D:/x", until="a", publish=True)
+    assert _marks() == []
+
+
+def test_a_failing_publish_step_aborts_and_names_its_phase():
+    doc = _both_phases()
+    doc.add(ActionNode("bad", "boom"), phase=PUBLISH, index=0)
+    with pytest.raises(ActionExecutionError) as caught:
+        Runner().run(doc, "D:/x", publish=True)
+    assert "publish: bad" in str(caught.value)
+    assert _marks() == ["a", "b"]  # the build half completed, publish stopped at 'bad'
+
+
+def test_step_events_carry_their_phase():
+    seen = []
+    events = EventBus()
+    events.subscribe(STEP_FINISHED, lambda path="", phase="", **_kw: seen.append((phase, path)))
+    Runner(events).run(_both_phases(), "D:/x", publish=True)
+    assert seen == [(BUILD, "a"), (BUILD, "b"), (PUBLISH, "fbx"), (PUBLISH, "ma")]
+
+
+def test_a_reference_contributes_build_actions_only(tmp_path):
+    inner = Document()
+    inner.add(ActionNode("inner_build", "mark", settings={"tag": "IB"}))
+    inner.add(ActionNode("inner_publish", "mark", settings={"tag": "IP"}), phase=PUBLISH)
+    inner.save(tmp_path / "base.tr")
+
+    outer = Document()
+    outer.add(ActionNode("ref", "reference", settings={"file": "base.tr"}))
+    outer.add(ActionNode("own", "mark", settings={"tag": "OWN"}), phase=PUBLISH)
+
+    Runner().run(outer, str(tmp_path), publish=True)
+    assert _marks() == ["ref/inner_build", "own"]
