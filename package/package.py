@@ -173,14 +173,9 @@ def dev_deploy(version=None):
     else:
         LOG("No C++ plugins found. Skipping plugin build.\n")
 
-    # Copy Python plugins if they exist
-    src_python_plugins_path = REPO_ROOT / "src" / "plugins" / "python"
-    if src_python_plugins_path.exists():
-        dev_python_plugins_path = deploy_root_path / "plugins" / "python"
-        if dev_python_plugins_path.exists():
-            shutil.rmtree(dev_python_plugins_path.as_posix())
-        shutil.copytree(src_python_plugins_path, dev_python_plugins_path)
-        LOG(f"Copied python plugins to dev deploy folder.\n")
+    # Python plug-ins are not copied for dev: the dev .mod puts
+    # src/plugins/python on MAYA_PLUG_IN_PATH directly, so edits to a plug-in
+    # take effect on the next Maya restart without a redeploy.
 
     # Generate .mod file for development
     user_maya_folder = Path(_get_home_dir()) / "Documents" / "maya"
@@ -271,6 +266,10 @@ def _generate_release_mod():
         for maya_version in target_versions:
             yield f"+ MAYAVERSION:{maya_version} PLATFORM:{_scode} {project_slug} {VERSION} {project_slug}\n"
             yield f"MAYA_PLUG_IN_PATH +:= plugins\\{_platform}-{maya_version}\n"
+            # Python plug-ins are version and platform agnostic. Declaring the
+            # directory here is what lets Maya resolve them by name, which is
+            # what keeps it from asking the user to approve the location.
+            yield f"MAYA_PLUG_IN_PATH +:= plugins/python\n"
             yield f"PYTHONPATH +:= tik\n"
             yield "\n"
 
@@ -295,6 +294,9 @@ def _generate_dev_mod(versions):
         for maya_version in deploy_versions:
             yield f"+ MAYAVERSION:{maya_version} PLATFORM:{_scode} {project_slug} {VERSION} {REPO_ROOT.as_posix()}\n"
             yield f"MAYA_PLUG_IN_PATH +:= _dev_deploy/plugins/{_platform}-{maya_version}\n"
+            # Read straight from source, so editing a plug-in only costs a
+            # Maya restart rather than a redeploy.
+            yield f"MAYA_PLUG_IN_PATH +:= src/plugins/python\n"
             yield f"PYTHONPATH +:= src/python\n"
             yield "\n"
 

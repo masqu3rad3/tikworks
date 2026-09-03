@@ -15,7 +15,6 @@ from tik.trigger.session import ActionHandle
 
 class ActionSettingsPanel(QtWidgets.QWidget):
     run_requested = QtCore.Signal(str)  # path
-    run_until_requested = QtCore.Signal(str)
     save_requested = QtCore.Signal(str)
     edited = QtCore.Signal(str)  # path
     open_file_requested = QtCore.Signal(str, str)  # path, extension
@@ -66,14 +65,12 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.save_button = QtWidgets.QPushButton("Save from scene")
         self.reset_button = QtWidgets.QPushButton("Reset overrides")
         self.run_button = QtWidgets.QPushButton("Run step")
-        self.until_button = QtWidgets.QPushButton("Run until here")
         buttons.addStretch(1)
-        for button in (self.save_button, self.reset_button, self.run_button, self.until_button):
+        for button in (self.save_button, self.reset_button, self.run_button):
             buttons.addWidget(button)
         layout.addLayout(buttons)
         self.form.changed.connect(self._on_changed)
         self.run_button.clicked.connect(lambda: self._emit(self.run_requested))
-        self.until_button.clicked.connect(lambda: self._emit(self.run_until_requested))
         self.save_button.clicked.connect(lambda: self._emit(self.save_requested))
         self.reset_button.clicked.connect(self._reset_overrides)
         self.guides_button.clicked.connect(self._open_guides)
@@ -88,13 +85,12 @@ class ActionSettingsPanel(QtWidgets.QWidget):
     def set_handle(self, handle: Optional[ActionHandle]) -> None:
         self._handle = handle
         enabled = handle is not None
-        for widget in (self.run_button, self.until_button, self.info_button):
+        for widget in (self.run_button, self.info_button):
             widget.setEnabled(enabled)
         # Publish actions never run on their own: the only way one executes is
         # as the tail of a full clean build.
         runnable = enabled and getattr(handle, "phase", BUILD) == BUILD
         self.run_button.setVisible(runnable)
-        self.until_button.setVisible(runnable)
         if handle is None:
             self.title.setText("No action selected")
             self.subtitle.setText("Pick an action in the pipeline, or press Tab to add one.")

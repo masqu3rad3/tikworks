@@ -225,7 +225,6 @@ class SessionView(QtWidgets.QWidget):
         bar.setSpacing(8)
         self.build_button = QtWidgets.QPushButton("▶  Build rig")
         self.build_button.setObjectName("PrimaryButton")
-        self.until_button = QtWidgets.QPushButton("Build until here")
         self.publish_button = QtWidgets.QPushButton("Build && Publish")
         self.publish_button.setToolTip("Build the rig from scratch, then run the publish actions")
         self.progress = QtWidgets.QProgressBar()
@@ -234,7 +233,6 @@ class SessionView(QtWidgets.QWidget):
         self.counter = QtWidgets.QLabel("")
         self.counter.setObjectName("PanelSubtitle")
         bar.addWidget(self.build_button)
-        bar.addWidget(self.until_button)
         bar.addWidget(self.publish_button)
         bar.addWidget(self.progress, 1)
         bar.addWidget(self.counter)
@@ -268,11 +266,9 @@ class SessionView(QtWidgets.QWidget):
 
         self.settings.edited.connect(self._on_settings_edited)
         self.settings.run_requested.connect(self.run_step)
-        self.settings.run_until_requested.connect(self.build_until)
         self.settings.save_requested.connect(self.save_from_scene)
         self.settings.open_file_requested.connect(lambda path, _ext: self.open_guides_requested.emit(path))
         self.build_button.clicked.connect(self.build)
-        self.until_button.clicked.connect(lambda: self.build_until(self.current_path()))
         self.publish_button.clicked.connect(self.build_and_publish)
 
         for tree in self.trees.values():
@@ -335,8 +331,6 @@ class SessionView(QtWidgets.QWidget):
         self.shelf = self.shelves[phase]
         self.palette.entries = action_entries(phase)
         self.palette.refilter()
-        # ``until`` is a build-list debugging tool: a partial build must not publish
-        self.until_button.setEnabled(phase == BUILD)
 
     @property
     def current_model(self) -> PipelineModel:

@@ -4,6 +4,7 @@
 
 PROJECT_NAME := tikworks
 SRC_DIR := src/python
+PLUGINS_DIR := src/plugins/python
 DOCS_DIR := docs
 DOCS_BUILD := docs/build/html
 TESTS_DIR := tests
@@ -20,11 +21,13 @@ ifeq ($(OS),Windows_NT)
     PATH_SEP := ;
     OPEN_CMD := start
     SET_PYTHONPATH = set PYTHONPATH=$(CURDIR)/$(SRC_DIR)$(PATH_SEP)%PYTHONPATH% &&
+    SET_PLUGIN_PATH = set MAYA_PLUG_IN_PATH=$(CURDIR)/$(PLUGINS_DIR)$(PATH_SEP)%MAYA_PLUG_IN_PATH% &&
 else
     PLATFORM := unix
     PATH_SEP := :
     OPEN_CMD := xdg-open
     SET_PYTHONPATH = PYTHONPATH=$(CURDIR)/$(SRC_DIR)$(PATH_SEP)$$PYTHONPATH
+    SET_PLUGIN_PATH = MAYA_PLUG_IN_PATH=$(CURDIR)/$(PLUGINS_DIR)$(PATH_SEP)$$MAYA_PLUG_IN_PATH
 endif
 
 # --------------------------------------------------
@@ -56,16 +59,19 @@ show-doc: ## Open built documentation in browser
 # Tests
 # --------------------------------------------------
 
+# SET_PLUGIN_PATH declares the plug-in area the way the generated .mod does,
+# so the suites exercise the trusted by-name load rather than the fallback.
+
 .PHONY: tests
 tests: tests-unit tests-integration ## Run all tests
 
 .PHONY: tests-unit
 tests-unit: ## Run unit tests
-	$(SET_PYTHONPATH) $(MAYAPY) $(TESTS_DIR)/unit/invoke.py
+	$(SET_PYTHONPATH) $(SET_PLUGIN_PATH) $(MAYAPY) $(TESTS_DIR)/unit/invoke.py
 
 .PHONY: tests-integration
 tests-integration: ## Run integration tests
-	$(SET_PYTHONPATH) $(MAYAPY) $(TESTS_DIR)/integration/invoke.py
+	$(SET_PYTHONPATH) $(SET_PLUGIN_PATH) $(MAYAPY) $(TESTS_DIR)/integration/invoke.py
 
 .PHONY: tests-ui
 tests-ui: ## Run Qt UI tests (no Maya standalone)
@@ -78,17 +84,17 @@ tests-ui: ## Run Qt UI tests (no Maya standalone)
 .PHONY: tests-cov
 tests-cov: ## Run all tests with coverage
 	$(MAYAPY) -m coverage erase
-	$(SET_PYTHONPATH) $(MAYAPY) -m coverage run $(TESTS_DIR)/unit/invoke.py
-	$(SET_PYTHONPATH) $(MAYAPY) -m coverage run $(TESTS_DIR)/integration/invoke.py
+	$(SET_PYTHONPATH) $(SET_PLUGIN_PATH) $(MAYAPY) -m coverage run $(TESTS_DIR)/unit/invoke.py
+	$(SET_PYTHONPATH) $(SET_PLUGIN_PATH) $(MAYAPY) -m coverage run $(TESTS_DIR)/integration/invoke.py
 	$(MAYAPY) -m coverage report
 
 .PHONY: tests-cov-unit
 tests-cov-unit: ## Run unit tests with coverage
-	$(SET_PYTHONPATH) $(MAYAPY) -m coverage run $(TESTS_DIR)/unit/invoke.py
+	$(SET_PYTHONPATH) $(SET_PLUGIN_PATH) $(MAYAPY) -m coverage run $(TESTS_DIR)/unit/invoke.py
 
 .PHONY: tests-cov-integration
 tests-cov-integration: ## Run integration tests with coverage
-	$(SET_PYTHONPATH) $(MAYAPY) -m coverage run $(TESTS_DIR)/integration/invoke.py
+	$(SET_PYTHONPATH) $(SET_PLUGIN_PATH) $(MAYAPY) -m coverage run $(TESTS_DIR)/integration/invoke.py
 
 # --------------------------------------------------
 # CMake Build

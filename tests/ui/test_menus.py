@@ -46,13 +46,40 @@ def test_file_saves_the_session_and_exchanges_guide_files(window):
     assert imp.shortcut().isEmpty()
 
 
+def test_each_sub_tab_shows_its_own_menu_and_hides_the_other(window):
+    """Session on the Session tab, Guides on the Designer tab -- never both."""
+    guides = next(a for a in window.menu_bar.actions() if a.text() == "&Guides")
+    session = next(a for a in window.menu_bar.actions() if a.text() == "&Session")
+
+    assert guides.isVisible() is False
+    assert session.isVisible() is True
+
+    window.views[0].sub_tabs.setCurrentIndex(DESIGNER_TAB)
+    assert guides.isVisible() is True
+    assert session.isVisible() is False
+
+    window.views[0].sub_tabs.setCurrentIndex(SESSION_TAB)
+    assert guides.isVisible() is False
+    assert session.isVisible() is True
+
+
 def test_the_guides_menu_is_disabled_off_the_designer_tab(window):
+    """Enablement tracks the target, separately from which menu is on show."""
     guides = next(a for a in window.menu_bar.actions() if a.text() == "&Guides")
     assert guides.isEnabled() is False
     window.views[0].sub_tabs.setCurrentIndex(DESIGNER_TAB)
     assert guides.isEnabled() is True
     window.views[0].sub_tabs.setCurrentIndex(SESSION_TAB)
     assert guides.isEnabled() is False
+
+
+def test_hiding_a_menu_leaves_its_shortcuts_alive(window):
+    """A hidden menu is still a menu: Ctrl+B keeps working off the Session tab."""
+    build = next(a for a in menu(window, "&Session").actions() if a.text() == "Build Rig")
+    window.views[0].sub_tabs.setCurrentIndex(DESIGNER_TAB)
+    assert window.session_menu_action.isVisible() is False
+    assert build.isVisible() is True
+    assert build.isEnabled() is True
 
 
 def test_the_guides_menu_carries_the_designer_verbs(window):

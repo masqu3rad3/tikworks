@@ -8,14 +8,7 @@ ANY FUNCTIONS HERE MUST NOT HAVE ANY DEPENDENCY TO tik.maya NODE WRAPPERS.
 
 from maya.api import OpenMaya
 
-from tik.vendor.apiundo import apiundo
-
-undocommit = apiundo.commit
-# def mockup_undo_redo(undo=None, redo=None):
-#     """Mockup function for undocommit to avoid circular imports."""
-#     pass
-#
-# undocommit = mockup_undo_redo
+from .undo import commit as undocommit
 
 
 def obj_exists(name):

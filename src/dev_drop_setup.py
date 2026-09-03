@@ -31,8 +31,9 @@ def _add_module():
     _module_dir = Path(__file__).parent.parent
 
     module_file_content = f"""+ tikworks 1.0.0 {_module_dir.as_posix()}
-PYTHONPATH +:= src
+PYTHONPATH +:= src/python
 MAYA_PLUG_IN_PATH +:= build/Debug
+MAYA_PLUG_IN_PATH +:= src/plugins/python
 """
 
     user_module_dir = Path(cmds.internalVar(uad=True), "modules")

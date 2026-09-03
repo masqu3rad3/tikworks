@@ -157,6 +157,7 @@ class TriggerWindow(MayaToolWindow):
         self._action(edit_menu, "Enable / Disable", lambda: self._view_call("toggle_current"), "Ctrl+E")
 
         session_menu = add_menu("&Session")
+        self.session_menu_action = session_menu.menuAction()
         self._action(session_menu, "Build Rig", lambda: self._view_call("build"), "Ctrl+B")
         self._action(session_menu, "Build & Publish", lambda: self._view_call("build_and_publish"), "Ctrl+Shift+P")
         self._action(session_menu, "Build Until Here", lambda: self._view_call("build_until", self._current_path()), "Ctrl+Shift+B")
@@ -283,15 +284,30 @@ class TriggerWindow(MayaToolWindow):
         return self._view_call(session_method, *args, **kwargs)
 
     def _sync_menu_state(self) -> None:
-        """The Guides menu is only offered where it has a target.
+        """Each sub-tab shows the menu that belongs to it, and hides the other.
+
+        Visibility follows the *mode*: Session on the Session tab, Guides on
+        the Guide Designer tab. Enablement follows the *target*, which is not
+        the same question -- the Guides verbs all route through
+        ``_designer_call``, and a Designer is built lazily, so off its tab
+        there is nothing for them to act on.
+
+        Hiding a menu leaves its actions alone, so the shortcuts underneath
+        (Ctrl+B, Ctrl+M) still fire either way. That costs nothing: on the
+        Session tab the Guides verbs no-op through the guard above, and
+        building from the Designer tab was always meaningful.
 
         Also where the Auto Sync menu action gets bound to whatever Designer
         just became active: a Designer is built lazily, one per session tab,
         so there is no single spot at window construction to wire this -- it
         happens here, every time the active tab (session or sub-tab) changes.
         """
+        on_designer = self._designer is not None
         if hasattr(self, "guides_menu_action"):
-            self.guides_menu_action.setEnabled(self._designer is not None)
+            self.guides_menu_action.setEnabled(on_designer)
+            self.guides_menu_action.setVisible(on_designer)
+        if hasattr(self, "session_menu_action"):
+            self.session_menu_action.setVisible(not on_designer)
         designer = self._designer
         if designer is not None:
             self._connect_designer_auto_sync(designer)
