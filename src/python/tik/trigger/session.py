@@ -17,12 +17,21 @@ from pathlib import Path
 from typing import Any, Optional
 
 from tik.trigger.core import registry, versioning
-from tik.trigger.core.document import EXTENSION, ActionNode, Document, join_path, split_path
+from tik.trigger.core.document import (
+    BUILD,
+    EXTENSION,
+    PHASES,
+    PUBLISH,
+    ActionNode,
+    Document,
+    join_path,
+    split_path,
+)
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import SessionError, SessionSaveError
 from tik.trigger.core.steps import REFERENCE_TYPE, StepResult
 
-_SETTINGS_ONLY = {"_session", "_node", "_path", "_linked", "_ref_handle", "_ref_path"}
+_SETTINGS_ONLY = {"_session", "_node", "_path", "_linked", "_ref_handle", "_ref_path", "_phase"}
 
 
 class ActionHandle:
@@ -33,12 +42,14 @@ class ActionHandle:
     """
 
     def __init__(self, session: "Session", node: ActionNode, path: str,
-                 ref_handle: Optional["ActionHandle"] = None, ref_path: str = "") -> None:
+                 ref_handle: Optional["ActionHandle"] = None, ref_path: str = "",
+                 phase: str = BUILD) -> None:
         object.__setattr__(self, "_session", session)
         object.__setattr__(self, "_node", node)
         object.__setattr__(self, "_path", path)
         object.__setattr__(self, "_ref_handle", ref_handle)
         object.__setattr__(self, "_ref_path", ref_path)
+        object.__setattr__(self, "_phase", phase)
         object.__setattr__(self, "_linked", ref_handle is not None)
 
     # ---------------------------------------------------------- identity
@@ -63,12 +74,18 @@ class ActionHandle:
         return self._linked
 
     @property
+    def phase(self) -> str:
+        """Which of the session's two lists this handle came from."""
+        return self._phase
+
+    @property
     def action_class(self) -> type:
         return registry.get_action(self._node.type)
 
     def __repr__(self) -> str:
         flag = " linked" if self._linked else ""
-        return f"<Action {self._path} ({self._node.type}){flag}>"
+        where = "" if self._phase == BUILD else f" [{self._phase}]"
+        return f"<Action {self._path} ({self._node.type}){flag}{where}>"
 
     # ----------------------------------------------------------- enabled
     @property
@@ -148,10 +165,15 @@ class ActionHandle:
         if self._linked:
             return [
                 ActionHandle(self._session, child, join_path(self._path, child.name),
-                             self._ref_handle, join_path(self._ref_path, child.name))
+                             self._ref_handle, join_path(self._ref_path, child.name),
+                             phase=self._phase)
                 for child in self._node.children
             ]
-        own = [ActionHandle(self._session, child, join_path(self._path, child.name)) for child in self._node.children]
+        own = [
+            ActionHandle(self._session, child, join_path(self._path, child.name),
+                         phase=self._phase)
+            for child in self._node.children
+        ]
         if self._node.type == REFERENCE_TYPE:
             return self._referenced_children() + own
         return own
@@ -162,7 +184,8 @@ class ActionHandle:
         except SessionError:
             return []
         return [
-            ActionHandle(self._session, child, join_path(self._path, child.name), self, child.name)
+            ActionHandle(self._session, child, join_path(self._path, child.name), self,
+                         child.name, phase=self._phase)
             for child in document.actions
         ]
 
@@ -179,7 +202,77 @@ class ActionHandle:
     def add(self, action_type: str, name: Optional[str] = None, index: Optional[int] = None, **settings) -> "ActionHandle":
         if self._linked:
             raise SessionError("Cannot add actions inside a referenced session; open it instead.")
-        return self._session.add(action_type, name, parent=self._path, index=index, **settings)
+        return self._session.add(action_type, name, parent=self._path, index=index,
+                                 phase=self._phase, **settings)
+
+
+class PhaseView:
+    """The tree API of one of a session's two action lists.
+
+    ``session.publish`` is one of these. It holds no state of its own -- every
+    verb delegates to the session with its phase attached -- so undo, the dirty
+    flag and the reference cache behave identically in both lists.
+    """
+
+    def __init__(self, session: "Session", phase: str) -> None:
+        self._session = session
+        self._phase = phase
+
+    @property
+    def phase(self) -> str:
+        return self._phase
+
+    @property
+    def actions(self) -> list[ActionHandle]:
+        return self._session.root_handles(self._phase)
+
+    def __getitem__(self, path: str) -> ActionHandle:
+        return self._session.handle(path, phase=self._phase)
+
+    def find(self, path: str) -> Optional[ActionHandle]:
+        try:
+            return self[path]
+        except SessionError:
+            return None
+
+    def __contains__(self, path: str) -> bool:
+        return self.find(path) is not None
+
+    def __iter__(self):
+        return iter(self.actions)
+
+    def __len__(self) -> int:
+        return len(self._session.document.roots(self._phase))
+
+    def paths(self) -> list[str]:
+        return self._session.document.paths(self._phase)
+
+    def walk(self) -> list[ActionHandle]:
+        return self._session.walk(phase=self._phase)
+
+    def add(self, action_type: str, name: Optional[str] = None, *,
+            parent: Optional[str | ActionHandle] = None,
+            after: Optional[str | ActionHandle] = None,
+            index: Optional[int] = None, **settings) -> ActionHandle:
+        return self._session.add(action_type, name, parent=parent, after=after,
+                                 index=index, phase=self._phase, **settings)
+
+    def remove(self, path: str | ActionHandle) -> None:
+        self._session.remove(path, phase=self._phase)
+
+    def move(self, path: str | ActionHandle, *, parent: Optional[str] = None,
+             index: Optional[int] = None, after: Optional[str] = None) -> ActionHandle:
+        return self._session.move(path, parent=parent, index=index, after=after,
+                                  phase=self._phase)
+
+    def rename(self, path: str | ActionHandle, new_name: str) -> ActionHandle:
+        return self._session.rename(path, new_name, phase=self._phase)
+
+    def duplicate(self, path: str | ActionHandle) -> ActionHandle:
+        return self._session.duplicate(path, phase=self._phase)
+
+    def __repr__(self) -> str:
+        return f"<PhaseView {self._phase}: {len(self)} actions>"
 
 
 class Session:
@@ -193,6 +286,7 @@ class Session:
         self.file_path: Optional[Path] = None
         self._saved_state = self.document.to_dict()
         self._reference_cache: dict[str, Document] = {}
+        self._views: dict[str, PhaseView] = {}
         self._guides = None
         self._undo: list[dict] = []
         self._redo: list[dict] = []
@@ -421,11 +515,28 @@ class Session:
         document_store.write_stamp(self.session_id)
 
     # -------------------------------------------------------------- tree
+    def view(self, phase: str = BUILD) -> PhaseView:
+        """The tree API of one phase. ``session.publish`` is the publish one."""
+        if phase not in PHASES:
+            raise SessionError(f"Unknown phase '{phase}'.")
+        if phase not in self._views:
+            self._views[phase] = PhaseView(self, phase)
+        return self._views[phase]
+
+    @property
+    def publish(self) -> PhaseView:
+        """This session's publish list. Runs only as the tail of a full build."""
+        return self.view(PUBLISH)
+
+    def root_handles(self, phase: str = BUILD) -> list[ActionHandle]:
+        return [ActionHandle(self, node, node.name, phase=phase)
+                for node in self.document.roots(phase)]
+
     @property
     def actions(self) -> list[ActionHandle]:
-        return [ActionHandle(self, node, node.name) for node in self.document.actions]
+        return self.root_handles(BUILD)
 
-    def walk(self) -> list[ActionHandle]:
+    def walk(self, phase: str = BUILD) -> list[ActionHandle]:
         """Every handle depth-first, including referenced (linked) ones."""
         found: list[ActionHandle] = []
 
@@ -434,18 +545,21 @@ class Session:
             for child in handle.children:
                 _visit(child)
 
-        for handle in self.actions:
+        for handle in self.root_handles(phase):
             _visit(handle)
         return found
 
-    def __getitem__(self, path: str) -> ActionHandle:
+    def handle(self, path: str, phase: str = BUILD) -> ActionHandle:
         parts = split_path(path)
         if not parts:
             raise SessionError("Empty action path.")
-        root = next((handle for handle in self.actions if handle.name == parts[0]), None)
+        root = next((item for item in self.root_handles(phase) if item.name == parts[0]), None)
         if root is None:
             raise SessionError(f"No action at '{parts[0]}'.")
         return root[join_path(*parts[1:])] if len(parts) > 1 else root
+
+    def __getitem__(self, path: str) -> ActionHandle:
+        return self.handle(path, BUILD)
 
     def find(self, path: str) -> Optional[ActionHandle]:
         try:
@@ -456,8 +570,8 @@ class Session:
     def __contains__(self, path: str) -> bool:
         return self.find(path) is not None
 
-    def paths(self) -> list[str]:
-        return self.document.paths()
+    def paths(self, phase: str = BUILD) -> list[str]:
+        return self.document.paths(phase)
 
     def add(
         self,
@@ -467,45 +581,52 @@ class Session:
         parent: Optional[str | ActionHandle] = None,
         after: Optional[str | ActionHandle] = None,
         index: Optional[int] = None,
+        phase: str = BUILD,
         **settings,
     ) -> ActionHandle:
         """Add an action; ``after`` places it next to a sibling, ``parent`` nests it."""
-        action_cls = registry.get_action(action_type)
+        action_cls = registry.get_action(action_type)  # raises for an unknown type
+        if not registry.allows(action_type, phase):
+            raise SessionError(
+                f"'{action_type}' cannot be placed in the {phase} list "
+                f"(its scope is '{getattr(action_cls, 'scope', BUILD)}')."
+            )
         action = action_cls(settings=settings)  # validates
         parent_path = parent.path if isinstance(parent, ActionHandle) else parent
         if after is not None:
             after_path = after.path if isinstance(after, ActionHandle) else after
             parts = split_path(after_path)
             parent_path = join_path(*parts[:-1]) or None
-            siblings = self.document.siblings(parent_path)
+            siblings = self.document.siblings(parent_path, phase)
             index = [node.name for node in siblings].index(parts[-1]) + 1
         node = ActionNode(name=name or action_type, type=action_type, settings=action.values())
-        path = self.document.add(node, parent=parent_path, index=index)
+        path = self.document.add(node, parent=parent_path, index=index, phase=phase)
         self.touch()
-        return self[path]
+        return self.handle(path, phase)
 
-    def remove(self, path: str | ActionHandle) -> None:
-        self.document.remove(path.path if isinstance(path, ActionHandle) else path)
+    def remove(self, path: str | ActionHandle, phase: str = BUILD) -> None:
+        self.document.remove(path.path if isinstance(path, ActionHandle) else path, phase=phase)
         self.touch()
 
     def move(self, path: str | ActionHandle, *, parent: Optional[str] = None,
-             index: Optional[int] = None, after: Optional[str] = None) -> ActionHandle:
+             index: Optional[int] = None, after: Optional[str] = None,
+             phase: str = BUILD) -> ActionHandle:
         path = path.path if isinstance(path, ActionHandle) else path
-        new_path = self.document.move(path, parent=parent, index=index, after=after)
+        new_path = self.document.move(path, parent=parent, index=index, after=after, phase=phase)
         self.touch()
-        return self[new_path]
+        return self.handle(new_path, phase)
 
-    def rename(self, path: str | ActionHandle, new_name: str) -> ActionHandle:
+    def rename(self, path: str | ActionHandle, new_name: str, phase: str = BUILD) -> ActionHandle:
         path = path.path if isinstance(path, ActionHandle) else path
-        new_path = self.document.rename(path, new_name)
+        new_path = self.document.rename(path, new_name, phase=phase)
         self.touch()
-        return self[new_path]
+        return self.handle(new_path, phase)
 
-    def duplicate(self, path: str | ActionHandle) -> ActionHandle:
+    def duplicate(self, path: str | ActionHandle, phase: str = BUILD) -> ActionHandle:
         path = path.path if isinstance(path, ActionHandle) else path
-        new_path = self.document.duplicate(path)
+        new_path = self.document.duplicate(path, phase=phase)
         self.touch()
-        return self[new_path]
+        return self.handle(new_path, phase)
 
     # ------------------------------------------------------- references
     def _referenced_document(self, handle: ActionHandle) -> Document:
@@ -524,42 +645,66 @@ class Session:
         return Runner(self.events)
 
     def validate(self) -> list[str]:
-        """Pre-flight problems for every runnable step (files missing, etc.)."""
+        """Pre-flight problems for every runnable step, in both lists."""
+        from tik.trigger.core.action import ActionContext
+
         runner = self._runner()
         problems: list[str] = []
-        try:
-            plan = runner.plan(self.document, self.directory)
-        except SessionError as error:
-            return [str(error)]
-        problems.extend(plan.problems)
-        for step in plan.steps:
-            action = registry.get_action(step.node.type)(settings=step.node.settings)
-            from tik.trigger.core.action import ActionContext
-
-            ctx = ActionContext(session=self, events=self.events,
-                                base_dir=step.base_dir, path=step.path)
-            problems.extend(f"{step.path}: {item}" for item in action.validate(ctx))
+        for phase in PHASES:
+            prefix = "" if phase == BUILD else f"{phase}: "
+            try:
+                plan = runner.plan(self.document, self.directory, phase=phase)
+            except SessionError as error:
+                problems.append(f"{prefix}{error}")
+                continue
+            problems.extend(f"{prefix}{item}" for item in plan.problems)
+            for step in plan.steps:
+                action = registry.get_action(step.node.type)(settings=step.node.settings)
+                ctx = ActionContext(session=self, events=self.events,
+                                    base_dir=step.base_dir, path=step.path)
+                problems.extend(f"{prefix}{step.path}: {item}" for item in action.validate(ctx))
         return problems
 
-    def build(self, until: Optional[str | ActionHandle] = None, reset_scene: bool = True) -> list[StepResult]:
-        """Reset the scene and run every enabled action (optionally stopping after ``until``)."""
+    def build(self, until: Optional[str | ActionHandle] = None, reset_scene: bool = True,
+              publish: bool = False) -> list[StepResult]:
+        """Reset the scene and run the build list; with ``publish``, the publish list after it.
+
+        ``until`` stops after that build action -- and forbids ``publish``,
+        because a partial build is not a rig anyone should be exporting.
+        """
         until = until.path if isinstance(until, ActionHandle) else until
-        self.events.log(f"Building {self.name}")
+        if publish and until is not None:
+            raise SessionError(
+                "'until' cannot be combined with publish: a partial build must not publish."
+            )
+        self.events.log(f"Building{' and publishing' if publish else ''} {self.name}")
         # The runner resets the scene, so the guides have to be in the document
         # before it does. Saving already captures; building must too, or a rig
         # built from an unsaved session has no guides at all.
         self.capture_guides()
-        return self._runner().run(self.document, self.directory, until=until, reset_scene=reset_scene, session=self)
+        return self._runner().run(self.document, self.directory, until=until,
+                                  reset_scene=reset_scene, session=self, publish=publish)
 
     def run(self, path: str | ActionHandle) -> StepResult:
-        """Run a single action in the current scene (no reset)."""
-        path = path.path if isinstance(path, ActionHandle) else path
-        self.capture_guides()
-        return self._runner().run(self.document, self.directory, only=path, reset_scene=False, session=self)[0]
+        """Run a single build action in the current scene (no reset).
 
-    def steps(self, until: Optional[str] = None):
-        """The planned steps (what Build would run)."""
-        return self._runner().plan(self.document, self.directory, until=until).steps
+        Publish actions are deliberately excluded: the only way one executes is
+        as the tail of a full clean build, so no partial or hand-edited rig can
+        produce a published artifact.
+        """
+        path = path.path if isinstance(path, ActionHandle) else path
+        if self.document.find(path, phase=PUBLISH) is not None:
+            raise SessionError(
+                f"'{path}' is a publish action; publish actions run only with Build & Publish."
+            )
+        self.capture_guides()
+        return self._runner().run(self.document, self.directory, only=path,
+                                  reset_scene=False, session=self)[0]
+
+    def steps(self, until: Optional[str] = None, phase: str = BUILD):
+        """The planned steps of one phase (what Build would run)."""
+        return self._runner().plan(self.document, self.directory, until=until, phase=phase).steps
 
     def __repr__(self) -> str:
-        return f"Session({self.name}, {len(self.document.actions)} actions)"
+        return (f"Session({self.name}, {len(self.document.actions)} actions, "
+                f"{len(self.document.publish)} publish)")

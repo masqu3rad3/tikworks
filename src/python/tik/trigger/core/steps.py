@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from .document import ActionNode
+from .document import BUILD, ActionNode
 
 REFERENCE_TYPE = "reference"
 
@@ -30,10 +30,13 @@ class Step:
     chain: tuple[str, ...] = ()  # referenced files leading here
     depth: int = 0
     linked: bool = False
+    phase: str = BUILD
 
     @property
     def display_chain(self) -> str:
-        return " > ".join([*(Path(item).name for item in self.chain), self.path])
+        text = " > ".join([*(Path(item).name for item in self.chain), self.path])
+        # the build list is the unmarked case; naming it would only add noise
+        return text if self.phase == BUILD else f"{self.phase}: {text}"
 
 
 @dataclass
@@ -42,6 +45,7 @@ class StepResult:
     status: str  # "done" | "failed" | "skipped"
     seconds: float = 0.0
     error: Optional[str] = None
+    phase: str = BUILD
 
 
 @dataclass

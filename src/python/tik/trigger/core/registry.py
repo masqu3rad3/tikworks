@@ -8,9 +8,10 @@ instance always knows its registered name.
 from __future__ import annotations
 
 import logging
-from typing import Callable, Type, TypeVar
+from typing import Callable, Optional, Type, TypeVar
 
-from .exceptions import DuplicateRegistrationError, NotFoundError
+from .document import BUILD, PUBLISH
+from .exceptions import DuplicateRegistrationError, NotFoundError, RegistryError
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,11 @@ T = TypeVar("T")
 
 _MODULES: dict[str, type] = {}
 _ACTIONS: dict[str, type] = {}
+
+#: An action's scope says which list it may be placed in. This is a *placement*
+#: rule for the UI and ``Session.add``; the runner never checks it.
+BOTH = "both"
+SCOPES = (BUILD, PUBLISH, BOTH)
 
 
 def register_module(name: str) -> Callable[[Type[T]], Type[T]]:
@@ -36,7 +42,7 @@ def register_module(name: str) -> Callable[[Type[T]], Type[T]]:
 
 
 def register_action(
-    name: str, category: str = "utility", icon: str = ""
+    name: str, category: str = "utility", icon: str = "", scope: str = BUILD
 ) -> Callable[[Type[T]], Type[T]]:
     """Register an ``Action`` subclass under ``name``.
 
@@ -45,7 +51,12 @@ def register_action(
         category: Shelf/palette group (``structure``, ``build``, ``deform``,
             ``finish``, ``utility``).
         icon: Icon name (defaults to ``name``).
+        scope: Which action list this may live in -- ``build`` (the default),
+            ``publish`` or ``both``.
     """
+
+    if scope not in SCOPES:
+        raise RegistryError(f"Unknown action scope '{scope}'; expected one of {SCOPES}.")
 
     def inner(cls: Type[T]) -> Type[T]:
         existing = _ACTIONS.get(name)
@@ -54,6 +65,7 @@ def register_action(
         cls.action_type = name  # type: ignore[attr-defined]
         cls.category = category  # type: ignore[attr-defined]
         cls.icon = icon or name  # type: ignore[attr-defined]
+        cls.scope = scope  # type: ignore[attr-defined]
         _ACTIONS[name] = cls
         logger.debug("Registered action: %s", name)
         return cls
@@ -114,9 +126,29 @@ def iter_modules() -> list[type]:
     return [_MODULES[name] for name in list_modules()]
 
 
-def iter_actions() -> list[type]:
-    """Return registered action classes."""
-    return [_ACTIONS[name] for name in list_actions()]
+def iter_actions(scope: Optional[str] = None) -> list[type]:
+    """Return registered action classes, optionally only those fitting ``scope``."""
+    classes = [_ACTIONS[name] for name in list_actions()]
+    if scope is None:
+        return classes
+    return [cls for cls in classes if _scope_allows(getattr(cls, "scope", BUILD), scope)]
+
+
+def _scope_allows(scope: str, phase: str) -> bool:
+    return scope == BOTH or scope == phase
+
+
+def allows(action_type: str, phase: str) -> bool:
+    """Whether ``action_type`` may be placed in the ``phase`` list.
+
+    ``False`` for an unregistered type, so callers can use this as a plain
+    guard without catching :class:`NotFoundError`.
+    """
+    try:
+        cls = get_action(action_type)
+    except NotFoundError:
+        return False
+    return _scope_allows(getattr(cls, "scope", BUILD), phase)
 
 
 def is_module_registered(name: str) -> bool:

@@ -38,7 +38,9 @@ def test_the_designer_is_built_once(view):
 
 
 def test_the_pipeline_lives_on_the_session_tab(view):
-    assert view.sub_tabs.widget(SESSION_TAB).findChild(type(view.tree)) is view.tree
+    """Both pipeline trees -- build and publish -- sit on the Session tab."""
+    found = view.sub_tabs.widget(SESSION_TAB).findChildren(type(view.tree))
+    assert set(found) == {view.tree, view.publish_tree}
 
 
 def test_switching_sub_tabs_reports_which_one(view):

@@ -9,6 +9,7 @@ from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.icons import glyph_icon, initials
 from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.trigger.core import registry
+from tik.trigger.core.document import BUILD
 from tik.trigger.session import ActionHandle
 
 
@@ -89,6 +90,11 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         enabled = handle is not None
         for widget in (self.run_button, self.until_button, self.info_button):
             widget.setEnabled(enabled)
+        # Publish actions never run on their own: the only way one executes is
+        # as the tail of a full clean build.
+        runnable = enabled and getattr(handle, "phase", BUILD) == BUILD
+        self.run_button.setVisible(runnable)
+        self.until_button.setVisible(runnable)
         if handle is None:
             self.title.setText("No action selected")
             self.subtitle.setText("Pick an action in the pipeline, or press Tab to add one.")

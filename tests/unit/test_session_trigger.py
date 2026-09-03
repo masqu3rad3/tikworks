@@ -27,11 +27,33 @@ class Weights(Action):
         CALLS.append(("weights", ctx.path, self.file))
 
 
+# Scope is stamped on the class (like ``category`` and ``icon``), so a scoped
+# variant needs its own subclass rather than a second registration of ``Mark``.
+class MarkBuildOnly(Mark):
+    pass
+
+
+class MarkPublishOnly(Mark):
+    pass
+
+
+class MarkEither(Mark):
+    pass
+
+
+class WeightsPublish(Weights):
+    pass
+
+
 @pytest.fixture(autouse=True)
 def _registered():
     clear_registries()
     register_action("mark", category="build")(Mark)
     register_action("weights", category="deform")(Weights)
+    register_action("mark_build_only", category="build")(MarkBuildOnly)
+    register_action("mark_publish_only", category="utility", scope="publish")(MarkPublishOnly)
+    register_action("mark_either", category="utility", scope="both")(MarkEither)
+    register_action("weights_publish", category="utility", scope="publish")(WeightsPublish)
     from tik.trigger.actions.reference.reference import Reference
 
     register_action("reference", category="structure")(Reference)
@@ -149,3 +171,115 @@ def test_reference_handles_and_overrides(tmp_path):
     ref.file = "rigs/missing.tr"
     assert ref.children == []
     assert any("not found" in problem for problem in rig.validate())
+
+
+# ---------------------------------------------------------- publish phase
+def test_publish_namespace_is_a_separate_list():
+    from tik.trigger.core.document import BUILD, PUBLISH
+
+    rig = Session()
+    rig.add("mark", "kine")
+    rig.publish.add("mark_either", "fbx")
+    rig.publish.add("mark_either", "ma")
+
+    assert rig.paths() == ["kine"]
+    assert rig.publish.paths() == ["fbx", "ma"]
+    assert rig.publish["fbx"].phase == PUBLISH
+    assert rig["kine"].phase == BUILD
+    assert "fbx" not in rig
+    assert "fbx" in rig.publish
+    assert rig.find("fbx") is None
+    assert len(rig.publish) == 2
+    assert [handle.name for handle in rig.publish] == ["fbx", "ma"]
+
+
+def test_publish_settings_and_tree_edits_go_through_the_view():
+    rig = Session()
+    rig.publish.add("mark_either", "fbx", tag="FBX")
+    assert rig.publish["fbx"].tag == "FBX"
+    rig.publish["fbx"].tag = "changed"
+    assert rig.publish["fbx"].tag == "changed"
+    rig.publish["fbx"].enabled = False
+    assert rig.publish["fbx"].enabled is False
+    assert rig.publish.duplicate("fbx").path == "fbx1"
+    assert rig.publish.rename("fbx1", "copy").path == "copy"
+    rig.publish.remove("copy")
+    assert rig.publish.paths() == ["fbx"]
+
+
+def test_publish_edits_are_undoable_and_dirty_the_session():
+    rig = Session()
+    rig.add("mark", "kine")
+    assert rig.is_modified
+    rig.publish.add("mark_either", "fbx")
+    assert rig.publish.paths() == ["fbx"]
+    assert rig.undo()
+    assert rig.publish.paths() == []
+    assert rig.paths() == ["kine"]
+    assert rig.redo()
+    assert rig.publish.paths() == ["fbx"]
+
+
+def test_scope_is_enforced_when_adding():
+    rig = Session()
+    with pytest.raises(SessionError):
+        rig.publish.add("mark_build_only")
+    with pytest.raises(SessionError):
+        rig.add("mark_publish_only")
+    assert rig.paths() == [] and rig.publish.paths() == []
+
+
+def test_publish_actions_are_never_individually_runnable():
+    CALLS.clear()
+    rig = Session()
+    rig.publish.add("mark_either", "fbx")
+    with pytest.raises(SessionError):
+        rig.run("fbx")
+    assert CALLS == []
+
+
+def test_until_cannot_be_combined_with_publish():
+    rig = Session()
+    rig.add("mark", "kine")
+    rig.publish.add("mark_either", "fbx")
+    with pytest.raises(SessionError):
+        rig.build(until="kine", publish=True)
+
+
+def test_build_and_publish_runs_both_lists():
+    rig = Session()
+    rig.add("mark", "kine")
+    rig.publish.add("mark_either", "fbx")
+    assert [item.path for item in rig.build()] == ["kine"]
+    assert [item.path for item in rig.build(publish=True)] == ["kine", "fbx"]
+
+
+def test_steps_and_validate_cover_both_phases():
+    from tik.trigger.core.document import PUBLISH
+
+    rig = Session()
+    rig.add("mark", "kine")
+    rig.publish.add("mark_either", "fbx")
+    assert [step.path for step in rig.steps()] == ["kine"]
+    assert [step.path for step in rig.steps(phase=PUBLISH)] == ["fbx"]
+    assert rig.validate() == []
+
+
+def test_validate_reports_publish_problems_with_their_phase(tmp_path):
+    rig = Session()
+    rig.save(tmp_path / "hero.tr")
+    rig.publish.add("weights_publish", "w", file="missing.trw")
+    problems = rig.validate()
+    assert len(problems) == 1
+    assert problems[0].startswith("publish: w: ")
+
+
+def test_publish_survives_a_save_and_reopen(tmp_path):
+    rig = Session()
+    rig.add("mark", "kine")
+    rig.publish.add("mark_either", "fbx", tag="FBX")
+    rig.save(tmp_path / "hero.tr")
+    reopened = Session.open(str(tmp_path / "hero.tr"))
+    assert reopened.paths() == ["kine"]
+    assert reopened.publish.paths() == ["fbx"]
+    assert reopened.publish["fbx"].tag == "FBX"

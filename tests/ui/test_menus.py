@@ -224,3 +224,12 @@ def test_auto_sync_stays_bound_after_closing_and_reopening_a_tab(window):
 
     designer.set_auto_sync(False)
     assert window.auto_sync_action.isChecked() is False
+
+
+def test_session_menu_has_build_and_publish(window):
+    entries = {item.text(): item for item in menu(window, "&Session").actions()}
+    assert "Build & Publish" in entries
+    assert entries["Build & Publish"].shortcut().toString() == "Ctrl+Shift+P"
+    # it sits beside the plain build verbs
+    labels = [item.text() for item in menu(window, "&Session").actions()]
+    assert labels[:3] == ["Build Rig", "Build & Publish", "Build Until Here"]

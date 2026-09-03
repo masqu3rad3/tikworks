@@ -23,7 +23,7 @@ from tik.core.side import Side
 
 from . import versioning
 from .action import Action, ActionContext
-from .document import ActionNode, Document
+from .document import BUILD, PHASES, PUBLISH, ActionNode, Document
 from .events import ERROR, LOG, PROGRESS, EventBus
 from .exceptions import (
     ActionError,
@@ -52,6 +52,7 @@ from .manifest import GuideAttr, GuideLayout, Input, instance_key
 from .reconcile import GuideDiff, ModuleDiff, RenderedGuide, reconcile
 from .module import Module
 from .registry import (
+    allows,
     clear_registries,
     get_action,
     get_module,
@@ -83,6 +84,9 @@ __all__ = [
     "ActionContext",
     "ActionNode",
     "Document",
+    "BUILD",
+    "PUBLISH",
+    "PHASES",
     "versioning",
     "EventBus",
     "PROGRESS",
@@ -117,6 +121,7 @@ __all__ = [
     "VectorField",
     "ListField",
     "NodeRefField",
+    "allows",
     "register_action",
     "register_module",
     "get_action",

@@ -245,3 +245,79 @@ def test_validate_rejects_duplicate_rows():
 def _with_space_rows(instance, rows):
     instance.settings["anim_spaces"] = rows
     return instance
+
+
+# ------------------------------------------------------------ action scope
+def test_action_scope_defaults_to_build_and_is_stamped():
+    from tik.trigger.core import Action
+    from tik.trigger.core.document import BUILD, PUBLISH
+    from tik.trigger.core.registry import BOTH, allows, iter_actions
+
+    class Plain(Action):
+        def run(self, ctx):
+            pass
+
+    class Exporter(Action):
+        def run(self, ctx):
+            pass
+
+    class Either(Action):
+        def run(self, ctx):
+            pass
+
+    register_action("plain")(Plain)
+    register_action("exporter", scope=PUBLISH)(Exporter)
+    register_action("either", scope=BOTH)(Either)
+
+    assert Plain.scope == BUILD
+    assert Exporter.scope == PUBLISH
+    assert Either.scope == BOTH
+
+    assert allows("plain", BUILD) and not allows("plain", PUBLISH)
+    assert allows("exporter", PUBLISH) and not allows("exporter", BUILD)
+    assert allows("either", BUILD) and allows("either", PUBLISH)
+    assert not allows("ghost", BUILD)
+
+    assert {cls.action_type for cls in iter_actions()} == {"plain", "exporter", "either"}
+    assert {cls.action_type for cls in iter_actions(scope=BUILD)} == {"plain", "either"}
+    assert {cls.action_type for cls in iter_actions(scope=PUBLISH)} == {"exporter", "either"}
+
+
+def test_unknown_action_scope_is_rejected():
+    from tik.trigger.core import Action
+    from tik.trigger.core.exceptions import RegistryError
+
+    class Nope(Action):
+        def run(self, ctx):
+            pass
+
+    with pytest.raises(RegistryError):
+        register_action("nope", scope="sideways")(Nope)
+
+
+def test_base_action_declares_a_scope():
+    from tik.trigger.core import Action
+    from tik.trigger.core.document import BUILD
+
+    assert Action.scope == BUILD
+
+
+def test_shipped_actions_declare_their_scopes():
+    from tik.trigger.actions.import_asset.import_asset import ImportAsset
+    from tik.trigger.actions.kinematics.kinematics import Kinematics
+    from tik.trigger.actions.reference.reference import Reference
+    from tik.trigger.actions.script.script import Script
+    from tik.trigger.core import registry
+    from tik.trigger.core.document import BUILD, PUBLISH
+
+    for cls in (ImportAsset, Kinematics, Reference, Script):
+        registry.ensure_registered(cls)
+
+    # a hook script is as useful before an export as during a build
+    assert registry.allows("script", BUILD) and registry.allows("script", PUBLISH)
+    # everything else stays build-only
+    assert registry.allows("kinematics", BUILD) and not registry.allows("kinematics", PUBLISH)
+    assert registry.allows("import_asset", BUILD) and not registry.allows("import_asset", PUBLISH)
+    # a reference in the publish list would expand another session's *build*
+    # actions into a publish run, which is nonsense
+    assert not registry.allows("reference", PUBLISH)
