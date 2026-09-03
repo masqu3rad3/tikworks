@@ -5,10 +5,9 @@ from maya import cmds
 
 import tik.maya as tm
 import tik.trigger as trigger
-from tik.trigger.maya import build, tags
-from tik.trigger.guides import GuideScene
 from tik.trigger.core import ParentRef, get_module
-from tik.trigger.maya import Builder
+from tik.trigger.guides import GuideScene
+from tik.trigger.maya import Builder, build, tags
 
 
 @pytest.fixture
@@ -30,7 +29,8 @@ def test_create_guides_tags_and_parents(scene):
     assert scene.document.module(instance.instance_id).name == "body"
     assert tags.SETTINGS not in joint.meta
     assert scene.document.module(instance.instance_id).settings == {
-        "controller_size": 10.0, "anim_spaces": []
+        "controller_size": 10.0,
+        "anim_spaces": [],
     }
     assert joint.parent.name == tags.GUIDE_HOLDER
     assert instance.guide_pairs == [("root", 0)]
@@ -52,13 +52,20 @@ def test_find_instances_reads_hierarchy_and_poses(scene):
         get_module("fkchain")(name="tail", settings={"segments": 2}),
         parent=ParentRef(root.instance_id, "root"),
     )
-    cmds.xform(scene.guide_node(child.instance_id, "segment", 1).long_name, ws=True, t=(0, 9, 0))
+    cmds.xform(
+        scene.guide_node(child.instance_id, "segment", 1).long_name,
+        ws=True,
+        t=(0, 9, 0),
+    )
     found = {item.name: item for item in scene.find_instances()}
     assert set(found) == {"body", "tail"}
     assert found["tail"].parent == ParentRef(root.instance_id, "root", 0)
     poses = {(pose.role, pose.index): pose.position for pose in found["tail"].guides}
     assert poses[("segment", 1)][1] == pytest.approx(9.0)
-    assert scene.guide_node(child.instance_id, "root").parent.name == scene.guide_node(root.instance_id, "root").name
+    assert (
+        scene.guide_node(child.instance_id, "root").parent.name
+        == scene.guide_node(root.instance_id, "root").name
+    )
 
 
 def test_find_instances_scopes(scene):
@@ -71,7 +78,9 @@ def test_find_instances_scopes(scene):
 
 def test_settings_roundtrip_and_delete_keeps_children(scene):
     root = scene.create_guides(get_module("base")(name="body"))
-    child = scene.create_guides(get_module("fkchain")(name="tail"), parent=ParentRef(root.instance_id, "root"))
+    child = scene.create_guides(
+        get_module("fkchain")(name="tail"), parent=ParentRef(root.instance_id, "root")
+    )
     scene.write_settings(root.instance_id, {"controller_size": 3.0})
     assert scene.read_settings(root.instance_id) == {
         "controller_size": 3.0,
@@ -96,10 +105,16 @@ def test_build_pipeline_creates_groups_controllers_and_attaches(scene):
     root = scene.create_guides(get_module("base")(name="body"))
     chain = get_module("fkchain")(name="tail", side="L", settings={"segments": 2})
     child = scene.create_guides(chain, parent=ParentRef(root.instance_id, "root"))
-    cmds.xform(scene.guide_node(root.instance_id, "root").long_name, ws=True, t=(0, 10, 0))
-    cmds.xform(scene.guide_node(child.instance_id, "root").long_name, ws=True, t=(2, 10, 0))
+    cmds.xform(
+        scene.guide_node(root.instance_id, "root").long_name, ws=True, t=(0, 10, 0)
+    )
+    cmds.xform(
+        scene.guide_node(child.instance_id, "root").long_name, ws=True, t=(2, 10, 0)
+    )
 
-    report = Builder().build(document=scene.document, rig_name="hero", afterlife="delete")
+    report = Builder().build(
+        document=scene.document, rig_name="hero", afterlife="delete"
+    )
     assert report.count == 2
     assert cmds.objExists("hero_rig")
     assert cmds.objExists("C_body_grp") and cmds.objExists("L_tail_grp")
@@ -160,7 +175,9 @@ def _built(scene, module_type="base", name="body", settings=None):
     """Build one instance and return its build context."""
     module = get_module(module_type)(name=name, settings=settings or {})
     instance = scene.create_guides(module)
-    report = Builder().build(document=scene.document, rig_name="rules", afterlife="keep")
+    report = Builder().build(
+        document=scene.document, rig_name="rules", afterlife="keep"
+    )
     return report.rigs[instance.instance_id]
 
 
@@ -168,7 +185,10 @@ def test_module_has_exactly_four_groups(scene):
     ctx = _built(scene)
     children = {
         path.split("|")[-1]
-        for path in cmds.listRelatives(ctx.groups.limb.long_name, children=True, fullPath=True) or []
+        for path in cmds.listRelatives(
+            ctx.groups.limb.long_name, children=True, fullPath=True
+        )
+        or []
     }
     assert len(children) == 4
     assert ctx.groups.socket.name in children
@@ -267,7 +287,9 @@ def _connected(scene):
         get_module("fkchain")(name="tail", side="L", settings={"segments": 2}),
         parent=ParentRef(root.instance_id, "root"),
     )
-    report = Builder().build(document=scene.document, rig_name="single", afterlife="keep")
+    report = Builder().build(
+        document=scene.document, rig_name="single", afterlife="keep"
+    )
     return report.rigs[root.instance_id], report.rigs[child.instance_id]
 
 

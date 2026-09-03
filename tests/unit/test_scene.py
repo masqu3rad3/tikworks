@@ -1,12 +1,14 @@
 from maya import cmds
+
 from tik.maya.core.scene import (
-    list_scene_nodes,
-    select_nodes,
     _clean_input,
     _wrap_output,
+    list_scene_nodes,
     proxy_wrapper,
+    select_nodes,
 )
 from tik.maya.types.transform import Transform
+
 
 def test_list_scene_nodes_returns_wrappers():
     # Setup
@@ -24,6 +26,7 @@ def test_list_scene_nodes_returns_wrappers():
     assert all(isinstance(node, Transform) for node in our_nodes)
     assert {node.name for node in our_nodes} == {"testT1", "testT2"}
 
+
 def test_list_scene_nodes_passes_args_to_cmds_ls():
     # Setup
     cmds.file(new=True, force=True)
@@ -37,6 +40,7 @@ def test_list_scene_nodes_passes_args_to_cmds_ls():
     assert len(nodes) == 1
     assert nodes[0].name == "selectedT"
     assert isinstance(nodes[0], Transform)
+
 
 # def test_select_nodes_selects_given_nodes():
 #     # Setup
@@ -92,6 +96,7 @@ def test_list_scene_nodes_passes_args_to_cmds_ls():
 
 def test_create_node_dag():
     from tik.maya.core.scene import create_node
+
     # Test creating a DAG node (transform)
     node = create_node("transform", name="myDag")
     assert node.exists()
@@ -102,6 +107,7 @@ def test_create_node_dag():
 def test_create_node_dg():
     # make sure the factory default is set
     import tik.maya as tm
+
     # from tik.maya.core.scene import create_node
     # Test creating a DG node (multiplyDivide)
     # create_node_with_dag_modifier should fail (invalid node type for DAG mod?)
@@ -116,6 +122,7 @@ def test_create_node_dg():
 
 def test_create_node_with_parent():
     from tik.maya.core.scene import create_node
+
     parent = create_node("transform", name="parentGrp")
     child = create_node("transform", name="childNode", parent=parent)
 
@@ -124,6 +131,7 @@ def test_create_node_with_parent():
 
 def test_create_node_fallback_to_unknown_with_name():
     import tik.maya as tm
+
     # "invalidType_XYZ" fails DAG and DG modifiers, falls back to cmds.createNode.
     # We provide a name to test that kwargs are passed correctly in fallback.
     node = tm.create_node("invalidType_XYZ", name="unknownNode")
@@ -279,4 +287,3 @@ def test_select_nodes_handles_mixed_input():
     selection = cmds.ls(selection=True)
     assert len(selection) == 2
     assert set(selection) == {"nodeA", "nodeB"}
-

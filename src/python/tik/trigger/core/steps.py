@@ -52,5 +52,3 @@ class StepResult:
 class Plan:
     steps: list[Step] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
-
-

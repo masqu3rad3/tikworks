@@ -36,7 +36,9 @@ class TestDevMod:
         assert "MAYA_PLUG_IN_PATH +:= src/plugins/python" in content
 
     def test_declares_the_plugin_area_once_per_block(self, package):
-        blocks = "".join(package._generate_dev_mod(["2025", "2026"])).count("+ MAYAVERSION")
+        blocks = "".join(package._generate_dev_mod(["2025", "2026"])).count(
+            "+ MAYAVERSION"
+        )
         plugin_lines = "".join(package._generate_dev_mod(["2025", "2026"])).count(
             "MAYA_PLUG_IN_PATH +:= src/plugins/python"
         )

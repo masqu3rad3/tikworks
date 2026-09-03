@@ -57,10 +57,14 @@ class GraphScene(QtWidgets.QGraphicsScene):
         self.moved.discard(spec.key)
         return node
 
-    def add_wire(self, source_key: str, target_key: str, primary: bool) -> Optional[WireItem]:
+    def add_wire(
+        self, source_key: str, target_key: str, primary: bool
+    ) -> Optional[WireItem]:
         s_node, _dot, s_port = source_key.rpartition(".")
         t_node, _dot, t_port = target_key.rpartition(".")
-        source = self.nodes[s_node].outputs.get(s_port) if s_node in self.nodes else None
+        source = (
+            self.nodes[s_node].outputs.get(s_port) if s_node in self.nodes else None
+        )
         target = self.nodes[t_node].inputs.get(t_port) if t_node in self.nodes else None
         if source is None or target is None:
             return None
@@ -105,13 +109,20 @@ class GraphScene(QtWidgets.QGraphicsScene):
             row += GRID
         painter.drawLines(lines)
         painter.setPen(QtGui.QPen(QtGui.QColor("#2a2a2a"), 0))
-        painter.drawLines([QtCore.QLineF(0, rect.top(), 0, rect.bottom()), QtCore.QLineF(rect.left(), 0, rect.right(), 0)])
+        painter.drawLines(
+            [
+                QtCore.QLineF(0, rect.top(), 0, rect.bottom()),
+                QtCore.QLineF(rect.left(), 0, rect.right(), 0),
+            ]
+        )
 
     # ------------------------------------------------------ interactions
     def start_wire(self, port: Port, pos) -> None:
         self._drag_from = port
         self._drag_line = QtWidgets.QGraphicsPathItem()
-        self._drag_line.setPen(QtGui.QPen(QtGui.QColor(theme.ACCENT), 1.5, QtCore.Qt.DashLine))
+        self._drag_line.setPen(
+            QtGui.QPen(QtGui.QColor(theme.ACCENT), 1.5, QtCore.Qt.DashLine)
+        )
         self._drag_line.setZValue(4)
         self.addItem(self._drag_line)
         self._update_drag(pos)
@@ -202,7 +213,11 @@ class GraphScene(QtWidgets.QGraphicsScene):
     def delete_selected(self) -> bool:
         """Disconnect selected wires and remove selected scene-node groups. True when anything was selected."""
         wires = [item for item in self.selectedItems() if isinstance(item, WireItem)]
-        externals = [item for item in self.selectedItems() if isinstance(item, NodeItem) and item.external]
+        externals = [
+            item
+            for item in self.selectedItems()
+            if isinstance(item, NodeItem) and item.external
+        ]
         for wire in wires:
             self.disconnect_requested.emit(wire.target_key)
         for node in externals:
@@ -215,7 +230,9 @@ class GraphScene(QtWidgets.QGraphicsScene):
     def _on_selection(self) -> None:
         for item in self.selectedItems():
             if isinstance(item, NodeItem):
-                (self.external_selected if item.external else self.node_selected).emit(item.key)
+                (self.external_selected if item.external else self.node_selected).emit(
+                    item.key
+                )
                 return
 
     def select_key(self, key: Optional[str]) -> None:

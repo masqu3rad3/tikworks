@@ -8,19 +8,27 @@ def entry(instance_id="id1", **kwargs):
     kwargs.setdefault("module_type", "fkchain")
     kwargs.setdefault("name", "tail")
     kwargs.setdefault("side", "C")
-    kwargs.setdefault("guides", [
-        GuideRecord("root", position=(0.0, 0.0, 0.0)),
-        GuideRecord("segment", 0, position=(5.0, 0.0, 0.0), parent=("root", 0)),
-    ])
+    kwargs.setdefault(
+        "guides",
+        [
+            GuideRecord("root", position=(0.0, 0.0, 0.0)),
+            GuideRecord("segment", 0, position=(5.0, 0.0, 0.0), parent=("root", 0)),
+        ],
+    )
     return ModuleEntry(instance_id, **kwargs)
 
 
 def rendered(instance_id="id1", pairs=(("root", 0), ("segment", 0)), positions=None):
-    positions = positions or {("root", 0): (0.0, 0.0, 0.0), ("segment", 0): (5.0, 0.0, 0.0)}
+    positions = positions or {
+        ("root", 0): (0.0, 0.0, 0.0),
+        ("segment", 0): (5.0, 0.0, 0.0),
+    }
     parents = {("root", 0): None, ("segment", 0): (instance_id, "root", 0)}
     return [
         RenderedGuide(
-            instance_id=instance_id, role=role, index=index,
+            instance_id=instance_id,
+            role=role,
+            index=index,
             node=f"{role}{index}_guide",
             position=positions[(role, index)],
             parent=parents.get((role, index)),
@@ -62,7 +70,9 @@ def test_extra_rendered_guide_is_unexpected_and_structural():
 
 def test_moved_guide_is_drift_not_structural():
     """The rigger dragged the elbow. Capture must win; regenerate must not run."""
-    scene = rendered(positions={("root", 0): (0.0, 0.0, 0.0), ("segment", 0): (7.5, 1.0, 0.0)})
+    scene = rendered(
+        positions={("root", 0): (0.0, 0.0, 0.0), ("segment", 0): (7.5, 1.0, 0.0)}
+    )
     diff = reconcile(GuideDocument(modules=[entry()]), scene)
     module = diff.modules["id1"]
     assert module.drifted == [("segment", 0)]
@@ -73,11 +83,27 @@ def test_moved_guide_is_drift_not_structural():
 
 
 def test_changed_guide_attr_is_drift():
-    document = GuideDocument(modules=[entry(guides=[
-        GuideRecord("root", position=(0.0, 0.0, 0.0), attrs={"twistWeight": 0.5}),
-    ])])
-    scene = [RenderedGuide("id1", "root", 0, "root_guide",
-                           position=(0.0, 0.0, 0.0), attrs={"twistWeight": 0.9})]
+    document = GuideDocument(
+        modules=[
+            entry(
+                guides=[
+                    GuideRecord(
+                        "root", position=(0.0, 0.0, 0.0), attrs={"twistWeight": 0.5}
+                    ),
+                ]
+            )
+        ]
+    )
+    scene = [
+        RenderedGuide(
+            "id1",
+            "root",
+            0,
+            "root_guide",
+            position=(0.0, 0.0, 0.0),
+            attrs={"twistWeight": 0.9},
+        )
+    ]
     diff = reconcile(document, scene)
     assert diff.modules["id1"].drifted == [("root", 0)]
     assert diff.structural == []
@@ -93,15 +119,18 @@ def test_unposed_record_is_reported_so_capture_claims_it():
 
 
 def test_tiny_float_difference_is_not_drift():
-    scene = rendered(positions={("root", 0): (0.0, 0.0, 0.0), ("segment", 0): (5.0 + 1e-9, 0.0, 0.0)})
+    scene = rendered(
+        positions={("root", 0): (0.0, 0.0, 0.0), ("segment", 0): (5.0 + 1e-9, 0.0, 0.0)}
+    )
     diff = reconcile(GuideDocument(modules=[entry()]), scene)
     assert diff.modules["id1"].drifted == []
 
 
 def test_wrong_intra_module_parent_is_structural():
     scene = rendered()
-    scene[1] = RenderedGuide("id1", "segment", 0, "segment0_guide",
-                             position=(5.0, 0.0, 0.0), parent=None)
+    scene[1] = RenderedGuide(
+        "id1", "segment", 0, "segment0_guide", position=(5.0, 0.0, 0.0), parent=None
+    )
     diff = reconcile(GuideDocument(modules=[entry()]), scene)
     assert diff.modules["id1"].parent_wrong is True
     assert diff.structural == ["id1"]
@@ -109,10 +138,16 @@ def test_wrong_intra_module_parent_is_structural():
 
 def test_root_parent_follows_the_primary_input():
     """The DAG is a rendering of the primary input connection (spec 4.4)."""
-    document = GuideDocument(modules=[
-        entry("child", inputs={"root": "parent.end"}),
-        entry("parent", name="spine", guides=[GuideRecord("root", position=(0.0, 0.0, 0.0))]),
-    ])
+    document = GuideDocument(
+        modules=[
+            entry("child", inputs={"root": "parent.end"}),
+            entry(
+                "parent",
+                name="spine",
+                guides=[GuideRecord("root", position=(0.0, 0.0, 0.0))],
+            ),
+        ]
+    )
     scene = rendered("child") + [
         RenderedGuide("parent", "root", 0, "spine_root_guide", position=(0.0, 0.0, 0.0))
     ]

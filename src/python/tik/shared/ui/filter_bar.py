@@ -9,7 +9,6 @@ by ``tik.shared.ui.theme``.
 
 from __future__ import annotations
 
-
 from tik.shared.ui.Qt import QtCore, QtWidgets
 
 
@@ -25,7 +24,9 @@ class FilterModel(QtCore.QObject):
 
     def set_keywords(self, keywords) -> None:
         self._keywords = [
-            keyword.strip().lower() for keyword in keywords or () if keyword and keyword.strip()
+            keyword.strip().lower()
+            for keyword in keywords or ()
+            if keyword and keyword.strip()
         ]
         self.filter_changed.emit()
 
@@ -94,7 +95,9 @@ class FilterBar(QtWidgets.QWidget):
 
     filter_changed = QtCore.Signal()
 
-    def __init__(self, parent=None, placeholder: str = "Filter…  (Enter to keep a keyword)") -> None:
+    def __init__(
+        self, parent=None, placeholder: str = "Filter…  (Enter to keep a keyword)"
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("FilterBar")
         self._model = FilterModel(self)

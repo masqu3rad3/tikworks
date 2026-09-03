@@ -5,7 +5,6 @@ from maya import cmds
 
 import tik.trigger as trigger
 
-
 MARK = "import maya.cmds as cmds\ncmds.createNode('transform', name='{name}')"
 
 
@@ -33,7 +32,12 @@ def test_build_and_publish_runs_both_in_order_with_one_reset(tmp_path):
 
     rig = _session(tmp_path)
     results = rig.build(publish=True)
-    assert [item.path for item in results] == ["build_a", "build_b", "export_fbx", "export_maya"]
+    assert [item.path for item in results] == [
+        "build_a",
+        "build_b",
+        "export_fbx",
+        "export_maya",
+    ]
     assert [item.phase for item in results] == [BUILD, BUILD, PUBLISH, PUBLISH]
     # one reset only: the build's nodes are still there when publish runs
     assert cmds.objExists("build_a") and cmds.objExists("export_maya")

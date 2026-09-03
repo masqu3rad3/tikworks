@@ -12,7 +12,9 @@ from .palette import PaletteEntry
 
 
 class ShelfTile(QtWidgets.QToolButton):
-    def __init__(self, entry: PaletteEntry, color: str, mime_type: str, parent=None) -> None:
+    def __init__(
+        self, entry: PaletteEntry, color: str, mime_type: str, parent=None
+    ) -> None:
         super().__init__(parent)
         self.entry = entry
         self.mime_type = mime_type
@@ -20,7 +22,9 @@ class ShelfTile(QtWidgets.QToolButton):
         self.setIcon(glyph_icon(initials(entry.label), color, size=22))
         self.setIconSize(QtCore.QSize(22, 22))
         self.setText(entry.label)
-        self.setToolTip(f"{entry.key} · click: add after selection · drag: place anywhere")
+        self.setToolTip(
+            f"{entry.key} · click: add after selection · drag: place anywhere"
+        )
         self.setFixedWidth(68)
         self.setAutoRaise(True)
         self._press_pos: Optional[QtCore.QPoint] = None
@@ -31,7 +35,11 @@ class ShelfTile(QtWidgets.QToolButton):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
-        if self._press_pos is not None and (event.pos() - self._press_pos).manhattanLength() > QtWidgets.QApplication.startDragDistance():
+        if (
+            self._press_pos is not None
+            and (event.pos() - self._press_pos).manhattanLength()
+            > QtWidgets.QApplication.startDragDistance()
+        ):
             drag = QtGui.QDrag(self)
             mime = QtCore.QMimeData()
             mime.setData(self.mime_type, self.entry.key.encode("utf-8"))
@@ -49,7 +57,14 @@ class Shelf(QtWidgets.QWidget):
     add_requested = QtCore.Signal(str)  # key
     toggled = QtCore.Signal(bool)  # collapsed
 
-    def __init__(self, entries: Sequence[PaletteEntry], mime_type: str, parent=None, colors: Optional[dict] = None, title: str = "Actions") -> None:
+    def __init__(
+        self,
+        entries: Sequence[PaletteEntry],
+        mime_type: str,
+        parent=None,
+        colors: Optional[dict] = None,
+        title: str = "Actions",
+    ) -> None:
         super().__init__(parent)
         self.entries = list(entries)
         self.mime_type = mime_type
@@ -87,15 +102,23 @@ class Shelf(QtWidgets.QWidget):
             if entry.category != current:
                 current = entry.category
                 label = QtWidgets.QLabel(current.upper())
-                label.setStyleSheet(f"color: {theme.TEXT_DIM}; font-size: 9px; letter-spacing: 1px; margin-top: 6px;")
+                label.setStyleSheet(
+                    f"color: {theme.TEXT_DIM}; font-size: 9px; letter-spacing: 1px; margin-top: 6px;"
+                )
                 self.body_layout.addWidget(label)
                 holder = QtWidgets.QWidget()
                 grid_layout = QtWidgets.QGridLayout(holder)
                 grid_layout.setContentsMargins(0, 0, 0, 0)
                 grid_layout.setSpacing(2)
                 self.body_layout.addWidget(holder)
-            tile = ShelfTile(entry, self.colors.get(entry.category, theme.CATEGORY["utility"]), self.mime_type)
-            tile.clicked.connect(lambda _checked=False, key=entry.key: self.add_requested.emit(key))
+            tile = ShelfTile(
+                entry,
+                self.colors.get(entry.category, theme.CATEGORY["utility"]),
+                self.mime_type,
+            )
+            tile.clicked.connect(
+                lambda _checked=False, key=entry.key: self.add_requested.emit(key)
+            )
             count = grid_layout.count()
             grid_layout.addWidget(tile, count // 2, count % 2)
             self.tiles[entry.key] = tile

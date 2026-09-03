@@ -1,5 +1,7 @@
 """DAG (Directed Acyclic Graph) node wrapper for Maya."""
+
 from __future__ import annotations
+
 from typing import Any
 
 from maya import cmds

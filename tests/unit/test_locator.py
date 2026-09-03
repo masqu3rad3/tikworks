@@ -1,6 +1,8 @@
 from maya import cmds
+
 from tik.maya.types.locator import Locator
 from tik.maya.types.transform import Transform
+
 
 class TestLocator:
     def test_create_locator(self):
@@ -13,7 +15,7 @@ class TestLocator:
     def test_create_locator_with_name(self):
         loc = Locator.create(name="myLoc")
         assert loc.transform.name == "myLoc"
-        assert loc.name == "myLocShape" # Default Maya naming behavior
+        assert loc.name == "myLocShape"  # Default Maya naming behavior
 
     def test_init_from_existing(self):
         # Create using cmds directly
@@ -35,4 +37,3 @@ class TestLocator:
         # Verify the return type of create explicitly
         loc = Locator.create(name="returnTest")
         assert type(loc) is Locator
-

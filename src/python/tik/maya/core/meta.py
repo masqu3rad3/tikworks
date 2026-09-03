@@ -124,9 +124,7 @@ class MetaStore:
         return f"MetaStore({dict(self.items())!r})"
 
 
-def find_by_meta(
-    key: str, value: Any = _ANY, node_type: str | None = None
-) -> list:
+def find_by_meta(key: str, value: Any = _ANY, node_type: str | None = None) -> list:
     """Return wrapped nodes carrying meta ``key``.
 
     Args:

@@ -9,15 +9,14 @@ from tik.trigger.core.exceptions import SessionError
 from tik.trigger.guides import GuideScene
 from tik.trigger.session import Session
 
-
 pytestmark = pytest.mark.usefixtures("trigger_plugins")
 
 
 def test_a_session_hands_out_a_guide_scene_bound_to_itself():
     session = Session()
     scene = session.guides
-    assert scene is session.guides                      # built once
-    assert scene.document is session.document.guides    # the same object
+    assert scene is session.guides  # built once
+    assert scene.document is session.document.guides  # the same object
 
 
 def test_an_unbound_guide_scene_owns_its_own_document():
@@ -65,14 +64,20 @@ def test_snapshot_replaces_the_guides_in_one_undo_step():
     extra = session.guides.add("fkchain", side="C", name="extra", segments=1)
     # its guides never rendered again -- exactly what Snapshot must drop
     session.guides.delete_guides(extra.instance_id)
-    assert [entry.name for entry in session.document.guides.modules] == ["original", "extra"]
+    assert [entry.name for entry in session.document.guides.modules] == [
+        "original",
+        "extra",
+    ]
 
     document, _report = session.guides.snapshot_from_scene()
     session.snapshot_guides_from_scene(document)
     assert [entry.name for entry in session.document.guides.modules] == ["original"]
 
     session.undo()
-    assert [entry.name for entry in session.document.guides.modules] == ["original", "extra"]
+    assert [entry.name for entry in session.document.guides.modules] == [
+        "original",
+        "extra",
+    ]
 
 
 # --------------------------------------------------------------- the scene
@@ -130,9 +135,7 @@ def test_forcing_a_checkout_takes_the_scene_over():
     second = Session()
     second.checkout_guides(force=True)
     assert second.owns_scene_guides is True
-    assert first.guides.guide_nodes(
-        first.document.guides.modules[0].instance_id
-    ) == {}
+    assert first.guides.guide_nodes(first.document.guides.modules[0].instance_id) == {}
 
 
 def test_handing_over_captures_then_checks_out():

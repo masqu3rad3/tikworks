@@ -8,12 +8,13 @@ from tik.trigger.core.guide_document import GuideDocument, ModuleEntry, expand_g
 from tik.trigger.guides import regenerate, snapshot
 from tik.trigger.maya import tags
 
-
 pytestmark = pytest.mark.usefixtures("trigger_plugins")
 
 
 def chain_entry(segments=3, instance_id="id1", name="tail"):
-    entry = ModuleEntry(instance_id, "fkchain", name, "C", settings={"segments": segments})
+    entry = ModuleEntry(
+        instance_id, "fkchain", name, "C", settings={"segments": segments}
+    )
     expand_guides(entry, registry.get_module("fkchain").guides, segments)
     return entry
 
@@ -35,8 +36,9 @@ def test_regenerate_restores_stored_poses():
     entry = chain_entry(2)
     entry.guide("segment", 0).position = (12.0, 3.0, 0.0)
     joints = regenerate.regenerate(entry)
-    placed = cmds.xform(joints[("segment", 0)].long_name, query=True,
-                        worldSpace=True, translation=True)
+    placed = cmds.xform(
+        joints[("segment", 0)].long_name, query=True, worldSpace=True, translation=True
+    )
     assert placed == pytest.approx([12.0, 3.0, 0.0])
 
 
@@ -44,8 +46,9 @@ def test_unposed_guides_land_at_their_draw_guides_pose():
     """A guide the document has never seen posed must not collapse to the origin."""
     entry = chain_entry(2)
     joints = regenerate.regenerate(entry)
-    placed = cmds.xform(joints[("segment", 1)].long_name, query=True,
-                        worldSpace=True, translation=True)
+    placed = cmds.xform(
+        joints[("segment", 1)].long_name, query=True, worldSpace=True, translation=True
+    )
     assert placed != pytest.approx([0.0, 0.0, 0.0])
 
 
@@ -57,8 +60,9 @@ def test_growing_the_chain_keeps_the_poses_of_survivors():
     entry.settings["segments"] = 4
     expand_guides(entry, registry.get_module("fkchain").guides, 4)
     joints = regenerate.regenerate(entry)
-    kept = cmds.xform(joints[("segment", 0)].long_name, query=True,
-                      worldSpace=True, translation=True)
+    kept = cmds.xform(
+        joints[("segment", 0)].long_name, query=True, worldSpace=True, translation=True
+    )
     assert kept == pytest.approx([12.0, 3.0, 0.0])
     assert ("segment", 3) in joints
 
@@ -96,6 +100,7 @@ def test_regenerate_all_builds_producers_first():
     document = GuideDocument(modules=[child, producer])
     regenerate.regenerate_all(document)
     from tik.trigger.guides import nodes
+
     root = nodes.guide_nodes("child")[("root", 0)]
     assert root.parent.meta[tags.INSTANCE] == "producer"
 

@@ -16,7 +16,9 @@ def test_ribbon_module_is_registered():
 
 def test_output_names_follow_the_joint_count():
     assert RibbonModule.output_names({"joint_count": 3}) == (
-        "joint0", "joint1", "joint2",
+        "joint0",
+        "joint1",
+        "joint2",
     )
 
 
@@ -49,7 +51,9 @@ def test_bind_joints_are_real_and_outside_the_ribbon_group():
         joint = f"L_upper_joint{index}_jnt"
         assert cmds.objExists(joint)
         # driven by its ribbon joint, and not living in the non-inheriting group
-        assert cmds.listConnections(f"{joint}.translate", source=True, destination=False)
+        assert cmds.listConnections(
+            f"{joint}.translate", source=True, destination=False
+        )
         assert "ribbon_grp" not in (cmds.listRelatives(joint, parent=True) or [""])[0]
 
 

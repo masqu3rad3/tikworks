@@ -7,9 +7,9 @@ import pytest
 from maya import cmds
 from maya.api import OpenMaya
 
+from tik.trigger.core.exceptions import GuideError
 from tik.trigger.guides import nodes
 from tik.trigger.maya import tags
-from tik.trigger.core.exceptions import GuideError
 
 DATA = Path(__file__).resolve().parents[1] / "data"
 
@@ -26,7 +26,11 @@ def test_add_settings_attrs_export_import_roundtrip(guides, tmp_path):
     assert guides.document.module(arm.instance_id).settings["pole_pin"] is True
     with pytest.raises(AttributeError):
         arm.nope = 1
-    cmds.xform(guides.guide_node(tail.instance_id, "segment", 2).long_name, ws=True, t=(0, 3, -9))
+    cmds.xform(
+        guides.guide_node(tail.instance_id, "segment", 2).long_name,
+        ws=True,
+        t=(0, 3, -9),
+    )
 
     path = guides.export(tmp_path / "hero")
     assert path.suffix == ".trg"
@@ -57,7 +61,10 @@ def test_mirror_and_test_build(guides):
     assert mirrored.parent.instance_id == body.instance_id
     cmds.xform(arm.root.long_name, ws=True, t=(4, 12, 1))
     again = guides.mirror(arm)
-    assert again.instance_id == mirrored.instance_id and round(again.root.world_position.x, 3) == -4.0
+    assert (
+        again.instance_id == mirrored.instance_id
+        and round(again.root.world_position.x, 3) == -4.0
+    )
     with pytest.raises(GuideError):
         guides.mirror(body)
     report = guides.test_build(body, arm)
@@ -92,9 +99,7 @@ def test_duplicate_copies_everything_with_a_unique_name(guides):
 # never enters and (rx, -ry, -rz) is exact, not an approximation. That is why no
 # matrix machinery is needed for a world-YZ mirror.
 
-_REFLECT_YZ = OpenMaya.MMatrix(
-    [-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
-)
+_REFLECT_YZ = OpenMaya.MMatrix([-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1])
 
 
 def _world(node):
@@ -107,7 +112,9 @@ def _reflected(node):
 
 
 def _matrices_match(first, second, tolerance=1e-4):
-    return all(abs(actual - expected) < tolerance for actual, expected in zip(first, second))
+    return all(
+        abs(actual - expected) < tolerance for actual, expected in zip(first, second)
+    )
 
 
 def _mirrored_pair(guides, role, position, rotation=(0, 0, 0)):
@@ -184,6 +191,7 @@ def test_mirror_holds_for_every_rotation_order(guides, rotate_order):
 
 # ------------------------------------------------------------ spaces storage
 
+
 def test_guide_attrs_round_trip(guides, tmp_path):
     """A per-guide authored attribute survives export and import."""
     body = guides.add("base", name="body")
@@ -194,7 +202,8 @@ def test_guide_attrs_round_trip(guides, tmp_path):
 
     path = guides.export(tmp_path / "hero")
     record = next(
-        item for item in json.loads(path.read_text())["joints"]
+        item
+        for item in json.loads(path.read_text())["joints"]
         if item["name"] == node.name
     )
     assert abs(record["attrs"]["twistWeight"] - (-0.42)) < 1e-6
@@ -231,9 +240,16 @@ def test_record_without_attrs_still_imports():
     from tik.trigger.guides.format import make_record
 
     record = make_record(
-        name="a_guide", position=(0, 0, 0), rotation=(0, 0, 0),
-        joint_orient=(0, 0, 0), parent=None, side="C", module="twist",
-        role="twist", index=0, instance="abc123",
+        name="a_guide",
+        position=(0, 0, 0),
+        rotation=(0, 0, 0),
+        joint_orient=(0, 0, 0),
+        parent=None,
+        side="C",
+        module="twist",
+        role="twist",
+        index=0,
+        instance="abc123",
     )
     assert "attrs" not in record
     assert record.get("attrs", {}) == {}
@@ -260,7 +276,10 @@ def test_import_recreates_a_role_the_file_predates(guides, tmp_path):
     handles = guides.import_(path)
     node = guides.guide_node(handles[0].instance_id, "hand", 0)
     assert node is not None, "the declared role was not recreated"
-    assert all(abs(actual - expected) < 1e-4 for actual, expected in zip(node.world_position, expected))
+    assert all(
+        abs(actual - expected) < 1e-4
+        for actual, expected in zip(node.world_position, expected)
+    )
 
 
 def test_import_leaves_nothing_behind_when_it_fills_a_role(guides, tmp_path):

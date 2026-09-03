@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import tik.maya as tm
 from tik.trigger.core import (
-    FieldGroup,
     ChoiceField,
+    FieldGroup,
     FloatField,
     GuideAttr,
     GuideLayout,
@@ -64,7 +64,7 @@ class Twist(Module):
             "reference",
             optional=True,
             help="What a start-sourced twist is measured against; "
-                 "defaults to the base socket's parent",
+            "defaults to the base socket's parent",
         ),
     )
     outputs = ("twist0",)
@@ -77,22 +77,27 @@ class Twist(Module):
             GuideAttr(
                 WEIGHT_ATTR,
                 help="How much of the extracted twist this joint takes. "
-                     "Unclamped; negative reverses it.",
+                "Unclamped; negative reverses it.",
             ),
         )
     }
 
     count = IntField(3, min=1, max=20, help="Number of twist joints")
     twist_source = ChoiceField(
-        "end", choices=("start", "end"), label="Twist Source", group=EXTRACTION,
+        "end",
+        choices=("start", "end"),
+        label="Twist Source",
+        group=EXTRACTION,
         help="'end' follows the child (forearm); 'start' counters the "
-             "segment's own roll (upper arm)",
+        "segment's own roll (upper arm)",
     )
     axis = ChoiceField("auto", choices=("auto", *AXES))
     extraction = ChoiceField(
-        "auto", choices=SOURCES, group=EXTRACTION,
+        "auto",
+        choices=SOURCES,
+        group=EXTRACTION,
         help="'channel' is unbounded but needs an FK-style driver; "
-             "'matrix' works anywhere and wraps past 180 degrees",
+        "'matrix' works anywhere and wraps past 180 degrees",
     )
     spacing = FloatField(
         10.0, min=0.01, help="Default guide distance, base to end", group=GUIDES
@@ -177,7 +182,11 @@ class Twist(Module):
         base_socket = rig.socket("base", match=base_guide)
         end_socket = rig.socket("end", match=end_guide)
 
-        axis = self.axis if self.axis != "auto" else dominant_axis(base_guide, end_guide)[0]
+        axis = (
+            self.axis
+            if self.axis != "auto"
+            else dominant_axis(base_guide, end_guide)[0]
+        )
 
         if self.twist_source == "end":
             driver, reference = end_socket, base_socket
@@ -223,7 +232,9 @@ class Twist(Module):
             joint = rig.bind_joint(f"twist{index}", radius=0.5)
             joint["rotateOrder"].value = 0  # xyz -- roll innermost
 
-            local = tm.create_node("multMatrix", name=rig.name(f"twist{index}", "local"))
+            local = tm.create_node(
+                "multMatrix", name=rig.name(f"twist{index}", "local")
+            )
             slot["worldMatrix[0]"] >> local["matrixIn[0]"]
             parent_joint["worldInverseMatrix[0]"] >> local["matrixIn[1]"]
             decompose = tm.create_node(

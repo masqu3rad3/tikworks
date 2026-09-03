@@ -20,14 +20,24 @@ from .settings_panel import ActionSettingsPanel
 
 def action_entries(scope: str = BUILD) -> list[PaletteEntry]:
     return [
-        PaletteEntry(cls.action_type, cls.display_label(), getattr(cls, "category", "utility"), [cls.description()[:40]])
+        PaletteEntry(
+            cls.action_type,
+            cls.display_label(),
+            getattr(cls, "category", "utility"),
+            [cls.description()[:40]],
+        )
         for cls in registry.iter_actions(scope=scope)
     ]
 
 
 def tile_entries(scope: str = BUILD) -> list[TileEntry]:
     return [
-        TileEntry(cls.action_type, cls.display_label(), getattr(cls, "category", "utility"), cls.description()[:80])
+        TileEntry(
+            cls.action_type,
+            cls.display_label(),
+            getattr(cls, "category", "utility"),
+            cls.description()[:80],
+        )
         for cls in registry.iter_actions(scope=scope)
     ]
 
@@ -76,8 +86,14 @@ class SessionView(QtWidgets.QWidget):
     activity = QtCore.Signal(str)
     sub_tab_changed = QtCore.Signal(int)
 
-    def __init__(self, session: Session, parent=None, file_browser=None,
-                 designer_factory=None, events=None) -> None:
+    def __init__(
+        self,
+        session: Session,
+        parent=None,
+        file_browser=None,
+        designer_factory=None,
+        events=None,
+    ) -> None:
         super().__init__(parent)
         self.session = session
         self.model = PipelineModel(session, self, phase=BUILD)
@@ -151,7 +167,8 @@ class SessionView(QtWidgets.QWidget):
         tree.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         tree.setEditTriggers(
-            QtWidgets.QAbstractItemView.EditKeyPressed | QtWidgets.QAbstractItemView.SelectedClicked
+            QtWidgets.QAbstractItemView.EditKeyPressed
+            | QtWidgets.QAbstractItemView.SelectedClicked
         )
         tree.setUniformRowHeights(True)
         tree.expandAll()
@@ -183,7 +200,9 @@ class SessionView(QtWidgets.QWidget):
         }
         self.shelf_stack = QtWidgets.QStackedWidget()
         for phase in PHASES:
-            self.shelves[phase].activated.connect(lambda key: self.add_action(key, as_child=False))
+            self.shelves[phase].activated.connect(
+                lambda key: self.add_action(key, as_child=False)
+            )
             self.shelf_stack.addWidget(self.shelves[phase])
         self.shelf = self.shelves[BUILD]  # menus and tests reach for the focused one
         self.shelf_pane = pane("Actions", self.shelf_stack)
@@ -206,7 +225,9 @@ class SessionView(QtWidgets.QWidget):
         self.pipeline_splitter.setSizes([360, 120])
         self.splitter.addWidget(self.pipeline_splitter)
 
-        self.settings = ActionSettingsPanel(file_browser=file_browser, base_dir=lambda: self.session.directory)
+        self.settings = ActionSettingsPanel(
+            file_browser=file_browser, base_dir=lambda: self.session.directory
+        )
         self.splitter.addWidget(self.settings)
         self.splitter.setStretchFactor(0, 0)
         self.splitter.setStretchFactor(1, 1)
@@ -225,7 +246,9 @@ class SessionView(QtWidgets.QWidget):
         self.build_button = QtWidgets.QPushButton("▶  Build rig")
         self.build_button.setObjectName("PrimaryButton")
         self.publish_button = QtWidgets.QPushButton("Build && Publish")
-        self.publish_button.setToolTip("Build the rig from scratch, then run the publish actions")
+        self.publish_button.setToolTip(
+            "Build the rig from scratch, then run the publish actions"
+        )
         self.progress = QtWidgets.QProgressBar()
         self.progress.setTextVisible(False)
         self.progress.setFixedHeight(4)
@@ -251,7 +274,9 @@ class SessionView(QtWidgets.QWidget):
             tree = self.trees[phase]
             model = self.models[phase]
             tree.selectionModel().currentChanged.connect(
-                lambda current, _previous, phase=phase: self._on_current_changed(phase, current)
+                lambda current, _previous, phase=phase: self._on_current_changed(
+                    phase, current
+                )
             )
             tree.customContextMenuRequested.connect(
                 lambda point, phase=phase: self._context_menu(phase, point)
@@ -266,20 +291,37 @@ class SessionView(QtWidgets.QWidget):
         self.settings.edited.connect(self._on_settings_edited)
         self.settings.run_requested.connect(self.run_step)
         self.settings.save_requested.connect(self.save_from_scene)
-        self.settings.open_file_requested.connect(lambda path, _ext: self.open_guides_requested.emit(path))
+        self.settings.open_file_requested.connect(
+            lambda path, _ext: self.open_guides_requested.emit(path)
+        )
         self.build_button.clicked.connect(self.build)
         self.publish_button.clicked.connect(self.build_and_publish)
 
         for tree in self.trees.values():
             QtWidgets.QShortcut(QtGui.QKeySequence("Delete"), tree, self.remove_current)
-            QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+D"), tree, self.duplicate_current)
+            QtWidgets.QShortcut(
+                QtGui.QKeySequence("Ctrl+D"), tree, self.duplicate_current
+            )
         QtWidgets.QShortcut(QtGui.QKeySequence("F5"), self, self.refresh)
 
     def _connect_events(self) -> None:
         events = self.session.events
-        events.subscribe(STEP_STARTED, lambda path="", phase=BUILD, **_kw: self._step(path, "running", phase=phase))
-        events.subscribe(STEP_FINISHED, lambda path="", phase=BUILD, **_kw: self._step(path, "done", phase=phase))
-        events.subscribe(STEP_FAILED, lambda path="", error="", phase=BUILD, **_kw: self._step(path, "failed", error, phase))
+        events.subscribe(
+            STEP_STARTED,
+            lambda path="", phase=BUILD, **_kw: self._step(
+                path, "running", phase=phase
+            ),
+        )
+        events.subscribe(
+            STEP_FINISHED,
+            lambda path="", phase=BUILD, **_kw: self._step(path, "done", phase=phase),
+        )
+        events.subscribe(
+            STEP_FAILED,
+            lambda path="", error="", phase=BUILD, **_kw: self._step(
+                path, "failed", error, phase
+            ),
+        )
         events.subscribe("progress", self._on_progress)
 
     # ------------------------------------------------------------ helpers
@@ -399,11 +441,17 @@ class SessionView(QtWidgets.QWidget):
     # ------------------------------------------------------------ editing
     def show_palette(self) -> None:
         tree = self.current_tree
-        anchor = tree.visualRect(tree.currentIndex()) if tree.currentIndex().isValid() else tree.rect()
+        anchor = (
+            tree.visualRect(tree.currentIndex())
+            if tree.currentIndex().isValid()
+            else tree.rect()
+        )
         point = tree.viewport().mapToGlobal(anchor.bottomLeft() + QtCore.QPoint(20, 4))
         self.palette.popup(point)
 
-    def add_action(self, action_type: str, as_child: bool = False) -> Optional[ActionHandle]:
+    def add_action(
+        self, action_type: str, as_child: bool = False
+    ) -> Optional[ActionHandle]:
         view = self.session.view(self._focus_phase)
         current = self.current_handle()
         try:
@@ -468,9 +516,13 @@ class SessionView(QtWidgets.QWidget):
             # publish actions are never individually runnable
             if phase == BUILD:
                 menu.addAction("Run step", lambda: self.run_step(handle.path))
-                menu.addAction("Build until here", lambda: self.build_until(handle.path))
+                menu.addAction(
+                    "Build until here", lambda: self.build_until(handle.path)
+                )
                 menu.addSeparator()
-            menu.addAction("Disable" if handle.enabled else "Enable", self.toggle_current)
+            menu.addAction(
+                "Disable" if handle.enabled else "Enable", self.toggle_current
+            )
             if not handle.is_linked:
                 menu.addAction("Rename", self.rename_current)
                 menu.addAction("Duplicate", self.duplicate_current)
@@ -493,7 +545,9 @@ class SessionView(QtWidgets.QWidget):
         self._menu.exec_(tree.viewport().mapToGlobal(point))
 
     # ------------------------------------------------------------ running
-    def _step(self, path: str, status: str, error: str = "", phase: str = BUILD) -> None:
+    def _step(
+        self, path: str, status: str, error: str = "", phase: str = BUILD
+    ) -> None:
         self.models.get(phase, self.model).set_status(path, status, error)
         self.activity.emit(f"{status}: {path}" + (f" — {error}" if error else ""))
         QtWidgets.QApplication.processEvents()
@@ -546,8 +600,12 @@ class SessionView(QtWidgets.QWidget):
         action = registry.get_action(handle.type)(settings=handle.settings)
         from tik.trigger.core.action import ActionContext
 
-        ctx = ActionContext(session=self.session, events=self.session.events,
-                            base_dir=self.session.directory, path=path)
+        ctx = ActionContext(
+            session=self.session,
+            events=self.session.events,
+            base_dir=self.session.directory,
+            path=path,
+        )
         written = action.save_from_scene(ctx)
         self.session.events.log(f"{path}: saved {len(written)} file(s)")
         self.settings.set_handle(handle)

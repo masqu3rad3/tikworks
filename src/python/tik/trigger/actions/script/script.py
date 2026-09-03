@@ -25,6 +25,8 @@ class Script(Action):
                 path = Path(ctx.paths["directory"]) / path
             if not path.exists():
                 raise ActionExecutionError(f"Script not found: {path}")
-            exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), namespace)
+            exec(
+                compile(path.read_text(encoding="utf-8"), str(path), "exec"), namespace
+            )
         if self.code:
             exec(compile(self.code, "<trigger script>", "exec"), namespace)

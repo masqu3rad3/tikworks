@@ -4,9 +4,19 @@ Unit tests for the tik.maya to maya.cmds converter.
 Tests the conversion rules, helper expansion, and overall conversion accuracy.
 """
 
-
 from tik.maya.utils.converter import Converter, convert
-from tik.maya.utils.converter.rules import TransformCreateRule, JointCreateRule, MeshCreateRule, PlugGetRule, PlugSetRule, PlugConnectRule, PlugRshiftRule, TransformPropertySetRule, ResolveRule, RuleContext
+from tik.maya.utils.converter.rules import (
+    JointCreateRule,
+    MeshCreateRule,
+    PlugConnectRule,
+    PlugGetRule,
+    PlugRshiftRule,
+    PlugSetRule,
+    ResolveRule,
+    RuleContext,
+    TransformCreateRule,
+    TransformPropertySetRule,
+)
 
 
 class TestTransformCreateRule:
@@ -432,8 +442,7 @@ mesh.unlock_normals()
 
         assert len(result.unsupported_operations) > 0
         assert any(
-            "unlock_normals" in entry.message
-            for entry in result.unsupported_operations
+            "unlock_normals" in entry.message for entry in result.unsupported_operations
         )
 
     def test_report_summary(self):
@@ -490,7 +499,10 @@ node = Transform.create(name='test')
         converter = Converter(add_header=False)
         result = converter.convert(source)
 
-        assert '"""' not in result.converted_code or "Auto-generated" not in result.converted_code
+        assert (
+            '"""' not in result.converted_code
+            or "Auto-generated" not in result.converted_code
+        )
 
 
 class TestEdgeCases:
@@ -525,4 +537,3 @@ cmds.createNode('transform')
 
         # Original cmds code should be preserved
         assert "cmds.createNode('transform')" in result.converted_code
-

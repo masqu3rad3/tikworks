@@ -208,7 +208,9 @@ class VectorField(Field):
         try:
             items = tuple(float(item) for item in value)
         except (TypeError, ValueError):
-            raise FieldValidationError(self.name, value, "must be a sequence of numbers")
+            raise FieldValidationError(
+                self.name, value, "must be a sequence of numbers"
+            )
         if len(items) != self.size:
             raise FieldValidationError(self.name, value, f"must have {self.size} items")
         return items
@@ -218,9 +220,13 @@ class VectorField(Field):
         items = self.coerce(value)
         for item in items:
             if self.min is not None and item < self.min:
-                raise FieldValidationError(self.name, value, f"components must be >= {self.min}")
+                raise FieldValidationError(
+                    self.name, value, f"components must be >= {self.min}"
+                )
             if self.max is not None and item > self.max:
-                raise FieldValidationError(self.name, value, f"components must be <= {self.max}")
+                raise FieldValidationError(
+                    self.name, value, f"components must be <= {self.max}"
+                )
         return items
 
     def to_schema(self) -> dict:
@@ -254,7 +260,9 @@ class ListField(Field):
 
     type_name = "list"
 
-    def __init__(self, default=None, *, item_type: Optional[type] = None, **kwargs) -> None:
+    def __init__(
+        self, default=None, *, item_type: Optional[type] = None, **kwargs
+    ) -> None:
         self.item_type = item_type
         super().__init__(list(default) if default else [], **kwargs)
 
@@ -284,7 +292,9 @@ class NodeRefField(Field):
 
     type_name = "node"
 
-    def __init__(self, default: str = "", *, node_types: Sequence[str] = (), **kwargs) -> None:
+    def __init__(
+        self, default: str = "", *, node_types: Sequence[str] = (), **kwargs
+    ) -> None:
         self.node_types = list(node_types)
         super().__init__(default, **kwargs)
 
@@ -316,7 +326,9 @@ class FileField(Field):
     ) -> None:
         if mode not in ("open", "save", "dir"):
             raise ValueError("mode must be 'open', 'save' or 'dir'")
-        self.extensions = [ext if ext.startswith(".") else f".{ext}" for ext in extensions]
+        self.extensions = [
+            ext if ext.startswith(".") else f".{ext}" for ext in extensions
+        ]
         self.mode = mode
         super().__init__(default, **kwargs)
 
@@ -363,7 +375,9 @@ class TableField(Field):
 
     type_name = "table"
 
-    def __init__(self, default=None, *, columns: Sequence[Column] = (), **kwargs) -> None:
+    def __init__(
+        self, default=None, *, columns: Sequence[Column] = (), **kwargs
+    ) -> None:
         self.columns = tuple(columns)
         super().__init__([dict(row) for row in default] if default else [], **kwargs)
 
@@ -376,7 +390,9 @@ class TableField(Field):
         rows = []
         for row in value:
             if not isinstance(row, dict):
-                raise FieldValidationError(self.name, value, "each row must be a mapping")
+                raise FieldValidationError(
+                    self.name, value, "each row must be a mapping"
+                )
             unknown = set(row) - known
             if unknown:
                 raise FieldValidationError(
@@ -388,7 +404,8 @@ class TableField(Field):
                 if column.kind == "choice" and column.choices and entry:
                     if entry not in column.choices:
                         raise FieldValidationError(
-                            self.name, value,
+                            self.name,
+                            value,
                             f"'{column.name}' must be one of {list(column.choices)}",
                         )
                 filled[column.name] = entry

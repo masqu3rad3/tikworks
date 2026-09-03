@@ -1,7 +1,9 @@
 import pytest
 from maya import cmds
 from maya.api import OpenMaya
+
 from tik.maya.types.curve import Curve
+
 
 class TestCurveCreate:
     def test_create_curve_basic(self):
@@ -26,6 +28,7 @@ class TestCurveCreate:
 
         assert curve.transform.name == "myCurve"
         assert curve.name == "myCurveShape"
+
 
 class TestCurveCVs:
     def test_cvs_world_space(self):
@@ -64,6 +67,7 @@ class TestCurveCVs:
         curve = Curve.create(d=1, p=[(0, 0, 0), (1, 0, 0)])
         with pytest.raises(ValueError, match="Invalid space 'invalid'"):
             curve.cvs(space="invalid")
+
 
 class TestCurveLineWidth:
     def test_line_width_property(self):

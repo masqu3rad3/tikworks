@@ -58,7 +58,12 @@ class StubScene:
         has to speak it too. Built on demand from ``_instances`` -- this is a
         test stand-in, not a store.
         """
-        from tik.trigger.core.guide_document import GuideDocument, GuideRecord, ModuleEntry, SceneGroup
+        from tik.trigger.core.guide_document import (
+            GuideDocument,
+            GuideRecord,
+            ModuleEntry,
+            SceneGroup,
+        )
 
         if self._document_cache is not None:
             return self._document_cache
@@ -66,13 +71,20 @@ class StubScene:
         for instance_id in self._snapshot():
             instance = self._instances[instance_id]
             entry = ModuleEntry(
-                instance_id=instance.instance_id, module_type=instance.module_type,
-                name=instance.name, side=instance.side,
-                settings=dict(instance.settings), inputs=dict(instance.inputs),
+                instance_id=instance.instance_id,
+                module_type=instance.module_type,
+                name=instance.name,
+                side=instance.side,
+                settings=dict(instance.settings),
+                inputs=dict(instance.inputs),
                 guides=[
-                    GuideRecord(role=pose.role, index=pose.index,
-                                position=tuple(pose.position), rotation=tuple(pose.rotation),
-                                rotate_order=pose.rotate_order)
+                    GuideRecord(
+                        role=pose.role,
+                        index=pose.index,
+                        position=tuple(pose.position),
+                        rotation=tuple(pose.rotation),
+                        rotate_order=pose.rotate_order,
+                    )
                     for pose in instance.guides
                 ],
             )
@@ -135,7 +147,9 @@ class StubScene:
 
     def find(self, name: str, side: Optional[str] = None) -> Optional[GuideHandle]:
         for handle in self.instances():
-            if handle.name == name and (side is None or handle.side == Side.from_value(side)):
+            if handle.name == name and (
+                side is None or handle.side == Side.from_value(side)
+            ):
                 return handle
         return None
 
@@ -150,7 +164,9 @@ class StubScene:
 
     # ---------------------------------------------------------- authoring
     def unique_name(self, name: str, side: str) -> str:
-        taken = {handle.key for handle in self.instances()} | set(self.layout.get("scene_nodes", {}))
+        taken = {handle.key for handle in self.instances()} | set(
+            self.layout.get("scene_nodes", {})
+        )
         base = name.rstrip("0123456789") or name
         candidate, index = name, 1
         while instance_key(candidate, side) in taken:
@@ -158,7 +174,9 @@ class StubScene:
             index += 1
         return candidate
 
-    def add(self, module_type, side="C", name=None, parent=None, inputs=None, **settings) -> GuideHandle:
+    def add(
+        self, module_type, side="C", name=None, parent=None, inputs=None, **settings
+    ) -> GuideHandle:
         module_cls = registry.get_module(module_type)
         module = module_cls(name=name, side=side, settings=settings)
         module.name = self.unique_name(module.name, module.side.value)
@@ -166,10 +184,16 @@ class StubScene:
         if isinstance(parent, GuideHandle):
             parent_ref = ParentRef(parent.instance_id, parent.module_class.guides.root)
         resolved = dict(inputs or {})
-        if not resolved and parent_ref is not None and module.primary_input() is not None:
+        if (
+            not resolved
+            and parent_ref is not None
+            and module.primary_input() is not None
+        ):
             producer = self._instances.get(parent_ref.instance_id)
             if producer is not None:
-                output = registry.get_module(producer.module_type).output_at_role(parent_ref.role)
+                output = registry.get_module(producer.module_type).output_at_role(
+                    parent_ref.role
+                )
                 if output:
                     resolved = {module.primary_input().name: f"{producer.key}.{output}"}
         instance = module.to_instance(
@@ -197,10 +221,13 @@ class StubScene:
 
     def duplicate(self, handle: GuideHandle, name: Optional[str] = None) -> GuideHandle:
         instance = handle.instance
-        copy = handle.module_class(name=name or instance.name, side=instance.side,
-                                   settings=instance.settings)
+        copy = handle.module_class(
+            name=name or instance.name, side=instance.side, settings=instance.settings
+        )
         copy.name = self.unique_name(copy.name, copy.side.value)
-        created = copy.to_instance(guides=list(instance.guides), inputs=dict(instance.inputs))
+        created = copy.to_instance(
+            guides=list(instance.guides), inputs=dict(instance.inputs)
+        )
         self._instances[created.instance_id] = created
         self._invalidate()
         collapse = self.layout.get("collapse", {})
@@ -214,13 +241,17 @@ class StubScene:
         if handle.side is Side.CENTER:
             raise GuideError("Center guides cannot be mirrored.")
         target = handle.side.mirror
-        mirrored = {name: mirror_source(source, handle.side.value, target.value)
-                    for name, source in instance.inputs.items()}
+        mirrored = {
+            name: mirror_source(source, handle.side.value, target.value)
+            for name, source in instance.inputs.items()
+        }
         existing = self.find(instance.name, target.value)
         if existing is not None:
             self.set_inputs(existing.instance_id, mirrored)
             return existing
-        module = handle.module_class(name=instance.name, side=target, settings=instance.settings)
+        module = handle.module_class(
+            name=instance.name, side=target, settings=instance.settings
+        )
         created = module.to_instance(guides=list(instance.guides), inputs=mirrored)
         self._instances[created.instance_id] = created
         self._invalidate()
@@ -234,7 +265,9 @@ class StubScene:
 
     def reparent_guides(self, instance_id: str, parent: Optional[ParentRef]) -> None:
         # data only: the designer never parents joints, and the tests assert it
-        self.calls.append(("reparent", instance_id, parent.instance_id if parent else None))
+        self.calls.append(
+            ("reparent", instance_id, parent.instance_id if parent else None)
+        )
 
     def rename_instance(self, instance_id: str, name: str) -> None:
         self._instances[instance_id].name = name
@@ -250,7 +283,9 @@ class StubScene:
         self._invalidate()
 
     def set_inputs(self, instance_id: str, inputs: dict) -> None:
-        self._instances[instance_id].inputs = {key: value for key, value in inputs.items() if value}
+        self._instances[instance_id].inputs = {
+            key: value for key, value in inputs.items() if value
+        }
         self._invalidate()
 
     # -------------------------------------------------------- connections
@@ -273,9 +308,11 @@ class StubScene:
         handle.set_input(input_name, None)
 
     def connections(self) -> list[dict]:
-        return [{"input": f"{handle.key}.{name}", "source": source}
-                for handle in self.instances()
-                for name, source in handle.inputs.items()]
+        return [
+            {"input": f"{handle.key}.{name}", "source": source}
+            for handle in self.instances()
+            for name, source in handle.inputs.items()
+        ]
 
     # ------------------------------------------------------------ layout
     @property
@@ -300,7 +337,10 @@ class StubScene:
 
     # ------------------------------------------------------- scene nodes
     def scene_groups(self) -> dict[str, list[str]]:
-        return {name: list(nodes) for name, nodes in self.layout.get("scene_nodes", {}).items()}
+        return {
+            name: list(nodes)
+            for name, nodes in self.layout.get("scene_nodes", {}).items()
+        }
 
     def add_scene_group(self, name: str = "", nodes: Optional[list] = None) -> str:
         groups = self.scene_groups()
@@ -450,15 +490,22 @@ class StubScene:
             root_role = module_cls.guides.root
             for pose in instance.guides:
                 is_root = pose.role == root_role and pose.index == 0
-                records.append(make_record(
-                    name=f"{instance.key}_{pose.role}{pose.index}",
-                    position=pose.position, rotation=pose.rotation,
-                    joint_orient=(0, 0, 0), parent=None, side=instance.side,
-                    module=instance.module_type, role=pose.role, index=pose.index,
-                    instance=instance.instance_id,
-                    settings=dict(instance.settings) if is_root else None,
-                    module_name=instance.name if is_root else None,
-                ))
+                records.append(
+                    make_record(
+                        name=f"{instance.key}_{pose.role}{pose.index}",
+                        position=pose.position,
+                        rotation=pose.rotation,
+                        joint_orient=(0, 0, 0),
+                        parent=None,
+                        side=instance.side,
+                        module=instance.module_type,
+                        role=pose.role,
+                        index=pose.index,
+                        instance=instance.instance_id,
+                        settings=dict(instance.settings) if is_root else None,
+                        module_name=instance.name if is_root else None,
+                    )
+                )
         return records
 
     def import_guide_instances(self, guide_instances) -> list:
@@ -491,16 +538,29 @@ class StubScene:
         wanted = {handle.instance_id for handle in handles} or None
         records = self.export_guide_records(wanted)
         keys = {handle.key for handle in (handles or self.instances())}
-        connections = [item for item in self.connections() if item["input"].split(".")[0] in keys]
+        connections = [
+            item for item in self.connections() if item["input"].split(".")[0] in keys
+        ]
         layout = self.layout
         sources = {item["source"] for item in connections}
-        groups = {name: nodes for name, nodes in layout.get("scene_nodes", {}).items()
-                  if not handles or set(nodes) & sources}
+        groups = {
+            name: nodes
+            for name, nodes in layout.get("scene_nodes", {}).items()
+            if not handles or set(nodes) & sources
+        }
         wanted = keys | set(groups)
         designer = {
             "scene_nodes": groups,
-            "positions": {key: value for key, value in layout.get("positions", {}).items() if key in wanted},
-            "collapse": {key: value for key, value in layout.get("collapse", {}).items() if key in wanted},
+            "positions": {
+                key: value
+                for key, value in layout.get("positions", {}).items()
+                if key in wanted
+            },
+            "collapse": {
+                key: value
+                for key, value in layout.get("collapse", {}).items()
+                if key in wanted
+            },
         }
         designer = {name: value for name, value in designer.items() if value}
         return GuideFile(records, connections, designer=designer).save(file_path)

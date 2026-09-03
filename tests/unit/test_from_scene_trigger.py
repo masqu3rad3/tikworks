@@ -8,13 +8,13 @@ from tik.trigger.core.guide_document import ModuleEntry, expand_guides
 from tik.trigger.guides import from_scene, nodes, regenerate
 from tik.trigger.maya import tags
 
-
 pytestmark = pytest.mark.usefixtures("trigger_plugins")
 
 
 def drawn_chain(segments=2, instance_id="id1", name="tail", side="L", **settings):
-    entry = ModuleEntry(instance_id, "fkchain", name, side,
-                        settings={"segments": segments, **settings})
+    entry = ModuleEntry(
+        instance_id, "fkchain", name, side, settings={"segments": segments, **settings}
+    )
     expand_guides(entry, registry.get_module("fkchain").guides, segments)
     regenerate.regenerate(entry)
     return entry
@@ -35,7 +35,9 @@ def test_poses_survive_the_round_trip():
     joint = nodes.guide_nodes("id1")[("segment", 0)]
     cmds.xform(joint.long_name, worldSpace=True, translation=(5.0, 6.0, 7.0))
     document, _report = from_scene.read()
-    assert document.module("id1").guide("segment", 0).position == pytest.approx((5.0, 6.0, 7.0))
+    assert document.module("id1").guide("segment", 0).position == pytest.approx(
+        (5.0, 6.0, 7.0)
+    )
 
 
 def test_a_scene_without_breadcrumbs_still_recovers_the_modules():

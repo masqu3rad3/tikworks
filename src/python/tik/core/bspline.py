@@ -45,11 +45,17 @@ def basis(parameter: float, count: int, degree: int) -> list[float]:
             span_start, span_end = knot[index], knot[index + level]
             left = 0.0
             if span_end != span_start:
-                left = (parameter - span_start) / (span_end - span_start) * weights[index]
+                left = (
+                    (parameter - span_start) / (span_end - span_start) * weights[index]
+                )
             next_start, next_end = knot[index + 1], knot[index + level + 1]
             right = 0.0
             if next_end != next_start:
-                right = (next_end - parameter) / (next_end - next_start) * weights[index + 1]
+                right = (
+                    (next_end - parameter)
+                    / (next_end - next_start)
+                    * weights[index + 1]
+                )
             next_weights.append(left + right)
         weights = next_weights
     return weights

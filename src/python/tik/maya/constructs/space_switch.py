@@ -85,7 +85,9 @@ class SpaceSwitch:
     @property
     def labels(self) -> list[str]:
         """Return the enum labels, world first."""
-        listed = cmds.attributeQuery(self.attr.attr, node=self.attr.node.long_name, listEnum=True)
+        listed = cmds.attributeQuery(
+            self.attr.attr, node=self.attr.node.long_name, listEnum=True
+        )
         return listed[0].split(":") if listed else []
 
     @undo

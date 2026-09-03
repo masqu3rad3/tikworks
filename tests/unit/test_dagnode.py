@@ -2,8 +2,8 @@
 import pytest
 from maya import cmds
 
-from tik.maya.core.registry import resolve
 from tik.maya.core.dagnode import DagNode
+from tik.maya.core.registry import resolve
 
 
 def test_parent_none_for_world_transform():
@@ -236,7 +236,9 @@ def test_color_methods_handle_missing_attributes():
     # We do this because overrideEnabled is a built-in attribute on DAG nodes
     # and cannot be deleted, but we want to test the safety check.
     original_has_attr = node_wrapper.has_attr
-    node_wrapper.has_attr = lambda attr: False if attr == "overrideEnabled" else original_has_attr(attr)
+    node_wrapper.has_attr = lambda attr: (
+        False if attr == "overrideEnabled" else original_has_attr(attr)
+    )
 
     try:
         # Test get_color
@@ -313,7 +315,7 @@ def test_get_color_returns_raw_tuple_when_as_color_is_false():
     # Assuming Color object is iterable or comparable to tuple, we use approx on elements.
     retrieved_color = node.color
     # If it's a Color object, get its rgb component or cast to tuple if logical
-    if hasattr(retrieved_color, 'rgb'):
+    if hasattr(retrieved_color, "rgb"):
         vals = retrieved_color.rgb
     else:
         vals = retrieved_color
@@ -378,6 +380,7 @@ def test_set_color_with_color_object():
     assert cmds.getAttr(f"{node.name}.overrideRGBColors") is True
     stored_rgb = cmds.getAttr(f"{node.name}.overrideColorRGB")[0]
     assert pytest.approx(stored_rgb, rel=1e-5) == color_obj.rgb
+
 
 def test_dagnode_get_color_returns_none_when_override_disabled() -> None:
     cmds.file(new=True, force=True)

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import time
-import statistics
 import gc
+import statistics
+import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
@@ -81,22 +81,23 @@ class Benchmark:
 
         print(f"\n{'COMPARISON REPORT':^60}")
         print(f"{'=' * 60}")
-        print(
-            f"{'Name':<25} | {'Avg (ms)':<10} | {'Total (s)':<10} | {'Best':<10}")
+        print(f"{'Name':<25} | {'Avg (ms)':<10} | {'Total (s)':<10} | {'Best':<10}")
         print(f"{'-' * 60}")
 
         # Sort by average time (fastest first)
-        sorted_results = sorted(self.results.values(), key=lambda result: result.average)
+        sorted_results = sorted(
+            self.results.values(), key=lambda result: result.average
+        )
 
         for res in sorted_results:
             print(
-                f"{res.name:<25} | {res.average * 1000:<10.4f} | {res.total:<10.4f} | {res.best * 1000:<10.4f}")
+                f"{res.name:<25} | {res.average * 1000:<10.4f} | {res.total:<10.4f} | {res.best * 1000:<10.4f}"
+            )
         print(f"{'=' * 60}\n")
 
 
 class _BenchmarkContext:
-    def __init__(self, parent: Benchmark, name: str, iterations: int,
-                 warmup: int):
+    def __init__(self, parent: Benchmark, name: str, iterations: int, warmup: int):
         self.parent = parent
         self.name = name
         self.iterations = iterations
@@ -144,5 +145,3 @@ class _BenchmarkContext:
         self.parent.results[self.name] = result
         print(result)  # Immediate feedback
         return result
-
-

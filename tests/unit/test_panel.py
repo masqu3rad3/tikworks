@@ -1,7 +1,8 @@
 """Unit tests for the Panel construct."""
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 from maya import cmds
 
 from tik.maya.constructs.panel import Panel
@@ -12,13 +13,15 @@ from tik.maya.types.transform import Transform
 @pytest.fixture
 def mock_ui_cmds():
     """Mock Maya UI commands that fail in standalone mode."""
-    with patch('maya.cmds.window') as m_window, \
-         patch('maya.cmds.paneLayout') as m_paneLayout, \
-         patch('maya.cmds.modelPanel') as m_modelPanel, \
-         patch('maya.cmds.modelEditor') as m_modelEditor, \
-         patch('maya.cmds.showWindow') as m_showWindow, \
-         patch('maya.cmds.deleteUI') as m_deleteUI, \
-         patch('maya.cmds.getPanel') as m_getPanel:
+    with (
+        patch("maya.cmds.window") as m_window,
+        patch("maya.cmds.paneLayout") as m_paneLayout,
+        patch("maya.cmds.modelPanel") as m_modelPanel,
+        patch("maya.cmds.modelEditor") as m_modelEditor,
+        patch("maya.cmds.showWindow") as m_showWindow,
+        patch("maya.cmds.deleteUI") as m_deleteUI,
+        patch("maya.cmds.getPanel") as m_getPanel,
+    ):
 
         # Setup defaults
         m_window.return_value = "tik_panel_window"
@@ -31,7 +34,7 @@ def mock_ui_cmds():
             "modelEditor": m_modelEditor,
             "getPanel": m_getPanel,
             "deleteUI": m_deleteUI,
-            "showWindow": m_showWindow
+            "showWindow": m_showWindow,
         }
 
 
@@ -123,7 +126,11 @@ def test_inherit_panel_properties(mock_ui_cmds):
     # Mock modelEditor query on source panel
     def model_editor_side_effect(*args, **kwargs):
         # If querying source panel
-        if args and args[0] == "modelPanel1" and (kwargs.get("q") or kwargs.get("query")):
+        if (
+            args
+            and args[0] == "modelPanel1"
+            and (kwargs.get("q") or kwargs.get("query"))
+        ):
             if kwargs.get("grid"):
                 return True
             if kwargs.get("polymeshes"):
@@ -143,7 +150,11 @@ def test_inherit_panel_properties(mock_ui_cmds):
     grid_call_found = False
     for call in calls:
         # call is like call('tik_panel', e=True, grid=True)
-        if len(call.args) > 0 and call.args[0] == "tik_panel" and call.kwargs.get("grid") is True:
+        if (
+            len(call.args) > 0
+            and call.args[0] == "tik_panel"
+            and call.kwargs.get("grid") is True
+        ):
             grid_call_found = True
             break
 
@@ -178,8 +189,10 @@ def test_close(mock_ui_cmds):
         True if kwargs.get("exists") else "tik_panel"
     )
     with patch(
-        'maya.cmds.window',
-        side_effect=lambda *args, **kwargs: True if kwargs.get("exists") else "tik_panel_window"
+        "maya.cmds.window",
+        side_effect=lambda *args, **kwargs: (
+            True if kwargs.get("exists") else "tik_panel_window"
+        ),
     ):
         panel.close()
 
@@ -239,6 +252,7 @@ def test_resolve_camera_string(mock_ui_cmds):
     panel_trans = Panel(cam_trans, inherit=False)
     assert panel_trans._camera.name == cam_shape
 
+
 def test_all_camera_properties(mock_ui_cmds):
     """Test all camera properties."""
     cam_shape = cmds.createNode("camera")
@@ -252,7 +266,7 @@ def test_all_camera_properties(mock_ui_cmds):
         "display_film_pivot",
         "display_safe_action",
         "display_safe_title",
-        "overscan"
+        "overscan",
     ]
 
     for prop in props:
@@ -262,8 +276,8 @@ def test_all_camera_properties(mock_ui_cmds):
         # Convert prop name to camelCase for cmds
         # e.g. display_field_chart -> displayFieldChart
         # overscan -> overscan
-        parts = prop.split('_')
-        attr_name = parts[0] + ''.join(part.title() for part in parts[1:])
+        parts = prop.split("_")
+        attr_name = parts[0] + "".join(part.title() for part in parts[1:])
 
         # Special case for overscan which is float
         val = 1.5 if prop == "overscan" else True
@@ -295,18 +309,22 @@ def test_all_panel_properties(mock_ui_cmds):
         ("hud", "headsUpDisplay"),
         ("selection_highlighting", "selectionHiliteDisplay"),
         ("color_management_enabled", "cmEnabled"),
-        ("manipulators", "manipulators")
+        ("manipulators", "manipulators"),
     ]
 
     for prop, flag in props:
         # Mock return value for getter
         mock_ui_cmds["modelEditor"].return_value = True
         assert getattr(panel, prop) is True
-        mock_ui_cmds["modelEditor"].assert_called_with("tik_panel", query=True, **{flag: True})
+        mock_ui_cmds["modelEditor"].assert_called_with(
+            "tik_panel", query=True, **{flag: True}
+        )
 
         # Setter
         setattr(panel, prop, False)
-        mock_ui_cmds["modelEditor"].assert_called_with("tik_panel", edit=True, **{flag: False})
+        mock_ui_cmds["modelEditor"].assert_called_with(
+            "tik_panel", edit=True, **{flag: False}
+        )
 
 
 def test_fit_view_and_activate(mock_ui_cmds):
@@ -314,8 +332,10 @@ def test_fit_view_and_activate(mock_ui_cmds):
     cam_shape = cmds.createNode("camera")
     panel = Panel(cam_shape, inherit=False)
 
-    with patch('maya.cmds.viewFit') as m_viewFit, \
-         patch('maya.cmds.setFocus') as m_setFocus:
+    with (
+        patch("maya.cmds.viewFit") as m_viewFit,
+        patch("maya.cmds.setFocus") as m_setFocus,
+    ):
 
         panel.fit_view(all=True)
         m_setFocus.assert_called_with("tik_panel")
@@ -375,7 +395,7 @@ def test_panel_isolate_enable(mock_ui_cmds):
     cam_shape = cmds.createNode("camera")
     panel = Panel(cam_shape, inherit=False)
 
-    with patch('maya.cmds.isolateSelect') as m_isolateSelect:
+    with patch("maya.cmds.isolateSelect") as m_isolateSelect:
         panel.isolate.enable()
         m_isolateSelect.assert_called_with("tik_panel", state=True)
 
@@ -386,8 +406,10 @@ def test_panel_isolate_add(mock_ui_cmds):
     panel = Panel(cam_shape, inherit=False)
     cube = cmds.polyCube()[0]
 
-    with patch('maya.cmds.isolateSelect') as m_isolateSelect, \
-         patch('tik.maya.core.scene.select_nodes') as m_select_nodes:
+    with (
+        patch("maya.cmds.isolateSelect") as m_isolateSelect,
+        patch("tik.maya.core.scene.select_nodes") as m_select_nodes,
+    ):
 
         panel.isolate.add(cube)
 
@@ -402,8 +424,10 @@ def test_panel_isolate_remove(mock_ui_cmds):
     panel = Panel(cam_shape, inherit=False)
     cube = cmds.polyCube()[0]
 
-    with patch('maya.cmds.isolateSelect') as m_isolateSelect, \
-         patch('tik.maya.core.scene.select_nodes') as m_select_nodes:
+    with (
+        patch("maya.cmds.isolateSelect") as m_isolateSelect,
+        patch("tik.maya.core.scene.select_nodes") as m_select_nodes,
+    ):
 
         panel.isolate.remove(cube)
 
@@ -417,8 +441,10 @@ def test_panel_isolate_clear(mock_ui_cmds):
     cam_shape = cmds.createNode("camera")
     panel = Panel(cam_shape, inherit=False)
 
-    with patch('maya.cmds.isolateSelect') as m_isolateSelect, \
-         patch('maya.cmds.select') as m_select:
+    with (
+        patch("maya.cmds.isolateSelect") as m_isolateSelect,
+        patch("maya.cmds.select") as m_select,
+    ):
 
         panel.isolate.clear()
 
@@ -433,9 +459,11 @@ def test_panel_isolate_call(mock_ui_cmds):
     panel = Panel(cam_shape, inherit=False)
     cube = cmds.polyCube()[0]
 
-    with patch('maya.cmds.isolateSelect') as m_isolateSelect, \
-         patch('tik.maya.core.scene.select_nodes') as m_select_nodes, \
-         patch('maya.cmds.select') as m_select:
+    with (
+        patch("maya.cmds.isolateSelect") as m_isolateSelect,
+        patch("tik.maya.core.scene.select_nodes") as m_select_nodes,
+        patch("maya.cmds.select") as m_select,
+    ):
 
         panel.isolate(cube)
 
@@ -480,6 +508,7 @@ def test_inherit_panel_properties_no_candidates(mock_ui_cmds):
         if (kwargs.get("q") or kwargs.get("query")) and args[0] == "otherPanel":
             return "otherCamera"
         return "tik_panel"
+
     mock_ui_cmds["modelPanel"].side_effect = model_panel_side_effect
 
     panel = Panel(cam_shape, inherit=True)
@@ -494,13 +523,16 @@ def test_inherit_panel_properties_active_panel(mock_ui_cmds):
     """Test inherit prefers active panel."""
     cam_shape = cmds.createNode("camera")
 
-    mock_ui_cmds["getPanel"].side_effect = lambda **kwargs: "modelPanel2" if kwargs.get("withFocus") else ["modelPanel1", "modelPanel2"]
+    mock_ui_cmds["getPanel"].side_effect = lambda **kwargs: (
+        "modelPanel2" if kwargs.get("withFocus") else ["modelPanel1", "modelPanel2"]
+    )
 
     # Both panels match camera
     def model_panel_side_effect(*args, **kwargs):
         if kwargs.get("q") or kwargs.get("query"):
             return cam_shape
         return "tik_panel"
+
     mock_ui_cmds["modelPanel"].side_effect = model_panel_side_effect
 
     # Mock modelEditor to return specific value for active panel
@@ -510,6 +542,7 @@ def test_inherit_panel_properties_active_panel(mock_ui_cmds):
         if args and args[0] == "modelPanel1" and kwargs.get("grid"):
             return False
         return None
+
     mock_ui_cmds["modelEditor"].side_effect = model_editor_side_effect
 
     panel = Panel(cam_shape, inherit=True)
@@ -522,13 +555,16 @@ def test_inherit_panel_properties_multiple_candidates(mock_ui_cmds):
     """Test inherit picks last candidate if active not in list."""
     cam_shape = cmds.createNode("camera")
 
-    mock_ui_cmds["getPanel"].side_effect = lambda **kwargs: "otherPanel" if kwargs.get("withFocus") else ["modelPanel1", "modelPanel2"]
+    mock_ui_cmds["getPanel"].side_effect = lambda **kwargs: (
+        "otherPanel" if kwargs.get("withFocus") else ["modelPanel1", "modelPanel2"]
+    )
 
     # Both panels match camera
     def model_panel_side_effect(*args, **kwargs):
         if kwargs.get("q") or kwargs.get("query"):
             return cam_shape
         return "tik_panel"
+
     mock_ui_cmds["modelPanel"].side_effect = model_panel_side_effect
 
     # Mock modelEditor
@@ -538,6 +574,7 @@ def test_inherit_panel_properties_multiple_candidates(mock_ui_cmds):
         if args and args[0] == "modelPanel1" and kwargs.get("grid"):
             return False
         return None
+
     mock_ui_cmds["modelEditor"].side_effect = model_editor_side_effect
 
     panel = Panel(cam_shape, inherit=True)
@@ -557,13 +594,15 @@ def test_inherit_panel_properties_runtime_error(mock_ui_cmds):
         if (kwargs.get("q") or kwargs.get("query")) and args[0] == "modelPanel1":
             return cam_shape
         return "tik_panel"
+
     mock_ui_cmds["modelPanel"].side_effect = model_panel_side_effect
 
     # Mock modelEditor to raise RuntimeError on edit
     def model_editor_side_effect(*args, **kwargs):
         if kwargs.get("edit"):
             raise RuntimeError("Some error")
-        return True # query returns True
+        return True  # query returns True
+
     mock_ui_cmds["modelEditor"].side_effect = model_editor_side_effect
 
     # Should not crash
@@ -576,8 +615,10 @@ def test_panel_isolate_normalize_list(mock_ui_cmds):
     panel = Panel(cam_shape, inherit=False)
     cubes = [cmds.polyCube()[0], cmds.polyCube()[0]]
 
-    with patch('maya.cmds.isolateSelect') as m_isolateSelect, \
-         patch('tik.maya.core.scene.select_nodes') as m_select_nodes:
+    with (
+        patch("maya.cmds.isolateSelect") as m_isolateSelect,
+        patch("tik.maya.core.scene.select_nodes") as m_select_nodes,
+    ):
 
         panel.isolate.add(cubes)
 

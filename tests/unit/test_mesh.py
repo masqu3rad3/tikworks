@@ -46,8 +46,13 @@ def test_vertices_returns_points_in_requested_spaces_and_respects_translate():
     dz = pts_world[index].z - pts_object[index].z
     assert (dx, dy, dz) == pytest.approx((3.0, 4.0, 5.0), abs=1e-5)
 
-    assert (pts_object[index].x, pts_object[index].y, pts_object[index].z) == pytest.approx(
-        (pts_transform[index].x, pts_transform[index].y, pts_transform[index].z), abs=1e-6
+    assert (
+        pts_object[index].x,
+        pts_object[index].y,
+        pts_object[index].z,
+    ) == pytest.approx(
+        (pts_transform[index].x, pts_transform[index].y, pts_transform[index].z),
+        abs=1e-6,
     )
 
 
@@ -154,7 +159,9 @@ def test_vertex_colors_get_set_indices():
     other_colors = mesh.get_vertex_colors(indices=other_indices)
     assert len(other_colors) == 2
     for color_val in other_colors:
-        assert (color_val.r, color_val.g, color_val.b) == pytest.approx((0.0, 0.0, 0.0), abs=1e-5)
+        assert (color_val.r, color_val.g, color_val.b) == pytest.approx(
+            (0.0, 0.0, 0.0), abs=1e-5
+        )
 
 
 def test_vertex_colors_display_off():
@@ -209,7 +216,8 @@ def test_get_vertex_colors_empty_array_returns_none():
     This covers line 138 in mesh.py: if len(colors) == 0: return None
     We use module-level patching to mock the OpenMaya.MFnMesh class.
     """
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
+
     import tik.maya.types.mesh as mesh_module
 
     mesh = Mesh.create("polyPlane", name="tm_empty_colors_mesh", sx=1, sy=1)

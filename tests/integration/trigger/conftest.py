@@ -30,7 +30,9 @@ def build_context(scene):
     or module body can be driven directly.
     """
 
-    def _make(module_type: str = "base", name: str = "probe", side: str = "C", settings=None):
+    def _make(
+        module_type: str = "base", name: str = "probe", side: str = "C", settings=None
+    ):
         module = get_module(module_type)(name=name, side=side, settings=settings or {})
         instance = scene.create_guides(module)
         rig_root = build.ensure_rig_root("test")

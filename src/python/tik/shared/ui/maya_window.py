@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import logging
 
-from tik.shared.ui.qtmaya import get_main_window
 from tik.shared.ui.Qt import QtWidgets
+from tik.shared.ui.qtmaya import get_main_window
 
 LOG = logging.getLogger(__name__)
 

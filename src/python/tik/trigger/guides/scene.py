@@ -9,23 +9,24 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Optional
 
-import tik.maya as tm
 from maya import cmds
+
+import tik.maya as tm
 from tik.core.side import Side
 from tik.trigger.core import registry
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import GuideError
-from tik.trigger.core.manifest import instance_key
 from tik.trigger.core.guide_document import GuideDocument
+from tik.trigger.core.manifest import instance_key
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 from tik.trigger.maya import tags
 from tik.trigger.maya.rig import GuideDraft
 
 from . import nodes
+from . import regenerate as regenerate_module
 from .capture import capture
 from .format import GuideFile, make_record
 from .handle import GuideHandle, mirror_source
-from . import regenerate as regenerate_module
 from .regenerate import regenerate
 from .snapshot import snapshot
 
@@ -90,8 +91,10 @@ class GuideScene:
     def _module_for(self, entry):
         module_cls = registry.get_module(entry.module_type)
         return module_cls(
-            instance_id=entry.instance_id, name=entry.name,
-            side=entry.side, settings=dict(entry.settings),
+            instance_id=entry.instance_id,
+            name=entry.name,
+            side=entry.side,
+            settings=dict(entry.settings),
         )
 
     def _primary_input_name(self, entry) -> Optional[str]:
@@ -149,7 +152,8 @@ class GuideScene:
             if regenerate_stale and diff.structural:
                 with nodes.undo_chunk("Trigger lockstep redraw"):
                     stale = [
-                        entry for entry in regenerate_module.ordered(self.document)
+                        entry
+                        for entry in regenerate_module.ordered(self.document)
                         if entry.instance_id in set(diff.structural)
                     ]
                     for entry in stale:
@@ -206,7 +210,6 @@ class GuideScene:
             return source  # already a uuid
         return source
 
-
     # ------------------------------------------------------- scene access
     def find_instances(self, scope: Any = "scene") -> list[ModuleInstance]:
         """Build-time instances: identity and settings from the document, poses
@@ -244,13 +247,17 @@ class GuideScene:
         return SceneObserver(callback)
 
     # ---------------------------------------------------------- authoring
-    def create_guides(self, module, parent=None, poses=None, inputs=None) -> ModuleInstance:
+    def create_guides(
+        self, module, parent=None, poses=None, inputs=None
+    ) -> ModuleInstance:
         """Write a module's document entry, then render its guides."""
         from tik.trigger.core.guide_document import ModuleEntry, expand_guides
 
         if self.document.module(module.instance_id) is not None:
             raise GuideError(f"Module {module.instance_id} already exists.")
-        resolved = {name: self.source_as_id(source) for name, source in (inputs or {}).items()}
+        resolved = {
+            name: self.source_as_id(source) for name, source in (inputs or {}).items()
+        }
         if not resolved and parent is not None and module.primary_input() is not None:
             # convenience: drawing under another module's guide pre-fills the
             # primary input with a real value
@@ -259,11 +266,16 @@ class GuideScene:
                 parent_cls = registry.get_module(producer.module_type)
                 output = parent_cls.output_at_role(parent.role)
                 if output:
-                    resolved = {module.primary_input().name: f"{producer.instance_id}.{output}"}
+                    resolved = {
+                        module.primary_input().name: f"{producer.instance_id}.{output}"
+                    }
         entry = ModuleEntry(
-            instance_id=module.instance_id, module_type=module.module_type,
-            name=module.name, side=module.side.value,
-            settings=module.values(), inputs=resolved,
+            instance_id=module.instance_id,
+            module_type=module.module_type,
+            name=module.name,
+            side=module.side.value,
+            settings=module.values(),
+            inputs=resolved,
         )
         expand_guides(entry, module.guides, module.guide_count())
         for pose in poses or []:
@@ -316,7 +328,9 @@ class GuideScene:
             node = target
             while node is not None:
                 if node.meta.get(tags.INSTANCE) == instance_id:
-                    raise GuideError("Cannot parent guides under their own descendants.")
+                    raise GuideError(
+                        "Cannot parent guides under their own descendants."
+                    )
                 node = node.parent
         with nodes.undo_chunk("Trigger reparent guides"):
             root.parent = target
@@ -331,11 +345,14 @@ class GuideScene:
         with nodes.undo_chunk("Trigger set inputs"):
             entry.inputs = {
                 name: self.source_as_id(source)
-                for name, source in dict(inputs).items() if source
+                for name, source in dict(inputs).items()
+                if source
             }
             self._apply(entry)
 
-    def set_input(self, instance_id: str, input_name: str, source: Optional[str]) -> None:
+    def set_input(
+        self, instance_id: str, input_name: str, source: Optional[str]
+    ) -> None:
         """Connect or disconnect one input."""
         entry = self._entry(instance_id)
         with nodes.undo_chunk("Trigger set input"):
@@ -393,30 +410,44 @@ class GuideScene:
             module_cls = registry.get_module(instance.module_type)
             joints = nodes.guide_nodes(instance.instance_id)
             root_role = module_cls.guides.root
-            ordered = sorted(joints.items(), key=lambda item: (item[0][0] != root_role, item[0][0], item[0][1]))
+            ordered = sorted(
+                joints.items(),
+                key=lambda item: (item[0][0] != root_role, item[0][0], item[0][1]),
+            )
             for (role, index), node in ordered:
                 parent = node.parent
-                parent_name = parent.name if parent is not None and parent.meta.get(tags.KIND) == tags.GUIDE else None
+                parent_name = (
+                    parent.name
+                    if parent is not None and parent.meta.get(tags.KIND) == tags.GUIDE
+                    else None
+                )
                 is_root = role == root_role and index == 0
                 declared = module_cls.attrs_for_role(role)
                 attrs = {item.name: node[item.name].value for item in declared}
-                records.append(make_record(
-                    name=node.name,
-                    position=cmds.xform(node.long_name, query=True, worldSpace=True, translation=True),
-                    rotation=tuple(node.rotate),
-                    joint_orient=node.joint_orient,
-                    parent=parent_name,
-                    side=instance.side,
-                    module=instance.module_type,
-                    role=role,
-                    index=index,
-                    instance=instance.instance_id,
-                    radius=node.radius,
-                    color=node.color or 17,
-                    attrs=attrs,
-                    settings=dict(instance.settings) if is_root else None,
-                    module_name=instance.name if is_root else None,
-                ))
+                records.append(
+                    make_record(
+                        name=node.name,
+                        position=cmds.xform(
+                            node.long_name,
+                            query=True,
+                            worldSpace=True,
+                            translation=True,
+                        ),
+                        rotation=tuple(node.rotate),
+                        joint_orient=node.joint_orient,
+                        parent=parent_name,
+                        side=instance.side,
+                        module=instance.module_type,
+                        role=role,
+                        index=index,
+                        instance=instance.instance_id,
+                        radius=node.radius,
+                        color=node.color or 17,
+                        attrs=attrs,
+                        settings=dict(instance.settings) if is_root else None,
+                        module_name=instance.name if is_root else None,
+                    )
+                )
         return records
 
     def _draw_missing_roles(self, module, present_roles, holder) -> dict:
@@ -476,11 +507,16 @@ class GuideScene:
         with nodes.undo_chunk("Trigger import guides"):
             for guide_instance in guide_instances:
                 module_cls = registry.get_module(guide_instance.module_type)
-                module = module_cls(name=guide_instance.name, side=guide_instance.side,
-                                    settings=guide_instance.settings)
+                module = module_cls(
+                    name=guide_instance.name,
+                    side=guide_instance.side,
+                    settings=guide_instance.settings,
+                )
                 joints: dict = {}
                 for (role, index), record in guide_instance.joints.items():
-                    joint = tm.Joint.create(name=record["name"], radius=record.get("radius", 1.0))
+                    joint = tm.Joint.create(
+                        name=record["name"], radius=record.get("radius", 1.0)
+                    )
                     joint.world_position = record["position"]
                     joint.joint_orient = record.get("joint_orient", (0, 0, 0))
                     joint.rotate = tuple(record.get("rotation", (0, 0, 0)))
@@ -489,12 +525,19 @@ class GuideScene:
                         plug = joint[item.name].create(
                             "float", default=item.default, keyable=item.keyable
                         )
-                        plug.value = record.get("attrs", {}).get(item.name, item.default)
-                    joint.meta.update({
-                        tags.KIND: tags.GUIDE, tags.MODULE: module.module_type,
-                        tags.INSTANCE: module.instance_id, tags.ROLE: role,
-                        tags.INDEX: index, tags.SIDE: module.side.value,
-                    })
+                        plug.value = record.get("attrs", {}).get(
+                            item.name, item.default
+                        )
+                    joint.meta.update(
+                        {
+                            tags.KIND: tags.GUIDE,
+                            tags.MODULE: module.module_type,
+                            tags.INSTANCE: module.instance_id,
+                            tags.ROLE: role,
+                            tags.INDEX: index,
+                            tags.SIDE: module.side.value,
+                        }
+                    )
                     joints[(role, index)] = joint
                     created_nodes[record["name"]] = joint
                 # Roles this file predates, drawn where the module puts them.
@@ -510,9 +553,13 @@ class GuideScene:
                 for (role, index), record in guide_instance.joints.items():
                     joint = joints[(role, index)]
                     parent_name = record.get("parent")
-                    parent_node = created_nodes.get(parent_name) if parent_name else None
+                    parent_node = (
+                        created_nodes.get(parent_name) if parent_name else None
+                    )
                     joint.parent = parent_node if parent_node is not None else holder
-                    cmds.xform(joint.long_name, worldSpace=True, translation=record["position"])
+                    cmds.xform(
+                        joint.long_name, worldSpace=True, translation=record["position"]
+                    )
                 for key, info in extras.get(module.instance_id, {}).items():
                     # Parented after the recorded joints, so a filled role can
                     # hang off one of them.
@@ -553,8 +600,11 @@ class GuideScene:
         for guide_instance, module, _joints in built:
             module.name = self.unique_name(module.name, module.side.value)
             entry = ModuleEntry(
-                instance_id=module.instance_id, module_type=module.module_type,
-                name=module.name, side=module.side.value, settings=module.values(),
+                instance_id=module.instance_id,
+                module_type=module.module_type,
+                name=module.name,
+                side=module.side.value,
+                settings=module.values(),
             )
             expand_guides(entry, module.guides, module.guide_count())
             # radius/colour/orient aren't captured from the scene (spec 4.2 gap),
@@ -578,7 +628,8 @@ class GuideScene:
                     if "." in source and source.rpartition(".")[0] in original_keys
                     else source
                 )
-                for name, source in guide_instance.inputs.items() if source
+                for name, source in guide_instance.inputs.items()
+                if source
             }
         # the imported joints are the authored poses, so record them
         capture(document, snapshot())
@@ -594,8 +645,6 @@ class GuideScene:
             if ordered_entry.instance_id in imported_ids:
                 regenerate(ordered_entry, document)
 
-
-
     # ----------------------------------------------------------- listing
     def instances(self) -> list[GuideHandle]:
         return [GuideHandle(self, entry.instance_id) for entry in self.document.modules]
@@ -609,7 +658,9 @@ class GuideScene:
 
     def find(self, name: str, side: Optional[str] = None) -> Optional[GuideHandle]:
         for entry in self.document.modules:
-            if entry.name == name and (side is None or entry.side == Side.from_value(side).value):
+            if entry.name == name and (
+                side is None or entry.side == Side.from_value(side).value
+            ):
                 return GuideHandle(self, entry.instance_id)
         return None
 
@@ -673,7 +724,8 @@ class GuideScene:
             document.collapse.pop(instance_id, None)
             for entry in document.modules:
                 entry.inputs = {
-                    name: source for name, source in entry.inputs.items()
+                    name: source
+                    for name, source in entry.inputs.items()
                     if source.rpartition(".")[0] != instance_id
                 }
             self._touch()
@@ -704,7 +756,10 @@ class GuideScene:
     # ------------------------------------------------------ scene nodes
     def scene_groups(self) -> dict[str, list[str]]:
         """``{group name: [scene node, ...]}`` — arbitrary Maya nodes modules connect to."""
-        return {name: list(nodes) for name, nodes in self.layout.get("scene_nodes", {}).items()}
+        return {
+            name: list(nodes)
+            for name, nodes in self.layout.get("scene_nodes", {}).items()
+        }
 
     def add_scene_group(self, name: str = "", nodes: Optional[list[str]] = None) -> str:
         groups = self.scene_groups()
@@ -780,7 +835,9 @@ class GuideScene:
         source_key, _d, output = source.rpartition(".")
         producer = self.by_key(source_key) if source_key else None
         if producer is not None and output not in producer.outputs:
-            raise GuideError(f"'{source_key}' has no output '{output}' (has {list(producer.outputs)}).")
+            raise GuideError(
+                f"'{source_key}' has no output '{output}' (has {list(producer.outputs)})."
+            )
         handle.set_input(input_name, source)
 
     def disconnect(self, target: str) -> None:
@@ -798,7 +855,9 @@ class GuideScene:
                 found.append({"input": f"{entry.key}.{input_name}", "source": source})
         return found
 
-    def reparent(self, handle: GuideHandle, parent: Optional[GuideHandle | ParentRef]) -> None:
+    def reparent(
+        self, handle: GuideHandle, parent: Optional[GuideHandle | ParentRef]
+    ) -> None:
         """Attach ``handle`` to ``parent``, or detach it.
 
         This sets the *primary input*, not the DAG: guide parenting is a
@@ -832,10 +891,13 @@ class GuideScene:
             # each euler factor onto the same axis: Rx keeps its angle, Ry and Rz
             # negate. Conjugation distributes over the product, so this is exact
             # in any rotation order - provided the order travels with it.
-            GuidePose(pose.role, pose.index,
-                      (-pose.position[0], pose.position[1], pose.position[2]),
-                      (pose.rotation[0], -pose.rotation[1], -pose.rotation[2]),
-                      pose.rotate_order)
+            GuidePose(
+                pose.role,
+                pose.index,
+                (-pose.position[0], pose.position[1], pose.position[2]),
+                (pose.rotation[0], -pose.rotation[1], -pose.rotation[2]),
+                pose.rotate_order,
+            )
             for pose in instance.guides
         ]
         if existing is not None:
@@ -848,8 +910,10 @@ class GuideScene:
             existing_entry = existing.entry
             module_cls = registry.get_module(existing_entry.module_type)
             module = module_cls(
-                instance_id=existing_entry.instance_id, name=existing_entry.name,
-                side=existing_entry.side, settings=instance.settings,
+                instance_id=existing_entry.instance_id,
+                name=existing_entry.name,
+                side=existing_entry.side,
+                settings=instance.settings,
             )
             existing_entry.settings = module.values()
             expand_guides(existing_entry, module.guides, module.guide_count())
@@ -857,7 +921,8 @@ class GuideScene:
                 name: self.source_as_id(
                     mirror_source(source, handle.side.value, target_side.value)
                 )
-                for name, source in instance.inputs.items() if source
+                for name, source in instance.inputs.items()
+                if source
             }
             for pose in poses:
                 record = existing_entry.guide(pose.role, pose.index)
@@ -868,17 +933,28 @@ class GuideScene:
             self._touch()
             regenerate(existing_entry, self.document)
             return existing
-        module = handle.module_class(name=instance.name, side=target_side, settings=instance.settings)
-        mirrored_inputs = {name: mirror_source(source, handle.side.value, target_side.value) for name, source in instance.inputs.items()}
-        self.create_guides(module, parent=instance.parent, poses=poses, inputs=mirrored_inputs)
+        module = handle.module_class(
+            name=instance.name, side=target_side, settings=instance.settings
+        )
+        mirrored_inputs = {
+            name: mirror_source(source, handle.side.value, target_side.value)
+            for name, source in instance.inputs.items()
+        }
+        self.create_guides(
+            module, parent=instance.parent, poses=poses, inputs=mirrored_inputs
+        )
         return GuideHandle(self, module.instance_id)
 
     def duplicate(self, handle: GuideHandle, name: Optional[str] = None) -> GuideHandle:
         """Copy a module: same type/side/settings/inputs/poses, a unique name (``arm`` -> ``arm1``)."""
         instance = handle.instance
-        module = handle.module_class(name=name or instance.name, side=instance.side, settings=instance.settings)
+        module = handle.module_class(
+            name=name or instance.name, side=instance.side, settings=instance.settings
+        )
         module.name = self.unique_name(module.name, module.side.value)
-        self.create_guides(module, poses=list(instance.guides), inputs=dict(instance.inputs))
+        self.create_guides(
+            module, poses=list(instance.guides), inputs=dict(instance.inputs)
+        )
         collapse = self.document.collapse
         if handle.instance_id in collapse:
             collapse[module.instance_id] = collapse[handle.instance_id]
@@ -901,16 +977,29 @@ class GuideScene:
         wanted = {handle.instance_id for handle in handles} or None
         records = self.export_guide_records(wanted)
         keys = {handle.key for handle in (handles or self.instances())}
-        connections = [item for item in self.connections() if item["input"].split(".")[0] in keys]
+        connections = [
+            item for item in self.connections() if item["input"].split(".")[0] in keys
+        ]
         layout = self.layout
         sources = {item["source"] for item in connections}
-        groups = {name: nodes for name, nodes in layout.get("scene_nodes", {}).items()
-                  if not handles or set(nodes) & sources}
+        groups = {
+            name: nodes
+            for name, nodes in layout.get("scene_nodes", {}).items()
+            if not handles or set(nodes) & sources
+        }
         wanted = keys | set(groups)
         designer = {
             "scene_nodes": groups,
-            "positions": {key: value for key, value in layout.get("positions", {}).items() if key in wanted},
-            "collapse": {key: value for key, value in layout.get("collapse", {}).items() if key in wanted},
+            "positions": {
+                key: value
+                for key, value in layout.get("positions", {}).items()
+                if key in wanted
+            },
+            "collapse": {
+                key: value
+                for key, value in layout.get("collapse", {}).items()
+                if key in wanted
+            },
         }
         designer = {name: value for name, value in designer.items() if value}
         return GuideFile(records, connections, designer=designer).save(file_path)
@@ -919,7 +1008,10 @@ class GuideScene:
         guide_file = GuideFile.load(file_path)
         instances = guide_file.instances()
         if guide_file.unknown:
-            self.events.log(f"Guide file has unknown module types: {guide_file.unknown}", level="warning")
+            self.events.log(
+                f"Guide file has unknown module types: {guide_file.unknown}",
+                level="warning",
+            )
         if reset:
             self.clear()
             self.set_layout({})

@@ -1,6 +1,7 @@
 # python
-import pytest
 from unittest.mock import patch
+
+import pytest
 from maya import cmds
 
 from tik.maya.core.shapenode import ShapeNode
@@ -190,7 +191,9 @@ def test_shapenode_with_instanced_shape_resolves_correct_transform_robust():
     # But listing relatives of the new parent is more reliable to find the specific path we just created
     children = cmds.listRelatives(g2, shapes=True, fullPath=True)
     if not children:
-        pytest.fail(f"Group2 has no children. Instancing failed. s_long: {s_long}, g2: {g2}")
+        pytest.fail(
+            f"Group2 has no children. Instancing failed. s_long: {s_long}, g2: {g2}"
+        )
 
     path2 = children[0]
 
@@ -258,4 +261,3 @@ def test_parent_property_returns_none_when_fullpath_empty():
         mock_instance.fullPathName.return_value = ""
 
         assert sn.parent is None
-

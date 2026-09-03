@@ -1,6 +1,5 @@
 """Shared UI kit: versioned field, tile grid, collapsible, scene watcher, tool window."""
 
-
 from tik.shared.ui.collapsible import CollapsibleGroup
 from tik.shared.ui.maya_window import HAS_MAYA, MayaToolWindow
 from tik.shared.ui.Qt import QtWidgets
@@ -33,7 +32,10 @@ def test_versioned_field_states_and_stepping(qapp, tmp_path):
 
 
 def test_tile_grid_reflows(qapp):
-    entries = [TileEntry(f"a{index}", f"Action {index}", "build" if index < 4 else "deform") for index in range(6)]
+    entries = [
+        TileEntry(f"a{index}", f"Action {index}", "build" if index < 4 else "deform")
+        for index in range(6)
+    ]
     grid = TileGrid(entries, "application/x-test", columns_hint=2)
     grid.resize(400, 300)
     grid.show()
@@ -68,7 +70,11 @@ def test_scene_watcher_debounces_and_guards(qapp):
         installed.append(event)
         return len(installed)
 
-    watcher = SceneWatcher(lambda event: calls.append(event), install_job=install, kill_job=lambda job: None)
+    watcher = SceneWatcher(
+        lambda event: calls.append(event),
+        install_job=install,
+        kill_job=lambda job: None,
+    )
     watcher.install()
     assert installed and watcher.jobs
     watcher.notify("SelectionChanged")

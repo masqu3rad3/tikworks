@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
+
 from tik.trigger.core.ordering import dependency_order
 
 SCHEMA_VERSION = 3
@@ -66,7 +67,9 @@ class ModuleInstance:
     settings: dict = field(default_factory=dict)
     guides: list[GuidePose] = field(default_factory=list)
     parent: Optional[ParentRef] = None
-    inputs: dict = field(default_factory=dict)  # input name -> "<key>.<output>" | scene node
+    inputs: dict = field(
+        default_factory=dict
+    )  # input name -> "<key>.<output>" | scene node
 
     @property
     def key(self) -> str:
@@ -145,7 +148,9 @@ class RigDocument:
             schema=SCHEMA_VERSION,
             meta=dict(data.get("meta", {})),
             guides=[ModuleInstance.from_dict(item) for item in data.get("guides", [])],
-            actions=[ActionInstance.from_dict(item) for item in data.get("actions", [])],
+            actions=[
+                ActionInstance.from_dict(item) for item in data.get("actions", [])
+            ],
         )
 
 
@@ -166,12 +171,16 @@ def order_instances(instances: list[ModuleInstance]) -> list[ModuleInstance]:
         return [parent] if parent is not None else []
 
     return dependency_order(
-        instances, parents, lambda instance: instance.instance_id,
+        instances,
+        parents,
+        lambda instance: instance.instance_id,
         cycle_error=lambda instance: f"Cyclic parenting at '{instance.name}'.",
     )
 
 
-def order_by_connections(instances: list[ModuleInstance], inputs_for) -> list[ModuleInstance]:
+def order_by_connections(
+    instances: list[ModuleInstance], inputs_for
+) -> list[ModuleInstance]:
     """Return instances with producers before consumers.
 
     Bind joints must be created in their final hierarchy position, so a
@@ -203,7 +212,9 @@ def order_by_connections(instances: list[ModuleInstance], inputs_for) -> list[Mo
         return found
 
     return dependency_order(
-        instances, producers, lambda instance: instance.instance_id,
+        instances,
+        producers,
+        lambda instance: instance.instance_id,
         cycle_error=lambda instance: f"Cyclic module connection at '{instance.name}'.",
     )
 

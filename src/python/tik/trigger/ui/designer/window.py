@@ -84,8 +84,14 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
     # so Qt's meta-object system actually sees it.
     auto_sync_changed = QtCore.Signal(bool)
 
-    def __init__(self, parent=None, events=None, file_browser=None, binding_adapter=None,
-                 scene=None) -> None:
+    def __init__(
+        self,
+        parent=None,
+        events=None,
+        file_browser=None,
+        binding_adapter=None,
+        scene=None,
+    ) -> None:
         super().__init__(parent)
         # ``scene`` is an injection point for tests; normally the designer owns
         # the scene's guides.
@@ -102,7 +108,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.last_guide_file: str = ""
         self.bindings = BindingManager()
         self._current: Optional[GuideHandle] = None
-        self._multi: list[GuideHandle] = []  # every selected module when they share a type
+        self._multi: list[GuideHandle] = (
+            []
+        )  # every selected module when they share a type
         self._external: Optional[str] = None  # selected scene-nodes group (graph only)
         self._module_obj = None
         self._input_rows: dict[str, InputRow] = {}
@@ -137,7 +145,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         # would then mark a freshly loaded, untouched session "modified"
         # before the rigger did anything. refresh() below is enough to paint
         # the document that is already there.
-        stored = QtCore.QSettings("tikworks", "trigger").value("designer/auto_sync", True)
+        stored = QtCore.QSettings("tikworks", "trigger").value(
+            "designer/auto_sync", True
+        )
         self._apply_auto_sync(stored not in (False, "false", "0", 0))
         self.refresh()
 
@@ -156,7 +166,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         left_layout.addWidget(header)
         self.side_combo = QtWidgets.QComboBox()
         self.side_combo.addItems(SIDES)
-        self.side_combo.setToolTip("Side of the modules you add next (Both = L and R, Auto = follow the selected module)")
+        self.side_combo.setToolTip(
+            "Side of the modules you add next (Both = L and R, Auto = follow the selected module)"
+        )
         left_layout.addWidget(self.side_combo)
         modules_header = QtWidgets.QLabel("MODULES")
         modules_header.setObjectName("PaneHeader")
@@ -167,7 +179,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.splitter.addWidget(left)
 
         self.tree = GuideTree()
-        self.tree_filter = FilterBar(placeholder="Filter modules…  (Enter to keep a keyword)")
+        self.tree_filter = FilterBar(
+            placeholder="Filter modules…  (Enter to keep a keyword)"
+        )
         tree_holder = QtWidgets.QWidget()
         tree_layout = QtWidgets.QVBoxLayout(tree_holder)
         tree_layout.setContentsMargins(0, 0, 0, 0)
@@ -244,20 +258,28 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.graph.palette_requested.connect(self.show_palette)
         self.graph.selection_changed.connect(self._on_graph_selection)
         self.graph.external_selection_changed.connect(self._on_external_selection)
-        self.graph.node_menu_requested.connect(lambda _key, pos: self.module_menu().exec(pos))
+        self.graph.node_menu_requested.connect(
+            lambda _key, pos: self.module_menu().exec(pos)
+        )
         self.graph.edited.connect(self.refresh)
         self.action_bar.select_requested.connect(self.select_current)
         self.action_bar.mirror_requested.connect(self.mirror_current)
         self.action_bar.build_selected_requested.connect(lambda: self.test_build())
-        self.action_bar.build_all_requested.connect(lambda: self.test_build(all_modules=True))
+        self.action_bar.build_all_requested.connect(
+            lambda: self.test_build(all_modules=True)
+        )
         self.action_bar.sync_requested.connect(self.sync_now)
         self.action_bar.auto_sync_toggled.connect(self.set_auto_sync)
         self.name_edit.editingFinished.connect(self._rename_current)
         self.form.changed.connect(self._on_setting_changed)
-        self.form.error.connect(lambda _name, message: self.events.log(message, level="warning"))
+        self.form.error.connect(
+            lambda _name, message: self.events.log(message, level="warning")
+        )
         self.scene_panel.changed.connect(self._on_scene_nodes_changed)
         # on the designer, not the tree: Delete has to work from the graph too
-        delete = QtWidgets.QShortcut(QtGui.QKeySequence("Delete"), self, self.delete_current)
+        delete = QtWidgets.QShortcut(
+            QtGui.QKeySequence("Delete"), self, self.delete_current
+        )
         delete.setContext(QtCore.Qt.WidgetWithChildrenShortcut)
 
     def _action(self, menu, text, slot, shortcut=None, checkable=False):
@@ -277,6 +299,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         the process down. The verbs live on the window's Guides menu, which
         dispatches to whichever designer is in front.
         """
+
         def toggle(text, slot, shortcut=None):
             action = QtWidgets.QAction(text, self)
             action.setCheckable(True)
@@ -288,14 +311,22 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             return action
 
         self.tree_action = toggle(
-            "Tree", lambda: self.set_pane_visible(self.tree_pane, self.tree_action.isChecked())
+            "Tree",
+            lambda: self.set_pane_visible(self.tree_pane, self.tree_action.isChecked()),
         )
         self.graph_action = toggle(
-            "Graph", lambda: self.set_pane_visible(self.graph_pane, self.graph_action.isChecked())
+            "Graph",
+            lambda: self.set_pane_visible(
+                self.graph_pane, self.graph_action.isChecked()
+            ),
         )
-        self.grid_action = toggle("Grid", lambda: self.graph.set_grid(self.grid_action.isChecked()), "G")
+        self.grid_action = toggle(
+            "Grid", lambda: self.graph.set_grid(self.grid_action.isChecked()), "G"
+        )
         self.snap_action = toggle(
-            "Snap to Grid", lambda: self.graph.set_snap(self.snap_action.isChecked()), "Shift+G"
+            "Snap to Grid",
+            lambda: self.graph.set_snap(self.snap_action.isChecked()),
+            "Shift+G",
         )
         for action in (self.grid_action, self.snap_action):
             self.graph.addAction(action)
@@ -314,7 +345,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         menu.addAction("Sever connections", self.sever_current)
         menu.addAction("Disconnect primary input", self.disconnect_primary)
         menu.addSeparator()
-        menu.addAction("Rename", lambda: (self.name_edit.setFocus(), self.name_edit.selectAll()))
+        menu.addAction(
+            "Rename", lambda: (self.name_edit.setFocus(), self.name_edit.selectAll())
+        )
         menu.addAction("Delete", self.delete_current)
         for action in menu.actions():
             if not action.isSeparator():
@@ -378,12 +411,18 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             return
         self._syncing = True
         try:
-            keep = [handle.instance_id for handle in (self._multi or ([self._current] if self._current else []))]
+            keep = [
+                handle.instance_id
+                for handle in (
+                    self._multi or ([self._current] if self._current else [])
+                )
+            ]
             handles = self.guides.instances()
             by_key = {handle.key: handle for handle in handles}
             self._clear_tree()
             items: dict[str, QtWidgets.QTreeWidgetItem] = {}
             pending = list(handles)
+
             # parent in the tree = the primary input's producer
             def parent_key(handle):
                 primary = handle.module_class.primary_input()
@@ -404,14 +443,32 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                     module_cls = handle.module_class
                     label = module_cls.display_label()
                     if module_cls.guides.multi:
-                        count = sum(1 for role, _index in entry.pairs if role == module_cls.guides.multi)
+                        count = sum(
+                            1
+                            for role, _index in entry.pairs
+                            if role == module_cls.guides.multi
+                        )
                         label = f"{label} · {count}"
                     primary = module_cls.primary_input()
-                    primary_text = handle.inputs.get(primary.name, "") if primary else ""
-                    item = QtWidgets.QTreeWidgetItem([handle.key, label, entry.side, primary_text or "—"])
+                    primary_text = (
+                        handle.inputs.get(primary.name, "") if primary else ""
+                    )
+                    item = QtWidgets.QTreeWidgetItem(
+                        [handle.key, label, entry.side, primary_text or "—"]
+                    )
                     item.setData(0, QtCore.Qt.UserRole, handle.instance_id)
-                    item.setIcon(0, glyph_icon(initials(module_cls.display_label()), theme.SIDE.get(entry.side, theme.SIDE["C"])))
-                    item.setFlags(item.flags() | QtCore.Qt.ItemIsDragEnabled | QtCore.Qt.ItemIsDropEnabled)
+                    item.setIcon(
+                        0,
+                        glyph_icon(
+                            initials(module_cls.display_label()),
+                            theme.SIDE.get(entry.side, theme.SIDE["C"]),
+                        ),
+                    )
+                    item.setFlags(
+                        item.flags()
+                        | QtCore.Qt.ItemIsDragEnabled
+                        | QtCore.Qt.ItemIsDropEnabled
+                    )
                     if p_key:
                         items[by_key[p_key].instance_id].addChild(item)
                     else:
@@ -419,7 +476,14 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                     items[handle.instance_id] = item
                 if len(remaining) == len(pending):
                     for handle in remaining:  # cycles / unresolved: flat
-                        item = QtWidgets.QTreeWidgetItem([handle.key, handle.module_class.display_label(), handle.side.value, "?"])
+                        item = QtWidgets.QTreeWidgetItem(
+                            [
+                                handle.key,
+                                handle.module_class.display_label(),
+                                handle.side.value,
+                                "?",
+                            ]
+                        )
                         item.setData(0, QtCore.Qt.UserRole, handle.instance_id)
                         self.tree.addTopLevelItem(item)
                         items[handle.instance_id] = item
@@ -429,8 +493,16 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.apply_tree_filter()
             self.graph.rebuild()
             connections = self.guides.connections()
-            externals = [item["source"] for item in connections if split_source(item["source"])[0] not in by_key]
-            missing = [name for name in externals if getattr(self.guides, "scene_node", lambda _n: True)(name) is None]
+            externals = [
+                item["source"]
+                for item in connections
+                if split_source(item["source"])[0] not in by_key
+            ]
+            missing = [
+                name
+                for name in externals
+                if getattr(self.guides, "scene_node", lambda _n: True)(name) is None
+            ]
             self.status.set("modules", f"{len(handles)} module(s)")
             notes = [f"{len(connections)} connection(s)"]
             if missing:
@@ -450,11 +522,17 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.status.set("connections", " · ".join(notes))
             kept = [items[instance_id] for instance_id in keep if instance_id in items]
             if kept:
-                self.tree.setCurrentItem(kept[0], 0, QtCore.QItemSelectionModel.NoUpdate)
+                self.tree.setCurrentItem(
+                    kept[0], 0, QtCore.QItemSelectionModel.NoUpdate
+                )
                 for item in kept:
                     item.setSelected(True)
-                self._select_handles([self.guides.get(item.data(0, QtCore.Qt.UserRole)) for item in kept])
-            elif self._external is not None and self._external in self.graph.graph.nodes:
+                self._select_handles(
+                    [self.guides.get(item.data(0, QtCore.Qt.UserRole)) for item in kept]
+                )
+            elif (
+                self._external is not None and self._external in self.graph.graph.nodes
+            ):
                 self.graph.select_key(self._external)
                 self._set_current_external(self._external)
             else:
@@ -495,7 +573,14 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             hidden += iterator.value().isHidden()
             iterator += 1
         total = len(self.guides.instances())
-        self.status.set("modules", f"{total - hidden} of {total} module(s)" if model.is_active else f"{total} module(s)")
+        self.status.set(
+            "modules",
+            (
+                f"{total - hidden} of {total} module(s)"
+                if model.is_active
+                else f"{total} module(s)"
+            ),
+        )
 
     def item_for(self, instance_id: str) -> Optional[QtWidgets.QTreeWidgetItem]:
         iterator = QtWidgets.QTreeWidgetItemIterator(self.tree)
@@ -507,7 +592,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         return None
 
     # ----------------------------------------------------------- selection
-    def _select_handles(self, handles: list[GuideHandle], sync_graph: bool = True) -> None:
+    def _select_handles(
+        self, handles: list[GuideHandle], sync_graph: bool = True
+    ) -> None:
         """Properties for one module, or for several of the same type (edited together)."""
         handles = [handle for handle in handles if handle is not None]
         if sync_graph:
@@ -520,7 +607,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self._set_current(handles[0], group=handles)
         else:
             self._set_current(None)
-            self.multi_label.setText(f"{len(handles)} modules of {len(types)} different types — nothing to edit together.")
+            self.multi_label.setText(
+                f"{len(handles)} modules of {len(types)} different types — nothing to edit together."
+            )
             self.multi_label.setVisible(True)
             self.status.set_activity(f"{len(handles)} modules selected (mixed types)")
 
@@ -550,7 +639,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             widget.setVisible(False)
         self.scene_panel.set_nodes(self.guides.scene_groups().get(name, []))
         self.scene_panel.setVisible(True)
-        self.status.set_activity(f"{name} — scene nodes (each row is an output; Delete removes the group)")
+        self.status.set_activity(
+            f"{name} — scene nodes (each row is an output; Delete removes the group)"
+        )
 
     def _on_graph_selection(self, key: str) -> None:
         handle = self.guides.by_key(key)
@@ -568,11 +659,15 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                         item.setSelected(True)
                         first = first or item
             if first is not None:
-                self.tree.setCurrentItem(first, 0, QtCore.QItemSelectionModel.NoUpdate)  # keep the others selected
+                self.tree.setCurrentItem(
+                    first, 0, QtCore.QItemSelectionModel.NoUpdate
+                )  # keep the others selected
         finally:
             self._syncing = False
         handles = self.selected_handles() or [handle]
-        self._select_handles(handles, sync_graph=False)  # never fight a rubber band in progress
+        self._select_handles(
+            handles, sync_graph=False
+        )  # never fight a rubber band in progress
 
     def _on_scene_event(self, name: str) -> None:
         if name == "SelectionChanged":
@@ -626,7 +721,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.refresh_drift()
 
     # ---------------------------------------------------------- properties
-    def _set_current(self, handle: Optional[GuideHandle], group: Optional[list[GuideHandle]] = None) -> None:
+    def _set_current(
+        self, handle: Optional[GuideHandle], group: Optional[list[GuideHandle]] = None
+    ) -> None:
         self._current = handle
         self._multi = list(group or [])
         self._external = None
@@ -653,26 +750,42 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.type_label.setText("")
             self.icon.clear()
             self.inputs_caption.setVisible(False)
-            self.status.set_activity("Select a module, or add one from the shelf (Tab to search).")
+            self.status.set_activity(
+                "Select a module, or add one from the shelf (Tab to search)."
+            )
             self.action_bar.set_selection([])
             return
         entry = handle.entry
         module_cls = handle.module_class
-        self._module_obj = module_cls(name=entry.name, side=entry.side, settings=entry.settings)
+        self._module_obj = module_cls(
+            name=entry.name, side=entry.side, settings=entry.settings
+        )
         self.name_edit.setText(entry.name)
         self.type_label.setText(f"{module_cls.display_label()} · {entry.side}")
-        self.icon.setPixmap(glyph_icon(initials(module_cls.display_label()), theme.SIDE.get(entry.side, theme.SIDE["C"]), 24).pixmap(24, 24))
+        self.icon.setPixmap(
+            glyph_icon(
+                initials(module_cls.display_label()),
+                theme.SIDE.get(entry.side, theme.SIDE["C"]),
+                24,
+            ).pixmap(24, 24)
+        )
         multi = len(self._multi) > 1
         if multi:
             self.name_edit.setEnabled(False)
             self.name_edit.setText(", ".join(item.key for item in self._multi))
-            self.multi_label.setText(f"Editing {len(self._multi)} {module_cls.display_label()} modules together — every change applies to all of them.")
+            self.multi_label.setText(
+                f"Editing {len(self._multi)} {module_cls.display_label()} modules together — every change applies to all of them."
+            )
             self.multi_label.setVisible(True)
             self.inputs_caption.setVisible(False)
         else:
-            declared_inputs = list(module_cls.inputs) + module_cls.space_inputs(handle.settings)
+            declared_inputs = list(module_cls.inputs) + module_cls.space_inputs(
+                handle.settings
+            )
             for declared in declared_inputs:
-                row = InputRow(declared, picker=self._pick_source, sources=self._source_choices)
+                row = InputRow(
+                    declared, picker=self._pick_source, sources=self._source_choices
+                )
                 row.set_source(handle.inputs.get(declared.name, ""))
                 row.changed.connect(self._on_input_changed)
                 label = declared.name + (" ●" if declared.primary else "")
@@ -681,13 +794,14 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.inputs_caption.setVisible(bool(declared_inputs))
         self.form.set_target(self._module_obj)
         if multi:
-            self.status.set_activity(f"{len(self._multi)} × {module_cls.display_label()} selected")
+            self.status.set_activity(
+                f"{len(self._multi)} × {module_cls.display_label()} selected"
+            )
         else:
             self.status.set_activity(f"{handle.key} — {module_cls.display_label()}")
         self.action_bar.set_selection(
             [handle.key for handle in (self._multi or ([handle] if handle else []))]
         )
-
 
     # -------------------------------------------------------------- teardown
     def teardown(self) -> None:

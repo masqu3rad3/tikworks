@@ -18,6 +18,7 @@ _maya_available = False
 if not os.environ.get("TIK_TESTS_NO_MAYA"):
     try:
         import maya.standalone
+
         _maya_available = True
     except ImportError:
         pass
@@ -50,7 +51,7 @@ if not _maya_available:
     _create_mock_maya()
 
 
-@pytest.fixture(scope='session', autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def initialize():
     """Initialize Maya standalone session before running tests.
 
@@ -67,8 +68,10 @@ def initialize():
         # Maya is already initialized
         pass
     # Import tik.maya to ensure all node wrappers and the default factory are registered
-    import tik.maya  # noqa: F401
     from maya import cmds  # noqa: F401
+
+    import tik.maya  # noqa: F401
+
     yield
     maya.standalone.uninitialize()
 

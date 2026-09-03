@@ -180,7 +180,9 @@ def test_twist_builds_on_an_arm():
     guides.connect("L_fore.base", "L_arm.lowerarm")
     guides.connect("L_fore.end", "L_arm.hand")
 
-    report = Builder().build(document=guides.document, rig_name="hero", afterlife="keep")
+    report = Builder().build(
+        document=guides.document, rig_name="hero", afterlife="keep"
+    )
     assert report.rigs[twist.instance_id]
 
     for index in range(3):
@@ -221,7 +223,9 @@ def _arm_with_twist(count=3):
     base.world_position = elbow.world_position
     base.aim_at(wrist)
     end["translateX"].value = elbow.distance_to(wrist)
-    report = Builder().build(document=guides.document, rig_name="hero", afterlife="keep")
+    report = Builder().build(
+        document=guides.document, rig_name="hero", afterlife="keep"
+    )
     return report.rigs[arm.instance_id], report.rigs[fore.instance_id]
 
 
@@ -269,7 +273,9 @@ def test_twist_joints_keep_their_fraction_along_the_segment():
     assert fractions == sorted(fractions), "twist joints are out of order"
     for index, fraction in enumerate(fractions):
         expected = (index + 1) / 4.0
-        assert abs(fraction - expected) < 1e-2, f"twist{index}: {fraction} != {expected}"
+        assert (
+            abs(fraction - expected) < 1e-2
+        ), f"twist{index}: {fraction} != {expected}"
 
 
 def test_end_guide_moves_only_along_x():

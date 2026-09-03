@@ -7,8 +7,8 @@ import pytest
 import tik.maya as tm
 import tik.trigger as trigger
 from tik.trigger.core import get_module
-from tik.trigger.maya import Builder
 from tik.trigger.core.exceptions import AttachError, GuideError
+from tik.trigger.maya import Builder
 
 
 def test_manifest_inputs_outputs():
@@ -16,7 +16,9 @@ def test_manifest_inputs_outputs():
     arm = get_module("arm")
     assert arm.input_names() == ["root"] and arm.primary_input().name == "root"
     assert arm.outputs == ("collar", "upperarm", "lowerarm", "hand")
-    assert arm.output_at_role("hand") == "hand" and arm.output_at_role("nope") == "collar"
+    assert (
+        arm.output_at_role("hand") == "hand" and arm.output_at_role("nope") == "collar"
+    )
     base = get_module("base")
     assert base.inputs == () and base.outputs == ("root",)
 
@@ -70,13 +72,18 @@ def test_export_import_keeps_connections_and_mirror_maps_sides(guides, tmp_path)
     guides.connect("tail.root", "L_arm.hand")
     path = guides.export(tmp_path / "hero")
     data = json.loads(path.read_text())
-    assert isinstance(data, dict) and {"input": "tail.root", "source": "L_arm.hand"} in data["connections"]
+    assert (
+        isinstance(data, dict)
+        and {"input": "tail.root", "source": "L_arm.hand"} in data["connections"]
+    )
     guides.clear()
     handles = guides.import_(path)
     tail = guides.by_key("tail")
     assert tail.inputs == {"root": "L_arm.hand"}
     assert guides.by_key("R_arm").inputs == {"root": "body.root"}
-    report = Builder().build(document=guides.document, rig_name="hero", afterlife="keep")
+    report = Builder().build(
+        document=guides.document, rig_name="hero", afterlife="keep"
+    )
     assert ("tail.root", "L_arm.hand") in report.connections
     # exporting a subset keeps only its connections
     subset = guides.export(tmp_path / "subset", guides.by_key("tail"))
@@ -87,7 +94,12 @@ def test_export_import_keeps_connections_and_mirror_maps_sides(guides, tmp_path)
 def test_fkchain_exposes_every_segment_as_output():
     from tik.trigger.modules.fkchain.fkchain import FkChain
 
-    assert FkChain.output_names({"segments": 2}) == ("root", "segment1", "segment2", "end")
+    assert FkChain.output_names({"segments": 2}) == (
+        "root",
+        "segment1",
+        "segment2",
+        "end",
+    )
     assert FkChain.output_names() == ("root", "segment1", "segment2", "segment3", "end")
 
 

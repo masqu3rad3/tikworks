@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-from functools import partial
 from array import array
-
+from functools import partial
 from typing import Optional, Union
 
 from maya import cmds
-from maya.api import OpenMaya
-from maya.api import OpenMayaAnim
+from maya.api import OpenMaya, OpenMayaAnim
 
-from ..core.deformer import Deformer, WeightsIO, DeformerWeights
+from ..core.apicommon import create_node_with_dg_modifier
+from ..core.deformer import Deformer, DeformerWeights, WeightsIO
 from ..core.registry import register
 from ..core.scene import proxy_wrapper
-from ..core.apicommon import create_node_with_dg_modifier
 
 
 @register("skinCluster")

@@ -1,11 +1,11 @@
 """Tests for the MatrixSpline construct."""
 
 import pytest
+from approx import axes, close
 from maya import cmds
 from maya.api import OpenMaya
 
 import tik.maya as tm
-from approx import axes, close
 from tik.core.bspline import basis
 from tik.maya.constructs.matrix_spline import MatrixSpline
 
@@ -25,10 +25,17 @@ def test_outputs_match_basis_weighted_positions():
     parameters = [0.2, 0.5, 0.8]
     spline = MatrixSpline.create(drivers, parameters, name="spl", degree=2)
     assert spline.degree == 2
-    assert [output.transform.name for output in spline.outputs] == ["spl_0_out", "spl_1_out", "spl_2_out"]
+    assert [output.transform.name for output in spline.outputs] == [
+        "spl_0_out",
+        "spl_1_out",
+        "spl_2_out",
+    ]
     for output, parameter in zip(spline.outputs, parameters):
         weights = basis(parameter, 3, 2)
-        expected = [sum(weight * position[axis] for weight, position in zip(weights, positions)) for axis in range(3)]
+        expected = [
+            sum(weight * position[axis] for weight, position in zip(weights, positions))
+            for axis in range(3)
+        ]
         assert close(output.transform.world_translation, expected)
         assert output.weights == pytest.approx(weights)
 
@@ -56,7 +63,9 @@ def test_explicit_up_matrix():
     drivers = _drivers([(0, 0, 0), (10, 0, 0)])
     frame = tm.Transform.create(name="frame")
     frame.rotate = (-90, 0, 0)
-    spline = MatrixSpline.create(drivers, [0.5], name="spl", up_matrix=frame["worldMatrix[0]"])
+    spline = MatrixSpline.create(
+        drivers, [0.5], name="spl", up_matrix=frame["worldMatrix[0]"]
+    )
     _, y_axis = axes(spline.outputs[0].transform)
     assert close(y_axis, (0, 0, -1))
 
@@ -111,7 +120,9 @@ def test_twist_interpolates_with_position_weights():
     twists[0].value = 100.0
     twists[1].value = 20.0
     twists[2].value = 300.0
-    assert spline.outputs[0].twist.value == pytest.approx(0.25 * 100 + 0.5 * 20 + 0.25 * 300)
+    assert spline.outputs[0].twist.value == pytest.approx(
+        0.25 * 100 + 0.5 * 20 + 0.25 * 300
+    )
 
 
 def test_twist_is_unbounded_and_stays_out_of_the_matrix():
@@ -128,7 +139,9 @@ def test_missing_twists_leave_plug_at_zero():
     drivers = _drivers([(0, 0, 0), (10, 0, 0)])
     spline = MatrixSpline.create(drivers, [0.5], name="spl", twists=[None, None])
     assert spline.outputs[0].twist.value == 0.0
-    assert not cmds.listConnections(spline.outputs[0].twist.path, source=True, destination=False)
+    assert not cmds.listConnections(
+        spline.outputs[0].twist.path, source=True, destination=False
+    )
 
 
 def test_delete_removes_network():

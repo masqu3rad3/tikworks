@@ -67,7 +67,9 @@ class GuideRecord:
             "position": list(self.position) if self.position is not None else None,
             "rotation": list(self.rotation) if self.rotation is not None else None,
             "rotate_order": self.rotate_order,
-            "joint_orient": list(self.joint_orient) if self.joint_orient is not None else None,
+            "joint_orient": (
+                list(self.joint_orient) if self.joint_orient is not None else None
+            ),
             "radius": self.radius,
             "color": self.color,
             "attrs": dict(self.attrs),
@@ -91,7 +93,9 @@ class GuideRecord:
             joint_orient=None if joint_orient is None else _triple(joint_orient),
             radius=None if radius is None else float(radius),
             color=None if color is None else int(color),
-            attrs={key: float(value) for key, value in (data.get("attrs") or {}).items()},
+            attrs={
+                key: float(value) for key, value in (data.get("attrs") or {}).items()
+            },
             parent=(str(parent[0]), int(parent[1])) if parent else None,
         )
 
@@ -223,13 +227,15 @@ class GuideDocument:
         labels = {value: key for key, value in self.node_ids().items()}
 
         def relabel(table):
-            return {
-                labels[key]: value for key, value in table.items() if key in labels
-            }
+            return {labels[key]: value for key, value in table.items() if key in labels}
 
         sections = {
-            "scene_nodes": {group.name: list(group.nodes) for group in self.scene_groups},
-            "positions": {key: list(value) for key, value in relabel(self.positions).items()},
+            "scene_nodes": {
+                group.name: list(group.nodes) for group in self.scene_groups
+            },
+            "positions": {
+                key: list(value) for key, value in relabel(self.positions).items()
+            },
             "collapse": dict(relabel(self.collapse)),
         }
         # empty sections are omitted, so an untouched layout is simply ``{}``
@@ -276,9 +282,15 @@ class GuideDocument:
         return cls(
             schema=SCHEMA_VERSION,
             modules=[ModuleEntry.from_dict(item) for item in data.get("modules", [])],
-            scene_groups=[SceneGroup.from_dict(item) for item in data.get("scene_groups", [])],
-            positions={key: list(value) for key, value in (data.get("positions") or {}).items()},
-            collapse={key: int(value) for key, value in (data.get("collapse") or {}).items()},
+            scene_groups=[
+                SceneGroup.from_dict(item) for item in data.get("scene_groups", [])
+            ],
+            positions={
+                key: list(value) for key, value in (data.get("positions") or {}).items()
+            },
+            collapse={
+                key: int(value) for key, value in (data.get("collapse") or {}).items()
+            },
         )
 
 

@@ -42,7 +42,9 @@ def test_world_translation_matches_channel():
     cmds.setAttr(f"{transform.name}.translate", 1.0, 2.0, 3.0, type="double3")
 
     translation = transform.world_translation
-    assert (translation.x, translation.y, translation.z) == pytest.approx((1.0, 2.0, 3.0), abs=1e-6)
+    assert (translation.x, translation.y, translation.z) == pytest.approx(
+        (1.0, 2.0, 3.0), abs=1e-6
+    )
 
 
 def test_snap_to_position_only_copies_world_position():
@@ -62,8 +64,12 @@ def test_snap_to_position_only_copies_world_position():
     assert cmds.getAttr(f"{src.name}.translate")[0] == pytest.approx(
         cmds.getAttr(f"{dst.name}.translate")[0], abs=1e-6
     )
-    assert cmds.getAttr(f"{src.name}.rotate")[0] == pytest.approx((0.0, 0.0, 0.0), abs=1e-6)
-    assert cmds.getAttr(f"{src.name}.scale")[0] == pytest.approx((1.0, 1.0, 1.0), abs=1e-6)
+    assert cmds.getAttr(f"{src.name}.rotate")[0] == pytest.approx(
+        (0.0, 0.0, 0.0), abs=1e-6
+    )
+    assert cmds.getAttr(f"{src.name}.scale")[0] == pytest.approx(
+        (1.0, 1.0, 1.0), abs=1e-6
+    )
 
 
 def test_snap_to_rotation_only_copies_rotation():
@@ -132,9 +138,16 @@ def test_freeze_zeroes_translate_and_rotate_keeps_scale_when_scale_false():
 
     transform.freeze(translate=True, rotate=True, scale=False)
 
-    assert cmds.getAttr(f"{transform.name}.translate")[0] == pytest.approx((0.0, 0.0, 0.0), abs=1e-6)
-    assert cmds.getAttr(f"{transform.name}.rotate")[0] == pytest.approx((0.0, 0.0, 0.0), abs=1e-6)
-    assert cmds.getAttr(f"{transform.name}.scale")[0] == pytest.approx((1.5, 1.1, 0.9), abs=1e-6)
+    assert cmds.getAttr(f"{transform.name}.translate")[0] == pytest.approx(
+        (0.0, 0.0, 0.0), abs=1e-6
+    )
+    assert cmds.getAttr(f"{transform.name}.rotate")[0] == pytest.approx(
+        (0.0, 0.0, 0.0), abs=1e-6
+    )
+    assert cmds.getAttr(f"{transform.name}.scale")[0] == pytest.approx(
+        (1.5, 1.1, 0.9), abs=1e-6
+    )
+
 
 def test_getting_world_matrix():
     transform = Transform.create(name="tm_world_matrix")
@@ -143,9 +156,12 @@ def test_getting_world_matrix():
     cmds.setAttr(f"{transform.name}.scale", 1.0, 2.0, 3.0, type="double3")
 
     world_matrix = transform.world_matrix
-    expected_matrix = OpenMaya.MMatrix(cmds.xform(transform.name, query=True, matrix=True, worldSpace=True))
+    expected_matrix = OpenMaya.MMatrix(
+        cmds.xform(transform.name, query=True, matrix=True, worldSpace=True)
+    )
 
     assert list(world_matrix) == pytest.approx(expected_matrix, abs=1e-6)
+
 
 def test_getting_matrix():
     transform = Transform.create(name="tm_matrix")
@@ -154,9 +170,12 @@ def test_getting_matrix():
     cmds.setAttr(f"{transform.name}.scale", 2.0, 3.0, 4.0, type="double3")
 
     local_matrix = transform.matrix
-    expected_matrix = OpenMaya.MMatrix(cmds.xform(transform.name, query=True, matrix=True, objectSpace=True))
+    expected_matrix = OpenMaya.MMatrix(
+        cmds.xform(transform.name, query=True, matrix=True, objectSpace=True)
+    )
 
     assert list(local_matrix) == pytest.approx(expected_matrix, abs=1e-6)
+
 
 def test_getting_parent_matrix():
     parent = Transform.create(name="tm_parent_matrix")
@@ -167,16 +186,21 @@ def test_getting_parent_matrix():
     cmds.setAttr(f"{parent.name}.scale", 1.0, 1.0, 1.0, type="double3")
 
     parent_matrix = child.parent_matrix
-    expected_matrix = OpenMaya.MMatrix(cmds.xform(parent.name, query=True, matrix=True, worldSpace=True))
+    expected_matrix = OpenMaya.MMatrix(
+        cmds.xform(parent.name, query=True, matrix=True, worldSpace=True)
+    )
 
     assert list(parent_matrix) == pytest.approx(expected_matrix, abs=1e-6)
+
 
 def test_getting_and_setting_translate():
     transform = Transform.create(name="tm_translate")
     transform.translate = OpenMaya.MVector(3.0, 4.0, 5.0)
 
     translate = transform.translate
-    assert (translate.x, translate.y, translate.z) == pytest.approx((3.0, 4.0, 5.0), abs=1e-6)
+    assert (translate.x, translate.y, translate.z) == pytest.approx(
+        (3.0, 4.0, 5.0), abs=1e-6
+    )
     assert transform.translate_x == pytest.approx(3.0, abs=1e-6)
     assert transform.translate_y == pytest.approx(4.0, abs=1e-6)
     assert transform.translate_z == pytest.approx(5.0, abs=1e-6)
@@ -185,7 +209,10 @@ def test_getting_and_setting_translate():
     transform.translate_y = 7.0
     transform.translate_z = 8.0
     translate = transform.translate
-    assert (translate.x, translate.y, translate.z) == pytest.approx((6.0, 7.0, 8.0), abs=1e-6)
+    assert (translate.x, translate.y, translate.z) == pytest.approx(
+        (6.0, 7.0, 8.0), abs=1e-6
+    )
+
 
 def test_getting_and_setting_rotate():
     transform = Transform.create(name="tm_rotate")
@@ -203,6 +230,7 @@ def test_getting_and_setting_rotate():
     rotate = transform.rotate
     assert (rotate.x, rotate.y, rotate.z) == pytest.approx((15.0, 25.0, 35.0), abs=1e-6)
 
+
 def test_getting_and_setting_scale():
     transform = Transform.create(name="tm_scale")
     transform.scale = OpenMaya.MVector(1.5, 2.0, 2.5)
@@ -218,6 +246,7 @@ def test_getting_and_setting_scale():
     transform.scale_z = 4.0
     scale = transform.scale
     assert (scale.x, scale.y, scale.z) == pytest.approx((2.0, 3.0, 4.0), abs=1e-6)
+
 
 def test_collect_children_recursive():
     # Setup hierarchy:
@@ -285,6 +314,7 @@ def test_collect_shape_transforms():
 
     assert "rootST" in names
     assert "child1ST" in names
+
 
 def test_collect_hierarchy_with_string_node_type():
     root = Transform.create(name="rootStr")
@@ -360,4 +390,3 @@ class TestInsertOffsetParent:
         # Verify offset has no parent (world space)
         offset_parents = cmds.listRelatives(offset.name, parent=True)
         assert offset_parents is None
-

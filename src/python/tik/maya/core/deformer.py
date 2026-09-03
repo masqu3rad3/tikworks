@@ -8,7 +8,6 @@ The Deformer class itself is not a falloff targer for any nodes.
 However, it is not an abstract class either. If wanted, deformer classes can be created directly from it.
 """
 
-
 from __future__ import annotations
 
 import array
@@ -21,8 +20,9 @@ from maya import cmds
 from maya.api import OpenMaya
 
 from tik.core import jsonio
-from .node import Node
+
 from ..core.apicommon import create_node_with_dg_modifier
+from .node import Node
 
 
 class Deformer(Node):
@@ -61,10 +61,12 @@ class Deformer(Node):
         file_dir, file_name = self._split_path(file_path, validate=True)
 
         cmds.deformerWeights(
-            file_name, export=True, deformer=self.name, path=file_dir,
-            **kwargs
+            file_name, export=True, deformer=self.name, path=file_dir, **kwargs
         )
-    def _load_deformer_weights(self, file_path: str | Path, method: str = "index", **kwargs) -> None:
+
+    def _load_deformer_weights(
+        self, file_path: str | Path, method: str = "index", **kwargs
+    ) -> None:
         """Load deformer weights from a file.
 
         Args:
@@ -195,7 +197,9 @@ class DeformerWeights:
             list(self._channel_names),
         )
 
-    def clamp(self, min_value: float = 0.0, max_value: float = 1.0) -> "DeformerWeights":
+    def clamp(
+        self, min_value: float = 0.0, max_value: float = 1.0
+    ) -> "DeformerWeights":
         """Clamp all weight values to the specified range.
 
         Args:
@@ -273,7 +277,9 @@ class DeformerWeights:
         result = self.copy()
         if isinstance(other, DeformerWeights):
             if len(other) != len(self):
-                raise ValueError("DeformerWeights dimensions must match for subtraction.")
+                raise ValueError(
+                    "DeformerWeights dimensions must match for subtraction."
+                )
             for idx in range(len(result._weights)):
                 result._weights[idx] = self._weights[idx] - other._weights[idx]
         else:
@@ -737,7 +743,9 @@ class WeightsIO:
 
         element_count = shape_info.size
         channel_count = len(layers)
-        channel_names = [layer.influence or f"channel_{idx}" for idx, layer in enumerate(layers)]
+        channel_names = [
+            layer.influence or f"channel_{idx}" for idx, layer in enumerate(layers)
+        ]
 
         # Build flat weight array: [elem0_ch0, elem0_ch1, ..., elem1_ch0, elem1_ch1, ...]
         weights = array.array("d")

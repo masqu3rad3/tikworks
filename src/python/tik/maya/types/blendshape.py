@@ -17,16 +17,11 @@ from ..core.scene import proxy_wrapper
 @register("blendShape")
 class BlendShape(Deformer):
     """Blendshape node type for Maya."""
+
     tm_blendshape = partial(proxy_wrapper, "blendShape")
 
     @classmethod
-    def create(
-            cls,
-            geometry = None,
-            targets = None,
-            name = None,
-            **kwargs
-    ) -> "BlendShape":
+    def create(cls, geometry=None, targets=None, name=None, **kwargs) -> "BlendShape":
         """Create Blendshape node type for Maya.
 
         Args:
@@ -44,8 +39,10 @@ class BlendShape(Deformer):
 
         # if only one of the influences or geometry is None, raise an error
         if geometry is None:
-            raise ValueError("To create blendshape with connections, geometry must be provided.\n"
-                             "Alternatively, call SkinCluster.create() without geometry and targets to create an unbound skinCluster node.")
+            raise ValueError(
+                "To create blendshape with connections, geometry must be provided.\n"
+                "Alternatively, call SkinCluster.create() without geometry and targets to create an unbound skinCluster node."
+            )
 
         default_kwargs = {
             "frontOfChain": True,
@@ -127,9 +124,9 @@ class BlendShape(Deformer):
         try:
             if target_id is None:
                 # This corresponds to the top-level node weight in Paint Tool
-                try: # Maya 2025+
+                try:  # Maya 2025+
                     return self[f"weightList[{geom_index}]"]["weights"].mplug
-                except RuntimeError: # Older Maya versions
+                except RuntimeError:  # Older Maya versions
                     return self[f"inputTarget[{geom_index}]"]["baseWeights"].mplug
             else:
                 # path: inputTarget[geom_index].inputTargetGroup[target_id].targetWeights
@@ -142,10 +139,10 @@ class BlendShape(Deformer):
     def _read_weights(self, plug, vert_count):
         """Reads sparse weights from plug, filling defaults with 1.0."""
         if plug is None:
-            return array('d', [1.0]) * vert_count
+            return array("d", [1.0]) * vert_count
 
         indices = plug.getExistingArrayAttributeIndices()
-        weights = array('d', [1.0]) * vert_count
+        weights = array("d", [1.0]) * vert_count
 
         for physical_idx, logical_idx in enumerate(indices):
             if logical_idx < vert_count:
@@ -254,11 +251,13 @@ class BlendShape(Deformer):
             channel_names = []
 
         target_weights_by_target = [
-            self._read_weights(self._get_weight_plug(geom_index, target_id=target_index), vertex_count)
+            self._read_weights(
+                self._get_weight_plug(geom_index, target_id=target_index), vertex_count
+            )
             for target_index in range(target_count)
         ]
 
-        flat_weights = array('d', [0.0]) * (vertex_count * target_count)
+        flat_weights = array("d", [0.0]) * (vertex_count * target_count)
         for vertex_index in range(vertex_count):
             base_offset = vertex_index * target_count
             for target_index in range(target_count):
@@ -481,7 +480,6 @@ class BlendShape(Deformer):
         # update the default kwargs with any user-provided kwargs
         default_kwargs.update(kwargs)
         self._save_deformer_weights(file_path, **default_kwargs)
-
 
     def load_weights(self, file_path, method="index", **kwargs):
         """Import blendshape weights from a file.

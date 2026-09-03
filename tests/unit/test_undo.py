@@ -10,7 +10,6 @@ import os
 from pathlib import Path
 
 import pytest
-
 from maya import cmds
 
 from tik.maya.core import undo
@@ -51,7 +50,9 @@ class TestDeployment:
         assert not list(package.rglob(undo.PLUGIN_NAME))
 
     def test_vendored_apiundo_is_retired(self):
-        assert not (REPO_ROOT / "src" / "python" / "tik" / "vendor" / "apiundo").exists()
+        assert not (
+            REPO_ROOT / "src" / "python" / "tik" / "vendor" / "apiundo"
+        ).exists()
 
 
 class TestInstall:
@@ -105,7 +106,9 @@ class TestCommit:
         calls = []
         cmds.undoInfo(state=True, infinity=True)
         cmds.undoInfo(openChunk=True)
-        undo.commit(undo=lambda: calls.append("undo"), redo=lambda: calls.append("redo"))
+        undo.commit(
+            undo=lambda: calls.append("undo"), redo=lambda: calls.append("redo")
+        )
         cmds.undoInfo(closeChunk=True)
 
         cmds.undo()

@@ -34,7 +34,11 @@ class DesignerProperties:
         return [name] if name else []
 
     def _pick_source(self) -> str:
-        picked = self.guides.selected_guide() if hasattr(self.guides, "selected_guide") else None
+        picked = (
+            self.guides.selected_guide()
+            if hasattr(self.guides, "selected_guide")
+            else None
+        )
         if picked is not None:
             handle = self.guides.get(picked.instance_id)
             if handle is not None:
@@ -53,7 +57,9 @@ class DesignerProperties:
                 self.guides.disconnect(f"{self._current.key}.{input_name}")
         except TriggerError as error:
             self.events.log(str(error), level="warning")
-            self._input_rows[input_name].set_source(self._current.inputs.get(input_name, ""))
+            self._input_rows[input_name].set_source(
+                self._current.inputs.get(input_name, "")
+            )
             return
         self.refresh()
 

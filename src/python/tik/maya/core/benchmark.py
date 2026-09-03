@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from functools import wraps
-from tik.core.benchmark import Benchmark
+
 from maya import cmds
+
+from tik.core.benchmark import Benchmark
 
 
 class MayaBenchmark(Benchmark):
@@ -49,4 +51,3 @@ class MayaBenchmark(Benchmark):
 
         context.run = maya_wrapped_run
         return context
-

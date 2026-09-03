@@ -2,11 +2,10 @@
 
 # python
 import pytest
-from maya import cmds
-from maya import OpenMaya
+from maya import OpenMaya, cmds
 
-from tik.maya.core.node import Node
 from tik.maya.core.dagnode import DagNode
+from tik.maya.core.node import Node
 
 
 def test_create_returns_registered_subclass_for_transform():
@@ -206,6 +205,7 @@ def test_get_valid_mobject_re_resolves_from_uuid_when_handle_stale():
     assert not resolved_obj.isNull()
     fn_dep = om.MFnDependencyNode(resolved_obj)
     assert fn_dep.uuid().asString() == original_uuid
+
 
 def test_node_m_obj_re_resolves_when_stale() -> None:
     """Cover the UUID fallback path in Node._get_valid_mobject.

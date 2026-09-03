@@ -3,9 +3,9 @@
 import pytest
 from maya import cmds
 
+from tik.maya.core.deformer import DeformerWeights
 from tik.maya.types.blendshape import BlendShape
 from tik.maya.types.mesh import Mesh
-from tik.maya.core.deformer import DeformerWeights
 
 
 class TestBlendShapeCreate:
@@ -175,7 +175,9 @@ class TestBlendShapeInbetween:
         blendshape = cmds.blendShape(target_mesh, base_mesh, name="inbetweenTypeBS")[0]
         blendshape_node = BlendShape(blendshape)
 
-        with pytest.raises(TypeError, match="Target must be an integer index or string name"):
+        with pytest.raises(
+            TypeError, match="Target must be an integer index or string name"
+        ):
             blendshape_node.add_inbetween([1, 2], "someMesh")
 
     def test_add_inbetween_raises_when_no_base_shapes(self):
@@ -225,7 +227,9 @@ class TestBlendShapeWeights:
         blendshape = cmds.blendShape(target_mesh, base_mesh, name="getWeightsTypeBS")[0]
         blendshape_node = BlendShape(blendshape)
 
-        with pytest.raises(TypeError, match="Target must be an integer index or string name"):
+        with pytest.raises(
+            TypeError, match="Target must be an integer index or string name"
+        ):
             blendshape_node.get_influence_weights([1, 2])
 
     def test_set_target_weights_by_index(self):
@@ -239,13 +243,20 @@ class TestBlendShapeWeights:
 
         # Get vertex count
         original_weights = blendshape_node.get_influence_weights(0)
-        new_weights = DeformerWeights([0.5] * original_weights.element_count, channel_count=1, element_count=original_weights.element_count)
+        new_weights = DeformerWeights(
+            [0.5] * original_weights.element_count,
+            channel_count=1,
+            element_count=original_weights.element_count,
+        )
 
         blendshape_node.set_influence_weights(0, new_weights)
 
         # Verify weights were set
         retrieved_weights = blendshape_node.get_influence_weights(0)
-        assert all(weight == pytest.approx(0.5, abs=0.01) for weight in retrieved_weights.weights)
+        assert all(
+            weight == pytest.approx(0.5, abs=0.01)
+            for weight in retrieved_weights.weights
+        )
 
     def test_set_target_weights_by_name(self):
         """Test setting target weights by name."""
@@ -258,12 +269,19 @@ class TestBlendShapeWeights:
 
         target_name = blendshape_node.influences[0]
         original_weights = blendshape_node.get_influence_weights(target_name)
-        new_weights = DeformerWeights([0.75] * original_weights.element_count, channel_count=1, element_count=original_weights.element_count)
+        new_weights = DeformerWeights(
+            [0.75] * original_weights.element_count,
+            channel_count=1,
+            element_count=original_weights.element_count,
+        )
 
         blendshape_node.set_influence_weights(target_name, new_weights)
 
         retrieved_weights = blendshape_node.get_influence_weights(target_name)
-        assert all(weight == pytest.approx(0.75, abs=0.01) for weight in retrieved_weights.weights)
+        assert all(
+            weight == pytest.approx(0.75, abs=0.01)
+            for weight in retrieved_weights.weights
+        )
 
     def test_set_target_weights_raises_on_invalid_type(self):
         """Test set_target_weights raises TypeError for invalid target type."""
@@ -273,7 +291,9 @@ class TestBlendShapeWeights:
         blendshape = cmds.blendShape(target_mesh, base_mesh, name="setWeightsTypeBS")[0]
         blendshape_node = BlendShape(blendshape)
 
-        with pytest.raises(TypeError, match="Target must be an integer index or string name"):
+        with pytest.raises(
+            TypeError, match="Target must be an integer index or string name"
+        ):
             blendshape_node.set_influence_weights([1, 2], [0.5])
 
     def test_set_target_weights_raises_on_length_mismatch(self):
@@ -294,7 +314,9 @@ class TestBlendShapeWeights:
         target_mesh, _ = cmds.polySphere(name="get_global_weights_target", sx=4, sy=4)
         cmds.move(0, 1, 0, target_mesh)
 
-        blendshape = cmds.blendShape(target_mesh, base_mesh, name="getGlobalWeightsBS")[0]
+        blendshape = cmds.blendShape(target_mesh, base_mesh, name="getGlobalWeightsBS")[
+            0
+        ]
         blendshape_node = BlendShape(blendshape)
 
         weights = blendshape_node.get_base_weights()
@@ -306,7 +328,9 @@ class TestBlendShapeWeights:
         target_mesh, _ = cmds.polySphere(name="set_global_weights_target", sx=4, sy=4)
         cmds.move(0, 1, 0, target_mesh)
 
-        blendshape = cmds.blendShape(target_mesh, base_mesh, name="setGlobalWeightsBS")[0]
+        blendshape = cmds.blendShape(target_mesh, base_mesh, name="setGlobalWeightsBS")[
+            0
+        ]
         blendshape_node = BlendShape(blendshape)
 
         original_weights = blendshape_node.get_base_weights()
@@ -315,7 +339,9 @@ class TestBlendShapeWeights:
         blendshape_node.set_base_weights(new_weights)
 
         retrieved_weights = blendshape_node.get_base_weights()
-        assert all(weight == pytest.approx(0.8, abs=0.01) for weight in retrieved_weights)
+        assert all(
+            weight == pytest.approx(0.8, abs=0.01) for weight in retrieved_weights
+        )
 
     def test_set_weights_raises_on_length_mismatch(self):
         """Test set_weights raises ValueError when weight length mismatches."""
@@ -358,7 +384,9 @@ class TestBlendShapeWeights:
         blendshape_node.set_weights(new_weights)
 
         retrieved = blendshape_node.get_weights()
-        assert all(value == pytest.approx(0.25, abs=0.01) for value in retrieved.weights)
+        assert all(
+            value == pytest.approx(0.25, abs=0.01) for value in retrieved.weights
+        )
 
     def test_set_weights_no_targets_accepts_empty(self):
         """Test set_weights ignores empty weights when no targets exist."""
@@ -368,7 +396,11 @@ class TestBlendShapeWeights:
 
         blendshape_node.set_weights([])
         blendshape_node.set_weights(
-            DeformerWeights([], channel_count=0, element_count=blendshape_node.get_base_weights().element_count)
+            DeformerWeights(
+                [],
+                channel_count=0,
+                element_count=blendshape_node.get_base_weights().element_count,
+            )
         )
 
         with pytest.raises(ValueError, match="no targets"):
@@ -380,18 +412,26 @@ class TestBlendShapeWeights:
         target_mesh, _ = cmds.polySphere(name="set_weights_mismatch_target", sx=2, sy=2)
         cmds.move(0, 1, 0, target_mesh)
 
-        blendshape = cmds.blendShape(target_mesh, base_mesh, name="setWeightsMismatchBS")[0]
+        blendshape = cmds.blendShape(
+            target_mesh, base_mesh, name="setWeightsMismatchBS"
+        )[0]
         blendshape_node = BlendShape(blendshape)
 
         vertex_count = blendshape_node.get_weights().element_count
         with pytest.raises(ValueError, match="Channel count"):
             blendshape_node.set_weights(
-                DeformerWeights([0.2] * vertex_count, channel_count=2, element_count=vertex_count)
+                DeformerWeights(
+                    [0.2] * vertex_count, channel_count=2, element_count=vertex_count
+                )
             )
 
         with pytest.raises(ValueError, match="Element count"):
             blendshape_node.set_weights(
-                DeformerWeights([0.2] * vertex_count, channel_count=1, element_count=vertex_count + 1)
+                DeformerWeights(
+                    [0.2] * vertex_count,
+                    channel_count=1,
+                    element_count=vertex_count + 1,
+                )
             )
 
     def test_set_base_weights_with_deformerweights(self):
@@ -520,7 +560,7 @@ class TestBlendShapeWeightPlugs:
         blendshape = BlendShape.create()
         weights = blendshape._read_weights(None, 10)
 
-        assert weights == array('d', [1.0] * 10)
+        assert weights == array("d", [1.0] * 10)
 
     def test_write_weights_raises_when_plug_none(self):
         """Test _write_weights raises RuntimeError when plug is None."""
@@ -563,8 +603,6 @@ class TestBlendShapeWeightPlugs:
 
         assert base_plug is not None
         assert target_plug is not None
-
-
 
 
 class TestBlendShapeSaveLoad:
@@ -634,11 +672,15 @@ class TestBlendShapeSaveLoad:
 
     def test_set_base_weights_length_mismatch(self):
         """Test set_base_weights raises on length mismatch."""
-        base_mesh, _ = cmds.polySphere(name="base_mismatch_base", sx=2, sy=2) # low vertex count
+        base_mesh, _ = cmds.polySphere(
+            name="base_mismatch_base", sx=2, sy=2
+        )  # low vertex count
         blendshape = BlendShape.create(geometry=base_mesh, name="baseMismatchBS")
 
         with pytest.raises(ValueError, match="Weight length .* count"):
-            blendshape.set_base_weights([1.0, 1.0]) # Length 2, but sphere implies more vert
+            blendshape.set_base_weights(
+                [1.0, 1.0]
+            )  # Length 2, but sphere implies more vert
 
         # Test with DeformerWeights mismatch
         dw = DeformerWeights([1.0, 1.0], 1, 2)
@@ -659,7 +701,9 @@ class TestBlendShapeAdditionalCoverage:
 
         # With 1 target, need vertex_count * target_count weights
         target_mesh, _ = cmds.polySphere(name="set_weights_len_target")
-        cmds.blendShape(blendshape.name, edit=True, target=(base_mesh, 0, target_mesh, 1.0))
+        cmds.blendShape(
+            blendshape.name, edit=True, target=(base_mesh, 0, target_mesh, 1.0)
+        )
 
         # Wrong length - should raise
         with pytest.raises(ValueError, match="Weight length"):
@@ -699,7 +743,9 @@ class TestBlendShapeAdditionalCoverage:
         idx = blendshape.add_target(target_mesh, name="target1")
 
         # DeformerWeights with wrong element_count should raise
-        dw = DeformerWeights([1.0, 2.0, 3.0, 4.0, 5.0], channel_count=1, element_count=5)
+        dw = DeformerWeights(
+            [1.0, 2.0, 3.0, 4.0, 5.0], channel_count=1, element_count=5
+        )
         with pytest.raises(ValueError, match="Element count"):
             blendshape.set_influence_weights(idx, dw)
 

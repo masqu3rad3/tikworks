@@ -67,7 +67,10 @@ class Action(Schema):
         """Return pre-flight problems (empty = ok)."""
         problems: list[str] = []
         for name, field_obj in self.fields().items():
-            if field_obj.type_name == "file" and getattr(field_obj, "mode", "") == "open":
+            if (
+                field_obj.type_name == "file"
+                and getattr(field_obj, "mode", "") == "open"
+            ):
                 value = getattr(self, name)
                 if value and not ctx.resolve(value).exists():
                     problems.append(f"{name}: file not found ({value})")

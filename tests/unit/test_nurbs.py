@@ -1,7 +1,9 @@
 import pytest
 from maya import cmds
 from maya.api import OpenMaya
+
 from tik.maya.types.nurbs import Nurbs
+
 
 class TestNurbsCreate:
     def test_create_primitive_plane(self):
@@ -35,6 +37,7 @@ class TestNurbsCreate:
         with pytest.raises(ValueError, match="Command 'invalidCmd' is not valid"):
             Nurbs.create("invalidCmd")
 
+
 class TestNurbsCVs:
     def test_cvs_world_space(self):
         # Create a plane at 0,0,0
@@ -58,4 +61,3 @@ class TestNurbsCVs:
         surface = Nurbs.create("nurbsPlane")
         with pytest.raises(ValueError, match="Invalid space 'invalid'"):
             surface.cvs(space="invalid")
-

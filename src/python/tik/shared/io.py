@@ -10,7 +10,8 @@ import logging
 from pathlib import Path
 from typing import Any, Optional, Union
 
-from tik.core.jsonio import load as _json_load, save as _json_save
+from tik.core.jsonio import load as _json_load
+from tik.core.jsonio import save as _json_save
 
 LOG = logging.getLogger(__name__)
 

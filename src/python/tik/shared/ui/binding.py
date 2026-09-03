@@ -47,7 +47,9 @@ class MayaAttributeAdapter:
         from maya import cmds
 
         self.unobserve()
-        self._job = cmds.scriptJob(attributeChange=[self.plug_path, callback], protected=False)
+        self._job = cmds.scriptJob(
+            attributeChange=[self.plug_path, callback], protected=False
+        )
 
     def unobserve(self) -> None:
         if self._job is None:
@@ -65,7 +67,9 @@ class MayaAttributeAdapter:
 class Binder:
     """Base binder: ``adapter`` <-> ``widget``. Subclasses map values."""
 
-    def __init__(self, adapter, widget: QtWidgets.QWidget, direction: str = "both") -> None:
+    def __init__(
+        self, adapter, widget: QtWidgets.QWidget, direction: str = "both"
+    ) -> None:
         if direction not in ("both", "to_widget", "to_maya"):
             raise ValueError("direction must be 'both', 'to_widget' or 'to_maya'")
         self.adapter = adapter
@@ -214,7 +218,9 @@ _BINDERS = [
 ]
 
 
-def bind(plug_path: str, widget: QtWidgets.QWidget, direction: str = "both", adapter=None) -> Binder:
+def bind(
+    plug_path: str, widget: QtWidgets.QWidget, direction: str = "both", adapter=None
+) -> Binder:
     """Create the right binder for ``widget`` (not started yet)."""
     adapter = adapter or MayaAttributeAdapter(plug_path)
     for widget_type, binder_cls in _BINDERS:

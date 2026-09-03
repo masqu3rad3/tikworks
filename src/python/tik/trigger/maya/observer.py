@@ -6,7 +6,14 @@ from typing import Callable
 
 from maya import cmds
 
-EVENTS = ("SelectionChanged", "DagObjectCreated", "SceneOpened", "NewSceneOpened", "Undo", "Redo")
+EVENTS = (
+    "SelectionChanged",
+    "DagObjectCreated",
+    "SceneOpened",
+    "NewSceneOpened",
+    "Undo",
+    "Redo",
+)
 
 
 class SceneObserver:
@@ -20,7 +27,9 @@ class SceneObserver:
     def start(self) -> None:
         self.stop()
         for event in EVENTS:
-            job = cmds.scriptJob(event=[event, lambda name=event: self._fire(name)], protected=False)
+            job = cmds.scriptJob(
+                event=[event, lambda name=event: self._fire(name)], protected=False
+            )
             self._jobs.append(job)
 
     def stop(self) -> None:

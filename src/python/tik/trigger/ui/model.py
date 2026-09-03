@@ -27,7 +27,9 @@ ErrorRole = QtCore.Qt.UserRole + 9
 class _Item:
     __slots__ = ("handle", "parent", "children", "row")
 
-    def __init__(self, handle: Optional[ActionHandle], parent: Optional["_Item"]) -> None:
+    def __init__(
+        self, handle: Optional[ActionHandle], parent: Optional["_Item"]
+    ) -> None:
         self.handle = handle
         self.parent = parent
         self.children: list["_Item"] = []
@@ -77,7 +79,9 @@ class PipelineModel(QtCore.QAbstractItemModel):
         item = self._item(index)
         return item.handle
 
-    def index_for_path(self, path: str, item: Optional[_Item] = None) -> QtCore.QModelIndex:
+    def index_for_path(
+        self, path: str, item: Optional[_Item] = None
+    ) -> QtCore.QModelIndex:
         item = item or self._root
         for child in item.children:
             if child.handle.path == path:
@@ -114,7 +118,9 @@ class PipelineModel(QtCore.QAbstractItemModel):
     def columnCount(self, parent=QtCore.QModelIndex()) -> int:  # noqa: N802
         return 1
 
-    def index(self, row: int, column: int, parent=QtCore.QModelIndex()) -> QtCore.QModelIndex:
+    def index(
+        self, row: int, column: int, parent=QtCore.QModelIndex()
+    ) -> QtCore.QModelIndex:
         item = self._item(parent)
         if 0 <= row < len(item.children):
             return self.createIndex(row, column, item.children[row])
@@ -127,7 +133,11 @@ class PipelineModel(QtCore.QAbstractItemModel):
         return self.createIndex(item.parent.row, 0, item.parent)
 
     def flags(self, index: QtCore.QModelIndex):
-        base = QtCore.Qt.ItemIsEnabled | QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsDropEnabled
+        base = (
+            QtCore.Qt.ItemIsEnabled
+            | QtCore.Qt.ItemIsSelectable
+            | QtCore.Qt.ItemIsDropEnabled
+        )
         if not index.isValid():
             return base
         handle = self.handle(index)
@@ -175,12 +185,16 @@ class PipelineModel(QtCore.QAbstractItemModel):
             return f"{handle.path} ({handle.type})"
         return None
 
-    def setData(self, index: QtCore.QModelIndex, value, role=QtCore.Qt.EditRole) -> bool:  # noqa: N802
+    def setData(
+        self, index: QtCore.QModelIndex, value, role=QtCore.Qt.EditRole
+    ) -> bool:  # noqa: N802
         handle = self.handle(index)
         if handle is None:
             return False
         if role == QtCore.Qt.CheckStateRole:
-            handle.enabled = value == QtCore.Qt.Checked or value == QtCore.Qt.Checked.value
+            handle.enabled = (
+                value == QtCore.Qt.Checked or value == QtCore.Qt.Checked.value
+            )
             self.dataChanged.emit(index, index)
             self.edited.emit()
             return True
@@ -216,8 +230,11 @@ class PipelineModel(QtCore.QAbstractItemModel):
         data = QtCore.QMimeData()
         # the phase travels with the path so a drop into the other tree knows
         # where the action is coming from
-        tokens = [f"{self.phase}:{self.handle(index).path}"
-                  for index in indexes if index.isValid()]
+        tokens = [
+            f"{self.phase}:{self.handle(index).path}"
+            for index in indexes
+            if index.isValid()
+        ]
         data.setData(MIME_PATH, ";".join(tokens).encode("utf-8"))
         return data
 
@@ -262,8 +279,13 @@ class PipelineModel(QtCore.QAbstractItemModel):
             self.cross_phase_moved.emit()
         return True
 
-    def _move_across(self, source_phase: str, path: str,
-                     parent_path: Optional[str], index: Optional[int]) -> bool:
+    def _move_across(
+        self,
+        source_phase: str,
+        path: str,
+        parent_path: Optional[str],
+        index: Optional[int],
+    ) -> bool:
         """Move one action from another phase into this one.
 
         There is no cross-phase ``move``: the document removes it from one list

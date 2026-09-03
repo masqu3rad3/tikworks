@@ -10,10 +10,9 @@ from maya import cmds
 
 import tik.maya as tm
 from tik.maya.roles.controller import Controller
-from tik.trigger.guides import GuideScene
-from tik.trigger.maya import tags
 from tik.trigger.core import ParentRef, get_module
-from tik.trigger.maya import Builder
+from tik.trigger.guides import GuideScene
+from tik.trigger.maya import Builder, tags
 
 MODULE_TYPES = ("base", "fkchain", "arm")
 
@@ -33,7 +32,9 @@ def _solo(module_type):
             get_module(module_type)(name=module_type),
             parent=ParentRef(body.instance_id, "root"),
         )
-    report = Builder().build(document=scene.document, rig_name="rules", afterlife="keep")
+    report = Builder().build(
+        document=scene.document, rig_name="rules", afterlife="keep"
+    )
     return report.rigs[instance.instance_id]
 
 
@@ -47,7 +48,9 @@ def connected_rig():
         get_module("arm")(name="arm", side="L"),
         parent=ParentRef(body.instance_id, "root"),
     )
-    report = Builder().build(document=scene.document, rig_name="rules", afterlife="keep")
+    report = Builder().build(
+        document=scene.document, rig_name="rules", afterlife="keep"
+    )
     return report, body, arm
 
 
@@ -82,9 +85,9 @@ def test_no_controller_outside_the_control_group(module_type):
     ctx = _solo(module_type)
     control_group = ctx.groups.control.long_name
     for controller in ctx.controllers:
-        assert control_group in controller.transform.long_name, (
-            f"{controller.transform.name} is outside {control_group}"
-        )
+        assert (
+            control_group in controller.transform.long_name
+        ), f"{controller.transform.name} is outside {control_group}"
 
 
 @pytest.mark.parametrize("module_type", MODULE_TYPES)
@@ -104,9 +107,10 @@ def test_every_controller_declares_a_mirror_rule(module_type):
     assert ctx.controllers, f"'{module_type}' produced no controllers"
     for controller in ctx.controllers:
         rule = controller.transform.meta[tags.MIRROR]
-        assert rule in (tags.BEHAVIOUR, tags.WORLD), (
-            f"{controller.transform.name} declares mirror rule {rule!r}"
-        )
+        assert rule in (
+            tags.BEHAVIOUR,
+            tags.WORLD,
+        ), f"{controller.transform.name} declares mirror rule {rule!r}"
 
 
 @pytest.mark.parametrize("module_type", MODULE_TYPES)
@@ -198,12 +202,18 @@ def test_space_inputs_get_no_socket():
     scene = GuideScene()
     body = scene.create_guides(get_module("base")(name="body"))
     arm = scene.create_guides(
-        get_module("arm")(name="arm", side="L", settings={
-            "anim_spaces": [{"control": "ik", "mode": "parent", "label": "world"}]
-        }),
+        get_module("arm")(
+            name="arm",
+            side="L",
+            settings={
+                "anim_spaces": [{"control": "ik", "mode": "parent", "label": "world"}]
+            },
+        ),
         parent=ParentRef(body.instance_id, "root"),
     )
-    report = Builder().build(document=scene.document, rig_name="rules", afterlife="keep")
+    report = Builder().build(
+        document=scene.document, rig_name="rules", afterlife="keep"
+    )
     rig = report.rigs[arm.instance_id]
 
     assert "root" in rig.attachments
@@ -219,14 +229,17 @@ def test_every_top_level_controller_has_an_offset_group(module_type):
     """
     rig = _solo(module_type)
     assert rig.controllers
-    tweaks = {control.transform.long_name for control in rig.controllers
-              if control.offset is None}
+    tweaks = {
+        control.transform.long_name
+        for control in rig.controllers
+        if control.offset is None
+    }
     for control in rig.controllers:
         if control.transform.long_name in tweaks:
             parent = control.transform.parent
-            assert parent is not None and Controller.is_controller(parent), (
-                f"{control.transform.name} has no offset group and no parent control"
-            )
+            assert parent is not None and Controller.is_controller(
+                parent
+            ), f"{control.transform.name} has no offset group and no parent control"
             continue
         # the offset is above the control; a module may insert its own group
         # between them (the arm's auto-collar does)

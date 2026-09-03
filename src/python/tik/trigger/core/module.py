@@ -31,7 +31,6 @@ from tik.core.side import Side
 from .manifest import GuideAttr, GuideLayout, Input, instance_key
 from .schemas import GuidePose, ModuleInstance, ParentRef
 
-
 SPACES = FieldGroup("Spaces", collapsed=True)
 """Every module's animation spaces fold away; declared here, not per module."""
 
@@ -179,7 +178,9 @@ class Module(Schema):
                 continue
             name = f"{control}_{label}"
             if name in seen:
-                problems.append(f"anim space row {index + 1}: '{name}' is already defined")
+                problems.append(
+                    f"anim space row {index + 1}: '{name}' is already defined"
+                )
             seen.add(name)
         return problems
 

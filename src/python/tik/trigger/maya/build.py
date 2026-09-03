@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-import tik.maya as tm
 from maya import cmds
+
+import tik.maya as tm
 from tik.trigger.core import registry
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import AttachError, BuildError
@@ -17,7 +18,6 @@ from tik.trigger.core.schemas import (
     order_instances,
     split_source,
 )
-
 from tik.trigger.guides import nodes as guide_nodes
 
 from . import tags
@@ -30,8 +30,12 @@ class BuildReport:
 
     built: list[str] = field(default_factory=list)  # instance ids in build order
     rigs: dict = field(default_factory=dict)  # instance id -> ModuleRig
-    connections: list[tuple[str, str]] = field(default_factory=list)  # ("L_arm.root", "body.root")
-    spaces: list[tuple[str, str]] = field(default_factory=list)  # ("L_arm.ik_chest", "body.root")
+    connections: list[tuple[str, str]] = field(
+        default_factory=list
+    )  # ("L_arm.root", "body.root")
+    spaces: list[tuple[str, str]] = field(
+        default_factory=list
+    )  # ("L_arm.ik_chest", "body.root")
     rig_root: Any = None
 
     @property
@@ -43,7 +47,11 @@ class BuildReport:
 def build_context(module, instance, rig_root, bind_parent=None) -> ModuleRig:
     """The object a module builds through, wired to its guides."""
     return ModuleRig(
-        module, instance, rig_root, guide_nodes.guide_nodes(instance.instance_id), bind_parent
+        module,
+        instance,
+        rig_root,
+        guide_nodes.guide_nodes(instance.instance_id),
+        bind_parent,
     )
 
 
@@ -72,16 +80,23 @@ def finalize(rig) -> None:
             marks[tags.KIND] = tags.OUTPUT
         tags.tag(node, **marks)
     for name, node in rig.attachments.items():
-        tags.tag(node, **{tags.KIND: tags.INPUT,
-                          tags.INSTANCE: rig.instance.instance_id,
-                          tags.ROLE: name})
+        tags.tag(
+            node,
+            **{
+                tags.KIND: tags.INPUT,
+                tags.INSTANCE: rig.instance.instance_id,
+                tags.ROLE: name,
+            },
+        )
 
 
 def connect(rig, input_name: str, source_node) -> None:
     """Drive a module's socket from the producer's output."""
     tm.MatrixConstraint.create(
-        source_node, rig.attachments[input_name],
-        maintain_offset=True, name=rig.name("attach", input_name),
+        source_node,
+        rig.attachments[input_name],
+        maintain_offset=True,
+        name=rig.name("attach", input_name),
     )
 
 
@@ -160,8 +175,10 @@ class Builder:
             raise ValueError(f"afterlife must be one of {AFTERLIFE_MODES}.")
         instances = self.order(guide_nodes.find_instances(scope, document))
         known_keys = {
-            item.key for item in (
-                instances if scope == "scene"
+            item.key
+            for item in (
+                instances
+                if scope == "scene"
                 else guide_nodes.find_instances("scene", document)
             )
         }
@@ -173,6 +190,7 @@ class Builder:
 
         with guide_nodes.undo_chunk(f"Trigger build: {rig_name}"):
             report.rig_root = ensure_rig_root(rig_name)
+
             # Producers must be built before consumers: rig.bind_parent is
             # resolved from the producer's output, so bind joints can be created
             # in their final hierarchy position instead of reparented later.
@@ -230,7 +248,9 @@ class Builder:
             return None
         return producer_ctx.outputs.get(output)
 
-    def _connect_one(self, instance, module_cls, inputs, by_key, report, known_keys) -> None:
+    def _connect_one(
+        self, instance, module_cls, inputs, by_key, report, known_keys
+    ) -> None:
         """Attach every declared input of one already-built instance."""
         rig = report.rigs[instance.instance_id]
         for declared in module_cls.inputs:
@@ -240,7 +260,8 @@ class Builder:
                     continue
                 raise AttachError(
                     f"{instance.key}.{declared.name}: required input has no source.",
-                    instance_id=instance.instance_id, module_type=instance.module_type,
+                    instance_id=instance.instance_id,
+                    module_type=instance.module_type,
                 )
             key, _output = split_source(source)
             if key is not None and key in known_keys and key not in by_key:
@@ -250,8 +271,11 @@ class Builder:
                 )
                 continue
             node = self.resolve(
-                source, by_key, report,
-                where=f"{instance.key}.{declared.name}", instance=instance,
+                source,
+                by_key,
+                report,
+                where=f"{instance.key}.{declared.name}",
+                instance=instance,
             )
             connect(rig, declared.name, node)
             report.connections.append((f"{instance.key}.{declared.name}", source))
@@ -297,8 +321,16 @@ class Builder:
             for (control, mode), (targets, labels) in groups.items():
                 connect_space(ctx, control, mode, targets, labels)
 
-    def resolve(self, source: str, by_key: dict, report: BuildReport, *,
-                strict: bool = True, where: str = "", instance=None):
+    def resolve(
+        self,
+        source: str,
+        by_key: dict,
+        report: BuildReport,
+        *,
+        strict: bool = True,
+        where: str = "",
+        instance=None,
+    ):
         """The node a source names.
 
         A source is ``"<module key>.<output>"`` or a bare scene node name.
@@ -336,16 +368,22 @@ class Builder:
         if problems:
             raise BuildError(
                 f"'{instance.name}' cannot build: " + "; ".join(problems),
-                instance_id=instance.instance_id, module_type=instance.module_type,
+                instance_id=instance.instance_id,
+                module_type=instance.module_type,
             )
         try:
             ctx = build_context(module, instance, rig_root, bind_parent)
             module.build(ctx)
-            missing = [name for name in module_cls.output_names(instance.settings) if name not in ctx.outputs]
+            missing = [
+                name
+                for name in module_cls.output_names(instance.settings)
+                if name not in ctx.outputs
+            ]
             if missing:
                 raise BuildError(
                     f"module '{instance.module_type}' did not produce output(s) {missing}",
-                    instance_id=instance.instance_id, module_type=instance.module_type,
+                    instance_id=instance.instance_id,
+                    module_type=instance.module_type,
                 )
             finalize(ctx)
         except BuildError:
@@ -354,6 +392,7 @@ class Builder:
             self.events.error(error, context=f"building {instance.name}")
             raise BuildError(
                 f"'{instance.name}' ({instance.module_type}) failed: {error}",
-                instance_id=instance.instance_id, module_type=instance.module_type,
+                instance_id=instance.instance_id,
+                module_type=instance.module_type,
             ) from error
         return ctx

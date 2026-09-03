@@ -49,13 +49,24 @@ def _qsettings_sandbox(tmp_path_factory):
     directory = tmp_path_factory.mktemp("qsettings")
     real_qsettings = QtCore.QSettings
     real_qsettings.setDefaultFormat(real_qsettings.IniFormat)
-    real_qsettings.setPath(real_qsettings.IniFormat, real_qsettings.UserScope, str(directory))
+    real_qsettings.setPath(
+        real_qsettings.IniFormat, real_qsettings.UserScope, str(directory)
+    )
 
     class _SandboxedQSettings(real_qsettings):
         def __init__(self, *args, **kwargs):
-            if len(args) == 2 and not kwargs and all(isinstance(arg, str) for arg in args):
+            if (
+                len(args) == 2
+                and not kwargs
+                and all(isinstance(arg, str) for arg in args)
+            ):
                 organization, application = args
-                super().__init__(real_qsettings.IniFormat, real_qsettings.UserScope, organization, application)
+                super().__init__(
+                    real_qsettings.IniFormat,
+                    real_qsettings.UserScope,
+                    organization,
+                    application,
+                )
             else:
                 super().__init__(*args, **kwargs)
 
@@ -118,6 +129,7 @@ def stub_session_guides(monkeypatch):
 
     sys.path.insert(0, str(Path(__file__).parent))
     from stub import StubScene
+
     from tik.trigger.session import Session
 
     scenes: dict = {}

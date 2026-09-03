@@ -61,7 +61,9 @@ class DesignerCommands:
             self.name_edit.selectAll()
             return []
         module_cls = registry.get_module(module_type)
-        parent_handle = self._current  # tree/graph selection only; nothing selected = no connection
+        parent_handle = (
+            self._current
+        )  # tree/graph selection only; nothing selected = no connection
         inputs = {}
         primary = module_cls.primary_input()
         if parent_handle is not None and primary is not None and parent_handle.outputs:
@@ -72,14 +74,23 @@ class DesignerCommands:
         elif choice == "Both":
             sides = [Side.LEFT, Side.RIGHT]
         elif choice == "Auto":
-            sides = [parent_handle.side if parent_handle is not None and parent_handle.side is not Side.CENTER else Side.LEFT]
+            sides = [
+                (
+                    parent_handle.side
+                    if parent_handle is not None
+                    and parent_handle.side is not Side.CENTER
+                    else Side.LEFT
+                )
+            ]
         else:
             sides = [Side.from_value(choice)]
         created = []
         try:
             with self.watcher.mute():
                 for side in sides:
-                    created.append(self.guides.add(module_type, side=side.value, inputs=inputs))
+                    created.append(
+                        self.guides.add(module_type, side=side.value, inputs=inputs)
+                    )
         except TriggerError as error:
             self.events.log(str(error), level="warning")
         self.refresh()
@@ -100,7 +111,10 @@ class DesignerCommands:
         try:
             with self.watcher.mute():
                 if parent is not None:
-                    self.guides.connect(f"{handle.key}.{primary.name}", f"{parent.key}.{parent.outputs[0]}")
+                    self.guides.connect(
+                        f"{handle.key}.{primary.name}",
+                        f"{parent.key}.{parent.outputs[0]}",
+                    )
                 else:
                     self.guides.disconnect(f"{handle.key}.{primary.name}")
         except TriggerError as error:
@@ -110,13 +124,20 @@ class DesignerCommands:
     def connect_dialog(self) -> None:
         if self._current is None or not self._current.input_names():
             return
-        text, ok = QtWidgets.QInputDialog.getText(self, "Connect input", f"{self._current.key}.<input> = <source>", text=f"{self._current.input_names()[0]} = ")
+        text, ok = QtWidgets.QInputDialog.getText(
+            self,
+            "Connect input",
+            f"{self._current.key}.<input> = <source>",
+            text=f"{self._current.input_names()[0]} = ",
+        )
         if ok and "=" in text:
             input_name, _eq, source = text.partition("=")
             self._on_input_changed(input_name.strip(), source.strip())
 
     def sever_current(self) -> None:
-        for handle in self.selected_handles() or ([self._current] if self._current else []):
+        for handle in self.selected_handles() or (
+            [self._current] if self._current else []
+        ):
             self.graph.sever(handle.key)
 
     def disconnect_primary(self) -> None:
@@ -130,7 +151,11 @@ class DesignerCommands:
         """Select the root guide joint(s) of the selected module(s) in the viewport."""
         select = getattr(self.guides, "select_nodes", None)
         with self.watcher.mute():
-            roots = [handle.root for handle in self.selected_handles() if handle.root is not None]
+            roots = [
+                handle.root
+                for handle in self.selected_handles()
+                if handle.root is not None
+            ]
             if select is not None:
                 select(roots)
             else:
@@ -193,7 +218,9 @@ class DesignerCommands:
         try:
             with self.watcher.mute():
                 report = self.guides.test_build(*handles)
-            self.status.set_activity(f"Test build: {report.count} module(s), {len(report.connections)} connection(s)")
+            self.status.set_activity(
+                f"Test build: {report.count} module(s), {len(report.connections)} connection(s)"
+            )
             return report
         except TriggerError as error:
             self.events.log(str(error), level="error")
@@ -264,7 +291,9 @@ class DesignerCommands:
         self.auto_sync_changed.emit(bool(on))
         QtCore.QSettings("tikworks", "trigger").setValue("designer/auto_sync", bool(on))
 
-    def export_file(self, path: Optional[str] = None, ask: bool = False, selected: bool = False) -> Optional[Path]:
+    def export_file(
+        self, path: Optional[str] = None, ask: bool = False, selected: bool = False
+    ) -> Optional[Path]:
         path = path or ("" if ask else self.last_guide_file) or self._pick("save")
         if not path:
             return None
@@ -274,7 +303,9 @@ class DesignerCommands:
         self.events.log(f"GuideLayout exported: {written}")
         return written
 
-    def import_file(self, path: Optional[str] = None, reset: bool = False) -> list[GuideHandle]:
+    def import_file(
+        self, path: Optional[str] = None, reset: bool = False
+    ) -> list[GuideHandle]:
         path = path or self._pick("open")
         if not path:
             return []
@@ -286,9 +317,21 @@ class DesignerCommands:
 
     def _pick(self, mode: str) -> str:
         if self.file_browser is not None:
-            return self.file_browser(mode, [GUIDE_EXTENSION], self.last_guide_file) or ""
+            return (
+                self.file_browser(mode, [GUIDE_EXTENSION], self.last_guide_file) or ""
+            )
         if mode == "save":
-            path, _f = QtWidgets.QFileDialog.getSaveFileName(self, "Export guides", self.last_guide_file, f"GuideLayout (*{GUIDE_EXTENSION})")
+            path, _f = QtWidgets.QFileDialog.getSaveFileName(
+                self,
+                "Export guides",
+                self.last_guide_file,
+                f"GuideLayout (*{GUIDE_EXTENSION})",
+            )
         else:
-            path, _f = QtWidgets.QFileDialog.getOpenFileName(self, "Import guides", self.last_guide_file, f"GuideLayout (*{GUIDE_EXTENSION})")
+            path, _f = QtWidgets.QFileDialog.getOpenFileName(
+                self,
+                "Import guides",
+                self.last_guide_file,
+                f"GuideLayout (*{GUIDE_EXTENSION})",
+            )
         return path

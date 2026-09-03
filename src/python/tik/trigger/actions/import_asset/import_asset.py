@@ -14,7 +14,9 @@ class ImportAsset(Action):
 
     label = "Import Model"
 
-    file_path = FileField("", extensions=[".ma", ".mb", ".fbx", ".obj", ".abc", ".usd"], label="File")
+    file_path = FileField(
+        "", extensions=[".ma", ".mb", ".fbx", ".obj", ".abc", ".usd"], label="File"
+    )
     namespace = StringField("", help="Optional namespace")
     reference = BoolField(False, help="Reference instead of import")
 

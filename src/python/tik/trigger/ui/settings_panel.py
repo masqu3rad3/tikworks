@@ -19,7 +19,12 @@ class ActionSettingsPanel(QtWidgets.QWidget):
     edited = QtCore.Signal(str)  # path
     open_file_requested = QtCore.Signal(str, str)  # path, extension
 
-    def __init__(self, parent=None, file_browser: Optional[Callable] = None, base_dir: Optional[Callable[[], str]] = None) -> None:
+    def __init__(
+        self,
+        parent=None,
+        file_browser: Optional[Callable] = None,
+        base_dir: Optional[Callable[[], str]] = None,
+    ) -> None:
         super().__init__(parent)
         self._handle: Optional[ActionHandle] = None
         self._action = None
@@ -49,7 +54,9 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         layout.addWidget(self.linked_note)
         self.form = FormBuilder(
             file_browser=file_browser,
-            file_extras={".trg": ("✎", lambda path: self.open_file_requested.emit(path, ".trg"))},
+            file_extras={
+                ".trg": ("✎", lambda path: self.open_file_requested.emit(path, ".trg"))
+            },
             base_dir=base_dir,
         )
         scroll = QtWidgets.QScrollArea()
@@ -59,7 +66,9 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         layout.addWidget(scroll, 1)
         buttons = QtWidgets.QHBoxLayout()
         self.guides_button = QtWidgets.QPushButton("Open Guide Designer")
-        self.guides_button.setToolTip("Author the guides file of this action in the Guide Designer")
+        self.guides_button.setToolTip(
+            "Author the guides file of this action in the Guide Designer"
+        )
         self.guides_button.setVisible(False)
         buttons.addWidget(self.guides_button)
         self.save_button = QtWidgets.QPushButton("Save from scene")
@@ -93,7 +102,9 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.run_button.setVisible(runnable)
         if handle is None:
             self.title.setText("No action selected")
-            self.subtitle.setText("Pick an action in the pipeline, or press Tab to add one.")
+            self.subtitle.setText(
+                "Pick an action in the pipeline, or press Tab to add one."
+            )
             self.icon.clear()
             self.form.set_target(None)
             self.linked_note.setVisible(False)
@@ -103,7 +114,13 @@ class ActionSettingsPanel(QtWidgets.QWidget):
             return
         action_cls = registry.get_action(handle.type)
         self._action = action_cls(settings=handle.settings)
-        self.icon.setPixmap(glyph_icon(initials(action_cls.display_label()), theme.CATEGORY.get(action_cls.category, theme.CATEGORY["utility"]), 26).pixmap(26, 26))
+        self.icon.setPixmap(
+            glyph_icon(
+                initials(action_cls.display_label()),
+                theme.CATEGORY.get(action_cls.category, theme.CATEGORY["utility"]),
+                26,
+            ).pixmap(26, 26)
+        )
         self.title.setText(handle.name)
         self.subtitle.setText(f"{action_cls.display_label()} · {handle.path}")
         self.form.set_target(self._action)
@@ -112,7 +129,9 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.guides_button.setVisible(self._guides_field_name() is not None)
         self.save_button.setVisible(self._has_save(action_cls))
         if handle.is_linked:
-            self.linked_note.setText("Referenced action — edits here are stored as overrides in this session.")
+            self.linked_note.setText(
+                "Referenced action — edits here are stored as overrides in this session."
+            )
             self._refresh_override_marks()
         else:
             self.form.mark_overrides(())
@@ -130,7 +149,9 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         name = self._guides_field_name()
         if name is None:
             return
-        self.open_file_requested.emit(str(getattr(self._action, name, "") or ""), ".trg")
+        self.open_file_requested.emit(
+            str(getattr(self._action, name, "") or ""), ".trg"
+        )
 
     @staticmethod
     def _has_save(action_cls) -> bool:
@@ -169,4 +190,8 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         if self._handle is None:
             return
         action_cls = registry.get_action(self._handle.type)
-        QtWidgets.QMessageBox.information(self, action_cls.display_label(), action_cls.description() or "No description.")
+        QtWidgets.QMessageBox.information(
+            self,
+            action_cls.display_label(),
+            action_cls.description() or "No description.",
+        )

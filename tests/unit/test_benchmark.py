@@ -2,7 +2,7 @@
 
 import pytest
 
-from tik.core.benchmark import BenchmarkResult, Benchmark, _BenchmarkContext
+from tik.core.benchmark import Benchmark, BenchmarkResult, _BenchmarkContext
 from tik.maya.core.benchmark import MayaBenchmark
 
 
@@ -273,4 +273,3 @@ class TestMayaBenchmark:
         assert benchmark.results["result_test"] is result
         assert result.iterations == 2
         assert len(result.times) == 2
-

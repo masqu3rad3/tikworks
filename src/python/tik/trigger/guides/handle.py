@@ -44,7 +44,9 @@ class GuideHandle:
         """
         found = self._guides.document.module(self._instance_id)
         if found is None:
-            raise GuideError(f"Module '{self._instance_id}' is no longer in the document.")
+            raise GuideError(
+                f"Module '{self._instance_id}' is no longer in the document."
+            )
         return found
 
     @property

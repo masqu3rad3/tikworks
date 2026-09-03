@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import tik.maya as tm
 from tik.trigger.core import (
-    FieldGroup,
     BoolField,
+    FieldGroup,
     FloatField,
     GuideLayout,
     Input,
@@ -22,7 +22,6 @@ from tik.trigger.core import (
     register_module,
 )
 from tik.trigger.systems.twist import twist_plug
-
 
 DEFORMATION = FieldGroup("Deformation", collapsed=True)
 GUIDES = FieldGroup("Guides", collapsed=True)
@@ -51,9 +50,7 @@ class RibbonModule(Module):
         False, help="Counter-scale Y/Z by ratio ** -0.5", group=DEFORMATION
     )
     twist = BoolField(True, help="Drive the ribbon twist from the pinned inputs")
-    controller_size = FloatField(
-        2.0, min=0.01, label="Controller Size", group=GUIDES
-    )
+    controller_size = FloatField(2.0, min=0.01, label="Controller Size", group=GUIDES)
     spacing = FloatField(
         10.0, min=0.01, help="Default distance between the guides", group=GUIDES
     )
@@ -98,12 +95,14 @@ class RibbonModule(Module):
                 else start_socket.parent
             )
             if reference is not None:
-                twist_plug(
-                    start_socket, reference, name=rig.name("startTwist")
-                ) >> ribbon.start_twist
-            twist_plug(
-                end_socket, start_socket, name=rig.name("endTwist")
-            ) >> ribbon.end_twist
+                (
+                    twist_plug(start_socket, reference, name=rig.name("startTwist"))
+                    >> ribbon.start_twist
+                )
+            (
+                twist_plug(end_socket, start_socket, name=rig.name("endTwist"))
+                >> ribbon.end_twist
+            )
 
         # Controllers belong to the module: tagged, side-coloured, in
         # control_grp, with an offset group. The offset rides the swinging

@@ -53,10 +53,17 @@ class GuideInstance:
 class GuideFile:
     """Load/save ``.trg`` files and group their joints into module instances."""
 
-    def __init__(self, records: Optional[list[dict]] = None, connections: Optional[list[dict]] = None, meta: Optional[dict] = None,
-                 designer: Optional[dict] = None) -> None:
+    def __init__(
+        self,
+        records: Optional[list[dict]] = None,
+        connections: Optional[list[dict]] = None,
+        meta: Optional[dict] = None,
+        designer: Optional[dict] = None,
+    ) -> None:
         self.records: list[dict] = list(records or [])
-        self.connections: list[dict] = list(connections or [])  # {"input": "L_arm.root", "source": "body.root"}
+        self.connections: list[dict] = list(
+            connections or []
+        )  # {"input": "L_arm.root", "source": "body.root"}
         self.meta: dict = dict(meta or {})
         # Guide Designer state that belongs to the asset, not the window:
         # {"scene_nodes": {group: [scene node, ...]}, "positions": {key: [x, y]}, "collapse": {key: 0|1|2}}
@@ -72,7 +79,12 @@ class GuideFile:
         except (OSError, ValueError) as error:
             raise GuideError(f"Cannot read guides '{path}': {error}") from error
         if isinstance(data, dict) and isinstance(data.get("joints"), list):
-            return cls(data["joints"], data.get("connections", []), data.get("meta", {}), data.get("designer", {}))
+            return cls(
+                data["joints"],
+                data.get("connections", []),
+                data.get("meta", {}),
+                data.get("designer", {}),
+            )
         raise GuideError(f"'{path}' is not a Trigger guide file.")
 
     def save(self, file_path) -> Path:
@@ -80,7 +92,11 @@ class GuideFile:
         if path.suffix != EXTENSION:
             path = path.with_suffix(EXTENSION)
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"joints": self.records, "connections": self.connections, "meta": self.meta}
+        payload = {
+            "joints": self.records,
+            "connections": self.connections,
+            "meta": self.meta,
+        }
         if self.designer:
             payload["designer"] = self.designer
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -92,7 +108,7 @@ class GuideFile:
         for item in self.connections:
             target = str(item.get("input", ""))
             if target.startswith(key + "."):
-                found[target[len(key) + 1:]] = item.get("source", "")
+                found[target[len(key) + 1 :]] = item.get("source", "")
         return found
 
     # ------------------------------------------------------------ queries
@@ -105,7 +121,11 @@ class GuideFile:
     def classify(self, record: dict) -> Optional[tuple[str, str, bool]]:
         """``(module_type, role, is_root)`` for a record, or None when unknown."""
         module_type, role = record.get("module"), record.get("role")
-        if not module_type or not role or not registry.is_module_registered(module_type):
+        if (
+            not module_type
+            or not role
+            or not registry.is_module_registered(module_type)
+        ):
             return None
         return module_type, role, registry.get_module(module_type).guides.root == role
 
@@ -122,9 +142,13 @@ class GuideFile:
 
     def instances(self) -> list[GuideInstance]:
         """Group records into module instances."""
-        self.unknown = sorted({
-            record.get("module", "") for record in self.records if self.classify(record) is None
-        })
+        self.unknown = sorted(
+            {
+                record.get("module", "")
+                for record in self.records
+                if self.classify(record) is None
+            }
+        )
         instances = self._instances_explicit()
         self._resolve_inputs(instances)
         return instances
@@ -161,7 +185,13 @@ class GuideFile:
             module_type, role, is_root = info
             instance = grouped.get(instance_id)
             if instance is None:
-                instance = GuideInstance(module_type, instance_id, record.get("name", ""), record.get("side", "C"), record)
+                instance = GuideInstance(
+                    module_type,
+                    instance_id,
+                    record.get("name", ""),
+                    record.get("side", "C"),
+                    record,
+                )
                 grouped[instance_id] = instance
             instance.joints[(role, int(record.get("index", 0)))] = record
             if is_root:
@@ -170,7 +200,11 @@ class GuideFile:
                 instance.side = record.get("side", "C")
                 instance.settings = dict(record.get("settings") or {})
                 parent = by_name.get(record.get("parent") or "")
-                instance.parent_joint = parent["name"] if parent and parent.get("instance") != instance_id else None
+                instance.parent_joint = (
+                    parent["name"]
+                    if parent and parent.get("instance") != instance_id
+                    else None
+                )
         return list(grouped.values())
 
 

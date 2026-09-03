@@ -13,6 +13,7 @@ Wrapper = TypeVar("Wrapper")
 _NODE_TYPES: dict[str, type[Any]] = {}
 _DEFAULT_FACTORY: Optional[type[Any]] = None  # set by set_default_factory(Node)
 
+
 def register(node_type: str) -> Callable[[type[Wrapper]], type[Wrapper]]:
     """Decorator for registering Maya node wrappers.
 

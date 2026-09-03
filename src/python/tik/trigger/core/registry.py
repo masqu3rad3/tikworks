@@ -56,7 +56,9 @@ def register_action(
     """
 
     if scope not in SCOPES:
-        raise RegistryError(f"Unknown action scope '{scope}'; expected one of {SCOPES}.")
+        raise RegistryError(
+            f"Unknown action scope '{scope}'; expected one of {SCOPES}."
+        )
 
     def inner(cls: type[Registered]) -> type[Registered]:
         existing = _ACTIONS.get(name)
@@ -131,7 +133,9 @@ def iter_actions(scope: Optional[str] = None) -> list[type]:
     classes = [_ACTIONS[name] for name in list_actions()]
     if scope is None:
         return classes
-    return [cls for cls in classes if _scope_allows(getattr(cls, "scope", BUILD), scope)]
+    return [
+        cls for cls in classes if _scope_allows(getattr(cls, "scope", BUILD), scope)
+    ]
 
 
 def _scope_allows(scope: str, phase: str) -> bool:

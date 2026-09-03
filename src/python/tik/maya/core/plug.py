@@ -7,8 +7,8 @@ from typing import Optional
 from maya import cmds
 from maya.api import OpenMaya
 
-from .registry import ensure_node, resolve
 from .constants import NodeNames
+from .registry import ensure_node, resolve
 
 #: Friendly type name -> (addAttr flag, Maya type). The flag decides the rest:
 #: ``attributeType`` types are animatable, so they default to keyable;
@@ -478,10 +478,14 @@ class Plug:
 
         proxy_plugs = []
         # Proxy connection direction:  original(src) -> proxy(dst)
-        self.__collect_proxy_plugs(target_plug.connectedTo(False, True), proxy_plugs)  # asSrc=True  -> destinations
+        self.__collect_proxy_plugs(
+            target_plug.connectedTo(False, True), proxy_plugs
+        )  # asSrc=True  -> destinations
 
         # Safety net: check the reverse direction too
-        self.__collect_proxy_plugs(target_plug.connectedTo(True, False), proxy_plugs)  # asDst=True  -> sources
+        self.__collect_proxy_plugs(
+            target_plug.connectedTo(True, False), proxy_plugs
+        )  # asDst=True  -> sources
 
         return proxy_plugs
 
@@ -496,7 +500,9 @@ class Plug:
     def __collect_proxy_plugs(self, plug_array, proxy_plugs):
         """Collect proxy plugs from the given plug array into the given proxy plugs list."""
         for plug in plug_array:
-            if OpenMaya.MFnAttribute(plug.attribute()).isProxyAttribute:  # property, no ()
+            if OpenMaya.MFnAttribute(
+                plug.attribute()
+            ).isProxyAttribute:  # property, no ()
                 proxy_plugs.append(plug.name())
 
     def __getitem__(self, attr):

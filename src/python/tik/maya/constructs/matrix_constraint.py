@@ -122,8 +122,12 @@ class MatrixConstraint:
                 name, driven, parent, source_plug, offset
             )
 
-        cls._connect_channels(decompose, "outputTranslate", driven, "translate", skip_translate)
-        cls._connect_channels(rotate_source, "outputRotate", driven, "rotate", skip_rotate)
+        cls._connect_channels(
+            decompose, "outputTranslate", driven, "translate", skip_translate
+        )
+        cls._connect_channels(
+            rotate_source, "outputRotate", driven, "rotate", skip_rotate
+        )
         cls._connect_channels(decompose, "outputScale", driven, "scale", skip_scale)
 
         return cls(driven, mult_matrix, decompose, average, rotate_nodes)
@@ -163,7 +167,13 @@ class MatrixConstraint:
         index += 1
         inverse["outputMatrix"] >> second_mult[f"matrixIn[{index}]"]
         second_mult["matrixSum"] >> rotate_decompose["inputMatrix"]
-        return rotate_decompose, [compose, first_mult, inverse, second_mult, rotate_decompose]
+        return rotate_decompose, [
+            compose,
+            first_mult,
+            inverse,
+            second_mult,
+            rotate_decompose,
+        ]
 
     @staticmethod
     def _connect_channels(source_node, source_attr, target, target_attr, skip):

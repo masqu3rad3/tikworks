@@ -1,6 +1,9 @@
 """Unit tests for tik.maya.core.apicommon."""
+
 from maya import cmds
+
 from tik.maya.core import apicommon
+
 
 class TestApiCommon:
     def test_obj_exists(self):
@@ -20,4 +23,3 @@ class TestApiCommon:
         assert apicommon.node_type("testMesh") == "mesh"
 
         assert apicommon.node_type("nonExistentNode") is None
-

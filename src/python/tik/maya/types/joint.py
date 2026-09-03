@@ -110,9 +110,11 @@ class Joint(Transform):
         for index, source in enumerate(joints):
             joint = cls.create(
                 name=f"{prefix}_{index}_jnt",
-                parent=current_parent.long_name
-                if hasattr(current_parent, "long_name")
-                else current_parent,
+                parent=(
+                    current_parent.long_name
+                    if hasattr(current_parent, "long_name")
+                    else current_parent
+                ),
                 radius=source.radius,
             )
             joint.joint_orient = source.joint_orient
@@ -151,9 +153,13 @@ class Joint(Transform):
         if len(joints) < 2:
             return
         if reverse_aim or reverse_up:
-            Joint._orient_chain_aimed(joints, aim_axis, up_axis, world_up, reverse_aim, reverse_up)
+            Joint._orient_chain_aimed(
+                joints, aim_axis, up_axis, world_up, reverse_aim, reverse_up
+            )
             return
-        orient_flag = f"{aim_axis}{up_axis}{''.join(sorted(set('xyz') - {aim_axis, up_axis}))}"
+        orient_flag = (
+            f"{aim_axis}{up_axis}{''.join(sorted(set('xyz') - {aim_axis, up_axis}))}"
+        )
         secondary = f"{up_axis}up"
         for joint in joints[:-1]:
             cmds.joint(
@@ -166,7 +172,9 @@ class Joint(Transform):
         cmds.joint(joints[-1].long_name, edit=True, orientation=(0, 0, 0))
 
     @staticmethod
-    def _orient_chain_aimed(joints, aim_axis, up_axis, world_up, reverse_aim, reverse_up):
+    def _orient_chain_aimed(
+        joints, aim_axis, up_axis, world_up, reverse_aim, reverse_up
+    ):
         """Orient with explicit (optionally negated) aim and up vectors.
 
         ``cmds.joint -orientJoint`` takes an axis *string* and so cannot express

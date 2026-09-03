@@ -17,9 +17,10 @@ packages = { find = {} }
 [tool.black]
 line-length = 88
 target-version = ["py310"]
-extend-exclude = "vendor"
+# tools/polish and utils/converter are parked; format them when they resume
+extend-exclude = "vendor|tools/polish|utils/converter"
 
 [tool.isort]
 profile = "black"
 known_first_party = ["tik"]
-skip_glob = ["*/vendor/*"]
+skip_glob = ["*/vendor/*", "*/tools/polish/*", "*/utils/converter/*"]

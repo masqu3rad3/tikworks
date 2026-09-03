@@ -4,7 +4,6 @@ import tempfile
 from pathlib import Path
 
 
-
 class TestUserSettingsInit:
     """Tests for UserSettings initialization."""
 
@@ -312,9 +311,10 @@ class TestFactoryDefaults:
 
             assert defaults_json["debug_mode"] == FACTORY_DEFAULTS["debug_mode"]
             assert defaults_json["mirror_mapping"] == FACTORY_DEFAULTS["mirror_mapping"]
-            assert defaults_json["max_number_of_recent_sessions"] == FACTORY_DEFAULTS[
-                "max_number_of_recent_sessions"
-            ]
+            assert (
+                defaults_json["max_number_of_recent_sessions"]
+                == FACTORY_DEFAULTS["max_number_of_recent_sessions"]
+            )
 
 
 class TestTriggerSettingsFacade:

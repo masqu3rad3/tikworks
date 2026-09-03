@@ -3,9 +3,22 @@
 import json
 
 import pytest
-
 from toy_modules import ToyChain, ToyRoot
-from tik.trigger.core import DuplicateRegistrationError, GuideLayout, ModuleInstance, NotFoundError, ParentRef, RigDocument, Side, clear_registries, get_module, register_action, register_module, unregister_module
+
+from tik.trigger.core import (
+    DuplicateRegistrationError,
+    GuideLayout,
+    ModuleInstance,
+    NotFoundError,
+    ParentRef,
+    RigDocument,
+    Side,
+    clear_registries,
+    get_module,
+    register_action,
+    register_module,
+    unregister_module,
+)
 from tik.trigger.core.schemas import GuidePose, order_instances
 
 
@@ -26,12 +39,22 @@ def test_guides_fixed_and_multi():
     assert fixed.validate([("collar", 0)]) == ["missing guide 'shoulder'"]
 
     chain = GuideLayout("root", multi="segment", min=2, max=4)
-    assert chain.expand(3) == [("root", 0), ("segment", 0), ("segment", 1), ("segment", 2)]
-    assert chain.validate([("root", 0), ("segment", 0)]) == ["needs at least 2 'segment' guides"]
-    assert "allows at most 4" in chain.validate([("root", 0)] + [("segment", index) for index in range(5)])[0]
-    assert chain.validate([("root", 0), ("segment", 0), ("segment", 1), ("nope", 0)]) == [
-        "unknown guide role 'nope'"
+    assert chain.expand(3) == [
+        ("root", 0),
+        ("segment", 0),
+        ("segment", 1),
+        ("segment", 2),
     ]
+    assert chain.validate([("root", 0), ("segment", 0)]) == [
+        "needs at least 2 'segment' guides"
+    ]
+    assert (
+        "allows at most 4"
+        in chain.validate([("root", 0)] + [("segment", index) for index in range(5)])[0]
+    )
+    assert chain.validate(
+        [("root", 0), ("segment", 0), ("segment", 1), ("nope", 0)]
+    ) == ["unknown guide role 'nope'"]
 
 
 def test_guides_rejects_bad_declarations():
@@ -139,8 +162,14 @@ def test_order_by_connections_puts_producers_first():
     first = ToyRoot(name="a").to_instance()
     second = ToyChain(name="b").to_instance()
     third = ToyChain(name="c").to_instance()
-    inputs = {"a": {}, "b": {"root": f"{first.key}.root"}, "c": {"root": f"{second.key}.root"}}
-    ordered = order_by_connections([third, second, first], lambda item: inputs[item.name])
+    inputs = {
+        "a": {},
+        "b": {"root": f"{first.key}.root"},
+        "c": {"root": f"{second.key}.root"},
+    }
+    ordered = order_by_connections(
+        [third, second, first], lambda item: inputs[item.name]
+    )
     assert [item.name for item in ordered] == ["a", "b", "c"]
 
 
@@ -173,6 +202,7 @@ def test_order_by_connections_ignores_bare_scene_sources():
 
 # ------------------------------------------------------------------- spaces
 
+
 # ------------------------------------------------------------ anim spaces
 def _spaced_module():
     from tik.trigger.core import Module
@@ -189,10 +219,12 @@ def test_space_rows_are_empty_by_default():
 
 def test_space_inputs_derive_one_port_per_row():
     module_cls = _spaced_module()
-    settings = {"anim_spaces": [
-        {"control": "ik", "mode": "parent", "label": "chest"},
-        {"control": "pole", "mode": "point", "label": "chest"},
-    ]}
+    settings = {
+        "anim_spaces": [
+            {"control": "ik", "mode": "parent", "label": "chest"},
+            {"control": "pole", "mode": "point", "label": "chest"},
+        ]
+    }
     derived = module_cls.space_inputs(settings)
     assert [item.name for item in derived] == ["ik_chest", "pole_chest"]
     assert all(item.kind == "space" for item in derived)
@@ -264,9 +296,16 @@ def test_action_scope_defaults_to_build_and_is_stamped():
     assert allows("either", BUILD) and allows("either", PUBLISH)
     assert not allows("ghost", BUILD)
 
-    assert {cls.action_type for cls in iter_actions()} == {"plain", "exporter", "either"}
+    assert {cls.action_type for cls in iter_actions()} == {
+        "plain",
+        "exporter",
+        "either",
+    }
     assert {cls.action_type for cls in iter_actions(scope=BUILD)} == {"plain", "either"}
-    assert {cls.action_type for cls in iter_actions(scope=PUBLISH)} == {"exporter", "either"}
+    assert {cls.action_type for cls in iter_actions(scope=PUBLISH)} == {
+        "exporter",
+        "either",
+    }
 
 
 def test_unknown_action_scope_is_rejected():
@@ -302,8 +341,12 @@ def test_shipped_actions_declare_their_scopes():
     # a hook script is as useful before an export as during a build
     assert registry.allows("script", BUILD) and registry.allows("script", PUBLISH)
     # everything else stays build-only
-    assert registry.allows("kinematics", BUILD) and not registry.allows("kinematics", PUBLISH)
-    assert registry.allows("import_asset", BUILD) and not registry.allows("import_asset", PUBLISH)
+    assert registry.allows("kinematics", BUILD) and not registry.allows(
+        "kinematics", PUBLISH
+    )
+    assert registry.allows("import_asset", BUILD) and not registry.allows(
+        "import_asset", PUBLISH
+    )
     # a reference in the publish list would expand another session's *build*
     # actions into a publish run, which is nonsense
     assert not registry.allows("reference", PUBLISH)

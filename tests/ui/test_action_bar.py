@@ -44,7 +44,7 @@ def test_the_auto_checkbox_reports_but_does_not_echo(bar):
     bar.auto_check.setChecked(False)
     assert seen == [False]
     seen.clear()
-    bar.set_auto_sync(True)   # programmatic: must not re-emit
+    bar.set_auto_sync(True)  # programmatic: must not re-emit
     assert seen == []
 
 

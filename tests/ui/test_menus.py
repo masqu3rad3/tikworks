@@ -1,14 +1,13 @@
 """One menu bar over both views of a session."""
 
 import pytest
+from test_pipeline_ui import _stub_designer
 
 from tik.trigger.core.guide_document import GuideDocument, ModuleEntry
 from tik.trigger.core.scene_recovery import RecoveredModule, RecoveryReport
 from tik.trigger.ui.designer.snapshot_dialog import SnapshotDialog
 from tik.trigger.ui.main import TriggerWindow
 from tik.trigger.ui.session_view import DESIGNER_TAB, SESSION_TAB
-
-from test_pipeline_ui import _stub_designer
 
 
 @pytest.fixture
@@ -23,7 +22,9 @@ def menu(window, title):
     for action in window.menu_bar.actions():
         if action.text() == title:
             return action.menu()
-    raise AssertionError(f"no {title} menu in {[entry.text() for entry in window.menu_bar.actions()]}")
+    raise AssertionError(
+        f"no {title} menu in {[entry.text() for entry in window.menu_bar.actions()]}"
+    )
 
 
 def items(menu_obj):
@@ -40,16 +41,26 @@ def test_file_saves_the_session_and_exchanges_guide_files(window):
     assert "Save" in entries
     assert "Import Guides…" in entries and "Export Guides…" in entries
     # Ctrl+S saves the session; the guide library has no save shortcut
-    save = next(entry for entry in menu(window, "&File").actions() if entry.text() == "Save")
+    save = next(
+        entry for entry in menu(window, "&File").actions() if entry.text() == "Save"
+    )
     assert save.shortcut().toString() == "Ctrl+S"
-    imp = next(entry for entry in menu(window, "&File").actions() if entry.text() == "Import Guides…")
+    imp = next(
+        entry
+        for entry in menu(window, "&File").actions()
+        if entry.text() == "Import Guides…"
+    )
     assert imp.shortcut().isEmpty()
 
 
 def test_each_sub_tab_shows_its_own_menu_and_hides_the_other(window):
     """Session on the Session tab, Guides on the Designer tab -- never both."""
-    guides = next(entry for entry in window.menu_bar.actions() if entry.text() == "&Guides")
-    session = next(entry for entry in window.menu_bar.actions() if entry.text() == "&Session")
+    guides = next(
+        entry for entry in window.menu_bar.actions() if entry.text() == "&Guides"
+    )
+    session = next(
+        entry for entry in window.menu_bar.actions() if entry.text() == "&Session"
+    )
 
     assert guides.isVisible() is False
     assert session.isVisible() is True
@@ -65,7 +76,9 @@ def test_each_sub_tab_shows_its_own_menu_and_hides_the_other(window):
 
 def test_the_guides_menu_is_disabled_off_the_designer_tab(window):
     """Enablement tracks the target, separately from which menu is on show."""
-    guides = next(entry for entry in window.menu_bar.actions() if entry.text() == "&Guides")
+    guides = next(
+        entry for entry in window.menu_bar.actions() if entry.text() == "&Guides"
+    )
     assert guides.isEnabled() is False
     window.views[0].sub_tabs.setCurrentIndex(DESIGNER_TAB)
     assert guides.isEnabled() is True
@@ -75,7 +88,11 @@ def test_the_guides_menu_is_disabled_off_the_designer_tab(window):
 
 def test_hiding_a_menu_leaves_its_shortcuts_alive(window):
     """A hidden menu is still entry menu: Ctrl+B keeps working off the Session tab."""
-    build = next(entry for entry in menu(window, "&Session").actions() if entry.text() == "Build Rig")
+    build = next(
+        entry
+        for entry in menu(window, "&Session").actions()
+        if entry.text() == "Build Rig"
+    )
     window.views[0].sub_tabs.setCurrentIndex(DESIGNER_TAB)
     assert window.session_menu_action.isVisible() is False
     assert build.isVisible() is True
@@ -84,7 +101,12 @@ def test_hiding_a_menu_leaves_its_shortcuts_alive(window):
 
 def test_the_guides_menu_carries_the_designer_verbs(window):
     entries = items(menu(window, "&Guides"))
-    for expected in ("Mirror", "Sever Connections", "Select All Guides", "Add Scene Nodes"):
+    for expected in (
+        "Mirror",
+        "Sever Connections",
+        "Select All Guides",
+        "Add Scene Nodes",
+    ):
         assert expected in entries
 
 
@@ -94,7 +116,11 @@ def test_edit_dispatches_to_whichever_view_is_active(window):
     calls = []
     view.designer.duplicate_current = lambda: calls.append("designer")
     view.duplicate_current = lambda: calls.append("session")
-    duplicate = next(entry for entry in menu(window, "&Edit").actions() if entry.text() == "Duplicate")
+    duplicate = next(
+        entry
+        for entry in menu(window, "&Edit").actions()
+        if entry.text() == "Duplicate"
+    )
     duplicate.trigger()
     assert calls == ["designer"]
     view.sub_tabs.setCurrentIndex(SESSION_TAB)
@@ -112,19 +138,28 @@ def test_undo_on_the_designer_tab_undoes_trigger_actions(window, monkeypatch):
     view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
     hits = []
     monkeypatch.setattr(view.session, "undo", lambda: hits.append("session") or True)
-    undo = next(entry for entry in menu(window, "&Edit").actions() if entry.text() == "Undo")
+    undo = next(
+        entry for entry in menu(window, "&Edit").actions() if entry.text() == "Undo"
+    )
     undo.trigger()
     assert hits == ["session"]
+
 
 def test_export_guides_asks_for_a_path(window):
     """It once passed True as the *path*, which blew up inside pathlib."""
     view = window.views[0]
     view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
     seen = {}
-    view.designer.export_file = lambda path=None, ask=False, selected=False: seen.update(
-        path=path, ask=ask, selected=selected
+    view.designer.export_file = (
+        lambda path=None, ask=False, selected=False: seen.update(
+            path=path, ask=ask, selected=selected
+        )
     )
-    action = next(entry for entry in menu(window, "&File").actions() if entry.text() == "Export Guides…")
+    action = next(
+        entry
+        for entry in menu(window, "&File").actions()
+        if entry.text() == "Export Guides…"
+    )
     action.trigger()
     assert seen == {"path": None, "ask": True, "selected": False}
 
@@ -134,7 +169,11 @@ def test_import_guides_takes_no_arguments(window):
     view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
     seen = []
     view.designer.import_file = lambda *args, **kwargs: seen.append((args, kwargs))
-    action = next(entry for entry in menu(window, "&File").actions() if entry.text() == "Import Guides…")
+    action = next(
+        entry
+        for entry in menu(window, "&File").actions()
+        if entry.text() == "Import Guides…"
+    )
     action.trigger()
     assert seen == [((), {})]
 
@@ -142,17 +181,24 @@ def test_import_guides_takes_no_arguments(window):
 def test_redraw_views_keeps_f5_and_sync_takes_f6(window):
     guides = items(menu(window, "&Guides"))
     assert "Sync From Scene" in guides
-    sync_action = next(entry for entry in menu(window, "&Guides").actions() if entry.text() == "Sync From Scene")
+    sync_action = next(
+        entry
+        for entry in menu(window, "&Guides").actions()
+        if entry.text() == "Sync From Scene"
+    )
     assert sync_action.shortcut().toString() == "F6"
 
     layout_menu = next(
-        entry.menu() for entry in menu(window, "&Guides").actions()
+        entry.menu()
+        for entry in menu(window, "&Guides").actions()
         if entry.menu() is not None and entry.text() == "Layout"
     )
     layout_entries = items(layout_menu)
     assert "Redraw Views" in layout_entries
     assert "Refresh" not in layout_entries
-    redraw = next(entry for entry in layout_menu.actions() if entry.text() == "Redraw Views")
+    redraw = next(
+        entry for entry in layout_menu.actions() if entry.text() == "Redraw Views"
+    )
     assert redraw.shortcut().toString() == "F5"
 
 
@@ -177,13 +223,20 @@ def test_snapshot_menu_command_reports_then_replaces_the_session(window, monkeyp
     # QMessageBox. Answer it without entry dialog so teardown cannot hang.
     monkeypatch.setattr(window, "ask_discard", lambda session: True)
     designer = view.designer
-    entry = ModuleEntry(instance_id="new-id", module_type="fkchain", name="arm", side="L")
+    entry = ModuleEntry(
+        instance_id="new-id", module_type="fkchain", name="arm", side="L"
+    )
     found = RecoveryReport(
-        modules=[RecoveredModule("new-id", "L_arm", "fkchain", True, 4)], guide_count=4,
+        modules=[RecoveredModule("new-id", "L_arm", "fkchain", True, 4)],
+        guide_count=4,
     )
     document = GuideDocument(modules=[entry])
     designer.guides.snapshot_from_scene = lambda: (document, found)
-    action = next(entry for entry in menu(window, "&Guides").actions() if entry.text() == "Snapshot Guides From Scene…")
+    action = next(
+        entry
+        for entry in menu(window, "&Guides").actions()
+        if entry.text() == "Snapshot Guides From Scene…"
+    )
 
     monkeypatch.setattr(SnapshotDialog, "exec", lambda self: SnapshotDialog.Rejected)
     action.trigger()

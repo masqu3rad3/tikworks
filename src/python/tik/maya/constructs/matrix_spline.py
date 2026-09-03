@@ -96,7 +96,9 @@ class MatrixSpline:
 
         # created in place under the parent so its local transform stays identity;
         # outputs carry world-space matrices and must not be transformed again
-        group_kwargs = {"parent": ensure_node(parent).long_name} if parent is not None else {}
+        group_kwargs = (
+            {"parent": ensure_node(parent).long_name} if parent is not None else {}
+        )
         group = Transform.create(name=f"{name}_spline_grp", **group_kwargs)
         group["inheritsTransform"].value = False
 
@@ -105,20 +107,26 @@ class MatrixSpline:
             spline._create_blend(index, parameter)
             for index, parameter in enumerate(parameters)
         ]
-        for index, (parameter, (pick, weights, nodes)) in enumerate(zip(parameters, blends)):
+        for index, (parameter, (pick, weights, nodes)) in enumerate(
+            zip(parameters, blends)
+        ):
             if index + 1 < len(blends):
                 target = blends[index + 1][0]["outputMatrix"]
             else:
                 target = drivers[-1]["worldMatrix[0]"]
             aim = spline._create_aim(index, pick, target, up_matrix, aim_axis, up_axis)
-            output = Transform.create(name=f"{name}_{index}_out", parent=group.long_name)
+            output = Transform.create(
+                name=f"{name}_{index}_out", parent=group.long_name
+            )
             aim["outputMatrix"] >> output["offsetParentMatrix"]
             twist = output["twist"].create("float", default=0.0)
             twist_source, math_nodes = spline._weighted_sum(twists, weights)
             if twist_source is not None:
                 twist_source >> twist
             spline.outputs.append(
-                SplineOutput(parameter, weights, output, twist, [*nodes, aim, *math_nodes])
+                SplineOutput(
+                    parameter, weights, output, twist, [*nodes, aim, *math_nodes]
+                )
             )
         return spline
 
@@ -166,7 +174,9 @@ class MatrixSpline:
         blend["outputMatrix"] >> pick["inputMatrix"]
         return pick, weights, [blend, pick]
 
-    def _create_aim(self, index: int, pick, target: Plug, up_matrix: Plug, aim_axis, up_axis):
+    def _create_aim(
+        self, index: int, pick, target: Plug, up_matrix: Plug, aim_axis, up_axis
+    ):
         aim = create_node("aimMatrix", name=f"{self.name}_{index}_aimMatrix")
         pick["outputMatrix"] >> aim["inputMatrix"]
         aim["primaryMode"].value = AIM

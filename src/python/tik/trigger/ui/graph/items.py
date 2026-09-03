@@ -25,9 +25,17 @@ from .constants import (
 
 
 class Port(QtWidgets.QGraphicsEllipseItem):
-    def __init__(self, node: "NodeItem", name: str, is_output: bool, primary: bool = False,
-                 space: bool = False) -> None:
-        super().__init__(-PORT_RADIUS, -PORT_RADIUS, PORT_RADIUS * 2, PORT_RADIUS * 2, node)
+    def __init__(
+        self,
+        node: "NodeItem",
+        name: str,
+        is_output: bool,
+        primary: bool = False,
+        space: bool = False,
+    ) -> None:
+        super().__init__(
+            -PORT_RADIUS, -PORT_RADIUS, PORT_RADIUS * 2, PORT_RADIUS * 2, node
+        )
         self.node = node
         self.name = name
         self.is_output = is_output
@@ -58,7 +66,10 @@ class Port(QtWidgets.QGraphicsEllipseItem):
         self.setPen(QtGui.QPen(QtGui.QColor("#111111"), 1))
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
-        if event.button() != QtCore.Qt.LeftButton or event.modifiers() & QtCore.Qt.ControlModifier:
+        if (
+            event.button() != QtCore.Qt.LeftButton
+            or event.modifiers() & QtCore.Qt.ControlModifier
+        ):
             event.ignore()
             return
         scene = self.scene()
@@ -99,11 +110,16 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.inputs: dict[str, Port] = {}
         self.outputs: dict[str, Port] = {}
         self._height = HEADER + 8
-        self.setFlags(QtWidgets.QGraphicsItem.ItemIsMovable | QtWidgets.QGraphicsItem.ItemIsSelectable
-                      | QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
+        self.setFlags(
+            QtWidgets.QGraphicsItem.ItemIsMovable
+            | QtWidgets.QGraphicsItem.ItemIsSelectable
+            | QtWidgets.QGraphicsItem.ItemSendsGeometryChanges
+        )
         self.setZValue(2)
         for name in spec.inputs:
-            self.inputs[name] = Port(self, name, False, primary=(name == spec.primary_input))
+            self.inputs[name] = Port(
+                self, name, False, primary=(name == spec.primary_input)
+            )
         for name in spec.spaces or []:
             self.inputs[name] = Port(self, name, False, space=True)
         for name in spec.outputs:
@@ -149,13 +165,17 @@ class NodeItem(QtWidgets.QGraphicsItem):
         return QtCore.QRectF(NODE_WIDTH - GLYPH_WIDTH - 4, 0, GLYPH_WIDTH + 4, HEADER)
 
     def boundingRect(self) -> QtCore.QRectF:  # noqa: N802
-        return QtCore.QRectF(-PORT_RADIUS, 0, NODE_WIDTH + PORT_RADIUS * 2, self._height)
+        return QtCore.QRectF(
+            -PORT_RADIUS, 0, NODE_WIDTH + PORT_RADIUS * 2, self._height
+        )
 
     # ---------------------------------------------------------------- paint
     def paint(self, painter, option, widget=None) -> None:
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         body = QtCore.QRectF(0, 0, NODE_WIDTH, self._height)
-        pen = QtGui.QPen(QtGui.QColor(theme.ACCENT if self.isSelected() else "#3a3a3a"), 1.2)
+        pen = QtGui.QPen(
+            QtGui.QColor(theme.ACCENT if self.isSelected() else "#3a3a3a"), 1.2
+        )
         if self.external:
             pen.setStyle(QtCore.Qt.DashLine)
         painter.setPen(pen)
@@ -177,38 +197,70 @@ class NodeItem(QtWidgets.QGraphicsItem):
         painter.setPen(ink)
         metrics = QtGui.QFontMetricsF(font)
         baseline = HEADER / 2 + metrics.capHeight() / 2
-        title = metrics.elidedText(self.title, QtCore.Qt.ElideRight, NODE_WIDTH - GLYPH_WIDTH - 60)
+        title = metrics.elidedText(
+            self.title, QtCore.Qt.ElideRight, NODE_WIDTH - GLYPH_WIDTH - 60
+        )
         painter.drawText(QtCore.QPointF(8, baseline), title)
         font.setBold(False)
         painter.setFont(font)
         metrics = QtGui.QFontMetricsF(font)
-        painter.drawText(QtCore.QPointF(NODE_WIDTH - GLYPH_WIDTH - 10 - metrics.horizontalAdvance(self.subtitle), baseline), self.subtitle)
+        painter.drawText(
+            QtCore.QPointF(
+                NODE_WIDTH
+                - GLYPH_WIDTH
+                - 10
+                - metrics.horizontalAdvance(self.subtitle),
+                baseline,
+            ),
+            self.subtitle,
+        )
         # collapse glyph: 1..3 lines (Maya node editor style)
         painter.setPen(QtGui.QPen(ink, 1.2))
         x0 = NODE_WIDTH - GLYPH_WIDTH - 2
         for line in range(self.mode + 1):
             line_y = HEADER / 2 - 4 + line * 4
-            painter.drawLine(QtCore.QPointF(x0, line_y), QtCore.QPointF(x0 + GLYPH_WIDTH - 4, line_y))
+            painter.drawLine(
+                QtCore.QPointF(x0, line_y), QtCore.QPointF(x0 + GLYPH_WIDTH - 4, line_y)
+            )
         painter.setPen(QtGui.QColor("#bdbdbd"))
         ins, outs = self.visible_ports()
         for port in ins:
             label = port.name + ("  ●" if port.primary else "")
-            painter.drawText(QtCore.QRectF(12, port.pos().y() - ROW / 2, NODE_WIDTH - 24, ROW), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft, label)
+            painter.drawText(
+                QtCore.QRectF(12, port.pos().y() - ROW / 2, NODE_WIDTH - 24, ROW),
+                QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft,
+                label,
+            )
         for port in outs:
-            painter.drawText(QtCore.QRectF(12, port.pos().y() - ROW / 2, NODE_WIDTH - 24, ROW), QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight, port.name)
+            painter.drawText(
+                QtCore.QRectF(12, port.pos().y() - ROW / 2, NODE_WIDTH - 24, ROW),
+                QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight,
+                port.name,
+            )
 
     # ------------------------------------------------------------- events
     def itemChange(self, change, value):  # noqa: N802
         scene = self.scene()
-        if change == QtWidgets.QGraphicsItem.ItemPositionChange and scene is not None and getattr(scene, "snap", False):
-            return QtCore.QPointF(round(value.x() / GRID) * GRID, round(value.y() / GRID) * GRID)
-        if change == QtWidgets.QGraphicsItem.ItemPositionHasChanged and scene is not None:
+        if (
+            change == QtWidgets.QGraphicsItem.ItemPositionChange
+            and scene is not None
+            and getattr(scene, "snap", False)
+        ):
+            return QtCore.QPointF(
+                round(value.x() / GRID) * GRID, round(value.y() / GRID) * GRID
+            )
+        if (
+            change == QtWidgets.QGraphicsItem.ItemPositionHasChanged
+            and scene is not None
+        ):
             scene.update_wires()
             scene.moved.add(self.key)
         return super().itemChange(change, value)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
-        if event.button() == QtCore.Qt.LeftButton and self.glyph_rect().contains(event.pos()):
+        if event.button() == QtCore.Qt.LeftButton and self.glyph_rect().contains(
+            event.pos()
+        ):
             self.scene().mode_change_requested.emit(self.key, (self.mode + 1) % 3)
             event.accept()
             return
@@ -233,7 +285,9 @@ class WireItem(QtWidgets.QGraphicsPathItem):
     def source_key(self) -> str:
         return self.source.key
 
-    def shape(self) -> QtGui.QPainterPath:  # generous hit area so wires are easy to pick
+    def shape(
+        self,
+    ) -> QtGui.QPainterPath:  # generous hit area so wires are easy to pick
         stroker = QtGui.QPainterPathStroker()
         stroker.setWidth(10)
         return stroker.createStroke(self.path())
@@ -246,7 +300,10 @@ class WireItem(QtWidgets.QGraphicsPathItem):
         path.cubicTo(start.x() + dx, start.y(), end.x() - dx, end.y(), end.x(), end.y())
         self.setPath(path)
         color = WIRE_PRIMARY if self.primary else WIRE_SECONDARY
-        pen = QtGui.QPen(QtGui.QColor(theme.TEXT_BRIGHT) if self.isSelected() else color, 2 if self.isSelected() else 1.6)
+        pen = QtGui.QPen(
+            QtGui.QColor(theme.TEXT_BRIGHT) if self.isSelected() else color,
+            2 if self.isSelected() else 1.6,
+        )
         if self.source.node.external:
             pen.setStyle(QtCore.Qt.DashLine)
         self.setPen(pen)

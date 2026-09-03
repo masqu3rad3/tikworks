@@ -1,22 +1,24 @@
-import os
 import json
+import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from maya import cmds
 
 from tik.maya.utils import control_shapes
 from tik.maya.utils.control_shapes import (
     ControlShapeLibrary,
-    get_home_dir,
-    capture,
-    capture_to_disk,
-    save_to_disk,
-    _normalize_ratio,
-    _scale_data,
     _guess_camera_view,
+    _normalize_ratio,
+    _resolve_folder_path,
+    _scale_data,
+    capture,
     capture_thumbnail,
-    _resolve_folder_path
+    capture_to_disk,
+    get_home_dir,
+    save_to_disk,
 )
+
 
 @pytest.fixture
 def clean_library():
@@ -24,6 +26,7 @@ def clean_library():
     ControlShapeLibrary._INSTANCE = None
     yield
     ControlShapeLibrary._INSTANCE = None
+
 
 def test_get_home_dir(monkeypatch):
     # Test Windows
@@ -45,6 +48,7 @@ def test_get_home_dir(monkeypatch):
     monkeypatch.delenv("USERPROFILE", raising=False)
     assert get_home_dir()
 
+
 def test_get_home_dir_fallback(monkeypatch):
     # Ensure both env vars are missing
     monkeypatch.delenv("USERPROFILE", raising=False)
@@ -54,6 +58,7 @@ def test_get_home_dir_fallback(monkeypatch):
     with patch("os.path.expanduser", return_value="/mock/home") as mock_expand:
         assert get_home_dir() == os.path.normpath("/mock/home")
         mock_expand.assert_called_with("~")
+
 
 class TestControlShapeLibrary:
     def test_singleton(self, clean_library):
@@ -95,10 +100,10 @@ class TestControlShapeLibrary:
         assert custom_dir not in lib.search_paths
 
         # Test add_path with None
-        lib.add_path(None) # Should not crash
+        lib.add_path(None)  # Should not crash
 
         # Test remove_path with None
-        lib.remove_path(None) # Should not crash
+        lib.remove_path(None)  # Should not crash
 
     def test_search_paths_empty_env_segment(clean_library, tmp_path, monkeypatch):
         lib = ControlShapeLibrary.get_instance()
@@ -228,6 +233,7 @@ class TestControlShapeLibrary:
             assert result is None
             mock_log.warning.assert_called()
 
+
 def test_capture_and_normalize():
     cmds.file(new=True, force=True)
     # Create a curve
@@ -246,13 +252,17 @@ def test_capture_and_normalize():
     # Test capture without normalization
     data_raw = capture(circle, normalize=False)
     points_raw = data_raw["curves"][0]["point"]
-    max_val_raw = max(max(abs(component) for component in point) for point in points_raw)
-    assert max_val_raw > 5.0 # Radius is 10
+    max_val_raw = max(
+        max(abs(component) for component in point) for point in points_raw
+    )
+    assert max_val_raw > 5.0  # Radius is 10
+
 
 def test_capture_no_shapes():
     cmds.file(new=True, force=True)
     empty = cmds.createNode("transform", name="empty")
     assert capture(empty) is None
+
 
 def test_save_to_disk(tmp_path):
     data = {"test": "data"}
@@ -261,6 +271,7 @@ def test_save_to_disk(tmp_path):
     with open(path, "r") as handle:
         loaded = json.load(handle)
     assert loaded == data
+
 
 def test_capture_to_disk(tmp_path, clean_library):
     cmds.file(new=True, force=True)
@@ -281,6 +292,7 @@ def test_capture_to_disk(tmp_path, clean_library):
             assert result is None
             mock_log.error.assert_called()
 
+
 def test_guess_camera_view():
     cmds.file(new=True, force=True)
 
@@ -299,6 +311,7 @@ def test_guess_camera_view():
     view = _guess_camera_view(cube2)
     assert view == "iso"
 
+
 def test_resolve_folder_path(tmp_path):
     folder = _resolve_folder_path(tmp_path, "category")
     assert folder == tmp_path / "category"
@@ -306,6 +319,7 @@ def test_resolve_folder_path(tmp_path):
 
     p2 = _resolve_folder_path(str(tmp_path), None)
     assert p2 == tmp_path
+
 
 def test_capture_thumbnail(tmp_path):
     cmds.file(new=True, force=True)
@@ -330,6 +344,7 @@ def test_capture_thumbnail(tmp_path):
                     with open(filename, "w") as handle:
                         handle.write("dummy image")
                     return filename
+
                 mock_playblast.side_effect = side_effect
 
                 path = capture_thumbnail("thumbCube", "thumb_test", tmp_path)
@@ -341,13 +356,13 @@ def test_capture_thumbnail(tmp_path):
                 MockCamera.create.assert_called()
                 mock_cam_instance.set_controls.assert_called_with("cameraAndAim")
 
+
 def test_normalize_data_small_dim():
     # Test that small dimensions are not scaled
-    data = {"curves": [{"point": [(0,0,0), (0.00001, 0, 0)]}]}
-    all_points = [(0,0,0), (0.00001, 0, 0)]
+    data = {"curves": [{"point": [(0, 0, 0), (0.00001, 0, 0)]}]}
+    all_points = [(0, 0, 0), (0.00001, 0, 0)]
 
     n_ratio = _normalize_ratio(all_points)
     normalized = _scale_data(data, n_ratio)
     # Should be unchanged because max_dim < 0.0001
     assert normalized == data
-

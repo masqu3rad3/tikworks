@@ -18,7 +18,14 @@ from tik.shared.ui.Qt import QtCore
 
 LOG = logging.getLogger(__name__)
 
-DEFAULT_EVENTS = ("SelectionChanged", "DagObjectCreated", "SceneOpened", "NewSceneOpened", "Undo", "Redo")
+DEFAULT_EVENTS = (
+    "SelectionChanged",
+    "DagObjectCreated",
+    "SceneOpened",
+    "NewSceneOpened",
+    "Undo",
+    "Redo",
+)
 
 
 class SceneWatcher(QtCore.QObject):

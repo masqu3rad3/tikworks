@@ -139,11 +139,21 @@ class ModuleRig:
 
     # ------------------------------------------------------------- groups
     def _create_groups(self) -> RigGroups:
-        limb = tm.Transform.create(name=self.name(suffix="grp"), parent=self.rig_root.long_name)
-        socket = tm.Transform.create(name=self.name("socket", suffix="grp"), parent=limb.long_name)
-        control = tm.Transform.create(name=self.name("control", suffix="grp"), parent=limb.long_name)
-        rig = tm.Transform.create(name=self.name("rig", suffix="grp"), parent=limb.long_name)
-        bind = tm.Transform.create(name=self.name("bind", suffix="grp"), parent=limb.long_name)
+        limb = tm.Transform.create(
+            name=self.name(suffix="grp"), parent=self.rig_root.long_name
+        )
+        socket = tm.Transform.create(
+            name=self.name("socket", suffix="grp"), parent=limb.long_name
+        )
+        control = tm.Transform.create(
+            name=self.name("control", suffix="grp"), parent=limb.long_name
+        )
+        rig = tm.Transform.create(
+            name=self.name("rig", suffix="grp"), parent=limb.long_name
+        )
+        bind = tm.Transform.create(
+            name=self.name("bind", suffix="grp"), parent=limb.long_name
+        )
 
         self.separator(limb, "visibility_")
         limb["controlVisibility"].create("bool", default=True) >> control["visibility"]
@@ -192,7 +202,9 @@ class ModuleRig:
 
     def group(self, *tokens, under="rig") -> tm.Transform:
         """A named group placed under one of the module's groups (or a node)."""
-        parent = getattr(self.groups, under) if isinstance(under, str) else node_of(under)
+        parent = (
+            getattr(self.groups, under) if isinstance(under, str) else node_of(under)
+        )
         return tm.Transform.create(
             name=self.name(*tokens, suffix="grp"),
             parent=parent.long_name if hasattr(parent, "long_name") else parent,
@@ -255,7 +267,11 @@ class ModuleRig:
             shape=shape,
             size=size,
             color=color if color is not None else SIDE_COLORS[self.side.value],
-            parent=node_of(parent).long_name if hasattr(node_of(parent), "long_name") else parent,
+            parent=(
+                node_of(parent).long_name
+                if hasattr(node_of(parent), "long_name")
+                else parent
+            ),
         )
         if match is not None:
             controller.transform.align_to(node_of(match))
@@ -344,17 +360,23 @@ class ModuleRig:
         return self.deform_joint(joint)
 
     def deform_joint(self, node) -> tm.Joint:
-        tags.tag(node, **{tags.KIND: tags.DEFORM, tags.INSTANCE: self.instance.instance_id})
+        tags.tag(
+            node, **{tags.KIND: tags.DEFORM, tags.INSTANCE: self.instance.instance_id}
+        )
         self.deform_joints.append(node)
         return node
 
     def output(self, name: str, node) -> None:
         if name not in self.module.output_names(self.module.values()):
-            raise GuideError(f"'{self.module.module_type}' does not declare output '{name}'.")
+            raise GuideError(
+                f"'{self.module.module_type}' does not declare output '{name}'."
+            )
         self.outputs[name] = node
 
     def attach(self, input_name: str, node) -> None:
         """Re-point an input at a node you built yourself, instead of its socket."""
         if self.module.get_input(input_name) is None:
-            raise GuideError(f"'{self.module.module_type}' does not declare input '{input_name}'.")
+            raise GuideError(
+                f"'{self.module.module_type}' does not declare input '{input_name}'."
+            )
         self.attachments[input_name] = node

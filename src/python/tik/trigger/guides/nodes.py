@@ -61,8 +61,11 @@ def create_guide_joint(
     """Create one tagged guide joint for ``module``."""
     joint = tm.Joint.create(
         name=naming.format_name(
-            module.name, role, index if index else None,
-            side=module.side.value, suffix="guide",
+            module.name,
+            role,
+            index if index else None,
+            side=module.side.value,
+            suffix="guide",
         ),
         parent=parent.long_name if hasattr(parent, "long_name") else parent,
         radius=radius,
@@ -157,8 +160,12 @@ def instance_from_nodes(
     for (role, index), node in sorted(nodes.items(), key=lambda item: item[0]):
         # cmds rather than tik.maya: world-space queries in one call, and this
         # runs once per guide joint on every scene scan.
-        position = tuple(cmds.xform(node.long_name, query=True, worldSpace=True, translation=True))
-        rotation = tuple(cmds.xform(node.long_name, query=True, worldSpace=True, rotation=True))
+        position = tuple(
+            cmds.xform(node.long_name, query=True, worldSpace=True, translation=True)
+        )
+        rotation = tuple(
+            cmds.xform(node.long_name, query=True, worldSpace=True, rotation=True)
+        )
         rotate_order = cmds.getAttr(f"{node.long_name}.rotateOrder")
         poses.append(GuidePose(role, index, position, rotation, rotate_order))
     return ModuleInstance(
@@ -189,7 +196,12 @@ def find_instances(scope: Any = "scene", document=None) -> list[ModuleInstance]:
     joints = []
     # cmds rather than tik.maya: one attribute-qualified ls finds every tagged
     # joint in the scene without walking the DAG.
-    for name in cmds.ls(f"*.{tm.META_PREFIX}{tags.KIND}", long=True, objectsOnly=True, type="joint") or []:
+    for name in (
+        cmds.ls(
+            f"*.{tm.META_PREFIX}{tags.KIND}", long=True, objectsOnly=True, type="joint"
+        )
+        or []
+    ):
         node = tm.resolve(name)
         data = node.meta.as_dict()
         if data.get(tags.KIND) == tags.GUIDE and tags.INSTANCE in data:
@@ -200,7 +212,9 @@ def find_instances(scope: Any = "scene", document=None) -> list[ModuleInstance]:
         joints = [node for node in joints if node.long_name in selected]
     elif scope != "scene":
         wanted = set(scope)
-        joints = [node for node in joints if meta[node.long_name][tags.INSTANCE] in wanted]
+        joints = [
+            node for node in joints if meta[node.long_name][tags.INSTANCE] in wanted
+        ]
 
     grouped: dict[str, dict] = {}
     for node in joints:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.shared.ui.tile_grid import TileEntry
 from tik.trigger.core import registry
@@ -11,17 +10,36 @@ from ..palette import PaletteEntry
 
 MIME_MODULE = "application/x-trigger-module-type"
 SCENE_NODE = "__scene_node__"  # pseudo module: a group of arbitrary scene nodes modules can connect to
-MODULE_COLORS = {"body": "#c9a24a", "limbs": "#5b8fd0", "generic": "#7fa86a", "face": "#b86b9a", "scene": "#8a93a0"}
-MODULE_CATEGORY = {"base": "body", "spine": "body", "head": "body", "arm": "limbs", "leg": "limbs",
-                   "finger": "limbs", "fkchain": "generic", "tail": "generic", "surface": "generic"}
+MODULE_COLORS = {
+    "body": "#c9a24a",
+    "limbs": "#5b8fd0",
+    "generic": "#7fa86a",
+    "face": "#b86b9a",
+    "scene": "#8a93a0",
+}
+MODULE_CATEGORY = {
+    "base": "body",
+    "spine": "body",
+    "head": "body",
+    "arm": "limbs",
+    "leg": "limbs",
+    "finger": "limbs",
+    "fkchain": "generic",
+    "tail": "generic",
+    "surface": "generic",
+}
 
 
 def module_entries():
     tiles, palette = [], []
     for module_cls in registry.iter_modules():
         category = MODULE_CATEGORY.get(module_cls.module_type, "generic")
-        tiles.append(TileEntry(module_cls.module_type, module_cls.display_label(), category))
-        palette.append(PaletteEntry(module_cls.module_type, module_cls.display_label(), category))
+        tiles.append(
+            TileEntry(module_cls.module_type, module_cls.display_label(), category)
+        )
+        palette.append(
+            PaletteEntry(module_cls.module_type, module_cls.display_label(), category)
+        )
     tiles.append(TileEntry(SCENE_NODE, "Scene", "scene"))
     palette.append(PaletteEntry(SCENE_NODE, "Scene Nodes", "scene"))
     return tiles, palette
@@ -30,7 +48,9 @@ def module_entries():
 class GuideTree(QtWidgets.QTreeWidget):
     """Instances tree; dragging a row onto another sets its primary input."""
 
-    reparent_requested = QtCore.Signal(str, object)  # instance_id, parent instance_id or None
+    reparent_requested = QtCore.Signal(
+        str, object
+    )  # instance_id, parent instance_id or None
     palette_requested = QtCore.Signal()
 
     def __init__(self, parent=None) -> None:
@@ -74,7 +94,9 @@ class GuideTree(QtWidgets.QTreeWidget):
         super().mousePressEvent(event)
 
     def dropEvent(self, event) -> None:  # noqa: N802
-        position = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        position = (
+            event.position().toPoint() if hasattr(event, "position") else event.pos()
+        )
         target = self.itemAt(position)
         moved = self.currentItem()
         event.setDropAction(QtCore.Qt.IgnoreAction)
@@ -85,7 +107,9 @@ class GuideTree(QtWidgets.QTreeWidget):
         target_id = target.data(0, QtCore.Qt.UserRole) if target is not None else None
         if target_id != moved_id:
             # rebuilding the tree while Qt is still inside the drop crashes; do it next tick
-            QtCore.QTimer.singleShot(0, lambda: self.reparent_requested.emit(moved_id, target_id))
+            QtCore.QTimer.singleShot(
+                0, lambda: self.reparent_requested.emit(moved_id, target_id)
+            )
 
 
 class InputRow(QtWidgets.QWidget):
@@ -107,7 +131,10 @@ class InputRow(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
         self.line = QtWidgets.QLineEdit()
-        self.line.setPlaceholderText("module.output or scene node" + ("  (optional)" if input_decl.optional else ""))
+        self.line.setPlaceholderText(
+            "module.output or scene node"
+            + ("  (optional)" if input_decl.optional else "")
+        )
         self.pick = QtWidgets.QToolButton()
         self.pick.setText("◦")
         self.pick.setToolTip("Use the selected guide (its module output) or scene node")
@@ -145,7 +172,9 @@ class InputRow(QtWidgets.QWidget):
         for key, label, outputs in modules:
             sub = menu.addMenu(f"{key}  ·  {label}")
             for output in outputs:
-                sub.addAction(output, lambda source=f"{key}.{output}": self.choose(source))
+                sub.addAction(
+                    output, lambda source=f"{key}.{output}": self.choose(source)
+                )
         if scene_nodes:
             if modules:
                 menu.addSeparator()
@@ -202,8 +231,12 @@ class SceneNodesPanel(QtWidgets.QWidget):
         buttons.addStretch(1)
         layout.addLayout(buttons)
         layout.addStretch(1)
-        self.add_button.clicked.connect(lambda: self._add_rows([self._picked()[:1] or [""]][0] or [""]))
-        self.add_selected_button.clicked.connect(lambda: self._add_rows(self._picked() or [""]))
+        self.add_button.clicked.connect(
+            lambda: self._add_rows([self._picked()[:1] or [""]][0] or [""])
+        )
+        self.add_selected_button.clicked.connect(
+            lambda: self._add_rows(self._picked() or [""])
+        )
 
     def _picked(self) -> list[str]:
         return list(self.picker() or []) if self.picker else []
@@ -239,7 +272,9 @@ class SceneNodesPanel(QtWidgets.QWidget):
         self.rows_layout.addWidget(holder)
         self.rows.append(line)
         line.editingFinished.connect(self._emit)
-        pick.clicked.connect(lambda: (line.setText((self._picked() or [line.text()])[0]), self._emit()))
+        pick.clicked.connect(
+            lambda: (line.setText((self._picked() or [line.text()])[0]), self._emit())
+        )
         remove.clicked.connect(lambda: self._remove(line, holder))
         return line
 

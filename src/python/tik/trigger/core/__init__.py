@@ -49,8 +49,8 @@ from .guide_document import (
     expand_guides,
 )
 from .manifest import GuideAttr, GuideLayout, Input, instance_key
-from .reconcile import GuideDiff, ModuleDiff, RenderedGuide, reconcile
 from .module import Module
+from .reconcile import GuideDiff, ModuleDiff, RenderedGuide, reconcile
 from .registry import (
     allows,
     clear_registries,

@@ -5,9 +5,9 @@ from __future__ import annotations
 from maya import cmds
 
 from . import apicommon
+from .constants import NODE_FACTORIES
 from .decorators import alias
 from .registry import is_registered, resolve
-from .constants import NODE_FACTORIES
 
 
 def _clean_input(data):

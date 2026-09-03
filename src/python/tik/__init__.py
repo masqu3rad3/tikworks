@@ -9,8 +9,14 @@ _maya_available = True
 
 def __getattr__(name):
     global _maya_available
-    if name in ("cs_handler", "MOCK_DATA", "ShapeLibraryModel", "FlatLeafProxyModel",
-                "HoverOverlay", "ShapeLibraryWidget"):
+    if name in (
+        "cs_handler",
+        "MOCK_DATA",
+        "ShapeLibraryModel",
+        "FlatLeafProxyModel",
+        "HoverOverlay",
+        "ShapeLibraryWidget",
+    ):
         if _maya_available:
             try:
                 from tik.maya.utils import control_shapes
@@ -38,7 +44,12 @@ def __getattr__(name):
         raise AttributeError(
             "tik.MOCK_DATA requires Maya and is not available in this environment"
         )
-    if name in ("ShapeLibraryModel", "FlatLeafProxyModel", "HoverOverlay", "ShapeLibraryWidget"):
+    if name in (
+        "ShapeLibraryModel",
+        "FlatLeafProxyModel",
+        "HoverOverlay",
+        "ShapeLibraryWidget",
+    ):
         raise AttributeError(
             f"tik.{name} requires Maya Qt widgets and is not available in this environment"
         )

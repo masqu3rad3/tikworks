@@ -7,7 +7,9 @@ from tik.shared.ui.Qt import QtCore, QtGui
 _CACHE: dict[tuple, QtGui.QIcon] = {}
 
 
-def glyph_icon(text: str, color: str, size: int = 18, text_color: str = "#1a1a1a") -> QtGui.QIcon:
+def glyph_icon(
+    text: str, color: str, size: int = 18, text_color: str = "#1a1a1a"
+) -> QtGui.QIcon:
     """A rounded square in ``color`` with ``text`` (1-2 letters) centred."""
     key = (text, color, size, text_color)
     if key in _CACHE:

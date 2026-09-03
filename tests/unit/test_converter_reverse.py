@@ -7,7 +7,17 @@ Tests the reverse conversion rules and overall conversion accuracy.
 import ast
 
 from tik.maya.utils.converter import convert_to_tik
-from tik.maya.utils.converter.rules_reverse import CreateNodeToTransformRule, JointToJointCreateRule, PolySphereToMeshCreateRule, SetAttrToPlugSetRule, SetAttrLockToPlugLockRule, GetAttrToPlugGetRule, ConnectAttrToPlugConnectRule, MakeIdentityToFreezeRule, ReverseRuleContext
+from tik.maya.utils.converter.rules_reverse import (
+    ConnectAttrToPlugConnectRule,
+    CreateNodeToTransformRule,
+    GetAttrToPlugGetRule,
+    JointToJointCreateRule,
+    MakeIdentityToFreezeRule,
+    PolySphereToMeshCreateRule,
+    ReverseRuleContext,
+    SetAttrLockToPlugLockRule,
+    SetAttrToPlugSetRule,
+)
 
 
 class TestCreateNodeToTransformRule:
@@ -343,9 +353,7 @@ selection = cmds.ls(selection=True)
         result = convert_to_tik(source)
 
         assert len(result.unsupported_operations) > 0
-        assert any(
-            "ls" in entry.message for entry in result.unsupported_operations
-        )
+        assert any("ls" in entry.message for entry in result.unsupported_operations)
 
     def test_report_summary(self):
         """Test that report summary is generated correctly."""
@@ -400,5 +408,3 @@ cmds.setAttr('myNode.translateX', 5.0)
         assert "node['translateX'].set(5.0)" in result.converted_code
         # Should NOT contain broken code
         assert "apply = node.freeze()" not in result.converted_code
-
-

@@ -5,7 +5,6 @@ from maya import cmds
 
 from tik.trigger.maya.observer import ApiCallbacks
 
-
 pytestmark = pytest.mark.usefixtures("trigger_plugins")
 
 

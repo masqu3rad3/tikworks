@@ -1,11 +1,10 @@
 """A session holds two views of one document: Session and Guide Designer."""
 
 import pytest
+from test_pipeline_ui import _stub_designer
 
 from tik.trigger.session import Session
 from tik.trigger.ui.session_view import DESIGNER_TAB, SESSION_TAB, SessionView
-
-from test_pipeline_ui import _stub_designer
 
 
 @pytest.fixture

@@ -25,7 +25,12 @@ def test_above_the_input_maximum_is_the_output_maximum():
 def test_output_range_is_honoured():
     plug = _driver(90.0)
     remap = tm.Remap.create(
-        plug, input_min=0.0, input_max=90.0, output_min=2.0, output_max=8.0, name="r_out"
+        plug,
+        input_min=0.0,
+        input_max=90.0,
+        output_min=2.0,
+        output_max=8.0,
+        name="r_out",
     )
     assert abs(remap.output.value - 8.0) < 1e-4
 

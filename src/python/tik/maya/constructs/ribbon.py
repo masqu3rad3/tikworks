@@ -112,8 +112,12 @@ class Ribbon:
 
     def _create_plugs(self, length: float, scaleable: bool) -> None:
         half = length * 0.5
-        self.start_plug = Transform.create(name=f"{self.name}_start_plug", parent=self.group.long_name)
-        self.end_plug = Transform.create(name=f"{self.name}_end_plug", parent=self.group.long_name)
+        self.start_plug = Transform.create(
+            name=f"{self.name}_start_plug", parent=self.group.long_name
+        )
+        self.end_plug = Transform.create(
+            name=f"{self.name}_end_plug", parent=self.group.long_name
+        )
         self.start_plug.translate = (-half, 0, 0)
         self.end_plug.translate = (half, 0, 0)
         self.start_twist = self.start_plug["twist"].create("float")
@@ -126,7 +130,9 @@ class Ribbon:
     def _create_up_frame(self) -> None:
         """``Rx(-start_twist) * start_plug.worldMatrix``: swings with the pin, no twist."""
         ensure_plugin("matrixNodes")
-        compose = create_node("composeMatrix", name=f"{self.name}_upFrame_composeMatrix")
+        compose = create_node(
+            "composeMatrix", name=f"{self.name}_upFrame_composeMatrix"
+        )
         negated = self.start_twist * -1.0
         negated >> compose["inputRotateX"]
         mult = create_node("multMatrix", name=f"{self.name}_upFrame_multMatrix")
@@ -189,13 +195,19 @@ class Ribbon:
             up_matrix=self.up_frame,
             parent=self.group,
         )
-        self.joint_group = Transform.create(name=f"{self.name}_joints_grp", parent=self.group.long_name)
+        self.joint_group = Transform.create(
+            name=f"{self.name}_joints_grp", parent=self.group.long_name
+        )
         # joints hold world-space channel values; the group must not transform them again
         self.joint_group["inheritsTransform"].value = False
         for index, output in enumerate(self.spline.outputs):
-            joint = Joint.create(name=f"{self.name}_{index}_jnt", parent=self.joint_group.long_name)
+            joint = Joint.create(
+                name=f"{self.name}_{index}_jnt", parent=self.joint_group.long_name
+            )
             joint["rotateOrder"].value = ROTATE_ORDER_XYZ
-            decompose = create_node("decomposeMatrix", name=f"{self.name}_{index}_decomposeMatrix")
+            decompose = create_node(
+                "decomposeMatrix", name=f"{self.name}_{index}_decomposeMatrix"
+            )
             output.transform["worldMatrix[0]"] >> decompose["inputMatrix"]
             decompose["outputTranslate"] >> joint["translate"]
             decompose["outputRotateY"] >> joint["rotateY"]
@@ -216,13 +228,15 @@ class Ribbon:
         )
 
     def _create_scaling(self, preserve_volume: bool) -> None:
-        self.measure = Measure.create(self.start_plug, self.end_plug, name=f"{self.name}_ribbon")
+        self.measure = Measure.create(
+            self.start_plug, self.end_plug, name=f"{self.name}_ribbon"
+        )
         ratio = self.measure.ratio_plug()
         # blend between 1.0 (switch off) and the live ratio (switch on)
         stretch = (ratio - 1.0) * self.scale_switch + 1.0
         volume = None
         if preserve_volume:
-            volume = (ratio ** -0.5 - 1.0) * self.scale_switch + 1.0
+            volume = (ratio**-0.5 - 1.0) * self.scale_switch + 1.0
         for joint, decompose in zip(self.deformer_joints, self._decomposes):
             scale_x = decompose["outputScaleX"] * stretch
             scale_x >> joint["scaleX"]
@@ -238,7 +252,9 @@ class Ribbon:
     def pin_start(self, node, maintain_offset: bool = True) -> MatrixConstraint:
         """Drive the start plug from ``node`` (full TRS)."""
         return MatrixConstraint.create(
-            node, self.start_plug, maintain_offset=maintain_offset,
+            node,
+            self.start_plug,
+            maintain_offset=maintain_offset,
             name=f"{self.name}_startPin",
         )
 
@@ -246,15 +262,21 @@ class Ribbon:
     def pin_end(self, node, maintain_offset: bool = True) -> MatrixConstraint:
         """Drive the end plug from ``node`` (full TRS)."""
         return MatrixConstraint.create(
-            node, self.end_plug, maintain_offset=maintain_offset,
+            node,
+            self.end_plug,
+            maintain_offset=maintain_offset,
             name=f"{self.name}_endPin",
         )
 
     @undo
-    def pin_mid(self, index: int, node, maintain_offset: bool = True) -> MatrixConstraint:
+    def pin_mid(
+        self, index: int, node, maintain_offset: bool = True
+    ) -> MatrixConstraint:
         """Drive mid plug ``index`` from ``node`` (full TRS)."""
         return MatrixConstraint.create(
-            node, self.mid_plugs[index], maintain_offset=maintain_offset,
+            node,
+            self.mid_plugs[index],
+            maintain_offset=maintain_offset,
             name=f"{self.name}_mid{index}Pin",
         )
 

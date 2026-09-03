@@ -131,8 +131,12 @@ def build_ikfk_limb(
 
     _build_lengths(rig, name, side_sign, segment_scales, result)
     _build_soft_ik(rig, name, soft_ik, control, driver, result)
-    _build_stretch(rig, name, stretch, squash, stretch_limit_default, control, driver, result)
-    _build_pole(rig, name, controller_size, pole_pin, control, driver, pole_rest, result)
+    _build_stretch(
+        rig, name, stretch, squash, stretch_limit_default, control, driver, result
+    )
+    _build_pole(
+        rig, name, controller_size, pole_pin, control, driver, pole_rest, result
+    )
     _build_visibility(rig, name, result)
     _blend_to_bind(rig, name, bind_joints, result)
     return result
@@ -162,9 +166,7 @@ def _build_chains(rig, guides, name, parent, side_sign, result) -> None:
     )
     # A mirrored-behaviour side aims the axis back up the chain, so translateX
     # goes negative and ChainLengths reads the sign.
-    tm.Joint.orient_chain(
-        source, reverse_aim=side_sign < 0, reverse_up=side_sign < 0
-    )
+    tm.Joint.orient_chain(source, reverse_aim=side_sign < 0, reverse_up=side_sign < 0)
     result.ik_joints = tm.Joint.duplicate_chain(
         source, prefix=rig.name(name, "ik"), parent=result.puppet_group
     )
@@ -301,7 +303,9 @@ def _build_soft_ik(rig, name, enabled, control, driver, result) -> None:
     )
 
 
-def _build_stretch(rig, name, stretch, squash, limit_default, control, driver, result) -> None:
+def _build_stretch(
+    rig, name, stretch, squash, limit_default, control, driver, result
+) -> None:
     """Add the extend- and compress-side factors.
 
     They live on opposite sides of 1.0 and never overlap, so each is simply a
@@ -311,9 +315,7 @@ def _build_stretch(rig, name, stretch, squash, limit_default, control, driver, r
     if stretch or squash:
         rig.separator(control, "stretch_")
     if stretch:
-        stretch_plug = control["stretch"].create(
-            "float", default=0.0, min=0.0, max=1.0
-        )
+        stretch_plug = control["stretch"].create("float", default=0.0, min=0.0, max=1.0)
         limit_plug = control["stretchLimit"].create(
             "float", default=limit_default, min=0.0
         )
@@ -332,9 +334,7 @@ def _build_stretch(rig, name, stretch, squash, limit_default, control, driver, r
         result.ik_lengths.add_factor((gap / total + 1.0).minimum(ceiling))
 
     if squash:
-        squash_plug = control["squash"].create(
-            "float", default=0.0, min=0.0, max=1.0
-        )
+        squash_plug = control["squash"].create("float", default=0.0, min=0.0, max=1.0)
         measure = tm.Measure.create(
             result.pole_base["worldMatrix[0]"],
             driver["worldMatrix[0]"],
@@ -348,9 +348,7 @@ def _build_stretch(rig, name, stretch, squash, limit_default, control, driver, r
 def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -> None:
     """Pole controller in a twist-aware auto space blended against a rest space."""
     rig.separator(control, "pole_")
-    pole_follow = control["poleFollow"].create(
-        "float", default=1.0, min=0.0, max=1.0
-    )
+    pole_follow = control["poleFollow"].create("float", default=1.0, min=0.0, max=1.0)
     frame = tm.AimFrame.create(
         result.pole_base,
         driver,
@@ -374,11 +372,15 @@ def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -
         parent=rig.groups.control,
         mirror="world",
     )
-    tm.MatrixConstraint.create(space.output, result.pole_control.offset, maintain_offset=False)
+    tm.MatrixConstraint.create(
+        space.output, result.pole_control.offset, maintain_offset=False
+    )
     # The rest offset lives in its own group rather than in the controller's
     # channels, so the animator gets a pole control that reads zero and can be
     # returned to its rest pose by zeroing it.
-    rest_group = rig.group(_role(name, "pole"), "rest", under=result.pole_control.offset)
+    rest_group = rig.group(
+        _role(name, "pole"), "rest", under=result.pole_control.offset
+    )
     rest_group.world_position = pole_rest
     # Relative, so the controller keeps its zeroed channels and simply inherits
     # the group's placement.

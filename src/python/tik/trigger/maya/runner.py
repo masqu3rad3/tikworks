@@ -24,6 +24,7 @@ from tik.trigger.core.steps import (
     StepResult,
 )
 
+
 def new_scene() -> None:
     """Start a build from an empty scene."""
     from tik.trigger.guides import nodes
@@ -41,7 +42,9 @@ def undo_chunk(label: str):
 class Runner:
     """Plans and executes a document."""
 
-    def __init__(self, events: Optional[EventBus] = None, loader: Optional[Callable] = None) -> None:
+    def __init__(
+        self, events: Optional[EventBus] = None, loader: Optional[Callable] = None
+    ) -> None:
         self.events = events or EventBus()
         self.loader = loader or Document.load
 
@@ -72,7 +75,9 @@ class Runner:
             plan.steps = kept
         return plan
 
-    def _collect(self, nodes, prefix, base_dir, chain, depth, linked, plan, phase) -> None:
+    def _collect(
+        self, nodes, prefix, base_dir, chain, depth, linked, plan, phase
+    ) -> None:
         for node in nodes:
             path = join_path(prefix, node.name)
             if not node.enabled:
@@ -81,13 +86,21 @@ class Runner:
                 self._collect_reference(node, path, base_dir, chain, depth, plan, phase)
                 continue
             plan.steps.append(Step(path, node, base_dir, chain, depth, linked, phase))
-            self._collect(node.children, path, base_dir, chain, depth + 1, linked, plan, phase)
+            self._collect(
+                node.children, path, base_dir, chain, depth + 1, linked, plan, phase
+            )
 
-    def _collect_reference(self, node, path, base_dir, chain, depth, plan, phase) -> None:
-        from tik.trigger.actions.reference.reference import Reference  # local: avoids cycle
+    def _collect_reference(
+        self, node, path, base_dir, chain, depth, plan, phase
+    ) -> None:
+        from tik.trigger.actions.reference.reference import (
+            Reference,  # local: avoids cycle
+        )
 
         try:
-            expanded, ref_dir, ref_file = Reference.expand(node, base_dir, self.loader, chain)
+            expanded, ref_dir, ref_file = Reference.expand(
+                node, base_dir, self.loader, chain
+            )
         except SessionError as error:
             plan.problems.append(f"{path}: {error}")
             self.events.log(f"{path}: {error}", level="error")
@@ -95,9 +108,20 @@ class Runner:
         # ``expanded.actions`` only, never ``expanded.publish``: publishing is an
         # act of the top-level session. The hero rig decides what gets exported;
         # the base rig it consumes does not.
-        self._collect(expanded.actions, path, ref_dir, chain + (ref_file,), depth + 1, True, plan, phase)
+        self._collect(
+            expanded.actions,
+            path,
+            ref_dir,
+            chain + (ref_file,),
+            depth + 1,
+            True,
+            plan,
+            phase,
+        )
         # a reference may also carry its own (local) children, run after the referenced ones
-        self._collect(node.children, path, base_dir, chain, depth + 1, False, plan, phase)
+        self._collect(
+            node.children, path, base_dir, chain, depth + 1, False, plan, phase
+        )
 
     # -------------------------------------------------------------- running
     def run(
@@ -120,7 +144,9 @@ class Runner:
             raise SessionError(
                 "'until' cannot be combined with publish: a partial build must not publish."
             )
-        steps = list(self.plan(document, base_dir, until=until, only=only, phase=BUILD).steps)
+        steps = list(
+            self.plan(document, base_dir, until=until, only=only, phase=BUILD).steps
+        )
         if publish:
             steps += self.plan(document, base_dir, phase=PUBLISH).steps
         if reset_scene and only is None:
@@ -148,18 +174,31 @@ class Runner:
         problems = action.validate(ctx)
         if problems:
             message = "; ".join(problems)
-            self.events.emit(STEP_FAILED, path=step.path, phase=step.phase, error=message)
-            raise ActionExecutionError(f"{step.display_chain}: {message}", action_name=step.path)
+            self.events.emit(
+                STEP_FAILED, path=step.path, phase=step.phase, error=message
+            )
+            raise ActionExecutionError(
+                f"{step.display_chain}: {message}", action_name=step.path
+            )
         try:
             with undo_chunk(f"Trigger: {step.display_chain}"):
                 action.run(ctx)
         except Exception as error:  # noqa: BLE001 - report then wrap
             seconds = time.perf_counter() - started
-            self.events.emit(STEP_FAILED, path=step.path, phase=step.phase,
-                             error=str(error), seconds=seconds)
+            self.events.emit(
+                STEP_FAILED,
+                path=step.path,
+                phase=step.phase,
+                error=str(error),
+                seconds=seconds,
+            )
             self.events.error(error, context=step.display_chain)
-            raise ActionExecutionError(f"{step.display_chain}: {error}", action_name=step.path) from error
+            raise ActionExecutionError(
+                f"{step.display_chain}: {error}", action_name=step.path
+            ) from error
         seconds = time.perf_counter() - started
-        self.events.emit(STEP_FINISHED, path=step.path, phase=step.phase, seconds=seconds)
+        self.events.emit(
+            STEP_FINISHED, path=step.path, phase=step.phase, seconds=seconds
+        )
         self.events.log(f"{step.display_chain} done in {seconds:.2f} s")
         return StepResult(step.path, "done", seconds, phase=step.phase)

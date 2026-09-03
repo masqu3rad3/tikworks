@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Optional
 
 from maya import cmds
+
 from tik.trigger.core import registry
 from tik.trigger.core.guide_document import GuideDocument, ModuleEntry
 from tik.trigger.core.ordering import dependency_order
@@ -56,7 +57,9 @@ def _producer_guide(entry: ModuleEntry, document: Optional[GuideDocument]):
     if producer is None:
         return None
     producer_cls = registry.get_module(producer.module_type)
-    role = output if output in producer_cls.guides.all_roles else producer_cls.guides.root
+    role = (
+        output if output in producer_cls.guides.all_roles else producer_cls.guides.root
+    )
     found = nodes.guide_nodes(producer_id)
     return found.get((role, 0)) or found.get((producer_cls.guides.root, 0))
 
@@ -155,4 +158,6 @@ def ordered(document: GuideDocument) -> list:
                     found.append(producer)
         return found
 
-    return dependency_order(document.modules, producers, lambda entry: entry.instance_id)
+    return dependency_order(
+        document.modules, producers, lambda entry: entry.instance_id
+    )

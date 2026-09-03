@@ -142,7 +142,9 @@ class Document:
             return self.publish
         raise SessionError(f"Unknown phase '{phase}'.")
 
-    def walk(self, phase: str = BUILD) -> Iterator[tuple[str, ActionNode, Optional[ActionNode]]]:
+    def walk(
+        self, phase: str = BUILD
+    ) -> Iterator[tuple[str, ActionNode, Optional[ActionNode]]]:
         """Yield ``(path, node, parent)`` depth-first."""
 
         def _walk(nodes, parent, prefix):
@@ -176,7 +178,9 @@ class Document:
         parts = split_path(path)
         return self.find(join_path(*parts[:-1]), phase) if len(parts) > 1 else None
 
-    def siblings(self, parent_path: Optional[str], phase: str = BUILD) -> list[ActionNode]:
+    def siblings(
+        self, parent_path: Optional[str], phase: str = BUILD
+    ) -> list[ActionNode]:
         if not parent_path:
             return self.roots(phase)
         return self.require(parent_path, phase).children
@@ -187,12 +191,14 @@ class Document:
                 return path
         return None
 
-    def unique_name(self, parent_path: Optional[str], base: str, phase: str = BUILD) -> str:
+    def unique_name(
+        self, parent_path: Optional[str], base: str, phase: str = BUILD
+    ) -> str:
         names = {node.name for node in self.siblings(parent_path, phase)}
         if base not in names:
             return base
         stem = base.rstrip("0123456789") or base
-        digits = base[len(stem):]
+        digits = base[len(stem) :]
         counter = int(digits) if digits else 0
         while True:
             counter += 1
@@ -247,7 +253,9 @@ class Document:
         if parent and (parent == path or parent.startswith(path + SEPARATOR)):
             raise SessionError("Cannot move an action under itself.")
         old_parent = self.parent_of(path, phase)
-        old_siblings = old_parent.children if old_parent is not None else self.roots(phase)
+        old_siblings = (
+            old_parent.children if old_parent is not None else self.roots(phase)
+        )
         old_index = old_siblings.index(node)
         old_siblings.pop(old_index)
         new_siblings = self.siblings(parent, phase)
@@ -280,5 +288,9 @@ class Document:
         siblings = parent.children if parent is not None else self.roots(phase)
         clone = node.copy()
         parent_path = join_path(*split_path(path)[:-1])
-        return self.add(clone, parent=parent_path or None,
-                        index=siblings.index(node) + 1, phase=phase)
+        return self.add(
+            clone,
+            parent=parent_path or None,
+            index=siblings.index(node) + 1,
+            phase=phase,
+        )

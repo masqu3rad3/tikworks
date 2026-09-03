@@ -12,7 +12,9 @@ from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 class PaletteEntry:
     __slots__ = ("key", "label", "category", "keywords")
 
-    def __init__(self, key: str, label: str, category: str = "", keywords: Sequence[str] = ()) -> None:
+    def __init__(
+        self, key: str, label: str, category: str = "", keywords: Sequence[str] = ()
+    ) -> None:
         self.key = key
         self.label = label
         self.category = category
@@ -22,7 +24,12 @@ class PaletteEntry:
         text = text.lower().strip()
         if not text:
             return True
-        haystack = [self.key.lower(), self.label.lower(), self.category.lower(), *self.keywords]
+        haystack = [
+            self.key.lower(),
+            self.label.lower(),
+            self.category.lower(),
+            *self.keywords,
+        ]
         return any(text in item for item in haystack)
 
 
@@ -34,7 +41,12 @@ class SearchPalette(QtWidgets.QFrame):
 
     MAX_RECENT = 6
 
-    def __init__(self, entries: Sequence[PaletteEntry], parent=None, colors: Optional[dict] = None) -> None:
+    def __init__(
+        self,
+        entries: Sequence[PaletteEntry],
+        parent=None,
+        colors: Optional[dict] = None,
+    ) -> None:
         super().__init__(parent, QtCore.Qt.Popup | QtCore.Qt.FramelessWindowHint)
         self.entries = list(entries)
         self.colors = colors or theme.CATEGORY
@@ -46,7 +58,9 @@ class SearchPalette(QtWidgets.QFrame):
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         self.search = QtWidgets.QLineEdit()
-        self.search.setPlaceholderText("Type to search…  Enter: add after · Shift+Enter: add as child")
+        self.search.setPlaceholderText(
+            "Type to search…  Enter: add after · Shift+Enter: add as child"
+        )
         self.list = QtWidgets.QListWidget()
         self.list.setFrameShape(QtWidgets.QFrame.NoFrame)
         self.list.setIconSize(QtCore.QSize(18, 18))
@@ -64,15 +78,21 @@ class SearchPalette(QtWidgets.QFrame):
         self.list.clear()
         entries = [entry for entry in self.entries if entry.matches(text)]
         if not text:
-            recent = [entry for key in self.recent for entry in entries if entry.key == key]
+            recent = [
+                entry for key in self.recent for entry in entries if entry.key == key
+            ]
             others = [entry for entry in entries if entry.key not in self.recent]
-            ordered = recent + sorted(others, key=lambda entry: (entry.category, entry.label))
+            ordered = recent + sorted(
+                others, key=lambda entry: (entry.category, entry.label)
+            )
             if recent:
                 self._add_header("recent")
                 for entry in recent:
                     self._add_entry(entry)
                 current_category = None
-                for entry in sorted(others, key=lambda entry: (entry.category, entry.label)):
+                for entry in sorted(
+                    others, key=lambda entry: (entry.category, entry.label)
+                ):
                     if entry.category != current_category:
                         current_category = entry.category
                         self._add_header(current_category)
@@ -85,7 +105,13 @@ class SearchPalette(QtWidgets.QFrame):
                         self._add_header(current_category)
                     self._add_entry(entry)
         else:
-            for entry in sorted(entries, key=lambda entry: (not entry.label.lower().startswith(text.lower()), entry.label)):
+            for entry in sorted(
+                entries,
+                key=lambda entry: (
+                    not entry.label.lower().startswith(text.lower()),
+                    entry.label,
+                ),
+            ):
                 self._add_entry(entry)
         for row in range(self.list.count()):
             if self.list.item(row).flags() & QtCore.Qt.ItemIsSelectable:
@@ -102,7 +128,13 @@ class SearchPalette(QtWidgets.QFrame):
         self.list.addItem(item)
 
     def _add_entry(self, entry: PaletteEntry) -> None:
-        item = QtWidgets.QListWidgetItem(glyph_icon(initials(entry.label), self.colors.get(entry.category, theme.CATEGORY["utility"])), entry.label)
+        item = QtWidgets.QListWidgetItem(
+            glyph_icon(
+                initials(entry.label),
+                self.colors.get(entry.category, theme.CATEGORY["utility"]),
+            ),
+            entry.label,
+        )
         item.setData(QtCore.Qt.UserRole, entry.key)
         item.setToolTip(f"{entry.key} · {entry.category}")
         self.list.addItem(item)
@@ -112,8 +144,11 @@ class SearchPalette(QtWidgets.QFrame):
         return item.data(QtCore.Qt.UserRole) if item is not None else None
 
     def visible_keys(self) -> list[str]:
-        return [self.list.item(row).data(QtCore.Qt.UserRole) for row in range(self.list.count())
-                if self.list.item(row).data(QtCore.Qt.UserRole)]
+        return [
+            self.list.item(row).data(QtCore.Qt.UserRole)
+            for row in range(self.list.count())
+            if self.list.item(row).data(QtCore.Qt.UserRole)
+        ]
 
     # ----------------------------------------------------------- choosing
     def _choose(self, as_child: bool) -> None:
@@ -123,7 +158,7 @@ class SearchPalette(QtWidgets.QFrame):
         if key in self.recent:
             self.recent.remove(key)
         self.recent.insert(0, key)
-        del self.recent[self.MAX_RECENT:]
+        del self.recent[self.MAX_RECENT :]
         self.hide()
         self.chosen.emit(key, as_child)
 

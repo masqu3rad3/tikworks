@@ -58,7 +58,9 @@ def test_external_control_plug():
     first, second, driven = _setup()
     holder = tm.Transform.create(name="holder")
     control = holder["which"].create("enum", items=["a", "b"])
-    switch = MatrixSwitch.create([first, second], driven, control=control, maintain_offset=False)
+    switch = MatrixSwitch.create(
+        [first, second], driven, control=control, maintain_offset=False
+    )
     assert switch.control.path == "holder.which"
     control.value = 1
     assert abs(driven.world_translation.x - 10) < 1e-6
