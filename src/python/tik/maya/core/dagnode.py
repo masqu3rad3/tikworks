@@ -129,7 +129,6 @@ class DagNode(Node):
             parent_inverse_matrix = new_dag_path.exclusiveMatrixInverse()
             # Compute new local matrix to maintain world position
             new_local_matrix = world_matrix_before * parent_inverse_matrix
-            # Apply the new local transformation
             transform_fn = OpenMaya.MFnTransform(new_dag_path)
             transform_fn.setTransformation(
                 OpenMaya.MTransformationMatrix(new_local_matrix)

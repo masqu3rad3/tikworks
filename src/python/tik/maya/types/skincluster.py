@@ -308,6 +308,22 @@ class SkinCluster(Deformer):
         return cmds.getAttr(f"{self.name}.lockWeights[{index}]")
 
     # python
+    def _influence_indices_for(self, influences) -> list[int]:
+        """Logical influence indices for a name or index, or a list of them."""
+        if isinstance(influences, (str, int)):
+            influences = [influences]
+        elif not isinstance(influences, list):
+            raise TypeError("`influences` must be an int, str or list of them.")
+        indices: list[int] = []
+        for influence in influences:
+            if isinstance(influence, str):
+                indices.append(self.influence_index(influence))
+            elif isinstance(influence, int):
+                indices.append(influence)
+            else:
+                raise TypeError("Influence entries must be int or str.")
+        return indices
+
     def get_influence_weights(
         self,
         influences: Union[int, str, list[Union[int, str]]],
@@ -324,27 +340,10 @@ class SkinCluster(Deformer):
             DeformerWeights: channel_count == number of requested influences,
                              element_count == vertex_count.
         """
-        # Normalize to list
-        if isinstance(influences, (str, int)):
-            requested = [influences]
-        elif isinstance(influences, list):
-            requested = influences
-        else:
-            raise TypeError("`influences` must be an int, str or list of them.")
-
+        requested_indices = self._influence_indices_for(influences)
         dag_path, vertex_component, skin_fn = self._get_geometry_dag_and_components(
             geometry
         )
-
-        # Resolve logical indices for requested influences (names preferred)
-        requested_indices: list[int] = []
-        for influence in requested:
-            if isinstance(influence, str):
-                requested_indices.append(self.influence_index(influence))
-            elif isinstance(influence, int):
-                requested_indices.append(influence)
-            else:
-                raise TypeError("Influence entries must be int or str.")
 
         # Query full weights and the influence ordering produced by the API
         full_weights, _ = skin_fn.getWeights(dag_path, vertex_component)
@@ -417,27 +416,10 @@ class SkinCluster(Deformer):
             geometry: Optional geometry to set.
             normalize: Whether to normalize weights after setting.
         """
-        # Normalize to list
-        if isinstance(influences, (str, int)):
-            requested = [influences]
-        elif isinstance(influences, list):
-            requested = influences
-        else:
-            raise TypeError("`influences` must be an int, str or list of them.")
-
+        requested_indices = self._influence_indices_for(influences)
         dag_path, vertex_component, skin_fn = self._get_geometry_dag_and_components(
             geometry
         )
-
-        # Resolve logical indices for requested influences
-        requested_indices: list[int] = []
-        for influence in requested:
-            if isinstance(influence, str):
-                requested_indices.append(self.influence_index(influence))
-            elif isinstance(influence, int):
-                requested_indices.append(influence)
-            else:
-                raise TypeError("Influence entries must be int or str.")
 
         selected_count = len(requested_indices)
         vertex_count = self.vertex_count
@@ -457,21 +439,13 @@ class SkinCluster(Deformer):
                 )
             flat_weights = list(weights.weights)
         else:
-            # plain list
-            if selected_count == 1:
-                if len(weights) != vertex_count:
-                    raise ValueError(
-                        f"Weight length {len(weights)} != {vertex_count} (vertex count)"
-                    )
-                flat_weights = list(weights)
-            else:
-                expected = vertex_count * selected_count
-                if len(weights) != expected:
-                    raise ValueError(
-                        f"Weight length {len(weights)} != expected {expected} "
-                        f"(vertex_count * influence_count)"
-                    )
-                flat_weights = list(weights)
+            expected = vertex_count * selected_count
+            if len(weights) != expected:
+                raise ValueError(
+                    f"Weight length {len(weights)} != expected {expected} "
+                    f"(vertex_count * influence_count)"
+                )
+            flat_weights = list(weights)
 
         # Build MIntArray of logical influence indices for the API
         influence_indices_array = OpenMaya.MIntArray(selected_count, 0)

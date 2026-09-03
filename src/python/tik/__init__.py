@@ -1,4 +1,7 @@
-"""Controller shape library UI widget for TikWorks Maya tools."""
+"""TikWorks.
+
+``tik.core`` is pure Python, ``tik.maya`` wraps Maya, and the tools build on both.
+"""
 
 # Lazy loading of Maya-dependent code.
 # This allows tik.trigger to be imported in headless/test environments

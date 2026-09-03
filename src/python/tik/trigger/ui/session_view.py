@@ -200,6 +200,36 @@ class SessionView(QtWidgets.QWidget):
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         self.splitter.setHandleWidth(6)
 
+        self.splitter.addWidget(self._build_shelf_pane())
+        self.splitter.addWidget(self._build_pipeline_pane())
+        self.settings = ActionSettingsPanel(
+            file_browser=file_browser, base_dir=lambda: self.session.directory
+        )
+        self.splitter.addWidget(self.settings)
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 1)
+        self.splitter.setStretchFactor(2, 1)
+        self.splitter.setCollapsible(0, True)
+        self.splitter.setCollapsible(1, False)
+        self.splitter.setCollapsible(2, False)
+        self.splitter.setSizes([170, 460, 420])
+        layout.addWidget(self.splitter, 1)
+
+        layout.addWidget(self._build_build_bar())
+
+        self.sub_tabs.addTab(session_page, "Session")
+        # a placeholder until the Designer is built on first activation
+        self._designer_page = QtWidgets.QWidget()
+        QtWidgets.QVBoxLayout(self._designer_page).setContentsMargins(0, 0, 0, 0)
+        self.sub_tabs.addTab(self._designer_page, "Guide Designer")
+        self.sub_tabs.currentChanged.connect(self._on_sub_tab_changed)
+
+        self.palette = SearchPalette(action_entries(BUILD), self)
+        self.palette.chosen.connect(self.add_action)
+
+        self._connect_signals()
+
+    def _build_shelf_pane(self) -> QtWidgets.QWidget:
         self.shelves = {
             BUILD: TileGrid(tile_entries(BUILD), MIME_TYPE),
             PUBLISH: TileGrid(tile_entries(PUBLISH), MIME_TYPE),
@@ -212,8 +242,9 @@ class SessionView(QtWidgets.QWidget):
             self.shelf_stack.addWidget(self.shelves[phase])
         self.shelf = self.shelves[BUILD]  # menus and tests reach for the focused one
         self.shelf_pane = pane("Actions", self.shelf_stack)
-        self.splitter.addWidget(self.shelf_pane)
+        return self.shelf_pane
 
+    def _build_pipeline_pane(self) -> QtWidgets.QWidget:
         self.tree = self._make_tree(self.model)
         self.publish_tree = self._make_tree(self.publish_model)
         self.trees = {BUILD: self.tree, PUBLISH: self.publish_tree}
@@ -229,21 +260,9 @@ class SessionView(QtWidgets.QWidget):
         self.pipeline_splitter.setCollapsible(0, False)
         self.pipeline_splitter.setCollapsible(1, True)
         self.pipeline_splitter.setSizes([360, 120])
-        self.splitter.addWidget(self.pipeline_splitter)
+        return self.pipeline_splitter
 
-        self.settings = ActionSettingsPanel(
-            file_browser=file_browser, base_dir=lambda: self.session.directory
-        )
-        self.splitter.addWidget(self.settings)
-        self.splitter.setStretchFactor(0, 0)
-        self.splitter.setStretchFactor(1, 1)
-        self.splitter.setStretchFactor(2, 1)
-        self.splitter.setCollapsible(0, True)
-        self.splitter.setCollapsible(1, False)
-        self.splitter.setCollapsible(2, False)
-        self.splitter.setSizes([170, 460, 420])
-        layout.addWidget(self.splitter, 1)
-
+    def _build_build_bar(self) -> QtWidgets.QWidget:
         bar_frame = QtWidgets.QFrame()
         bar_frame.setObjectName("BuildBar")
         bar = QtWidgets.QHBoxLayout(bar_frame)
@@ -264,18 +283,9 @@ class SessionView(QtWidgets.QWidget):
         bar.addWidget(self.publish_button)
         bar.addWidget(self.progress, 1)
         bar.addWidget(self.counter)
-        layout.addWidget(bar_frame)
+        return bar_frame
 
-        self.sub_tabs.addTab(session_page, "Session")
-        # a placeholder until the Designer is built on first activation
-        self._designer_page = QtWidgets.QWidget()
-        QtWidgets.QVBoxLayout(self._designer_page).setContentsMargins(0, 0, 0, 0)
-        self.sub_tabs.addTab(self._designer_page, "Guide Designer")
-        self.sub_tabs.currentChanged.connect(self._on_sub_tab_changed)
-
-        self.palette = SearchPalette(action_entries(BUILD), self)
-        self.palette.chosen.connect(self.add_action)
-
+    def _connect_signals(self) -> None:
         for phase in PHASES:
             tree = self.trees[phase]
             model = self.models[phase]

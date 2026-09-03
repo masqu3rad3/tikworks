@@ -156,7 +156,30 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         tiles, palette_entries = module_entries()
         self.splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         self.splitter.setHandleWidth(6)
+        self.splitter.addWidget(self._build_side_pane(tiles))
+        self.splitter.addWidget(self._build_tree_pane())
+        self.splitter.addWidget(self._build_graph_pane())
+        self.splitter.addWidget(self._build_properties_pane())
+        for index, stretch in enumerate((0, 1, 2, 1)):
+            self.splitter.setStretchFactor(index, stretch)
+        self.splitter.setCollapsible(0, True)
+        self.splitter.setCollapsible(1, True)
+        self.splitter.setCollapsible(2, True)
+        self.splitter.setCollapsible(3, False)
+        self.splitter.setSizes([170, 280, 520, 270])
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.splitter, 1)
+        self.action_bar = DesignerActionBar(self)
+        layout.addWidget(self.action_bar)
 
+        self.palette = SearchPalette(palette_entries, self, colors=MODULE_COLORS)
+        self.palette.chosen.connect(lambda key, _child: self.create_guides(key))
+
+        self._connect_signals()
+
+    def _build_side_pane(self, tiles) -> QtWidgets.QWidget:
         left = QtWidgets.QWidget()
         left_layout = QtWidgets.QVBoxLayout(left)
         left_layout.setContentsMargins(8, 8, 8, 8)
@@ -177,8 +200,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.shelf = TileGrid(tiles, MIME_MODULE, colors=MODULE_COLORS)
         self.shelf.activated.connect(lambda key: self.create_guides(key))
         left_layout.addWidget(self.shelf, 1)
-        self.splitter.addWidget(left)
+        return left
 
+    def _build_tree_pane(self) -> QtWidgets.QWidget:
         self.tree = GuideTree()
         self.tree_filter = FilterBar(
             placeholder="Filter modules…  (Enter to keep a keyword)"
@@ -190,12 +214,14 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         tree_layout.addWidget(self.tree_filter)
         tree_layout.addWidget(self.tree, 1)
         self.tree_pane = pane("Tree", tree_holder)
-        self.splitter.addWidget(self.tree_pane)
+        return self.tree_pane
 
+    def _build_graph_pane(self) -> QtWidgets.QWidget:
         self.graph = GraphView(self.guides, events=self.events)
         self.graph_pane = pane("Graph", self.graph)
-        self.splitter.addWidget(self.graph_pane)
+        return self.graph_pane
 
+    def _build_properties_pane(self) -> QtWidgets.QWidget:
         self.properties = QtWidgets.QWidget()
         props = QtWidgets.QVBoxLayout(self.properties)
         props.setContentsMargins(12, 10, 12, 10)
@@ -232,25 +258,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.scene_panel = SceneNodesPanel(picker=self._selected_scene_nodes)
         self.scene_panel.setVisible(False)
         props.addWidget(self.scene_panel, 1)
-        self.splitter.addWidget(self.properties)
+        return self.properties
 
-        for index, stretch in enumerate((0, 1, 2, 1)):
-            self.splitter.setStretchFactor(index, stretch)
-        self.splitter.setCollapsible(0, True)
-        self.splitter.setCollapsible(1, True)
-        self.splitter.setCollapsible(2, True)
-        self.splitter.setCollapsible(3, False)
-        self.splitter.setSizes([170, 280, 520, 270])
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.splitter, 1)
-        self.action_bar = DesignerActionBar(self)
-        layout.addWidget(self.action_bar)
-
-        self.palette = SearchPalette(palette_entries, self, colors=MODULE_COLORS)
-        self.palette.chosen.connect(lambda key, _child: self.create_guides(key))
-
+    def _connect_signals(self) -> None:
         self.tree_filter.filter_changed.connect(self.apply_tree_filter)
         self.tree.itemSelectionChanged.connect(self._on_tree_selection)
         self.tree.reparent_requested.connect(self.reparent)

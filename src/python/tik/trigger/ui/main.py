@@ -115,18 +115,27 @@ class TriggerWindow(MayaToolWindow):
         return action
 
     def _build_menus(self, bar) -> None:
+        self._menus: dict = {}
+        self._build_file_menu(self._add_menu(bar, "&File"))
+        self._build_edit_menu(self._add_menu(bar, "&Edit"))
+        self._build_session_menu(self._add_menu(bar, "&Session"))
+        guides_menu = self._add_menu(bar, "&Guides")
+        self._build_guides_menu(guides_menu)
+        self._build_layout_menu(guides_menu)
+        self._build_tools_menu(self._add_menu(bar, "&Tools"))
+        self._build_help_menu(self._add_menu(bar, "&Help"))
+        self._update_recent_menu()
+
+    def _add_menu(self, bar, title: str) -> QtWidgets.QMenu:
         # Built with the bar as their C++ parent, not via ``bar.addMenu(str)``:
         # that hands ownership to Python, and the menu dies with the local that
         # held it -- leaving the bar showing titles backed by dead objects.
-        self._menus: dict = {}
+        menu = QtWidgets.QMenu(title, bar)
+        bar.addMenu(menu)
+        self._menus[title] = menu
+        return menu
 
-        def add_menu(title: str):
-            found = QtWidgets.QMenu(title, bar)
-            bar.addMenu(found)
-            self._menus[title] = found
-            return found
-
-        file_menu = add_menu("&File")
+    def _build_file_menu(self, file_menu) -> None:
         self._action(file_menu, "New Session", self.new_session, "Ctrl+N")
         self._action(file_menu, "Open…", self.open_session, "Ctrl+O")
         self.recent_menu = file_menu.addMenu("Open Recent")
@@ -159,10 +168,10 @@ class TriggerWindow(MayaToolWindow):
         )
         self._action(file_menu, "Quit", self.close, "Ctrl+Q")
 
+    def _build_edit_menu(self, edit_menu) -> None:
         # One Edit menu for both views: the verbs mean the same thing, so they
         # act on whichever of the two is in front rather than fighting over
         # Ctrl+D / F2 / Del.
-        edit_menu = add_menu("&Edit")
         self._action(edit_menu, "Undo", self.undo, "Ctrl+Z")
         self._action(edit_menu, "Redo", self.redo, "Ctrl+Y")
         edit_menu.addSeparator()
@@ -202,7 +211,7 @@ class TriggerWindow(MayaToolWindow):
             "Ctrl+E",
         )
 
-        session_menu = add_menu("&Session")
+    def _build_session_menu(self, session_menu) -> None:
         self.session_menu_action = session_menu.menuAction()
         self._action(
             session_menu, "Build Rig", lambda: self._view_call("build"), "Ctrl+B"
@@ -231,7 +240,7 @@ class TriggerWindow(MayaToolWindow):
             session_menu, "Clear Statuses", lambda: self._view_call("clear_statuses")
         )
 
-        guides_menu = add_menu("&Guides")
+    def _build_guides_menu(self, guides_menu) -> None:
         self.guides_menu_action = guides_menu.menuAction()
         self._action(
             guides_menu, "Add Module…", lambda: self._designer_call("show_palette")
@@ -311,6 +320,8 @@ class TriggerWindow(MayaToolWindow):
             "Clear Scene Guides",
             lambda: self._designer_call("clear_guides"),
         )
+
+    def _build_layout_menu(self, guides_menu) -> None:
         layout_menu = QtWidgets.QMenu("Layout", guides_menu)
         guides_menu.addMenu(layout_menu)
         self._menus["Layout"] = layout_menu
@@ -350,7 +361,7 @@ class TriggerWindow(MayaToolWindow):
             layout_menu, "Redraw Views", lambda: self._designer_call("refresh"), "F5"
         )
 
-        tools_menu = add_menu("&Tools")
+    def _build_tools_menu(self, tools_menu) -> None:
         self._action(
             tools_menu, "Guide Designer", lambda: self.open_guide_designer(), "Ctrl+G"
         )
@@ -369,10 +380,9 @@ class TriggerWindow(MayaToolWindow):
         tools_menu.addSeparator()
         self._action(tools_menu, "Settings…", self.open_settings)
 
-        help_menu = add_menu("&Help")
+    def _build_help_menu(self, help_menu) -> None:
         self._action(help_menu, "Documentation", self.open_docs)
         self._action(help_menu, "About Trigger", self.about)
-        self._update_recent_menu()
 
     def _build_status(self, strip) -> None:
         self.status = StatusFields(strip, ("references", "maya", "version"))
