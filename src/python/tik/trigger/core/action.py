@@ -38,6 +38,7 @@ class Action(Schema):
     label: str = ""
     action_type: str = ""  # stamped by @register_action
     category: str = "utility"  # stamped by @register_action
+    scope: str = "build"  # stamped by @register_action: build | publish | both
     icon: str = ""  # stamped by @register_action
     info: str = ""  # shown by the "?" button; defaults to the class docstring
 

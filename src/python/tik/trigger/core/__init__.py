@@ -52,6 +52,7 @@ from .manifest import GuideAttr, GuideLayout, Input, instance_key
 from .reconcile import GuideDiff, ModuleDiff, RenderedGuide, reconcile
 from .module import Module
 from .registry import (
+    allows,
     clear_registries,
     get_action,
     get_module,
@@ -120,6 +121,7 @@ __all__ = [
     "VectorField",
     "ListField",
     "NodeRefField",
+    "allows",
     "register_action",
     "register_module",
     "get_action",
