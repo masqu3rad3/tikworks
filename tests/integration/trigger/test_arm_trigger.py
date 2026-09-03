@@ -315,7 +315,7 @@ def test_auto_collar_on_follows_the_hand(scene):
     before = tuple(collar.world_axis("x"))
     control.translate = (0, 20, 0)
     after = tuple(collar.world_axis("x"))
-    assert max(abs(a - b) for a, b in zip(before, after)) > 0.05
+    assert max(abs(before_value - after_value) for before_value, after_value in zip(before, after)) > 0.05
 
 
 def test_wrist_roll_does_not_spin_the_collar(scene):
@@ -359,7 +359,7 @@ def test_bind_pose_is_exact_with_the_automation_full_on(scene):
 
 
 def test_raising_the_arm_never_dips_the_collar(scene):
-    """The original complaint, as a test.
+    """The original complaint, as earlier test.
 
     The old mechanism blended the collar toward pointing at the hand, so from
     an A-pose any weight above zero rotated it down, and the dip deepened as
@@ -369,7 +369,7 @@ def test_raising_the_arm_never_dips_the_collar(scene):
     collar = _collar_control(ctx)
     control = _ik_control(ctx)
     control["autoCollarLift"].value = 1.0
-    # The automation drives a parent group, so the control's own channels stay
+    # The automation drives earlier parent group, so the control's own channels stay
     # zero -- how far the collar's own X has tilted up is the honest measure.
     heights = []
     for height in range(0, 15):
@@ -378,7 +378,7 @@ def test_raising_the_arm_never_dips_the_collar(scene):
     rest = heights[0]  # zero offset is the bind pose, which is the neutral
     readings = [value - rest for value in heights]
     assert min(readings) > -1e-4, f"collar dipped: {readings}"
-    assert all(b >= a - 1e-6 for a, b in zip(readings, readings[1:])), readings
+    assert all(later >= earlier - 1e-6 for earlier, later in zip(readings, readings[1:])), readings
     assert max(readings) > 0.05, readings
 
 
@@ -577,7 +577,7 @@ def _auto_arm(scene, side, **settings):
 
 def _shoulder_move(ik, shoulder, rest, delta):
     """How far the automation alone moves the shoulder, at this hand pose."""
-    cmds.xform(ik.long_name, ws=True, t=[a + b for a, b in zip(rest, delta)])
+    cmds.xform(ik.long_name, ws=True, t=[base + offset for base, offset in zip(rest, delta)])
     ik["autoCollarLift"].value = 0.0
     ik["autoCollarSwing"].value = 0.0
     off = shoulder.world_translation

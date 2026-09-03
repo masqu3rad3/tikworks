@@ -188,7 +188,7 @@ def test_create_and_properties(skincluster_setup: Dict[str, object]):
     assert skincluster.influence_count == 2
 
     assert skincluster.geometry.name == mesh_shape
-    assert mesh_shape in [x.name for x in skincluster.geometries]
+    assert mesh_shape in [geometry.name for geometry in skincluster.geometries]
 
     skincluster.skinning_method = 1
     assert skincluster.skinning_method == 1
@@ -420,14 +420,14 @@ def test_get_set_influence_weights_single_by_index(skincluster_setup: Dict[str, 
     assert dw.channel_count == 1
     assert dw.element_count == skincluster.vertex_count
     # All default weights should be > 0
-    assert all(isinstance(v, float) for v in dw.weights)
+    assert all(isinstance(weight, float) for weight in dw.weights)
 
     # Set new weights for that influence
     new_vals = [0.3] * dw.element_count
     skincluster.set_influence_weights(0, DeformerWeights(new_vals, channel_count=1, element_count=dw.element_count))
 
     retrieved = skincluster.get_influence_weights(0)
-    assert all(v == pytest.approx(0.3, abs=1e-4) for v in retrieved.weights)
+    assert all(weight == pytest.approx(0.3, abs=1e-4) for weight in retrieved.weights)
 
 
 def test_get_set_influence_weights_single_by_name(skincluster_setup: Dict[str, object]):
@@ -441,7 +441,7 @@ def test_get_set_influence_weights_single_by_name(skincluster_setup: Dict[str, o
     new_vals = [0.6] * dw.element_count
     skincluster.set_influence_weights(first_influence, DeformerWeights(new_vals, channel_count=1, element_count=dw.element_count))
     retrieved = skincluster.get_influence_weights(first_influence)
-    assert all(v == pytest.approx(0.6, abs=1e-4) for v in retrieved.weights)
+    assert all(weight == pytest.approx(0.6, abs=1e-4) for weight in retrieved.weights)
 
 
 def test_get_set_influence_weights_multiple(skincluster_setup: Dict[str, object]):
@@ -458,7 +458,7 @@ def test_get_set_influence_weights_multiple(skincluster_setup: Dict[str, object]
     # Create new weights: alternate values per channel
     vcount = dw.element_count
     flat = []
-    for i in range(vcount):
+    for index in range(vcount):
         flat.append(0.2)  # first influence
         flat.append(0.8)  # second influence
 

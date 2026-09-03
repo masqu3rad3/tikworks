@@ -396,7 +396,7 @@ def test_scene_node_groups_and_side_combo(designer):
     # right-click menu on an input field lists other modules -> outputs, and scene nodes by group
     designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
     modules, scene_nodes = designer._input_rows["root"].sources()
-    assert [m[0] for m in modules] == [] and scene_nodes == [("anchors", "pelvis_jnt")]
+    assert [module[0] for module in modules] == [] and scene_nodes == [("anchors", "pelvis_jnt")]
     designer.set_side("C")
     designer.create_guides("toy_root")
     designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
@@ -611,20 +611,20 @@ def test_tree_filter_and_ctrl_click_toggle(designer, qapp):
     designer.tree_filter.clear()
     assert designer.status.text("modules") == "3 module(s)"
     designer.refresh()
-    assert all(not designer.item_for(h.instance_id).isHidden() for h in chains)
+    assert all(not designer.item_for(handle.instance_id).isHidden() for handle in chains)
     # Ctrl+click toggles selection without slicing; the graph selection is not echoed back by the tree
     view = designer.graph
     view.graph.select_keys([])
     view.toggle_node_at(view.mapFromScene(view.graph.nodes["L_toy_chain"].sceneBoundingRect().center()))
     view.toggle_node_at(view.mapFromScene(view.graph.nodes["R_toy_chain"].sceneBoundingRect().center()))
-    assert {n.key for n in view.graph.selected_nodes()} == {"L_toy_chain", "R_toy_chain"}
+    assert {node.key for node in view.graph.selected_nodes()} == {"L_toy_chain", "R_toy_chain"}
     assert len(designer.selected_handles()) == 2 and designer.multi_label.isVisible()
     qapp.processEvents()
     assert designer.form.widget("segments").isVisible()
     designer.form.widget("segments").setValue(9)
-    assert all(designer.guides.settings[c.instance_id]["segments"] == 9 for c in chains)
+    assert all(designer.guides.settings[chain.instance_id]["segments"] == 9 for chain in chains)
     view.toggle_node_at(view.mapFromScene(view.graph.nodes["L_toy_chain"].sceneBoundingRect().center()))
-    assert {n.key for n in view.graph.selected_nodes()} == {"R_toy_chain"}
+    assert {node.key for node in view.graph.selected_nodes()} == {"R_toy_chain"}
     assert len(view.graph.wires) == 2  # nothing sliced
 
 

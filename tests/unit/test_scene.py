@@ -19,10 +19,10 @@ def test_list_scene_nodes_returns_wrappers():
 
     # Verify
     # Note: Maya creates default cameras and other transforms, so we filter by our names
-    our_nodes = [n for n in nodes if n.name in ["testT1", "testT2"]]
+    our_nodes = [node for node in nodes if node.name in ["testT1", "testT2"]]
     assert len(our_nodes) == 2
-    assert all(isinstance(n, Transform) for n in our_nodes)
-    assert {n.name for n in our_nodes} == {"testT1", "testT2"}
+    assert all(isinstance(node, Transform) for node in our_nodes)
+    assert {node.name for node in our_nodes} == {"testT1", "testT2"}
 
 def test_list_scene_nodes_passes_args_to_cmds_ls():
     # Setup

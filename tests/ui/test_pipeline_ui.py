@@ -215,7 +215,7 @@ def test_a_session_tab_holds_both_views(qapp):
     window = TriggerWindow(designer_factory=_stub_designer)
     window.show()
     view = window.views[0]
-    titles = [view.sub_tabs.tabText(i) for i in range(view.sub_tabs.count())]
+    titles = [view.sub_tabs.tabText(index) for index in range(view.sub_tabs.count())]
     assert titles == ["Session", "Guide Designer"]
     window.close()
 
@@ -298,12 +298,13 @@ def test_reference_children_appear_after_file_edit(view, tmp_path):
 # ------------------------------------------------- graph view: space ports
 def _graph_scene():
     from tik.trigger.ui.graph import GraphScene
+    from tik.trigger.ui.graph.items import NodeSpec
 
     scene = GraphScene()
-    scene.add_node("body", "body", "Base", [], ["root"], "#888888")
-    scene.add_node("head", "head", "Base", [], ["root"], "#888888")
+    scene.add_node(NodeSpec("body", "body", "Base", [], ["root"], "#888888"))
+    scene.add_node(NodeSpec("head", "head", "Base", [], ["root"], "#888888"))
     scene.add_node(
-        "L_arm", "L_arm", "Arm", ["root"], ["hand"], "#888888", spaces=["ik_hand"]
+        NodeSpec("L_arm", "L_arm", "Arm", ["root"], ["hand"], "#888888", spaces=["ik_hand"])
     )
     return scene
 
@@ -324,9 +325,10 @@ def test_single_input_port_keeps_one_wire():
 
 def test_a_node_without_spaces_still_builds():
     from tik.trigger.ui.graph import GraphScene
+    from tik.trigger.ui.graph.items import NodeSpec
 
     scene = GraphScene()
-    node = scene.add_node("body", "body", "Base", ["root"], ["root"], "#888888")
+    node = scene.add_node(NodeSpec("body", "body", "Base", ["root"], ["root"], "#888888"))
     assert set(node.inputs) == {"root"}
 
 

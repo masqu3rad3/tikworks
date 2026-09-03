@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from functools import wraps
 from tik.core.benchmark import Benchmark
 from maya import cmds

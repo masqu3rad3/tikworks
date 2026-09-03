@@ -24,7 +24,7 @@ from .constants import (
     ROW_GAP,
     WORLD,
 )
-from .items import NodeItem, WireItem
+from .items import NodeItem, NodeSpec, WireItem
 from .scene import GraphScene
 
 
@@ -102,7 +102,10 @@ class GraphView(QtWidgets.QGraphicsView):
             pos = list(auto[key])
             candidate = rect_at(pos, height)
             for _ in range(200):
-                hit = next((r for r in placed if r.intersects(candidate.adjusted(-8, -8, 8, 8))), None)
+                hit = next(
+                    (rect for rect in placed if rect.intersects(candidate.adjusted(-8, -8, 8, 8))),
+                    None,
+                )
                 if hit is None:
                     break
                 pos[1] = hit.bottom() + ROW_GAP
@@ -114,7 +117,14 @@ class GraphView(QtWidgets.QGraphicsView):
 
         for name in sorted(groups):
             pos = free_pos(name, HEADER + len(groups[name]) * ROW + 8)
-            node = self.graph.add_node(name, name, "scene", [], groups[name], "", external=True, pos=pos, mode=collapse.get(name, MODE_FULL))
+            node = self.graph.add_node(
+                NodeSpec(
+                    key=name, title=name, subtitle="scene", inputs=[],
+                    outputs=groups[name], color="", external=True,
+                    mode=collapse.get(name, MODE_FULL),
+                ),
+                pos=pos,
+            )
             exists = getattr(self.guides, "scene_node", lambda _n: True)
             missing = [item for item in groups[name] if exists(item) is None]
             node.subtitle = "scene ✗ missing" if missing else "scene ✓"
@@ -127,11 +137,15 @@ class GraphView(QtWidgets.QGraphicsView):
             pos = free_pos(handle.key, HEADER + rows * ROW + 8)
             primary = module_cls.primary_input()
             self.graph.add_node(
-                handle.key, handle.key, module_cls.display_label(),
-                [item.name for item in module_cls.inputs], list(handle.outputs),
-                theme.SIDE.get(handle.side.value, theme.SIDE["C"]),
-                primary_input=primary.name if primary else None, pos=pos,
-                mode=collapse.get(handle.key, MODE_FULL), spaces=space_names,
+                NodeSpec(
+                    key=handle.key, title=handle.key, subtitle=module_cls.display_label(),
+                    inputs=[item.name for item in module_cls.inputs],
+                    outputs=list(handle.outputs),
+                    color=theme.SIDE.get(handle.side.value, theme.SIDE["C"]),
+                    primary_input=primary.name if primary else None,
+                    mode=collapse.get(handle.key, MODE_FULL), spaces=space_names,
+                ),
+                pos=pos,
             )
         node_group = {node: name for name, nodes in groups.items() for node in nodes}
         for handle in handles:
@@ -153,9 +167,9 @@ class GraphView(QtWidgets.QGraphicsView):
         result: dict[str, tuple] = {}
 
         def place(key, column, height):
-            y = columns.get(column, 0.0)
-            result[key] = (20 + column * (NODE_WIDTH + COLUMN_GAP), 30 + y)
-            columns[column] = y + height + ROW_GAP
+            top = columns.get(column, 0.0)
+            result[key] = (20 + column * (NODE_WIDTH + COLUMN_GAP), 30 + top)
+            columns[column] = top + height + ROW_GAP
 
         for name in sorted(groups):
             place(name, 0, HEADER + len(groups[name]) * ROW + 8)
@@ -175,7 +189,10 @@ class GraphView(QtWidgets.QGraphicsView):
         by_key = {handle.key: handle for handle in handles}
         groups = self.guides.scene_groups()
         depth = self._depths(handles, by_key)
-        positions = {key: [x, y] for key, (x, y) in self._auto_positions(handles, groups, depth).items()}
+        positions = {
+            key: list(position)
+            for key, position in self._auto_positions(handles, groups, depth).items()
+        }
         self.guides.update_layout(positions=positions)
         self.rebuild()
         self.fit()

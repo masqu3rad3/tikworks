@@ -27,8 +27,8 @@ def _create_mock_maya():
     """Create a mock maya module for headless test environments."""
     mock_maya = types.ModuleType("maya")
     mock_maya.cmds = types.ModuleType("maya.cmds")
-    mock_maya.cmds.file = lambda *a, **k: ""
-    mock_maya.cmds.select = lambda *a, **k: None
+    mock_maya.cmds.file = lambda *args, **kwargs: ""
+    mock_maya.cmds.select = lambda *args, **kwargs: None
     mock_maya.standalone = types.ModuleType("maya.standalone")
     mock_maya.standalone.initialize = lambda: None
     mock_maya.standalone.uninitialize = lambda: None

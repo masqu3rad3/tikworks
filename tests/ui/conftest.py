@@ -53,7 +53,7 @@ def _qsettings_sandbox(tmp_path_factory):
 
     class _SandboxedQSettings(real_qsettings):
         def __init__(self, *args, **kwargs):
-            if len(args) == 2 and not kwargs and all(isinstance(a, str) for a in args):
+            if len(args) == 2 and not kwargs and all(isinstance(arg, str) for arg in args):
                 organization, application = args
                 super().__init__(real_qsettings.IniFormat, real_qsettings.UserScope, organization, application)
             else:

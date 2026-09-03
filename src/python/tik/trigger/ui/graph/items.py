@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional
 
 from tik.shared.ui import theme
@@ -70,28 +71,42 @@ class Port(QtWidgets.QGraphicsEllipseItem):
         event.accept()
 
 
+@dataclass
+class NodeSpec:
+    """Everything a graph node is drawn from."""
+
+    key: str
+    title: str
+    subtitle: str
+    inputs: list
+    outputs: list
+    color: str
+    external: bool = False
+    primary_input: Optional[str] = None
+    mode: int = MODE_FULL
+    spaces: Optional[list] = None
+
+
 class NodeItem(QtWidgets.QGraphicsItem):
-    def __init__(self, key: str, title: str, subtitle: str, inputs: list, outputs: list, color: str,
-                 external: bool = False, primary_input: Optional[str] = None, mode: int = MODE_FULL,
-                 spaces: Optional[list] = None) -> None:
+    def __init__(self, spec: NodeSpec) -> None:
         super().__init__()
-        self.key = key
-        self.title = title
-        self.subtitle = subtitle
-        self.color = color
-        self.external = external
-        self.mode = mode
+        self.key = spec.key
+        self.title = spec.title
+        self.subtitle = spec.subtitle
+        self.color = spec.color
+        self.external = spec.external
+        self.mode = spec.mode
         self.inputs: dict[str, Port] = {}
         self.outputs: dict[str, Port] = {}
         self._height = HEADER + 8
         self.setFlags(QtWidgets.QGraphicsItem.ItemIsMovable | QtWidgets.QGraphicsItem.ItemIsSelectable
                       | QtWidgets.QGraphicsItem.ItemSendsGeometryChanges)
         self.setZValue(2)
-        for name in inputs:
-            self.inputs[name] = Port(self, name, False, primary=(name == primary_input))
-        for name in spaces or []:
+        for name in spec.inputs:
+            self.inputs[name] = Port(self, name, False, primary=(name == spec.primary_input))
+        for name in spec.spaces or []:
             self.inputs[name] = Port(self, name, False, space=True)
-        for name in outputs:
+        for name in spec.outputs:
             self.outputs[name] = Port(self, name, True)
         self.relayout()
 
@@ -100,7 +115,10 @@ class NodeItem(QtWidgets.QGraphicsItem):
         if self.mode == MODE_MINIMAL:
             return [], []
         if self.mode == MODE_CONNECTED:
-            return ([p for p in self.inputs.values() if p.connected], [p for p in self.outputs.values() if p.connected])
+            return (
+                [port for port in self.inputs.values() if port.connected],
+                [port for port in self.outputs.values() if port.connected],
+            )
         return list(self.inputs.values()), list(self.outputs.values())
 
     def relayout(self) -> None:
@@ -169,8 +187,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
         painter.setPen(QtGui.QPen(ink, 1.2))
         x0 = NODE_WIDTH - GLYPH_WIDTH - 2
         for line in range(self.mode + 1):
-            y = HEADER / 2 - 4 + line * 4
-            painter.drawLine(QtCore.QPointF(x0, y), QtCore.QPointF(x0 + GLYPH_WIDTH - 4, y))
+            line_y = HEADER / 2 - 4 + line * 4
+            painter.drawLine(QtCore.QPointF(x0, line_y), QtCore.QPointF(x0 + GLYPH_WIDTH - 4, line_y))
         painter.setPen(QtGui.QColor("#bdbdbd"))
         ins, outs = self.visible_ports()
         for port in ins:

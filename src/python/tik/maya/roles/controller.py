@@ -7,6 +7,8 @@ A Controller is a semantic wrapper around a Transform node that:
 - exposes a controller-centric API
 """
 
+from __future__ import annotations
+
 import logging
 
 from maya import cmds

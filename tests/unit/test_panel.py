@@ -141,9 +141,9 @@ def test_inherit_panel_properties(mock_ui_cmds):
     # Check if grid was set
     calls = mock_ui_cmds["modelEditor"].mock_calls
     grid_call_found = False
-    for c in calls:
-        # c is like call('tik_panel', e=True, grid=True)
-        if len(c.args) > 0 and c.args[0] == "tik_panel" and c.kwargs.get("grid") is True:
+    for call in calls:
+        # call is like call('tik_panel', e=True, grid=True)
+        if len(call.args) > 0 and call.args[0] == "tik_panel" and call.kwargs.get("grid") is True:
             grid_call_found = True
             break
 
@@ -263,7 +263,7 @@ def test_all_camera_properties(mock_ui_cmds):
         # e.g. display_field_chart -> displayFieldChart
         # overscan -> overscan
         parts = prop.split('_')
-        attr_name = parts[0] + ''.join(x.title() for x in parts[1:])
+        attr_name = parts[0] + ''.join(part.title() for part in parts[1:])
 
         # Special case for overscan which is float
         val = 1.5 if prop == "overscan" else True
@@ -465,7 +465,7 @@ def test_inherit_panel_properties_self_check(mock_ui_cmds):
 
     # Check that modelEditor was NOT called with query=True on tik_panel
     calls = mock_ui_cmds["modelEditor"].mock_calls
-    query_calls = [c for c in calls if c.kwargs.get("query") is True]
+    query_calls = [call for call in calls if call.kwargs.get("query") is True]
     assert len(query_calls) == 0
 
 
@@ -486,7 +486,7 @@ def test_inherit_panel_properties_no_candidates(mock_ui_cmds):
 
     # Should return early
     calls = mock_ui_cmds["modelEditor"].mock_calls
-    query_calls = [c for c in calls if c.kwargs.get("query") is True]
+    query_calls = [call for call in calls if call.kwargs.get("query") is True]
     assert len(query_calls) == 0
 
 

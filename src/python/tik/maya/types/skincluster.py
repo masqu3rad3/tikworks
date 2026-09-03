@@ -1,9 +1,11 @@
 """SkinCluster type for Maya integration."""
 
+from __future__ import annotations
+
 from functools import partial
 from array import array
 
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 from maya import cmds
 from maya.api import OpenMaya
@@ -100,7 +102,7 @@ class SkinCluster(Deformer):
     # === Properties ===
 
     @property
-    def influences(self) -> List[str]:
+    def influences(self) -> list[str]:
         """Return list of influence object names."""
         return cmds.skinCluster(self.name, query=True, influence=True) or []
 
@@ -124,12 +126,12 @@ class SkinCluster(Deformer):
         return self.original_geometries[0] if self.original_geometries else None
 
     @property
-    def geometries(self) -> List[str]:
+    def geometries(self) -> list[str]:
         """Return all connected geometry shape names."""
         return self.tm_skincluster(self.name, query=True, geometry=True) or []
 
     @property
-    def original_geometries(self) -> List[str]:
+    def original_geometries(self) -> list[str]:
         """Return original geometry shape names connected to the skinCluster."""
         return self["originalGeometry"].list_inputs()
 
@@ -308,7 +310,7 @@ class SkinCluster(Deformer):
     # python
     def get_influence_weights(
         self,
-        influences: Union[int, str, List[Union[int, str]]],
+        influences: Union[int, str, list[Union[int, str]]],
         geometry: Optional[str] = None,
     ) -> DeformerWeights:
         """
@@ -335,7 +337,7 @@ class SkinCluster(Deformer):
         )
 
         # Resolve logical indices for requested influences (names preferred)
-        requested_indices: List[int] = []
+        requested_indices: list[int] = []
         for influence in requested:
             if isinstance(influence, str):
                 requested_indices.append(self.influence_index(influence))
@@ -355,7 +357,8 @@ class SkinCluster(Deformer):
 
         # Map logical influence index -> position in full_influence_indices
         pos_map = {
-            int(full_influence_indices[i]): i for i in range(full_influence_count)
+            int(full_influence_indices[position]): position
+            for position in range(full_influence_count)
         }
 
         # Determine positions for requested indices and collect channel names
@@ -365,8 +368,8 @@ class SkinCluster(Deformer):
             for dag in influence_dags
         }
 
-        selected_positions: List[int] = []
-        channel_names: List[str] = []
+        selected_positions: list[int] = []
+        channel_names: list[str] = []
         for logical_idx in requested_indices:
             if logical_idx not in pos_map:
                 raise ValueError(
@@ -397,8 +400,8 @@ class SkinCluster(Deformer):
 
     def set_influence_weights(
         self,
-        influences: Union[int, str, List[Union[int, str]]],
-        weights: Union[DeformerWeights, List[float]],
+        influences: Union[int, str, list[Union[int, str]]],
+        weights: Union[DeformerWeights, list[float]],
         geometry: Optional[str] = None,
         normalize: bool = True,
     ) -> None:
@@ -426,7 +429,7 @@ class SkinCluster(Deformer):
         )
 
         # Resolve logical indices for requested influences
-        requested_indices: List[int] = []
+        requested_indices: list[int] = []
         for influence in requested:
             if isinstance(influence, str):
                 requested_indices.append(self.influence_index(influence))
@@ -504,7 +507,7 @@ class SkinCluster(Deformer):
 
     def set_weights(
         self,
-        weights: Union[DeformerWeights, List[float]],
+        weights: Union[DeformerWeights, list[float]],
         geometry: Optional[str] = None,
         normalize: bool = True,
     ) -> None:
@@ -530,7 +533,7 @@ class SkinCluster(Deformer):
         )
 
     def get_vertex_weights(
-        self, vertex_indices: List[int], geometry: Optional[str] = None
+        self, vertex_indices: list[int], geometry: Optional[str] = None
     ) -> DeformerWeights:
         """Get weights for specific vertices.
 
@@ -570,8 +573,8 @@ class SkinCluster(Deformer):
 
     def set_vertex_weights(
         self,
-        vertex_indices: List[int],
-        weights: Union[DeformerWeights, List[float]],
+        vertex_indices: list[int],
+        weights: Union[DeformerWeights, list[float]],
         geometry: Optional[str] = None,
         normalize: bool = True,
     ) -> None:
@@ -609,7 +612,7 @@ class SkinCluster(Deformer):
             dag_path, vertex_component, influence_indices, weight_array, normalize
         )
 
-    def get_blend_weights(self, geometry: Optional[str] = None) -> List[float]:
+    def get_blend_weights(self, geometry: Optional[str] = None) -> list[float]:
         """Get dual quaternion blend weights.
 
         Args:
@@ -625,7 +628,7 @@ class SkinCluster(Deformer):
 
     def set_blend_weights(
         self,
-        weights: List[float],
+        weights: list[float],
         geometry: Optional[str] = None,
     ) -> None:
         """Set dual quaternion blend weights.

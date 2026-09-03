@@ -6,6 +6,8 @@ using the Maya Python API 2.0 for better performance.
 ANY FUNCTIONS HERE MUST NOT HAVE ANY DEPENDENCY TO tik.maya NODE WRAPPERS.
 """
 
+from __future__ import annotations
+
 from maya.api import OpenMaya
 
 from .undo import commit as undocommit

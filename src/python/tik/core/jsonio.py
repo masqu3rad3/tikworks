@@ -1,5 +1,7 @@
 """Generic JSON I/O utilities."""
 
+from __future__ import annotations
+
 import json
 from json import JSONDecodeError
 from pathlib import Path

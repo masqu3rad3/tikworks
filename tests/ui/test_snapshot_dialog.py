@@ -12,9 +12,9 @@ from stub import StubScene
 
 def report(complete=2, partial=0):
     modules = [
-        RecoveredModule(f"c{i}", f"mod{i}", "fkchain", True, 4) for i in range(complete)
+        RecoveredModule(f"c{index}", f"mod{index}", "fkchain", True, 4) for index in range(complete)
     ] + [
-        RecoveredModule(f"p{i}", f"old{i}", "fkchain", False, 4) for i in range(partial)
+        RecoveredModule(f"p{index}", f"old{index}", "fkchain", False, 4) for index in range(partial)
     ]
     return RecoveryReport(modules=modules, guide_count=4 * len(modules))
 

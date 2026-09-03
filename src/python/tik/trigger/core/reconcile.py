@@ -103,7 +103,10 @@ class GuideDiff:
 def _same(left, right, tolerance: float) -> bool:
     if left is None or right is None:
         return left is right
-    return all(abs(float(a) - float(b)) <= tolerance for a, b in zip(left, right))
+    return all(
+        abs(float(left_value) - float(right_value)) <= tolerance
+        for left_value, right_value in zip(left, right)
+    )
 
 
 def reconcile(

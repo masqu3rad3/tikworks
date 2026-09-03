@@ -26,9 +26,9 @@ def test_outputs_match_basis_weighted_positions():
     spline = MatrixSpline.create(drivers, parameters, name="spl", degree=2)
     assert spline.degree == 2
     assert [output.transform.name for output in spline.outputs] == ["spl_0_out", "spl_1_out", "spl_2_out"]
-    for output, u in zip(spline.outputs, parameters):
-        weights = basis(u, 3, 2)
-        expected = [sum(w * p[axis] for w, p in zip(weights, positions)) for axis in range(3)]
+    for output, parameter in zip(spline.outputs, parameters):
+        weights = basis(parameter, 3, 2)
+        expected = [sum(weight * position[axis] for weight, position in zip(weights, positions)) for axis in range(3)]
         assert close(output.transform.world_translation, expected)
         assert output.weights == pytest.approx(weights)
 

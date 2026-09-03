@@ -47,7 +47,7 @@ def test_joints_match_basis_weighted_positions_after_bending():
     positions = [(0, 0, 0), (5, 3, 0), (10, 0, 0)]
     for index, joint in enumerate(ribbon.deformer_joints):
         weights = basis((index + 0.5) / 5, 3, 2)
-        expected = [sum(w * p[axis] for w, p in zip(weights, positions)) for axis in range(3)]
+        expected = [sum(weight * position[axis] for weight, position in zip(weights, positions)) for axis in range(3)]
         assert close(joint.world_translation, expected)
 
 

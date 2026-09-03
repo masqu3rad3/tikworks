@@ -28,7 +28,7 @@ def test_guides_fixed_and_multi():
     chain = GuideLayout("root", multi="segment", min=2, max=4)
     assert chain.expand(3) == [("root", 0), ("segment", 0), ("segment", 1), ("segment", 2)]
     assert chain.validate([("root", 0), ("segment", 0)]) == ["needs at least 2 'segment' guides"]
-    assert "allows at most 4" in chain.validate([("root", 0)] + [("segment", i) for i in range(5)])[0]
+    assert "allows at most 4" in chain.validate([("root", 0)] + [("segment", index) for index in range(5)])[0]
     assert chain.validate([("root", 0), ("segment", 0), ("segment", 1), ("nope", 0)]) == [
         "unknown guide role 'nope'"
     ]
@@ -136,38 +136,38 @@ def test_order_instances_parents_first_and_cycle():
 def test_order_by_connections_puts_producers_first():
     from tik.trigger.core.schemas import order_by_connections
 
-    a = ToyRoot(name="a").to_instance()
-    b = ToyChain(name="b").to_instance()
-    c = ToyChain(name="c").to_instance()
-    inputs = {"a": {}, "b": {"root": f"{a.key}.root"}, "c": {"root": f"{b.key}.root"}}
-    ordered = order_by_connections([c, b, a], lambda item: inputs[item.name])
+    first = ToyRoot(name="a").to_instance()
+    second = ToyChain(name="b").to_instance()
+    third = ToyChain(name="c").to_instance()
+    inputs = {"a": {}, "b": {"root": f"{first.key}.root"}, "c": {"root": f"{second.key}.root"}}
+    ordered = order_by_connections([third, second, first], lambda item: inputs[item.name])
     assert [item.name for item in ordered] == ["a", "b", "c"]
 
 
 def test_order_by_connections_detects_a_cycle():
     from tik.trigger.core.schemas import order_by_connections
 
-    a = ToyChain(name="a").to_instance()
-    b = ToyChain(name="b").to_instance()
-    inputs = {"a": {"root": f"{b.key}.root"}, "b": {"root": f"{a.key}.root"}}
+    first = ToyChain(name="a").to_instance()
+    second = ToyChain(name="b").to_instance()
+    inputs = {"a": {"root": f"{second.key}.root"}, "b": {"root": f"{first.key}.root"}}
     with pytest.raises(ValueError, match="Cyclic"):
-        order_by_connections([a, b], lambda item: inputs[item.name])
+        order_by_connections([first, second], lambda item: inputs[item.name])
 
 
 def test_order_by_connections_keeps_unconnected_order():
     from tik.trigger.core.schemas import order_by_connections
 
-    a = ToyRoot(name="a").to_instance()
-    b = ToyChain(name="b").to_instance()
-    ordered = order_by_connections([b, a], lambda item: {})
+    first = ToyRoot(name="a").to_instance()
+    second = ToyChain(name="b").to_instance()
+    ordered = order_by_connections([second, first], lambda item: {})
     assert [item.name for item in ordered] == ["b", "a"]
 
 
 def test_order_by_connections_ignores_bare_scene_sources():
     from tik.trigger.core.schemas import order_by_connections
 
-    a = ToyChain(name="a").to_instance()
-    ordered = order_by_connections([a], lambda item: {"root": "some_jnt"})
+    first = ToyChain(name="a").to_instance()
+    ordered = order_by_connections([first], lambda item: {"root": "some_jnt"})
     assert [item.name for item in ordered] == ["a"]
 
 

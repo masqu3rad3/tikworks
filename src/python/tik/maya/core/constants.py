@@ -1,4 +1,7 @@
 """Constants for the Tik Maya Core module."""
+
+from __future__ import annotations
+
 from maya import cmds
 
 #: The nine transform channels, in channel-box order.

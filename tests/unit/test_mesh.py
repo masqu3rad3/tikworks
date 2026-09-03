@@ -40,14 +40,14 @@ def test_vertices_returns_points_in_requested_spaces_and_respects_translate():
 
     assert len(pts_object) == len(pts_world) == len(pts_transform)
 
-    i = 0
-    dx = pts_world[i].x - pts_object[i].x
-    dy = pts_world[i].y - pts_object[i].y
-    dz = pts_world[i].z - pts_object[i].z
+    index = 0
+    dx = pts_world[index].x - pts_object[index].x
+    dy = pts_world[index].y - pts_object[index].y
+    dz = pts_world[index].z - pts_object[index].z
     assert (dx, dy, dz) == pytest.approx((3.0, 4.0, 5.0), abs=1e-5)
 
-    assert (pts_object[i].x, pts_object[i].y, pts_object[i].z) == pytest.approx(
-        (pts_transform[i].x, pts_transform[i].y, pts_transform[i].z), abs=1e-6
+    assert (pts_object[index].x, pts_object[index].y, pts_object[index].z) == pytest.approx(
+        (pts_transform[index].x, pts_transform[index].y, pts_transform[index].z), abs=1e-6
     )
 
 
@@ -96,7 +96,7 @@ def test_unlock_normals_unlocks_all_and_softens_edges():
     mfn = OpenMaya.MFnMesh(dag)
 
     mfn.lockVertexNormals(OpenMaya.MIntArray(range(mfn.numVertices)))
-    assert any(mfn.isNormalLocked(i) for i in range(mfn.numNormals))
+    assert any(mfn.isNormalLocked(index) for index in range(mfn.numNormals))
 
     mesh.unlock_normals(soften=True)
 
@@ -104,8 +104,8 @@ def test_unlock_normals_unlocks_all_and_softens_edges():
     sel2.add(mesh.long_name)
     mfn2 = OpenMaya.MFnMesh(sel2.getDagPath(0))
 
-    assert not any(mfn2.isNormalLocked(i) for i in range(mfn2.numNormals))
-    assert all(mfn2.isEdgeSmooth(i) for i in range(mfn2.numEdges))
+    assert not any(mfn2.isNormalLocked(index) for index in range(mfn2.numNormals))
+    assert all(mfn2.isEdgeSmooth(index) for index in range(mfn2.numEdges))
 
 
 def test_vertex_colors_get_set_all():

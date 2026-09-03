@@ -236,7 +236,7 @@ class TriggerWindow(MayaToolWindow):
                 from maya import cmds
 
                 maya_text = f"Maya {cmds.about(version=True)}"
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - a mocked maya has no about()
                 pass
         self.status.set("maya", maya_text)
         self.status.set("version", f"tik.trigger {VERSION}")
@@ -359,7 +359,9 @@ class TriggerWindow(MayaToolWindow):
             session, file_browser=self.file_browser,
             designer_factory=self.designer_factory, events=self.events,
         )
-        view.sub_tab_changed.connect(lambda index, v=view: self._on_sub_tab_changed(v, index))
+        view.sub_tab_changed.connect(
+            lambda index, session_view=view: self._on_sub_tab_changed(session_view, index)
+        )
         view.title_changed.connect(self._update_title)
         view.open_guides_requested.connect(self.open_guide_designer)
         view.activity.connect(self.status.set_activity)
@@ -382,7 +384,11 @@ class TriggerWindow(MayaToolWindow):
                 return view
         session = Session.open(path, events=self.events)
         view = self.add_session(session)
-        for item in [v for v in self.views if v is not view and not v.session.actions and not v.session.file_path]:
+        untouched = [
+            other for other in self.views
+            if other is not view and not other.session.actions and not other.session.file_path
+        ]
+        for item in untouched:
             self.tabs.removeTab(self.tabs.indexOf(item))
         self._remember(path)
         return view
@@ -540,7 +546,9 @@ class TriggerWindow(MayaToolWindow):
         if not self.recent_files:
             self.recent_menu.addAction("(none)").setEnabled(False)
         for path in self.recent_files:
-            self.recent_menu.addAction(path, lambda checked=False, p=path: self.open_session(p))
+            self.recent_menu.addAction(
+                path, lambda checked=False, file_path=path: self.open_session(file_path)
+            )
 
     # -------------------------------------------------------------- title
     def _update_title(self) -> None:

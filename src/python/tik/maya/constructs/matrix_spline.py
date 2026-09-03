@@ -101,8 +101,11 @@ class MatrixSpline:
         group["inheritsTransform"].value = False
 
         spline = cls(name, group, drivers, degree)
-        blends = [spline._create_blend(index, u) for index, u in enumerate(parameters)]
-        for index, (u, (pick, weights, nodes)) in enumerate(zip(parameters, blends)):
+        blends = [
+            spline._create_blend(index, parameter)
+            for index, parameter in enumerate(parameters)
+        ]
+        for index, (parameter, (pick, weights, nodes)) in enumerate(zip(parameters, blends)):
             if index + 1 < len(blends):
                 target = blends[index + 1][0]["outputMatrix"]
             else:
@@ -114,7 +117,9 @@ class MatrixSpline:
             twist_source, math_nodes = spline._weighted_sum(twists, weights)
             if twist_source is not None:
                 twist_source >> twist
-            spline.outputs.append(SplineOutput(u, weights, output, twist, [*nodes, aim, *math_nodes]))
+            spline.outputs.append(
+                SplineOutput(parameter, weights, output, twist, [*nodes, aim, *math_nodes])
+            )
         return spline
 
     @staticmethod
@@ -148,9 +153,9 @@ class MatrixSpline:
         if self.group.exists():
             cmds.delete(self.group.long_name)
 
-    def _create_blend(self, index: int, u: float):
+    def _create_blend(self, index: int, parameter: float):
         """parentMatrix (weighted drivers) -> pickMatrix (translate + scale only)."""
-        weights = basis(u, len(self.drivers), self.degree)
+        weights = basis(parameter, len(self.drivers), self.degree)
         blend = create_node("parentMatrix", name=f"{self.name}_{index}_parentMatrix")
         for slot, (driver, weight) in enumerate(zip(self.drivers, weights)):
             driver["worldMatrix[0]"] >> blend[f"target[{slot}].targetMatrix"]

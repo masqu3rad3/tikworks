@@ -1,5 +1,7 @@
 """Camera node types wrapper."""
 
+from __future__ import annotations
+
 from maya import cmds, mel
 
 from ..core.registry import register

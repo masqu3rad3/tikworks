@@ -1,6 +1,8 @@
 """Panel construct for managing model panels and camera settings."""
 
-from typing import Any, Dict, Optional, Tuple, Union
+from __future__ import annotations
+
+from typing import Any, Optional, Union
 
 from maya import cmds
 
@@ -147,7 +149,7 @@ class Panel:
     def __init__(
         self,
         camera: Union[str, Camera, Transform],
-        resolution: Tuple[int, int] = (1920, 1080),
+        resolution: tuple[int, int] = (1920, 1080),
         inherit: bool = True,
         title: str = "Tik Panel",
     ):
@@ -162,7 +164,7 @@ class Panel:
         self._camera = self._resolve_camera(camera)
         self._window: Optional[str] = None
         self._panel: Optional[str] = None
-        self._original_camera_state: Dict[str, Any] = {}
+        self._original_camera_state: dict[str, Any] = {}
 
         # Store original camera state
         self._capture_camera_state()
@@ -218,7 +220,7 @@ class Panel:
             val = cmds.camera(self._camera.name, query=True, **{attr: True})
             self._original_camera_state[attr] = val
 
-    def _create_ui(self, resolution: Tuple[int, int], title: str):
+    def _create_ui(self, resolution: tuple[int, int], title: str):
         """Create the window and model panel."""
         width, height = resolution
         # Compensate for menu bar height roughly

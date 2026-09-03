@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import time
 import statistics
 import gc
 from dataclasses import dataclass, field
-from typing import List, Callable, Dict, Optional
+from typing import Callable, Optional
 
 
 # --- Data Container ---
@@ -10,7 +12,7 @@ from typing import List, Callable, Dict, Optional
 class BenchmarkResult:
     name: str
     iterations: int
-    times: List[float] = field(default_factory=list)
+    times: list[float] = field(default_factory=list)
 
     @property
     def total(self):
@@ -59,7 +61,7 @@ class BenchmarkResult:
 # --- The Engine ---
 class Benchmark:
     def __init__(self):
-        self.results: Dict[str, BenchmarkResult] = {}
+        self.results: dict[str, BenchmarkResult] = {}
 
     def measure(self, name: str, iterations: int = 10, warmup: int = 2):
         """Measure a block of code, as a context manager or a decorator.
@@ -84,7 +86,7 @@ class Benchmark:
         print(f"{'-' * 60}")
 
         # Sort by average time (fastest first)
-        sorted_results = sorted(self.results.values(), key=lambda r: r.average)
+        sorted_results = sorted(self.results.values(), key=lambda result: result.average)
 
         for res in sorted_results:
             print(

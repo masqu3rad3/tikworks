@@ -250,7 +250,7 @@ class StubScene:
         self._invalidate()
 
     def set_inputs(self, instance_id: str, inputs: dict) -> None:
-        self._instances[instance_id].inputs = {k: v for k, v in inputs.items() if v}
+        self._instances[instance_id].inputs = {key: value for key, value in inputs.items() if value}
         self._invalidate()
 
     # -------------------------------------------------------- connections
@@ -499,8 +499,8 @@ class StubScene:
         wanted = keys | set(groups)
         designer = {
             "scene_nodes": groups,
-            "positions": {k: v for k, v in layout.get("positions", {}).items() if k in wanted},
-            "collapse": {k: v for k, v in layout.get("collapse", {}).items() if k in wanted},
+            "positions": {key: value for key, value in layout.get("positions", {}).items() if key in wanted},
+            "collapse": {key: value for key, value in layout.get("collapse", {}).items() if key in wanted},
         }
         designer = {name: value for name, value in designer.items() if value}
         return GuideFile(records, connections, designer=designer).save(file_path)

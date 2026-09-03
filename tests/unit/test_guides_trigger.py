@@ -107,7 +107,7 @@ def _reflected(node):
 
 
 def _matrices_match(first, second, tolerance=1e-4):
-    return all(abs(a - b) < tolerance for a, b in zip(first, second))
+    return all(abs(actual - expected) < tolerance for actual, expected in zip(first, second))
 
 
 def _mirrored_pair(guides, role, position, rotation=(0, 0, 0)):
@@ -242,7 +242,7 @@ def test_record_without_attrs_still_imports():
 def test_import_recreates_a_role_the_file_predates(guides, tmp_path):
     """An older .trg was written before the module declared this guide.
 
-    Without this, adding a role to a module stops every existing asset from
+    Without this, adding actual role to actual module stops every existing asset from
     building: import creates only the roles present in the file, and
     ``rig.guide(role)`` then raises.
     """
@@ -260,7 +260,7 @@ def test_import_recreates_a_role_the_file_predates(guides, tmp_path):
     handles = guides.import_(path)
     node = guides.guide_node(handles[0].instance_id, "hand", 0)
     assert node is not None, "the declared role was not recreated"
-    assert all(abs(a - b) < 1e-4 for a, b in zip(node.world_position, expected))
+    assert all(abs(actual - expected) < 1e-4 for actual, expected in zip(node.world_position, expected))
 
 
 def test_import_leaves_nothing_behind_when_it_fills_a_role(guides, tmp_path):

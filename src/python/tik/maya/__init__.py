@@ -11,8 +11,16 @@ from .core.plug import Plug
 from .core.meta import META_PREFIX, find_by_meta
 from .core.node import Node
 from .core.registry import resolve
-from .core.scene import *  # noqa: F401, F403
-from .core.scene import proxy_wrapper
+from .core.scene import (
+    create_node,
+    createNode,
+    ensure_plugin,
+    list_scene_nodes,
+    ls,
+    proxy_wrapper,
+    select,
+    select_nodes,
+)
 from .core.shapenode import ShapeNode
 from .constructs import (
     AimFrame,
@@ -74,6 +82,14 @@ __all__ = [
     "Ribbon",
     "SoftIk",
     "META_PREFIX",
+    "create_node",
+    "createNode",
+    "ensure_plugin",
+    "list_scene_nodes",
+    "ls",
+    "proxy_wrapper",
+    "select",
+    "select_nodes",
 ]
 
 # --- MODULE LEVEL GETATTR (PEP 562) ---

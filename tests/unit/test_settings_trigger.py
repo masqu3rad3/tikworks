@@ -34,8 +34,8 @@ class TestUserSettingsInit:
             file_path = Path(tmpdir) / "existing.json"
             import json
 
-            with open(file_path, "w") as f:
-                json.dump({"existing_key": "existing_value"}, f)
+            with open(file_path, "w") as handle:
+                json.dump({"existing_key": "existing_value"}, handle)
 
             settings = UserSettings(file_path)
             assert settings.get("existing_key") == "existing_value"
@@ -61,8 +61,8 @@ class TestUserSettingsProperties:
             file_path = Path(tmpdir) / "keys_test.json"
             import json
 
-            with open(file_path, "w") as f:
-                json.dump({"a": 1, "b": 2}, f)
+            with open(file_path, "w") as handle:
+                json.dump({"a": 1, "b": 2}, handle)
 
             settings = UserSettings(file_path)
             assert set(settings.keys) == {"a", "b"}
@@ -75,8 +75,8 @@ class TestUserSettingsProperties:
             file_path = Path(tmpdir) / "values_test.json"
             import json
 
-            with open(file_path, "w") as f:
-                json.dump({"a": 1, "b": 2}, f)
+            with open(file_path, "w") as handle:
+                json.dump({"a": 1, "b": 2}, handle)
 
             settings = UserSettings(file_path)
             assert set(settings.values) == {1, 2}
@@ -93,8 +93,8 @@ class TestUserSettingsGetSet:
             file_path = Path(tmpdir) / "get_test.json"
             import json
 
-            with open(file_path, "w") as f:
-                json.dump({"key": "value"}, f)
+            with open(file_path, "w") as handle:
+                json.dump({"key": "value"}, handle)
 
             settings = UserSettings(file_path)
             assert settings.get("key") == "value"
@@ -143,8 +143,8 @@ class TestUserSettingsPersistence:
 
             import json
 
-            with open(file_path, "r") as f:
-                data = json.load(f)
+            with open(file_path, "r") as handle:
+                data = json.load(handle)
             assert data["saved"] == "value"
 
     def test_is_changed_true_after_modification(self):
@@ -218,8 +218,8 @@ class TestUserSettingsData:
             file_path = Path(tmpdir) / "update_test.json"
             import json
 
-            with open(file_path, "w") as f:
-                json.dump({"a": 1, "b": 2}, f)
+            with open(file_path, "w") as handle:
+                json.dump({"a": 1, "b": 2}, handle)
 
             settings = UserSettings(file_path)
             settings.update({"b": 3, "c": 4})  # c should NOT be added
@@ -235,8 +235,8 @@ class TestUserSettingsData:
             file_path = Path(tmpdir) / "addmissing_test.json"
             import json
 
-            with open(file_path, "w") as f:
-                json.dump({"a": 1}, f)
+            with open(file_path, "w") as handle:
+                json.dump({"a": 1}, handle)
 
             settings = UserSettings(file_path)
             settings.update({"b": 2}, add_missing_keys=True)
@@ -307,8 +307,8 @@ class TestFactoryDefaults:
         )
 
         if defaults_json_path.exists():
-            with open(defaults_json_path, "r") as f:
-                defaults_json = json.load(f)
+            with open(defaults_json_path, "r") as handle:
+                defaults_json = json.load(handle)
 
             assert defaults_json["debug_mode"] == FACTORY_DEFAULTS["debug_mode"]
             assert defaults_json["mirror_mapping"] == FACTORY_DEFAULTS["mirror_mapping"]
@@ -420,8 +420,8 @@ class TestTriggerSettingsFacade:
         """Test facade repr."""
         from tik.trigger.config.settings import trigger_settings
 
-        r = repr(trigger_settings)
-        assert isinstance(r, str)
+        text = repr(trigger_settings)
+        assert isinstance(text, str)
 
     def test_facade_reset_to_factory_defaults(self):
         """Test reset_to_factory_defaults resets all values."""

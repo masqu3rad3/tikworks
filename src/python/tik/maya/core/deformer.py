@@ -15,7 +15,7 @@ import array
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Union
+from typing import Iterable, Optional, Union
 
 from maya import cmds
 from maya.api import OpenMaya
@@ -108,10 +108,10 @@ class DeformerWeights:
 
     def __init__(
         self,
-        weights: Union[List[float], array.array],
+        weights: Union[list[float], array.array],
         channel_count: int,
         element_count: int,
-        channel_names: Optional[List[str]] = None,
+        channel_names: Optional[list[str]] = None,
     ):
         """Initialize DeformerWeights container.
 
@@ -145,13 +145,13 @@ class DeformerWeights:
         return self._element_count
 
     @property
-    def channel_names(self) -> List[str]:
+    def channel_names(self) -> list[str]:
         """Names of channels if available."""
         return self._channel_names
 
     # === Public Methods ===
 
-    def get_element_weights(self, element_index: int) -> List[float]:
+    def get_element_weights(self, element_index: int) -> list[float]:
         """Get weights for a single element across all channels.
 
         Args:
@@ -167,7 +167,7 @@ class DeformerWeights:
         start_idx = element_index * self._channel_count
         return list(self._weights[start_idx : start_idx + self._channel_count])
 
-    def get_channel_weights(self, channel_index: int) -> List[float]:
+    def get_channel_weights(self, channel_index: int) -> list[float]:
         """Get weights for a single channel across all elements.
 
         Args:
@@ -224,7 +224,7 @@ class DeformerWeights:
                     self._weights[idx] /= total
         return self
 
-    def to_list(self) -> List[float]:
+    def to_list(self) -> list[float]:
         """Convert weights to a standard Python list."""
         return list(self._weights)
 
@@ -361,18 +361,18 @@ class HeaderInfo:
     """Metadata for serialized deformer weight files."""
 
     file_name: Optional[str] = None
-    world_matrix: Optional[List[float]] = None
+    world_matrix: Optional[list[float]] = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, object]) -> "HeaderInfo":
+    def from_dict(cls, data: dict[str, object]) -> "HeaderInfo":
         """Create header info from a dictionary."""
         file_name = data.get("fileName") if data else None
         world_matrix = data.get("worldMatrix") if data else None
         return cls(file_name=file_name, world_matrix=world_matrix)
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         """Serialize header info to a dictionary."""
-        data: Dict[str, object] = {}
+        data: dict[str, object] = {}
         if self.file_name is not None:
             data["fileName"] = self.file_name
         if self.world_matrix is not None:
@@ -389,12 +389,12 @@ class ShapeInfo:
     stride: int
     size: int
     max_index: int
-    points: Dict[int, List[float]] = field(default_factory=dict)
+    points: dict[int, list[float]] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, object]) -> "ShapeInfo":
+    def from_dict(cls, data: dict[str, object]) -> "ShapeInfo":
         """Create ShapeInfo from a dictionary."""
-        points_dict: Dict[int, List[float]] = {}
+        points_dict: dict[int, list[float]] = {}
         for point_entry in data.get("points", []) or []:
             point_index = int(point_entry["index"])
             point_value = list(point_entry["value"])
@@ -408,7 +408,7 @@ class ShapeInfo:
             points=points_dict,
         )
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         """Serialize ShapeInfo to a dictionary."""
         point_entries = [
             {"index": point_index, "value": self.points[point_index]}
@@ -431,7 +431,7 @@ class WeightLayer:
     shape: str
     layer: int
     default_value: float
-    points: Dict[int, float] = field(default_factory=dict)
+    points: dict[int, float] = field(default_factory=dict)
     size: Optional[int] = None
     max_index: Optional[int] = None
     influence: Optional[str] = None
@@ -440,10 +440,10 @@ class WeightLayer:
 
     @classmethod
     def from_dict(
-        cls, data: Dict[str, object], base_layer_names: Iterable[str]
+        cls, data: dict[str, object], base_layer_names: Iterable[str]
     ) -> "WeightLayer":
         """Create a WeightLayer from a dictionary."""
-        points_dict: Dict[int, float] = {}
+        points_dict: dict[int, float] = {}
         for point_entry in data.get("points", []) or []:
             point_index = int(point_entry["index"])
             point_value = float(point_entry["value"])
@@ -464,7 +464,7 @@ class WeightLayer:
             is_base=is_base,
         )
 
-    def to_dict(self, base_layer_name: Optional[str] = None) -> Dict[str, object]:
+    def to_dict(self, base_layer_name: Optional[str] = None) -> dict[str, object]:
         """Serialize WeightLayer to a dictionary."""
         source_name = self.influence
         if source_name is None and self.is_base and base_layer_name:
@@ -475,7 +475,7 @@ class WeightLayer:
             for point_index in sorted(self.points)
         ]
 
-        data: Dict[str, object] = {
+        data: dict[str, object] = {
             "shape": self.shape,
             "layer": self.layer,
             "defaultValue": self.default_value,
@@ -533,22 +533,22 @@ class WeightsIO:
         return self._header
 
     @property
-    def shapes(self) -> List[ShapeInfo]:
+    def shapes(self) -> list[ShapeInfo]:
         """Ordered list of shapes."""
         return [self._shapes[name] for name in self._shape_order]
 
     @property
-    def layers(self) -> List[WeightLayer]:
+    def layers(self) -> list[WeightLayer]:
         """List of weight layers."""
         return list(self._layers)
 
     @property
-    def base_layer_names(self) -> List[str]:
+    def base_layer_names(self) -> list[str]:
         """Names used to tag base weight layers."""
         return list(self._base_layer_names)
 
     @property
-    def influence_names(self) -> List[str]:
+    def influence_names(self) -> list[str]:
         """Unique influence names excluding base layers."""
         names = {
             layer.influence
@@ -573,7 +573,7 @@ class WeightsIO:
         """Return ShapeInfo by name if present."""
         return self._shapes.get(name)
 
-    def layers_for_shape(self, shape_name: str) -> List[WeightLayer]:
+    def layers_for_shape(self, shape_name: str) -> list[WeightLayer]:
         """Return all layers associated with a shape."""
         return [layer for layer in self._layers if layer.shape == shape_name]
 
@@ -647,7 +647,7 @@ class WeightsIO:
     # === Serialization ===
 
     @classmethod
-    def from_dict(cls, data: Dict[str, object]) -> "WeightsIO":
+    def from_dict(cls, data: dict[str, object]) -> "WeightsIO":
         """Create WeightsIO from a dictionary.
 
         Supports input with or without the top-level 'deformerWeight' key.
@@ -673,7 +673,7 @@ class WeightsIO:
             base_layer_names=base_layer_names,
         )
 
-    def to_dict(self) -> Dict[str, object]:
+    def to_dict(self) -> dict[str, object]:
         """Serialize WeightsIO to a dictionary matching Maya's deformerWeights format."""
         header_info = self._header.to_dict()
         shape_entries = [shape_info.to_dict() for shape_info in self.shapes]
@@ -682,7 +682,7 @@ class WeightsIO:
             for layer in self._layers
         ]
 
-        data: Dict[str, object] = {
+        data: dict[str, object] = {
             "headerInfo": header_info,
             "shapes": shape_entries,
             "weights": layer_entries,

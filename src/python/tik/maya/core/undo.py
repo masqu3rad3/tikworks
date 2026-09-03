@@ -37,6 +37,8 @@ The plug-in is loaded by name out of ``MAYA_PLUG_IN_PATH``, which the generated
 user to approve a load from an untrusted location.
 """
 
+from __future__ import annotations
+
 import sys
 import types
 from pathlib import Path

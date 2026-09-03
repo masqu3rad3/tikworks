@@ -65,7 +65,7 @@ def test_plug_set_and_get_string_attribute():
     assert plug.get() == "hello world"
 
 def test_plug_set_and_get_matrix_attribute():
-    """Test setting and getting a matrix attribute."""
+    """Test setting and getting actual matrix attribute."""
     transform = cmds.createNode("transform", name="matrixHolder")
     node = Node(cmds.ls(transform, long=True)[0])
     cmds.addAttr(node.name, longName="myMatrix", attributeType="matrix")
@@ -76,7 +76,7 @@ def test_plug_set_and_get_matrix_attribute():
                     5.0, 10.0, 15.0, 1.0]
     plug.set(matrix_value)
     retrieved_value = plug.get()
-    assert all(pytest.approx(a, rel=1e-6) == b for a, b in zip(retrieved_value, matrix_value))
+    assert all(pytest.approx(actual, rel=1e-6) == expected for actual, expected in zip(retrieved_value, matrix_value))
 
 def test_plug_set_unsupported_type_raises_typeerror():
     """Test setting an unsupported type raises TypeError."""
@@ -101,7 +101,7 @@ def test_connect_and_disconnect_specific_plugs():
     src.connect(dst, force=True)
 
     conns = cmds.listConnections(dst.path, plugs=True, source=True) or []
-    assert any(c.endswith(".outA") for c in conns)
+    assert any(connection.endswith(".outA") for connection in conns)
 
     src.disconnect(dst)
 
@@ -311,9 +311,9 @@ def test_plug_children_compound_attribute():
     plug = node["translate"]
     children = plug.children
     assert len(children) == 3
-    assert any(c.attr == "translateX" for c in children)
-    assert any(c.attr == "translateY" for c in children)
-    assert any(c.attr == "translateZ" for c in children)
+    assert any(child.attr == "translateX" for child in children)
+    assert any(child.attr == "translateY" for child in children)
+    assert any(child.attr == "translateZ" for child in children)
 
 def test_plug_children_empty_for_simple_attribute():
     """Test children property returns empty list for simple attribute."""
@@ -353,7 +353,7 @@ def test_plug_list_outputs_returns_nodes():
 
     outputs = src_node["tx"].list_outputs()
     assert len(outputs) == 2
-    names = sorted([n.name for n in outputs])
+    names = sorted([node.name for node in outputs])
     assert names == ["outDst1", "outDst2"]
 
 def test_plug_list_outputs_returns_plugs():

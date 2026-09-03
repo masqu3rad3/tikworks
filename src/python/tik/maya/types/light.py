@@ -1,5 +1,7 @@
 """Light node type wrapper."""
 
+from __future__ import annotations
+
 from maya import cmds
 
 from ..core.registry import register

@@ -65,28 +65,28 @@ class PipelineDelegate(QtWidgets.QStyledItemDelegate):
                 painter.setBrush(QtGui.QColor(254, 126, 0, 60))
                 painter.drawEllipse(center, 6.0, 6.0)
 
-        x = rect.left() + 3 + GUTTER + 2
+        pen_x = rect.left() + 3 + GUTTER + 2
         # category stripe
         pen = QtGui.QPen(QtGui.QColor(theme.LINKED if linked else category_color), STRIPE)
         if linked:
             pen.setStyle(QtCore.Qt.DashLine)
         painter.setPen(pen)
-        painter.drawLine(x, rect.top() + 5, x, rect.bottom() - 4)
-        x += 8
+        painter.drawLine(pen_x, rect.top() + 5, pen_x, rect.bottom() - 4)
+        pen_x += 8
 
         painter.setOpacity((1.0 if enabled else 0.4) * (0.85 if linked else 1.0))
 
         if linked:  # checkbox
-            box = QtCore.QRect(x, rect.center().y() - 5, 11, 11)
+            box = QtCore.QRect(pen_x, rect.center().y() - 5, 11, 11)
             painter.setRenderHint(QtGui.QPainter.Antialiasing)
             painter.setPen(QtGui.QPen(QtGui.QColor(theme.LINKED), 1))
             painter.setBrush(QtGui.QColor(theme.STATUS["done"]) if enabled else QtCore.Qt.NoBrush)
             painter.drawRoundedRect(box, 2, 2)
-            x += 17
+            pen_x += 17
 
         icon = glyph_icon(initials(index.data(LabelRole) or index.data(TypeRole) or "?"), category_color, size=16)
-        icon.paint(painter, QtCore.QRect(x, rect.center().y() - 8, 16, 16))
-        x += 22
+        icon.paint(painter, QtCore.QRect(pen_x, rect.center().y() - 8, 16, 16))
+        pen_x += 22
 
         font = QtGui.QFont(option.font)
         if linked:
@@ -100,29 +100,29 @@ class PipelineDelegate(QtWidgets.QStyledItemDelegate):
             painter.setPen(pen)
             painter.setBrush(QtCore.Qt.NoBrush)
             cy = rect.center().y() + 0.5
-            painter.drawEllipse(QtCore.QRectF(x, cy - 3, 6, 6))
-            painter.drawEllipse(QtCore.QRectF(x + 5, cy - 3, 6, 6))
-            x += 15
+            painter.drawEllipse(QtCore.QRectF(pen_x, cy - 3, 6, 6))
+            painter.drawEllipse(QtCore.QRectF(pen_x + 5, cy - 3, 6, 6))
+            pen_x += 15
             painter.setPen(QtGui.QColor("#e6e6e6" if selected else "#a8b3c2"))
         metrics = QtGui.QFontMetrics(font)
         name_width = metrics.horizontalAdvance(name)
-        painter.drawText(QtCore.QRect(x, rect.top(), name_width + 4, rect.height()), QtCore.Qt.AlignVCenter, name)
-        x += name_width + 12
+        painter.drawText(QtCore.QRect(pen_x, rect.top(), name_width + 4, rect.height()), QtCore.Qt.AlignVCenter, name)
+        pen_x += name_width + 12
 
         summary = index.data(SummaryRole) or ""
         if status == "failed":
             summary = "failed — " + (index.data(QtCore.Qt.ToolTipRole) or "")
-        if summary and x < rect.right() - 30:
+        if summary and pen_x < rect.right() - 30:
             small = QtGui.QFont(option.font)
             small.setPointSizeF(max(option.font.pointSizeF() - 1, 7))
             painter.setFont(small)
             painter.setPen(QtGui.QColor(theme.STATUS["failed"] if status == "failed" else theme.TEXT_DIM))
-            elided = QtGui.QFontMetrics(small).elidedText(summary, QtCore.Qt.ElideMiddle, rect.right() - x - 8)
-            painter.drawText(QtCore.QRect(x, rect.top(), rect.right() - x - 6, rect.height()), QtCore.Qt.AlignVCenter, elided)
+            elided = QtGui.QFontMetrics(small).elidedText(summary, QtCore.Qt.ElideMiddle, rect.right() - pen_x - 8)
+            painter.drawText(QtCore.QRect(pen_x, rect.top(), rect.right() - pen_x - 6, rect.height()), QtCore.Qt.AlignVCenter, elided)
 
     def checkbox_rect(self, option, index) -> QtCore.QRect:
-        x = option.rect.left() + 3 + GUTTER + 2 + 8
-        return QtCore.QRect(x, option.rect.center().y() - 5, 11, 11)
+        pen_x = option.rect.left() + 3 + GUTTER + 2 + 8
+        return QtCore.QRect(pen_x, option.rect.center().y() - 5, 11, 11)
 
     def editorEvent(self, event, model, option, index) -> bool:  # noqa: N802
         if (event.type() == QtCore.QEvent.MouseButtonRelease and index.data(LinkedRole)

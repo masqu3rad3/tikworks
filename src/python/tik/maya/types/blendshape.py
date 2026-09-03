@@ -1,7 +1,10 @@
 """Blendshape type for Maya integration."""
+
+from __future__ import annotations
+
 from array import array
 from functools import partial
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 from maya import cmds
 
@@ -133,7 +136,7 @@ class BlendShape(Deformer):
                 return self[f"inputTarget[{geom_index}]"][
                     f"inputTargetGroup[{target_id}]"
                 ]["targetWeights"].mplug
-        except Exception:
+        except Exception:  # noqa: BLE001 - any missing plug means "no weights"
             return None
 
     def _read_weights(self, plug, vert_count):
@@ -149,7 +152,7 @@ class BlendShape(Deformer):
                 element = plug.elementByPhysicalIndex(physical_idx)
                 try:
                     value = element.asDouble()
-                except Exception:
+                except Exception:  # noqa: BLE001 - float-typed weight plugs
                     value = element.asFloat()
                 weights[logical_idx] = float(value)
 
@@ -272,7 +275,7 @@ class BlendShape(Deformer):
 
     def set_weights(
         self,
-        weights: Union[DeformerWeights, List[float]],
+        weights: Union[DeformerWeights, list[float]],
         geometry: Optional[str] = None,
     ) -> None:
         """Set all weights for the geometry.

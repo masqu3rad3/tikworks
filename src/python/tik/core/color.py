@@ -5,6 +5,8 @@ A lightweight, object-oriented color manipulation library.
 Internal storage is strictly RGB Float (0.0 - 1.0).
 """
 
+from __future__ import annotations
+
 import colorsys
 import math
 import random
@@ -95,40 +97,40 @@ class Color:
         hex_str = hex_str.lstrip("#")
 
         if len(hex_str) == 3:
-            hex_str = "".join(c * 2 for c in hex_str)
+            hex_str = "".join(char * 2 for char in hex_str)
 
         if len(hex_str) != 6:
             raise ValueError(f"Invalid Hex String: {hex_str}")
 
         try:
-            r = int(hex_str[0:2], 16)
-            g = int(hex_str[2:4], 16)
-            b = int(hex_str[4:6], 16)
+            red = int(hex_str[0:2], 16)
+            green = int(hex_str[2:4], 16)
+            blue = int(hex_str[4:6], 16)
         except ValueError:
             raise ValueError(f"Invalid Hex String: {hex_str}")
 
-        self._r = r / 255.0
-        self._g = g / 255.0
-        self._b = b / 255.0
+        self._r = red / 255.0
+        self._g = green / 255.0
+        self._b = blue / 255.0
 
     def _from_sequence(self, seq):
         if len(seq) < 3:
             raise ValueError("Sequence must contain at least 3 values")
 
-        r, g, b = seq[:3]
+        red, green, blue = seq[:3]
 
-        is_int_format = any(v > 1.0 for v in (r, g, b)) or all(
-            isinstance(v, int) for v in (r, g, b)
+        is_int_format = any(value > 1.0 for value in (red, green, blue)) or all(
+            isinstance(value, int) for value in (red, green, blue)
         )
 
         if is_int_format:
-            self._r = float(r) / 255.0
-            self._g = float(g) / 255.0
-            self._b = float(b) / 255.0
+            self._r = float(red) / 255.0
+            self._g = float(green) / 255.0
+            self._b = float(blue) / 255.0
         else:
-            self._r = float(r)
-            self._g = float(g)
-            self._b = float(b)
+            self._r = float(red)
+            self._g = float(green)
+            self._b = float(blue)
 
     # ------------------------------------------------------------------
     # Properties / Conversions
@@ -177,36 +179,36 @@ class Color:
             random.seed(seed)
 
         if mode == cls.RANDOM_PASTEL:
-            h = random.random()
-            s = random.uniform(0.2, 0.5)
-            v = random.uniform(0.8, 1.0)
-            return cls(colorsys.hsv_to_rgb(h, s, v))
+            hue = random.random()
+            saturation = random.uniform(0.2, 0.5)
+            value = random.uniform(0.8, 1.0)
+            return cls(colorsys.hsv_to_rgb(hue, saturation, value))
 
         if mode == cls.RANDOM_NEON:
-            h = random.random()
-            s = random.uniform(0.8, 1.0)
-            v = 1.0
-            return cls(colorsys.hsv_to_rgb(h, s, v))
+            hue = random.random()
+            saturation = random.uniform(0.8, 1.0)
+            value = 1.0
+            return cls(colorsys.hsv_to_rgb(hue, saturation, value))
 
         if mode == cls.RANDOM_METALLIC:
             metallic_hues = [
                 random.uniform(0.0, 0.15),
                 random.uniform(0.5, 0.66),
             ]
-            h = random.choice(metallic_hues)
-            s = random.uniform(0.0, 0.25)
-            v = random.uniform(0.6, 0.9)
+            hue = random.choice(metallic_hues)
+            saturation = random.uniform(0.0, 0.25)
+            value = random.uniform(0.6, 0.9)
 
-            if h < 0.2:
-                s = random.uniform(0.4, 0.7)
+            if hue < 0.2:
+                saturation = random.uniform(0.4, 0.7)
 
-            return cls(colorsys.hsv_to_rgb(h, s, v))
+            return cls(colorsys.hsv_to_rgb(hue, saturation, value))
 
         if mode == cls.RANDOM_DARK:
-            h = random.random()
-            s = random.random()
-            v = random.uniform(0.0, 0.3)
-            return cls(colorsys.hsv_to_rgb(h, s, v))
+            hue = random.random()
+            saturation = random.random()
+            value = random.uniform(0.0, 0.3)
+            return cls(colorsys.hsv_to_rgb(hue, saturation, value))
 
         return cls((random.random(), random.random(), random.random()))
 
@@ -214,22 +216,22 @@ class Color:
     # Modifiers
     # ------------------------------------------------------------------
 
-    def set_hsv(self, h=None, s=None, v=None):
+    def set_hsv(self, hue=None, saturation=None, value=None):
         """Modify color using HSV values.
 
         Args:
-            h: Hue value (0.0-1.0), None to keep current
-            s: Saturation value (0.0-1.0), None to keep current
-            v: Value/brightness (0.0-1.0), None to keep current
+            hue: Hue (0.0-1.0), None to keep current
+            saturation: Saturation (0.0-1.0), None to keep current
+            value: Value/brightness (0.0-1.0), None to keep current
 
         Returns:
             self: For method chaining
         """
-        curr_h, curr_s, curr_v = self.hsv
+        current_hue, current_saturation, current_value = self.hsv
         self._r, self._g, self._b = colorsys.hsv_to_rgb(
-            h if h is not None else curr_h,
-            s if s is not None else curr_s,
-            v if v is not None else curr_v,
+            hue if hue is not None else current_hue,
+            saturation if saturation is not None else current_saturation,
+            value if value is not None else current_value,
         )
         return self
 

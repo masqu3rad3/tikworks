@@ -18,7 +18,7 @@ def view(qapp):
 
 
 def test_a_session_has_two_sub_tabs(view):
-    titles = [view.sub_tabs.tabText(i) for i in range(view.sub_tabs.count())]
+    titles = [view.sub_tabs.tabText(index) for index in range(view.sub_tabs.count())]
     assert titles == ["Session", "Guide Designer"]
     assert view.sub_tabs.currentIndex() == SESSION_TAB
 

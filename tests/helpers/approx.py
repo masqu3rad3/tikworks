@@ -5,7 +5,7 @@ from maya.api import OpenMaya
 
 def close(vector, expected, tolerance=1e-4):
     """True when every component of ``vector`` is within ``tolerance`` of ``expected``."""
-    return all(abs(a - b) < tolerance for a, b in zip(vector, expected))
+    return all(abs(actual - expected) < tolerance for actual, expected in zip(vector, expected))
 
 
 def axes(transform):

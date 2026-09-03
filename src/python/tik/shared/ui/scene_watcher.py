@@ -97,7 +97,7 @@ class SceneWatcher(QtCore.QObject):
             job = self._jobs.pop()
             try:
                 kill(job)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - the job may already be gone
                 pass
 
     @staticmethod

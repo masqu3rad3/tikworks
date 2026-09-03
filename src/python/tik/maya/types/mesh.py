@@ -1,5 +1,7 @@
 """Mesh node type wrapper."""
 
+from __future__ import annotations
+
 from maya import cmds
 from maya.api import OpenMaya
 
@@ -139,9 +141,9 @@ class Mesh(ShapeNode):
 
         if indices is not None:
             filtered_colors = OpenMaya.MColorArray()
-            for i in indices:
-                if 0 <= i < len(colors):
-                    filtered_colors.append(colors[i])
+            for index in indices:
+                if 0 <= index < len(colors):
+                    filtered_colors.append(colors[index])
             return filtered_colors
 
         return colors

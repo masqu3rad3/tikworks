@@ -150,8 +150,8 @@ class TestControlShapeLibrary:
 
         # Create a json at root
         shape_file = user_path / "root_shape.json"
-        with open(shape_file, "w") as f:
-            json.dump({"name": "root_shape"}, f)
+        with open(shape_file, "w") as handle:
+            json.dump({"name": "root_shape"}, handle)
 
         lib.refresh()
 
@@ -167,8 +167,8 @@ class TestControlShapeLibrary:
 
         # Create shape
         shape_file = user_path / "auto_shape.json"
-        with open(shape_file, "w") as f:
-            json.dump({"name": "auto_shape"}, f)
+        with open(shape_file, "w") as handle:
+            json.dump({"name": "auto_shape"}, handle)
 
         # Manually clear cache to simulate uninitialized state
         lib._cache = {}
@@ -185,8 +185,8 @@ class TestControlShapeLibrary:
         # Create a dummy shape file
         shape_data = {"name": "test_shape", "curves": []}
         shape_file = lib._user_path / "test_shape.json"
-        with open(shape_file, "w") as f:
-            json.dump(shape_data, f)
+        with open(shape_file, "w") as handle:
+            json.dump(shape_data, handle)
 
         # Refresh and list
         lib.refresh()
@@ -214,8 +214,8 @@ class TestControlShapeLibrary:
         lib._user_path.mkdir()
 
         bad_file = lib._user_path / "bad.json"
-        with open(bad_file, "w") as f:
-            f.write("{invalid_json")
+        with open(bad_file, "w") as handle:
+            handle.write("{invalid_json")
 
         lib.refresh()
         assert lib.load("bad") is None
@@ -240,13 +240,13 @@ def test_capture_and_normalize():
     # Check normalization (radius 10 -> diameter 20. Scale should be 1/20 = 0.05)
     points = data["curves"][0]["point"]
     # Max coordinate value should be scaled down
-    max_val = max(max(abs(c) for c in p) for p in points)
+    max_val = max(max(abs(component) for component in point) for point in points)
     assert max_val <= 0.5 + 0.0001
 
     # Test capture without normalization
     data_raw = capture(circle, normalize=False)
     points_raw = data_raw["curves"][0]["point"]
-    max_val_raw = max(max(abs(c) for c in p) for p in points_raw)
+    max_val_raw = max(max(abs(component) for component in point) for point in points_raw)
     assert max_val_raw > 5.0 # Radius is 10
 
 def test_capture_no_shapes():
@@ -258,8 +258,8 @@ def test_save_to_disk(tmp_path):
     data = {"test": "data"}
     path = save_to_disk(data, "test_save", tmp_path)
     assert os.path.exists(path)
-    with open(path, "r") as f:
-        loaded = json.load(f)
+    with open(path, "r") as handle:
+        loaded = json.load(handle)
     assert loaded == data
 
 def test_capture_to_disk(tmp_path, clean_library):
@@ -300,9 +300,9 @@ def test_guess_camera_view():
     assert view == "iso"
 
 def test_resolve_folder_path(tmp_path):
-    p = _resolve_folder_path(tmp_path, "category")
-    assert p == tmp_path / "category"
-    assert p.exists()
+    folder = _resolve_folder_path(tmp_path, "category")
+    assert folder == tmp_path / "category"
+    assert folder.exists()
 
     p2 = _resolve_folder_path(str(tmp_path), None)
     assert p2 == tmp_path
@@ -327,8 +327,8 @@ def test_capture_thumbnail(tmp_path):
                 # Side effect for playblast to create the file
                 def side_effect(*args, **kwargs):
                     filename = kwargs.get("completeFilename")
-                    with open(filename, "w") as f:
-                        f.write("dummy image")
+                    with open(filename, "w") as handle:
+                        handle.write("dummy image")
                     return filename
                 mock_playblast.side_effect = side_effect
 

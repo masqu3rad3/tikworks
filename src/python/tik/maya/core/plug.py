@@ -1,5 +1,7 @@
 """Plug module for Maya core functionalities."""
 
+from __future__ import annotations
+
 from typing import Optional
 
 from maya import cmds

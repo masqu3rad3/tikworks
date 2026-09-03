@@ -9,7 +9,6 @@ by ``tik.shared.ui.theme``.
 
 from __future__ import annotations
 
-from typing import List
 
 from tik.shared.ui.Qt import QtCore, QtWidgets
 
@@ -21,11 +20,13 @@ class FilterModel(QtCore.QObject):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._keywords: List[str] = []
+        self._keywords: list[str] = []
         self._pending = ""
 
     def set_keywords(self, keywords) -> None:
-        self._keywords = [k.strip().lower() for k in keywords or () if k and k.strip()]
+        self._keywords = [
+            keyword.strip().lower() for keyword in keywords or () if keyword and keyword.strip()
+        ]
         self.filter_changed.emit()
 
     def set_pending_text(self, text) -> None:
@@ -33,14 +34,14 @@ class FilterModel(QtCore.QObject):
         self.filter_changed.emit()
 
     @property
-    def keywords(self) -> List[str]:
+    def keywords(self) -> list[str]:
         return list(self._keywords)
 
     @property
     def is_active(self) -> bool:
         return bool(self._keywords or self._pending)
 
-    def _terms(self) -> List[str]:
+    def _terms(self) -> list[str]:
         return self._keywords + ([self._pending] if self._pending else [])
 
     def matches(self, text) -> bool:
@@ -97,7 +98,7 @@ class FilterBar(QtWidgets.QWidget):
         super().__init__(parent)
         self.setObjectName("FilterBar")
         self._model = FilterModel(self)
-        self._pills: List[_Pill] = []
+        self._pills: list[_Pill] = []
         self._line_edit = _FilterLineEdit(self)
         self._line_edit.setObjectName("FilterInput")
         self._line_edit.setPlaceholderText(placeholder)
@@ -123,7 +124,7 @@ class FilterBar(QtWidgets.QWidget):
         return self._model
 
     @property
-    def keywords(self) -> List[str]:
+    def keywords(self) -> list[str]:
         return self._model.keywords
 
     @property
@@ -149,7 +150,7 @@ class FilterBar(QtWidgets.QWidget):
         keyword = self._line_edit.text().strip()
         if not keyword:
             return
-        if keyword.lower() in [p.keyword().lower() for p in self._pills]:
+        if keyword.lower() in [pill.keyword().lower() for pill in self._pills]:
             self._line_edit.clear()
             return
         pill = _Pill(keyword, self._pill_row)
@@ -179,4 +180,4 @@ class FilterBar(QtWidgets.QWidget):
         pill.deleteLater()
 
     def _publish(self) -> None:
-        self._model.set_keywords([p.keyword() for p in self._pills])
+        self._model.set_keywords([pill.keyword() for pill in self._pills])

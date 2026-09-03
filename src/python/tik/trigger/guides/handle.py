@@ -8,12 +8,15 @@ regenerate, and stays valid when the guide joints are deleted.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from tik.core.side import Side
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import instance_key
+
+if TYPE_CHECKING:
+    from .scene import GuideScene
 
 
 def mirror_source(source: str, side: str, target_side: str) -> str:

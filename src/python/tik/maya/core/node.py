@@ -3,6 +3,8 @@
 This module is also a fallback for all unregistered node types.
 """
 
+from __future__ import annotations
+
 import logging
 
 import maya.cmds as cmds

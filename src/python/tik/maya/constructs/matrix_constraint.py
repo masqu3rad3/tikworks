@@ -7,7 +7,7 @@ compensation strand so the driven rotation stays clean.
 
 from __future__ import annotations
 
-from typing import Iterable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Iterable, Optional, Sequence, Union
 
 from maya import cmds
 from maya.api import OpenMaya
@@ -16,6 +16,9 @@ from ..core.decorators import undo
 from ..core.plug import Plug, world_matrix_plug
 from ..core.registry import resolve
 from ..core.scene import create_node, ensure_plugin
+
+if TYPE_CHECKING:
+    from ..types.transform import Transform
 
 DriverType = Union[str, "Transform", Plug, Sequence[Union[str, "Transform", Plug]]]
 

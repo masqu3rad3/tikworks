@@ -39,16 +39,16 @@ def test_parent_set_to_new_parent_node_and_updates_children():
     ch_node.parent = p2_node
 
     assert ch_node.parent.name == "p2"
-    assert all(c.name != "ch" for c in p1_node.children)
-    assert any(c.name == "ch" for c in p2_node.children)
+    assert all(child.name != "ch" for child in p1_node.children)
+    assert any(child.name == "ch" for child in p2_node.children)
 
 
 def test_parent_set_to_new_parent_by_name_and_cache_refresh():
     pA = cmds.createNode("transform", name="pA")
     pB = cmds.createNode("transform", name="pB")
-    n = cmds.createNode("transform", name="n", parent=pA)
+    node = cmds.createNode("transform", name="n", parent=pA)
 
-    n_node = resolve(cmds.ls(n, long=True)[0])
+    n_node = resolve(cmds.ls(node, long=True)[0])
 
     _ = n_node.parent  # populate the cached dag path
     n_node.parent = "pB"
@@ -78,9 +78,9 @@ def test_children_return_wrapped_nodes_and_order():
     parent_node = resolve(cmds.ls(parent, long=True)[0])
     children = parent_node.children
 
-    assert all(isinstance(c, DagNode) for c in children)
-    assert [c.name for c in children] == ["c1", "c2"]
-    assert {c.long_name for c in children} == set(cmds.ls([c1, c2], long=True))
+    assert all(isinstance(child, DagNode) for child in children)
+    assert [child.name for child in children] == ["c1", "c2"]
+    assert {child.long_name for child in children} == set(cmds.ls([c1, c2], long=True))
 
 
 def test_children_empty_on_leaf():

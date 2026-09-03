@@ -79,14 +79,14 @@ class TestController:
     def test_from_node(self):
         """Test wrapping existing node."""
         # Create a regular transform
-        t = cmds.createNode("transform", name="regular_t")
+        transform = cmds.createNode("transform", name="regular_t")
 
         # Should fail
         with pytest.raises(RuntimeError):
             Controller.from_node("regular_t")
 
         # Tag it manually
-        cmds.addAttr(t, longName="isController", attributeType="bool", defaultValue=True)
+        cmds.addAttr(transform, longName="isController", attributeType="bool", defaultValue=True)
 
         # Should succeed
         ctrl = Controller.from_node("regular_t")

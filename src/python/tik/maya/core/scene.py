@@ -1,5 +1,7 @@
 """Module for tikmaya which handles scene-related functions."""
 
+from __future__ import annotations
+
 from maya import cmds
 
 from . import apicommon

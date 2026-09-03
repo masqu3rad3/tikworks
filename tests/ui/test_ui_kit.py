@@ -33,7 +33,7 @@ def test_versioned_field_states_and_stepping(qapp, tmp_path):
 
 
 def test_tile_grid_reflows(qapp):
-    entries = [TileEntry(f"a{i}", f"Action {i}", "build" if i < 4 else "deform") for i in range(6)]
+    entries = [TileEntry(f"a{index}", f"Action {index}", "build" if index < 4 else "deform") for index in range(6)]
     grid = TileGrid(entries, "application/x-test", columns_hint=2)
     grid.resize(400, 300)
     grid.show()

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -39,7 +41,7 @@ def get_home_dir():
         home = os.getenv("HOME")
 
     if not home:
-        home = os.path.expanduser("~")
+        home = str(Path.home())
 
     return os.path.normpath(home)
 

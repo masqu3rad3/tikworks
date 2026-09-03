@@ -368,8 +368,8 @@ class FormBuilder(QtWidgets.QWidget):
                 )
                 fold = CollapsibleGroup(group.label, expanded=expanded)
                 fold.toggled.connect(
-                    lambda state, g=group: self._collapsed.__setitem__(
-                        self._fold_key(g), state
+                    lambda state, fold=group: self._collapsed.__setitem__(
+                        self._fold_key(fold), state
                     )
                 )
                 holder = QtWidgets.QWidget()
@@ -411,7 +411,7 @@ class FormBuilder(QtWidgets.QWidget):
                 int(field.min) if field.min is not None else -(2**31),
                 int(field.max) if field.max is not None else 2**31 - 1,
             )
-            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+            widget.valueChanged.connect(lambda value, field_name=name: self._on_change(field_name, value))
         elif kind == "float":
             widget = QtWidgets.QDoubleSpinBox()
             widget.setDecimals(3)
@@ -419,16 +419,16 @@ class FormBuilder(QtWidgets.QWidget):
                 float(field.min) if field.min is not None else -1e9,
                 float(field.max) if field.max is not None else 1e9,
             )
-            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+            widget.valueChanged.connect(lambda value, field_name=name: self._on_change(field_name, value))
         elif kind == "bool":
             widget = QtWidgets.QCheckBox()
-            widget.toggled.connect(lambda value, n=name: self._on_change(n, bool(value)))
+            widget.toggled.connect(lambda value, field_name=name: self._on_change(field_name, bool(value)))
         elif kind == "choice":
             widget = QtWidgets.QComboBox()
             for choice in field.choices or []:
                 widget.addItem(str(choice), choice)
             widget.currentIndexChanged.connect(
-                lambda index, n=name, w=widget: self._on_change(n, w.itemData(index))
+                lambda index, field_name=name, combo=widget: self._on_change(field_name, combo.itemData(index))
             )
         elif kind == "vector":
             widget = _VectorEditor(
@@ -437,16 +437,16 @@ class FormBuilder(QtWidgets.QWidget):
                 maximum=field.max,
                 labels=getattr(field, "labels", None),
             )
-            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+            widget.valueChanged.connect(lambda value, field_name=name: self._on_change(field_name, value))
         elif kind == "list":
             widget = QtWidgets.QLineEdit()
             widget.setPlaceholderText("comma separated")
             widget.editingFinished.connect(
-                lambda n=name, w=widget: self._on_change(n, self._parse_list(w.text()))
+                lambda field_name=name, editor=widget: self._on_change(field_name, self._parse_list(editor.text()))
             )
         elif kind == "node":
             widget = _NodeEditor(self.node_picker)
-            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+            widget.valueChanged.connect(lambda value, field_name=name: self._on_change(field_name, value))
         elif kind == "file":
             extra = None
             for ext in getattr(field, "extensions", []):
@@ -457,18 +457,18 @@ class FormBuilder(QtWidgets.QWidget):
 
             widget = VersionedFileField(getattr(field, "extensions", ()), getattr(field, "mode", "open"),
                                         extra=extra, browser=self.file_browser, base_dir=self.base_dir)
-            widget.changed.connect(lambda value, n=name: self._on_change(n, value))
+            widget.changed.connect(lambda value, field_name=name: self._on_change(field_name, value))
         elif kind == "table":
             widget = _TableEditor(
                 getattr(field, "columns", ()),
                 choices_resolver=lambda attr: getattr(self._target, attr, ()),
             )
-            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+            widget.valueChanged.connect(lambda value, field_name=name: self._on_change(field_name, value))
         elif kind == "dict":
             widget = QtWidgets.QLabel("(edited in place)")
         else:  # string and unknown types
             widget = QtWidgets.QLineEdit()
-            widget.editingFinished.connect(lambda n=name, w=widget: self._on_change(n, w.text()))
+            widget.editingFinished.connect(lambda field_name=name, editor=widget: self._on_change(field_name, editor.text()))
         return widget
 
     @staticmethod

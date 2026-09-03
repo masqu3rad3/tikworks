@@ -1,17 +1,19 @@
 """Registry for Maya node wrappers."""
 
-from typing import Any, Callable, Dict, Optional, Type, TypeVar
+from __future__ import annotations
+
+from typing import Any, Callable, Optional, TypeVar
 
 import maya.cmds as cmds
 
 from . import apicommon as api
 
-T = TypeVar("T")
+Wrapper = TypeVar("Wrapper")
 
-_NODE_TYPES: Dict[str, Type[Any]] = {}
-_DEFAULT_FACTORY: Optional[Type[Any]] = None  # set by set_default_factory(Node)
+_NODE_TYPES: dict[str, type[Any]] = {}
+_DEFAULT_FACTORY: Optional[type[Any]] = None  # set by set_default_factory(Node)
 
-def register(node_type: str) -> Callable[[Type[T]], Type[T]]:
+def register(node_type: str) -> Callable[[type[Wrapper]], type[Wrapper]]:
     """Decorator for registering Maya node wrappers.
 
     Args:
@@ -27,7 +29,7 @@ def register(node_type: str) -> Callable[[Type[T]], Type[T]]:
             pass
     """
 
-    def inner(cls: Type[T]) -> Type[T]:
+    def inner(cls: type[Wrapper]) -> type[Wrapper]:
         """Register the class for the given node type."""
         _NODE_TYPES[node_type] = cls
         return cls
@@ -35,7 +37,7 @@ def register(node_type: str) -> Callable[[Type[T]], Type[T]]:
     return inner
 
 
-def set_default_factory(factory: Type[T]) -> None:
+def set_default_factory(factory: type[Wrapper]) -> None:
     """Set the fallback factory for unregistered node types.
 
     Args:

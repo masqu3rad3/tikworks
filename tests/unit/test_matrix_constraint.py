@@ -7,7 +7,7 @@ from tik.maya.constructs.matrix_constraint import MatrixConstraint
 
 
 def _close(vector, expected, tolerance=1e-5):
-    return all(abs(a - b) < tolerance for a, b in zip(vector, expected))
+    return all(abs(actual - expected) < tolerance for actual, expected in zip(vector, expected))
 
 
 def test_follows_driver_without_offset():

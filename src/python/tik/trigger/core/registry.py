@@ -8,14 +8,14 @@ instance always knows its registered name.
 from __future__ import annotations
 
 import logging
-from typing import Callable, Optional, Type, TypeVar
+from typing import Callable, Optional, TypeVar
 
 from .document import BUILD, PUBLISH
 from .exceptions import DuplicateRegistrationError, NotFoundError, RegistryError
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
+Registered = TypeVar("Registered")
 
 _MODULES: dict[str, type] = {}
 _ACTIONS: dict[str, type] = {}
@@ -26,10 +26,10 @@ BOTH = "both"
 SCOPES = (BUILD, PUBLISH, BOTH)
 
 
-def register_module(name: str) -> Callable[[Type[T]], Type[T]]:
+def register_module(name: str) -> Callable[[type[Registered]], type[Registered]]:
     """Register a ``Module`` subclass under ``name``."""
 
-    def inner(cls: Type[T]) -> Type[T]:
+    def inner(cls: type[Registered]) -> type[Registered]:
         existing = _MODULES.get(name)
         if existing is not None and existing is not cls:
             raise DuplicateRegistrationError(name, kind="module")
@@ -43,7 +43,7 @@ def register_module(name: str) -> Callable[[Type[T]], Type[T]]:
 
 def register_action(
     name: str, category: str = "utility", icon: str = "", scope: str = BUILD
-) -> Callable[[Type[T]], Type[T]]:
+) -> Callable[[type[Registered]], type[Registered]]:
     """Register an ``Action`` subclass under ``name``.
 
     Args:
@@ -58,7 +58,7 @@ def register_action(
     if scope not in SCOPES:
         raise RegistryError(f"Unknown action scope '{scope}'; expected one of {SCOPES}.")
 
-    def inner(cls: Type[T]) -> Type[T]:
+    def inner(cls: type[Registered]) -> type[Registered]:
         existing = _ACTIONS.get(name)
         if existing is not None and existing is not cls:
             raise DuplicateRegistrationError(name, kind="action")

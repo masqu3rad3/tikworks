@@ -19,32 +19,37 @@ def clamp_degree(count: int, degree: int) -> int:
     return max(0, min(degree, count - 1))
 
 
-def basis(u: float, count: int, degree: int) -> list[float]:
-    """Return the ``count`` basis weights at parameter ``u`` in [0, 1].
+def basis(parameter: float, count: int, degree: int) -> list[float]:
+    """Return the ``count`` basis weights at ``parameter`` in [0, 1].
 
-    The weights sum to 1 and interpolate the end points (u=0 -> first control
-    point, u=1 -> last). ``u`` is clamped to [0, 1].
+    The weights sum to 1 and interpolate the end points (0 -> first control
+    point, 1 -> last). ``parameter`` is clamped to [0, 1].
     """
     if count < 1:
         raise ValueError("count must be >= 1")
     if not 0 <= degree <= count - 1:
         raise ValueError(f"degree must be within [0, {count - 1}], got {degree}")
-    u = min(max(float(u), 0.0), 1.0)
-    if u >= 1.0:
+    parameter = min(max(float(parameter), 0.0), 1.0)
+    if parameter >= 1.0:
         weights = [0.0] * count
         weights[-1] = 1.0
         return weights
     knot = knots(count, degree)
-    weights = [1.0 if knot[i] <= u < knot[i + 1] else 0.0 for i in range(len(knot) - 1)]
-    for p in range(1, degree + 1):
+    weights = [
+        1.0 if knot[index] <= parameter < knot[index + 1] else 0.0
+        for index in range(len(knot) - 1)
+    ]
+    for level in range(1, degree + 1):
         next_weights = []
-        for i in range(len(knot) - 1 - p):
+        for index in range(len(knot) - 1 - level):
+            span_start, span_end = knot[index], knot[index + level]
             left = 0.0
-            if knot[i + p] != knot[i]:
-                left = (u - knot[i]) / (knot[i + p] - knot[i]) * weights[i]
+            if span_end != span_start:
+                left = (parameter - span_start) / (span_end - span_start) * weights[index]
+            next_start, next_end = knot[index + 1], knot[index + level + 1]
             right = 0.0
-            if knot[i + p + 1] != knot[i + 1]:
-                right = (knot[i + p + 1] - u) / (knot[i + p + 1] - knot[i + 1]) * weights[i + 1]
+            if next_end != next_start:
+                right = (next_end - parameter) / (next_end - next_start) * weights[index + 1]
             next_weights.append(left + right)
         weights = next_weights
     return weights
