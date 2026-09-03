@@ -43,10 +43,12 @@ class GuideInstance:
 
     @property
     def key(self) -> str:
+        """Display key: ``name`` for center modules, ``<side>_<name>`` otherwise."""
         return self.name if self.side in ("C", "") else f"{self.side}_{self.name}"
 
     @property
     def joint_names(self) -> list[str]:
+        """The joint names this instance's records carry."""
         return [record["name"] for record in self.joints.values()]
 
 
@@ -74,6 +76,7 @@ class GuideFile:
     # ------------------------------------------------------------- file io
     @classmethod
     def load(cls, file_path) -> "GuideFile":
+        """Read a ``.trg`` file; raises ``GuideError`` on a bad file."""
         path = Path(file_path)
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -89,6 +92,7 @@ class GuideFile:
         raise GuideError(f"'{path}' is not a Trigger guide file.")
 
     def save(self, file_path) -> Path:
+        """Write the file, adding the ``.trg`` suffix if missing."""
         path = Path(file_path)
         if path.suffix != EXTENSION:
             path = path.with_suffix(EXTENSION)
@@ -114,9 +118,11 @@ class GuideFile:
 
     # ------------------------------------------------------------ queries
     def by_name(self) -> dict[str, dict]:
+        """``{joint name: record}``."""
         return {record["name"]: record for record in self.records}
 
     def children_of(self, name: str) -> list[dict]:
+        """The records whose parent is ``name``."""
         return [record for record in self.records if record.get("parent") == name]
 
     def classify(self, record: dict) -> Optional[tuple[str, str, bool]]:
@@ -131,6 +137,7 @@ class GuideFile:
         return module_type, role, registry.get_module(module_type).guides.root == role
 
     def roots(self) -> list[dict]:
+        """The records that start a module (its first guide)."""
         found = []
         for record in self.records:
             info = self.classify(record)
@@ -139,6 +146,7 @@ class GuideFile:
         return found
 
     def root_names(self) -> list[str]:
+        """The joint names of the module roots."""
         return [record["name"] for record in self.roots()]
 
     def instances(self) -> list[GuideInstance]:

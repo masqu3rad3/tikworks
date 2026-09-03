@@ -24,6 +24,7 @@ class FkChain(Module):
 
     @classmethod
     def output_names(cls, settings=None):
+        """``root``, one output per segment, then ``end``."""
         count = int((settings or {}).get("segments", cls.segments.default))
         return ("root", *(f"segment{index + 1}" for index in range(count)), "end")
 
@@ -32,9 +33,11 @@ class FkChain(Module):
     controller_size = FloatField(2.0, min=0.01, label="Controller Size")
 
     def guide_count(self) -> int:
+        """One segment guide per ``segments``."""
         return self.segments
 
     def draw_guides(self, guides) -> None:
+        """A root and ``segments`` joints spaced along X."""
         previous = guides.joint("root", (0, 0, 0))
         for index in range(self.segments):
             offset = self.spacing * (index + 1) * guides.side_mult
@@ -43,6 +46,7 @@ class FkChain(Module):
             )
 
     def build(self, rig) -> None:
+        """One FK controller per segment, bind joints in final position."""
         guide_nodes = [rig.guide("root"), *rig.chain("segment")]
         socket = rig.socket("root", match=guide_nodes[0])
 

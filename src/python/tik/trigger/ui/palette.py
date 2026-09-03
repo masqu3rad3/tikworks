@@ -13,6 +13,8 @@ from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 
 
 class PaletteEntry:
+    """One searchable item: key, label, category and extra keywords."""
+
     __slots__ = ("key", "label", "category", "keywords")
 
     def __init__(
@@ -24,6 +26,7 @@ class PaletteEntry:
         self.keywords = [item.lower() for item in keywords]
 
     def matches(self, text: str) -> bool:
+        """True when ``text`` is found in the key, label or keywords."""
         text = text.lower().strip()
         if not text:
             return True
@@ -78,6 +81,7 @@ class SearchPalette(QtWidgets.QFrame):
 
     # ----------------------------------------------------------- filtering
     def refilter(self) -> None:
+        """Rebuild the list for the typed text; recent items lead when it is empty."""
         text = self.search.text()
         self.list.clear()
         entries = [entry for entry in self.entries if entry.matches(text)]
@@ -144,10 +148,12 @@ class SearchPalette(QtWidgets.QFrame):
         self.list.addItem(item)
 
     def current_key(self) -> Optional[str]:
+        """The key of the highlighted item, or None."""
         item = self.list.currentItem()
         return item.data(QtCore.Qt.UserRole) if item is not None else None
 
     def visible_keys(self) -> list[str]:
+        """The keys of the listed items, top to bottom."""
         return [
             self.list.item(row).data(QtCore.Qt.UserRole)
             for row in range(self.list.count())
@@ -194,6 +200,7 @@ class SearchPalette(QtWidgets.QFrame):
         return super().eventFilter(obj, event)
 
     def popup(self, global_pos: QtCore.QPoint) -> None:
+        """Show the palette at ``global_pos`` with an empty search."""
         self.search.clear()
         self.refilter()
         self.move(global_pos)

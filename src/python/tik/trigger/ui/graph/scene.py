@@ -12,6 +12,8 @@ from .items import NodeItem, NodeSpec, Port, WireItem
 
 
 class GraphScene(QtWidgets.QGraphicsScene):
+    """The graph canvas: nodes, wires, wire dragging, slicing and selection."""
+
     connect_requested = QtCore.Signal(str, str)  # input key, source key (node.port)
     disconnect_requested = QtCore.Signal(str)  # input key
     remove_group_requested = QtCore.Signal(str)  # scene-nodes group name
@@ -36,6 +38,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
     # ------------------------------------------------------------ building
     def clear_graph(self) -> None:
         # clearing selected items emits selectionChanged; nobody must react mid-rebuild
+        """Remove every item without emitting selection changes."""
         self.blockSignals(True)
         try:
             self.clear()
@@ -49,6 +52,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         self._detached = None
 
     def add_node(self, spec: NodeSpec, pos=None) -> NodeItem:
+        """Add a node for ``spec``, at ``pos`` when given."""
         node = NodeItem(spec)
         if pos is not None:
             node.setPos(*pos)
@@ -60,6 +64,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
     def add_wire(
         self, source_key: str, target_key: str, primary: bool
     ) -> Optional[WireItem]:
+        """Draw a wire between two port keys; None when either port is missing."""
         s_node, _dot, s_port = source_key.rpartition(".")
         t_node, _dot, t_port = target_key.rpartition(".")
         source = (
@@ -87,6 +92,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         return [wire for wire in self.wires if wire.target is port]
 
     def update_wires(self) -> None:
+        """Redraw every wire after nodes moved."""
         for wire in self.wires:
             wire.refresh()
 
@@ -118,6 +124,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
 
     # ------------------------------------------------------ interactions
     def start_wire(self, port: Port, pos) -> None:
+        """Begin dragging a new wire out of ``port``."""
         self._drag_from = port
         self._drag_line = QtWidgets.QGraphicsPathItem()
         self._drag_line.setPen(
@@ -167,6 +174,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         return None
 
     def finish_wire(self, port: Optional[Port]) -> None:
+        """Drop the dragged wire on ``port`` (None cancels or disconnects)."""
         origin, self._drag_from = self._drag_from, None
         detached, self._detached = self._detached, None
         if self._drag_line is not None:
@@ -228,6 +236,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         return bool(wires or externals)
 
     def selected_nodes(self) -> list[NodeItem]:
+        """The selected node items."""
         return [item for item in self.selectedItems() if isinstance(item, NodeItem)]
 
     def _on_selection(self) -> None:
@@ -239,9 +248,11 @@ class GraphScene(QtWidgets.QGraphicsScene):
                 return
 
     def select_key(self, key: Optional[str]) -> None:
+        """Select only the node with ``key`` (None clears)."""
         self.select_keys([key] if key else [])
 
     def select_keys(self, keys) -> None:
+        """Select exactly the nodes with ``keys``."""
         wanted = set(keys)
         self.blockSignals(True)
         try:

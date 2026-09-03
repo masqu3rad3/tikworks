@@ -45,6 +45,8 @@ def _holder() -> QtWidgets.QWidget:
 
 
 class TriggerWindow(MayaToolWindow):
+    """The Trigger main window: session tabs, menus, log dock and status bar."""
+
     WINDOW_NAME = "TriggerWindow"
 
     def __init__(self, parent=None, file_browser=None, designer_factory=None) -> None:
@@ -389,15 +391,18 @@ class TriggerWindow(MayaToolWindow):
     # ---------------------------------------------------------------- tabs
     @property
     def views(self) -> list[SessionView]:
+        """One ``SessionView`` per open tab."""
         return [self.tabs.widget(index) for index in range(self.tabs.count())]
 
     @property
     def current_view(self) -> Optional[SessionView]:
+        """The view on the active tab, or None."""
         widget = self.tabs.currentWidget()
         return widget if isinstance(widget, SessionView) else None
 
     @property
     def session(self) -> Optional[Session]:
+        """The session on the active tab, or None."""
         view = self.current_view
         return view.session if view else None
 
@@ -499,6 +504,7 @@ class TriggerWindow(MayaToolWindow):
         return view.current_path() if view else None
 
     def add_session(self, session: Session) -> SessionView:
+        """Open ``session`` in a new tab and make it current."""
         view = SessionView(
             session,
             file_browser=self.file_browser,
@@ -519,9 +525,11 @@ class TriggerWindow(MayaToolWindow):
         return view
 
     def new_session(self) -> SessionView:
+        """Open an empty session in a new tab."""
         return self.add_session(Session(events=self.events))
 
     def open_session(self, path: Optional[str] = None) -> Optional[SessionView]:
+        """Open a ``.tr`` file (asking for one when ``path`` is empty)."""
         if not path:
             path, _f = QtWidgets.QFileDialog.getOpenFileName(
                 self, "Open session", "", FILE_FILTER
@@ -547,6 +555,7 @@ class TriggerWindow(MayaToolWindow):
         return view
 
     def save_session(self) -> None:
+        """Save the current session, asking for a path if it has none."""
         session = self.session
         if session is None:
             return
@@ -558,6 +567,7 @@ class TriggerWindow(MayaToolWindow):
         self._update_title()
 
     def save_session_as(self, path: Optional[str] = None) -> None:
+        """Save the current session to ``path`` (asking when empty)."""
         session = self.session
         if session is None:
             return
@@ -572,6 +582,7 @@ class TriggerWindow(MayaToolWindow):
         self._update_title()
 
     def increment_session(self) -> None:
+        """Save the current session to its next version number."""
         session = self.session
         if session is None:
             return
@@ -583,6 +594,7 @@ class TriggerWindow(MayaToolWindow):
         self._update_title()
 
     def import_actions(self, path: Optional[str] = None) -> None:
+        """Append the actions of another ``.tr`` file to the current session."""
         session = self.session
         if session is None:
             return
@@ -600,6 +612,7 @@ class TriggerWindow(MayaToolWindow):
         self._view_call("refresh")
 
     def export_actions(self, path: Optional[str] = None) -> None:
+        """Write the current session's actions to a ``.tr`` file."""
         session = self.session
         if session is None:
             return
@@ -612,6 +625,7 @@ class TriggerWindow(MayaToolWindow):
         session.document.save(path if path.endswith(EXTENSION) else path + EXTENSION)
 
     def ask_discard(self, session: Session) -> bool:
+        """Ask whether unsaved changes in ``session`` may be dropped."""
         answer = QtWidgets.QMessageBox.question(
             self,
             "Unsaved changes",
@@ -621,6 +635,7 @@ class TriggerWindow(MayaToolWindow):
         return answer == QtWidgets.QMessageBox.Yes
 
     def close_tab(self, index: int) -> bool:
+        """Close the tab at ``index`` unless the user keeps unsaved changes."""
         view = self.tabs.widget(index)
         if (
             isinstance(view, SessionView)
@@ -639,11 +654,13 @@ class TriggerWindow(MayaToolWindow):
         # The session's stack on both tabs: guide *structure* is a document
         # edit. Moving a guide is a scene edit and stays on Maya's stack,
         # undone with focus in the viewport.
+        """Undo the last document edit of the current session."""
         session = self.session
         if session is not None and session.undo():
             self._after_document_change()
 
     def redo(self) -> None:
+        """Redo the last undone document edit of the current session."""
         session = self.session
         if session is not None and session.redo():
             self._after_document_change()
@@ -665,6 +682,7 @@ class TriggerWindow(MayaToolWindow):
         designer.refresh()
 
     def validate_session(self) -> None:
+        """Report the current session's problems, or that there are none."""
         session = self.session
         if session is None:
             return
@@ -679,26 +697,31 @@ class TriggerWindow(MayaToolWindow):
             self.status.set_activity("Session valid")
 
     def toggle_shelf(self) -> None:
+        """Show or hide the action shelf of the current tab."""
         view = self.current_view
         if view is not None:
             view.set_shelf_visible(not view.shelf_visible)
             self.shelf_action.setChecked(view.shelf_visible)
 
     def toggle_log(self) -> None:
+        """Show or hide the log dock."""
         self.log_dock.setVisible(not self.log_dock.isVisible())
         self.log_action.setChecked(self.log_dock.isVisible())
 
     def open_settings(self) -> None:
+        """Placeholder until the settings dialog exists."""
         QtWidgets.QMessageBox.information(
             self, "Settings", "Settings are not available yet."
         )
 
     def open_docs(self) -> None:
+        """Open the project page in the browser."""
         QtGui.QDesktopServices.openUrl(
             QtCore.QUrl("https://github.com/masqu3rad3/tikworks")
         )
 
     def about(self) -> None:
+        """Show the version box."""
         QtWidgets.QMessageBox.about(
             self, "About Trigger", f"Trigger {VERSION}\nModular rigging on tik.maya."
         )

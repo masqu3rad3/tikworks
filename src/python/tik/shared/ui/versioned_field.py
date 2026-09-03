@@ -30,6 +30,7 @@ class _HoverKeyFilter(QtCore.QObject):
 
     @classmethod
     def ensure(cls) -> "_HoverKeyFilter":
+        """The one application-wide filter, installed on first use."""
         if cls._instance is None:
             cls._instance = cls()
             app = QtWidgets.QApplication.instance()
@@ -55,6 +56,8 @@ class _HoverKeyFilter(QtCore.QObject):
 
 
 class VersionedFileField(QtWidgets.QWidget):
+    """A file path field that shows the version badge and steps through versions."""
+
     changed = QtCore.Signal(object)
 
     def __init__(
@@ -116,10 +119,12 @@ class VersionedFileField(QtWidgets.QWidget):
         self.refresh_state()
 
     def set_base_dir(self, base_dir: Optional[Callable[[], str]]) -> None:
+        """Resolve relative paths against ``base_dir()`` from now on."""
         self._base_dir = base_dir
         self.refresh_state()
 
     def resolved(self) -> Optional[Path]:
+        """The absolute path the text points at, or None when empty."""
         text = self.value().strip()
         if not text:
             return None
@@ -136,9 +141,11 @@ class VersionedFileField(QtWidgets.QWidget):
     # ------------------------------------------------------------- state
     @property
     def state(self) -> str:
+        """``empty``, ``missing``, ``pinned`` or ``latest``."""
         return self._state
 
     def refresh_state(self) -> None:
+        """Recompute the state and badge from the current text."""
         path = self.resolved()
         if path is None:
             state, badge = "empty", ""

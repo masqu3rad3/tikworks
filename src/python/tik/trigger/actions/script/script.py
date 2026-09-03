@@ -18,6 +18,7 @@ class Script(Action):
     code = StringField("", help="Inline code run after the file")
 
     def run(self, ctx) -> None:
+        """Execute the script file or inline code with ``ctx`` in its namespace."""
         namespace = {"ctx": ctx, "__name__": "__trigger_script__"}
         if self.file_path:
             path = Path(self.file_path)

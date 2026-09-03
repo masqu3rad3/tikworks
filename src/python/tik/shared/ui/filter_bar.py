@@ -23,6 +23,7 @@ class FilterModel(QtCore.QObject):
         self._pending = ""
 
     def set_keywords(self, keywords) -> None:
+        """Replace the committed keywords (lower-cased, blanks dropped)."""
         self._keywords = [
             keyword.strip().lower()
             for keyword in keywords or ()
@@ -31,15 +32,18 @@ class FilterModel(QtCore.QObject):
         self.filter_changed.emit()
 
     def set_pending_text(self, text) -> None:
+        """The text being typed, matched before it becomes a keyword."""
         self._pending = (text or "").strip().lower()
         self.filter_changed.emit()
 
     @property
     def keywords(self) -> list[str]:
+        """The committed keywords."""
         return list(self._keywords)
 
     @property
     def is_active(self) -> bool:
+        """True when any keyword or pending text would filter."""
         return bool(self._keywords or self._pending)
 
     def _terms(self) -> list[str]:
@@ -77,6 +81,7 @@ class _Pill(QtWidgets.QFrame):
         layout.addWidget(close)
 
     def keyword(self) -> str:
+        """The keyword this pill shows."""
         return self._keyword
 
 
@@ -124,23 +129,29 @@ class FilterBar(QtWidgets.QWidget):
 
     @property
     def model(self) -> FilterModel:
+        """The filter model the bar edits."""
         return self._model
 
     @property
     def keywords(self) -> list[str]:
+        """The committed keywords."""
         return self._model.keywords
 
     @property
     def line_edit(self) -> QtWidgets.QLineEdit:
+        """The text field, for focus and key handling."""
         return self._line_edit
 
     def matches(self, text) -> bool:
+        """True when ``text`` passes the current filter."""
         return self._model.matches(text)
 
     def set_text(self, text: str) -> None:
+        """Replace the pending text."""
         self._line_edit.setText(text)
 
     def clear(self) -> None:
+        """Drop every keyword and the pending text."""
         for pill in list(self._pills):
             self._discard_pill(pill)
         self._pills = []

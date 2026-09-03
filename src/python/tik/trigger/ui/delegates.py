@@ -31,6 +31,8 @@ ZEBRA = ("#151515", "#191919")
 
 
 class PipelineDelegate(QtWidgets.QStyledItemDelegate):
+    """Paints one pipeline row: gutter dot, checkbox, icon, name and summary."""
+
     def sizeHint(self, option, index):  # noqa: N802
         return QtCore.QSize(220, ROW_HEIGHT)
 
@@ -162,10 +164,12 @@ class PipelineDelegate(QtWidgets.QStyledItemDelegate):
             )
 
     def checkbox_rect(self, option, index) -> QtCore.QRect:
+        """Where the enabled checkbox is painted for ``index``."""
         pen_x = option.rect.left() + 3 + GUTTER + 2 + 8
         return QtCore.QRect(pen_x, option.rect.center().y() - 5, 11, 11)
 
     def editorEvent(self, event, model, option, index) -> bool:  # noqa: N802
+        """Toggle a linked action's checkbox on click; the rest goes to Qt."""
         if (
             event.type() == QtCore.QEvent.MouseButtonRelease
             and index.data(LinkedRole)

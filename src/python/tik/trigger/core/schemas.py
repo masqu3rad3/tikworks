@@ -28,6 +28,7 @@ class GuidePose:
 
     @classmethod
     def from_dict(cls, data: dict) -> "GuidePose":
+        """Rebuild a pose from its JSON form."""
         return cls(
             role=data["role"],
             index=int(data.get("index", 0)),
@@ -47,6 +48,7 @@ class ParentRef:
 
     @classmethod
     def from_dict(cls, data: Optional[dict]) -> Optional["ParentRef"]:
+        """Rebuild a parent reference from its JSON form; None stays None."""
         if not data:
             return None
         return cls(
@@ -73,19 +75,23 @@ class ModuleInstance:
 
     @property
     def key(self) -> str:
+        """Display key: ``name`` for center modules, ``<side>_<name>`` otherwise."""
         return self.name if self.side in ("C", "") else f"{self.side}_{self.name}"
 
     @property
     def guide_pairs(self) -> list[tuple[str, int]]:
+        """``(role, index)`` of every guide pose."""
         return [(pose.role, pose.index) for pose in self.guides]
 
     def to_dict(self) -> dict:
+        """The JSON form used by ``.trg`` files."""
         data = asdict(self)
         data["parent"] = asdict(self.parent) if self.parent else None
         return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "ModuleInstance":
+        """Rebuild an instance from its JSON form."""
         return cls(
             module_type=data["module_type"],
             instance_id=data["instance_id"],
@@ -108,10 +114,12 @@ class ActionInstance:
     settings: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
+        """The JSON form used by ``.trg`` files."""
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: dict) -> "ActionInstance":
+        """Rebuild an action instance from its JSON form."""
         return cls(
             action_type=data["action_type"],
             name=data["name"],
@@ -130,6 +138,7 @@ class RigDocument:
     actions: list[ActionInstance] = field(default_factory=list)
 
     def to_dict(self) -> dict:
+        """The JSON form of the whole rig document."""
         return {
             "schema": self.schema,
             "meta": dict(self.meta),
@@ -139,6 +148,7 @@ class RigDocument:
 
     @classmethod
     def from_dict(cls, data: dict) -> "RigDocument":
+        """Rebuild a rig document from its JSON form."""
         schema = int(data.get("schema", SCHEMA_VERSION))
         if schema > SCHEMA_VERSION:
             raise ValueError(

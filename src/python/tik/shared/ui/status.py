@@ -46,12 +46,15 @@ class StatusFields:
             self.bar.addWidget(widget, stretch)
 
     def set_activity(self, text: str, timeout_ms: int = 0) -> None:
+        """Show ``text`` in the activity slot, cleared after ``timeout_ms`` when given."""
         self.activity.setText(text)
         if timeout_ms and self.bar is not None:
             self.bar.showMessage("", timeout_ms)
 
     def set(self, name: str, text: str) -> None:
+        """Show ``text`` in the field called ``name``."""
         self.labels[name].setText(text)
 
     def text(self, name: str) -> str:
+        """The text shown in the field called ``name``."""
         return self.labels[name].text()

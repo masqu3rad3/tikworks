@@ -123,6 +123,7 @@ class Arm(Module):
         )
 
     def validate(self) -> list[str]:
+        """The base checks plus the auto-collar axis ranges."""
         problems = super().validate()
         if self.auto_collar:
             for label, axis in (
@@ -137,6 +138,7 @@ class Arm(Module):
 
     # --------------------------------------------------------------- guides
     def draw_guides(self, guides) -> None:
+        """Collar, shoulder, elbow and hand along X, with a bent elbow."""
         mult = guides.side_mult
         collar = guides.joint("collar", (2 * mult, 0, 0), radius=1.5)
         shoulder = guides.joint("shoulder", (5 * mult, 0, 0), parent=collar)
@@ -150,6 +152,7 @@ class Arm(Module):
 
     # ---------------------------------------------------------------- build
     def build(self, rig) -> None:
+        """IK/FK limb, limb lock, twist and the optional auto collar."""
         collar_guide = rig.guide("collar")
         limb_guides = rig.guides("shoulder", "elbow", "hand")
         size = _derive_size(limb_guides)

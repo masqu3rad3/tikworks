@@ -69,22 +69,27 @@ class ActionHandle:
     # ---------------------------------------------------------- identity
     @property
     def name(self) -> str:
+        """The action's name, the last segment of its path."""
         return self._node.name
 
     @property
     def type(self) -> str:
+        """The registered action type this node runs."""
         return self._node.type
 
     @property
     def path(self) -> str:
+        """``parent/child`` path of this action inside its phase list."""
         return self._path
 
     @property
     def node(self) -> ActionNode:
+        """The underlying document node."""
         return self._node
 
     @property
     def is_linked(self) -> bool:
+        """True when the action lives in a referenced session (read-only tree)."""
         return self._linked
 
     @property
@@ -94,6 +99,7 @@ class ActionHandle:
 
     @property
     def action_class(self) -> type:
+        """The ``Action`` subclass registered for this node's type."""
         return registry.get_action(self._node.type)
 
     def __repr__(self) -> str:
@@ -104,6 +110,7 @@ class ActionHandle:
     # ----------------------------------------------------------- enabled
     @property
     def enabled(self) -> bool:
+        """Whether the runner executes this action; overrides apply for linked ones."""
         if self._linked:
             override = self._override().get("enabled")
             return self._node.enabled if override is None else bool(override)
@@ -154,6 +161,7 @@ class ActionHandle:
         self._session.touch()
 
     def set(self, **settings) -> "ActionHandle":
+        """Assign several settings at once; returns the handle for chaining."""
         for key, value in settings.items():
             setattr(self, key, value)
         return self
@@ -176,6 +184,7 @@ class ActionHandle:
     # ---------------------------------------------------------- children
     @property
     def children(self) -> list["ActionHandle"]:
+        """Child actions, including a reference's own actions when linked."""
         if self._linked:
             return [
                 ActionHandle(
@@ -237,6 +246,7 @@ class ActionHandle:
         index: Optional[int] = None,
         **settings,
     ) -> "ActionHandle":
+        """Add a child action under this one (not allowed inside a reference)."""
         if self._linked:
             raise SessionError(
                 "Cannot add actions inside a referenced session; open it instead."
@@ -265,16 +275,19 @@ class PhaseView:
 
     @property
     def phase(self) -> str:
+        """``build`` or ``publish``."""
         return self._phase
 
     @property
     def actions(self) -> list[ActionHandle]:
+        """The root actions of this phase, in run order."""
         return self._session.root_handles(self._phase)
 
     def __getitem__(self, path: str) -> ActionHandle:
         return self._session.handle(path, phase=self._phase)
 
     def find(self, path: str) -> Optional[ActionHandle]:
+        """The action at ``path``, or None when there is none."""
         try:
             return self[path]
         except SessionError:
@@ -290,9 +303,11 @@ class PhaseView:
         return len(self._session.document.roots(self._phase))
 
     def paths(self) -> list[str]:
+        """Every action path in this phase, depth first."""
         return self._session.document.paths(self._phase)
 
     def walk(self) -> list[ActionHandle]:
+        """Every action handle in this phase, depth first."""
         return self._session.walk(phase=self._phase)
 
     def add(
@@ -305,6 +320,7 @@ class PhaseView:
         index: Optional[int] = None,
         **settings,
     ) -> ActionHandle:
+        """Add an action; ``after`` places it next to a sibling, ``parent`` nests it."""
         return self._session.add(
             action_type,
             name,
@@ -316,6 +332,7 @@ class PhaseView:
         )
 
     def remove(self, path: str | ActionHandle) -> None:
+        """Remove the action at ``path`` and everything under it."""
         self._session.remove(path, phase=self._phase)
 
     def move(
@@ -326,14 +343,17 @@ class PhaseView:
         index: Optional[int] = None,
         after: Optional[str] = None,
     ) -> ActionHandle:
+        """Move an action under ``parent``, to ``index`` or right ``after`` a sibling."""
         return self._session.move(
             path, parent=parent, index=index, after=after, phase=self._phase
         )
 
     def rename(self, path: str | ActionHandle, new_name: str) -> ActionHandle:
+        """Rename an action; returns the handle at its new path."""
         return self._session.rename(path, new_name, phase=self._phase)
 
     def duplicate(self, path: str | ActionHandle) -> ActionHandle:
+        """Copy an action next to itself with a unique name."""
         return self._session.duplicate(path, phase=self._phase)
 
     def __repr__(self) -> str:
@@ -363,6 +383,7 @@ class Session:
 
     @classmethod
     def open(cls, file_path: str, events: Optional[EventBus] = None) -> "Session":
+        """Load a ``.tr`` file into a new session."""
         return cls(file_path=file_path, events=events)
 
     # ------------------------------------------------------------ state
@@ -384,6 +405,7 @@ class Session:
             self._last_state = state
 
     def undo(self) -> bool:
+        """Restore the document state before the last edit; False when nothing to undo."""
         if not self._undo:
             return False
         self._redo.append(self.document.to_dict())
@@ -393,6 +415,7 @@ class Session:
         return True
 
     def redo(self) -> bool:
+        """Re-apply the last undone edit; False when nothing to redo."""
         if not self._redo:
             return False
         self._undo.append(self.document.to_dict())
@@ -403,21 +426,26 @@ class Session:
 
     @property
     def can_undo(self) -> bool:
+        """True when the undo stack holds an earlier state."""
         return bool(self._undo)
 
     @property
     def is_modified(self) -> bool:
+        """True when the document differs from what was last saved."""
         return self.document.to_dict() != self._saved_state
 
     @property
     def directory(self) -> str:
+        """The folder of the session file, or ``""`` while unsaved."""
         return str(self.file_path.parent) if self.file_path else ""
 
     @property
     def name(self) -> str:
+        """The session file name, or ``untitled`` while unsaved."""
         return self.file_path.name if self.file_path else "untitled"
 
     def new(self) -> None:
+        """Replace the document with an empty one and forget the file path."""
         self.document = Document()
         self.file_path = None
         self._saved_state = self.document.to_dict()
@@ -427,6 +455,7 @@ class Session:
         self._reference_cache.clear()
 
     def load(self, file_path: str) -> None:
+        """Replace the document with the contents of ``file_path``."""
         path = Path(file_path)
         self.document = Document.load(path)
         self.file_path = path
@@ -438,6 +467,7 @@ class Session:
         self.events.log(f"Session loaded: {path}")
 
     def save(self, file_path: Optional[str] = None, increment: bool = False) -> Path:
+        """Write the document; ``increment`` saves to the next version number instead."""
         target = Path(file_path) if file_path else self.file_path
         if target is None:
             raise SessionSaveError("No file path given for the session.")
@@ -457,6 +487,7 @@ class Session:
         return target
 
     def increment(self) -> Path:
+        """Save to the next version number and return the new path."""
         return self.save(increment=True)
 
     # ------------------------------------------------------------ guides
@@ -596,6 +627,7 @@ class Session:
         return self.view(PUBLISH)
 
     def root_handles(self, phase: str = BUILD) -> list[ActionHandle]:
+        """Handles for the root actions of ``phase``."""
         return [
             ActionHandle(self, node, node.name, phase=phase)
             for node in self.document.roots(phase)
@@ -603,6 +635,7 @@ class Session:
 
     @property
     def actions(self) -> list[ActionHandle]:
+        """The root actions of the build list."""
         return self.root_handles(BUILD)
 
     def walk(self, phase: str = BUILD) -> list[ActionHandle]:
@@ -619,6 +652,7 @@ class Session:
         return found
 
     def handle(self, path: str, phase: str = BUILD) -> ActionHandle:
+        """The handle at ``path``; raises ``SessionError`` when it does not exist."""
         parts = split_path(path)
         if not parts:
             raise SessionError("Empty action path.")
@@ -633,6 +667,7 @@ class Session:
         return self.handle(path, BUILD)
 
     def find(self, path: str) -> Optional[ActionHandle]:
+        """The build-list action at ``path``, or None."""
         try:
             return self[path]
         except SessionError:
@@ -642,6 +677,7 @@ class Session:
         return self.find(path) is not None
 
     def paths(self, phase: str = BUILD) -> list[str]:
+        """Every action path in ``phase``, depth first."""
         return self.document.paths(phase)
 
     def add(
@@ -678,6 +714,7 @@ class Session:
         return self.handle(path, phase)
 
     def remove(self, path: str | ActionHandle, phase: str = BUILD) -> None:
+        """Remove the action at ``path`` from ``phase``."""
         self.document.remove(
             path.path if isinstance(path, ActionHandle) else path, phase=phase
         )
@@ -692,6 +729,7 @@ class Session:
         after: Optional[str] = None,
         phase: str = BUILD,
     ) -> ActionHandle:
+        """Move an action under ``parent``, to ``index`` or right ``after`` a sibling."""
         path = path.path if isinstance(path, ActionHandle) else path
         new_path = self.document.move(
             path, parent=parent, index=index, after=after, phase=phase
@@ -702,12 +740,14 @@ class Session:
     def rename(
         self, path: str | ActionHandle, new_name: str, phase: str = BUILD
     ) -> ActionHandle:
+        """Rename an action; returns the handle at its new path."""
         path = path.path if isinstance(path, ActionHandle) else path
         new_path = self.document.rename(path, new_name, phase=phase)
         self.touch()
         return self.handle(new_path, phase)
 
     def duplicate(self, path: str | ActionHandle, phase: str = BUILD) -> ActionHandle:
+        """Copy an action next to itself with a unique name."""
         path = path.path if isinstance(path, ActionHandle) else path
         new_path = self.document.duplicate(path, phase=phase)
         self.touch()

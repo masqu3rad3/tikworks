@@ -33,11 +33,13 @@ class Reference(Action):
     )
 
     def run(self, ctx) -> None:  # expanded by the runner; nothing to do here
+        """Nothing: the runner expands a reference into its actions."""
         return None
 
     # ------------------------------------------------------------ expansion
     @staticmethod
     def resolve_file(node: ActionNode, base_dir: str) -> Path:
+        """The referenced ``.tr`` path, made absolute against ``base_dir``."""
         file_value = node.settings.get("file", "")
         if not file_value:
             raise SessionError("reference has no file.")
@@ -100,4 +102,5 @@ class Reference(Action):
 
     # --------------------------------------------------------------- summary
     def summary(self) -> str:
+        """The referenced file name, for the pipeline list."""
         return Path(self.file).name if self.file else ""

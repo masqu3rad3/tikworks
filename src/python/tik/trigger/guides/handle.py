@@ -51,10 +51,12 @@ class GuideHandle:
 
     @property
     def instance_id(self) -> str:
+        """The uuid that identifies this module in the document."""
         return self._instance_id
 
     @property
     def name(self) -> str:
+        """The module's name (without its side)."""
         return self.entry.name
 
     @name.setter
@@ -72,18 +74,22 @@ class GuideHandle:
 
     @property
     def module_type(self) -> str:
+        """The registered module type."""
         return self.entry.module_type
 
     @property
     def side(self) -> Side:
+        """The module's side."""
         return Side.from_value(self.entry.side)
 
     @property
     def key(self) -> str:
+        """Display key: ``name`` for center modules, ``<side>_<name>`` otherwise."""
         return self.entry.key
 
     @property
     def module_class(self) -> type:
+        """The ``Module`` subclass registered for this type."""
         return registry.get_module(self.entry.module_type)
 
     def __repr__(self) -> str:
@@ -118,11 +124,13 @@ class GuideHandle:
         return self._guides.get(source.rpartition(".")[0])
 
     def select(self) -> None:
+        """Select this module's guide joints."""
         self._guides.select_guides(self._instance_id)
 
     # ---------------------------------------------------------- settings
     @property
     def settings(self) -> dict:
+        """The module's settings with defaults filled in."""
         module = self.module_class(settings=self.entry.settings)
         return module.values()
 
@@ -153,6 +161,7 @@ class GuideHandle:
         self._guides.write_settings(self.instance_id, settings)
 
     def set(self, **settings) -> "GuideHandle":
+        """Assign several settings at once; returns the handle for chaining."""
         for key, value in settings.items():
             setattr(self, key, value)
         return self
@@ -165,13 +174,16 @@ class GuideHandle:
 
     @property
     def input_names(self) -> list[str]:
+        """Declared inputs plus the space inputs the settings add."""
         return self.module_class.input_names(self.settings)
 
     @property
     def outputs(self) -> tuple:
+        """The output names this module exposes with its settings."""
         return self.module_class.output_names(self.settings)
 
     def set_input(self, input_name: str, source: Optional[str]) -> None:
+        """Connect ``input_name`` to ``source`` (``<key>.<output>`` or a node); None clears."""
         if self.module_class.get_input(input_name, self.settings) is None:
             raise GuideError(f"'{self.module_type}' has no input '{input_name}'.")
         self._guides.set_input(self.instance_id, input_name, source)

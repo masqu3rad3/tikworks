@@ -60,6 +60,7 @@ class PipelineModel(QtCore.QAbstractItemModel):
 
     # ------------------------------------------------------------ building
     def rebuild(self) -> None:
+        """Re-read the action tree from the session."""
         self.beginResetModel()
         self._root = _Item(None, None)
         self._populate(self._root, self.view.actions)
@@ -76,12 +77,14 @@ class PipelineModel(QtCore.QAbstractItemModel):
         return index.internalPointer() if index.isValid() else self._root
 
     def handle(self, index: QtCore.QModelIndex) -> Optional[ActionHandle]:
+        """The action handle behind ``index``, or None."""
         item = self._item(index)
         return item.handle
 
     def index_for_path(
         self, path: str, item: Optional[_Item] = None
     ) -> QtCore.QModelIndex:
+        """The model index of the action at ``path`` (invalid when absent)."""
         item = item or self._root
         for child in item.children:
             if child.handle.path == path:
@@ -93,6 +96,7 @@ class PipelineModel(QtCore.QAbstractItemModel):
 
     # ------------------------------------------------------------- status
     def set_status(self, path: str, status: str, error: str = "") -> None:
+        """Record a run status (and error text) for the action at ``path``."""
         self._status[path] = status
         if error:
             self._errors[path] = error
@@ -103,12 +107,14 @@ class PipelineModel(QtCore.QAbstractItemModel):
             self.dataChanged.emit(index, index)
 
     def clear_status(self) -> None:
+        """Forget every run status."""
         self._status.clear()
         self._errors.clear()
         if self._root.children:
             self.dataChanged.emit(self.index(0, 0), self.index(self.rowCount() - 1, 0))
 
     def status(self, path: str) -> str:
+        """The recorded run status for ``path``, or ``""``."""
         return self._status.get(path, "")
 
     # ------------------------------------------------------- model basics
@@ -215,6 +221,7 @@ class PipelineModel(QtCore.QAbstractItemModel):
 
     # ------------------------------------------------------------ editing
     def toggle(self, index: QtCore.QModelIndex) -> None:
+        """Flip the enabled flag of the action at ``index``."""
         handle = self.handle(index)
         if handle is not None:
             handle.enabled = not handle.enabled

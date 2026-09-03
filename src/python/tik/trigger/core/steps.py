@@ -34,6 +34,7 @@ class Step:
 
     @property
     def display_chain(self) -> str:
+        """``a.tr > b.tr > path`` for a referenced step; the publish phase is named."""
         text = " > ".join([*(Path(item).name for item in self.chain), self.path])
         # the build list is the unmarked case; naming it would only add noise
         return text if self.phase == BUILD else f"{self.phase}: {text}"
@@ -41,6 +42,8 @@ class Step:
 
 @dataclass
 class StepResult:
+    """What one step produced when it ran."""
+
     path: str
     status: str  # "done" | "failed" | "skipped"
     seconds: float = 0.0
@@ -50,5 +53,7 @@ class StepResult:
 
 @dataclass
 class Plan:
+    """The ordered steps a run will execute, plus the problems that block it."""
+
     steps: list[Step] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)

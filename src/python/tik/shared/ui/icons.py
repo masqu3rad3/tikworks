@@ -34,6 +34,7 @@ def glyph_icon(
 
 
 def initials(label: str) -> str:
+    """One or two letters that stand for ``label`` (``fk chain`` -> ``FC``)."""
     words = [word for word in label.replace("_", " ").split() if word]
     if not words:
         return "?"

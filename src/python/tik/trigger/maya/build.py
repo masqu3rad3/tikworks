@@ -40,6 +40,7 @@ class BuildReport:
 
     @property
     def count(self) -> int:
+        """How many modules were built."""
         return len(self.built)
 
 
@@ -162,6 +163,7 @@ class Builder:
 
     @staticmethod
     def order(instances: list[ModuleInstance]) -> list[ModuleInstance]:
+        """The instances parents-first."""
         return order_instances(instances)
 
     def build(
@@ -171,6 +173,7 @@ class Builder:
         afterlife: str = "delete",
         document=None,
     ) -> BuildReport:
+        """Build every guide instance in ``scope`` into a rig called ``rig_name``."""
         if afterlife not in AFTERLIFE_MODES:
             raise ValueError(f"afterlife must be one of {AFTERLIFE_MODES}.")
         instances = self.order(guide_nodes.find_instances(scope, document))

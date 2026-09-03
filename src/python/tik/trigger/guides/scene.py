@@ -217,12 +217,15 @@ class GuideScene:
         return nodes.find_instances(scope, self.document)
 
     def guide_node(self, instance_id: str, role: str, index: int = 0):
+        """The joint drawn for ``role``/``index`` of an instance; raises when missing."""
         return nodes.guide_node(instance_id, role, index)
 
     def guide_nodes(self, instance_id: str) -> dict:
+        """``{(role, index): joint}`` for one instance."""
         return nodes.guide_nodes(instance_id)
 
     def select_guides(self, instance_id: str) -> None:
+        """Select every guide joint of an instance."""
         nodes.select_guides(instance_id)
 
     def scene_node(self, name: str):
@@ -230,18 +233,23 @@ class GuideScene:
         return nodes.scene_node(name)
 
     def selected_guide(self) -> Optional[ParentRef]:
+        """The first selected guide as a ``ParentRef``, or None."""
         return nodes.selected_guide()
 
     def selected_node_name(self) -> str:
+        """The first selected node's name, or ``""``."""
         return nodes.selected_node_name()
 
     def selected_node_names(self) -> list[str]:
+        """The names of the selected nodes."""
         return nodes.selected_node_names()
 
     def select_nodes(self, items) -> None:
+        """Replace the selection with ``items`` (nodes or names)."""
         nodes.select_nodes(items)
 
     def make_observer(self, callback):
+        """A scene observer that calls ``callback`` on scene events."""
         from tik.trigger.maya.observer import SceneObserver
 
         return SceneObserver(callback)
@@ -297,6 +305,7 @@ class GuideScene:
         return nodes.instance_from_nodes(module.instance_id, created, entry=entry)
 
     def delete_guides(self, instance_id: str) -> None:
+        """Delete an instance's guide joints, keeping other instances' guides under them."""
         found = nodes.guide_nodes(instance_id)
         if not found:
             return
@@ -336,6 +345,7 @@ class GuideScene:
             root.parent = target
 
     def apply_guide_poses(self, instance: ModuleInstance) -> None:
+        """Move an instance's guide joints to the poses it records."""
         nodes.apply_poses(nodes.guide_nodes(instance.instance_id), instance.guides)
 
     # ----------------------------------------------------------- settings
@@ -363,6 +373,7 @@ class GuideScene:
             self._apply(entry)
 
     def read_settings(self, instance_id: str) -> dict:
+        """A copy of the settings stored for an instance (empty when unknown)."""
         entry = self.document.module(instance_id)
         return dict(entry.settings) if entry is not None else {}
 
@@ -651,16 +662,20 @@ class GuideScene:
 
     # ----------------------------------------------------------- listing
     def instances(self) -> list[GuideHandle]:
+        """A handle for every module in the document."""
         return [GuideHandle(self, entry.instance_id) for entry in self.document.modules]
 
     def roots(self) -> list[GuideHandle]:
+        """The modules with no parent."""
         return [handle for handle in self.instances() if handle.parent is None]
 
     def get(self, instance_id: str) -> Optional[GuideHandle]:
+        """The handle for ``instance_id``, or None."""
         entry = self.document.module(instance_id)
         return GuideHandle(self, entry.instance_id) if entry is not None else None
 
     def find(self, name: str, side: Optional[str] = None) -> Optional[GuideHandle]:
+        """The first module called ``name`` (on ``side`` when given), or None."""
         for entry in self.document.modules:
             if entry.name == name and (
                 side is None or entry.side == Side.from_value(side).value
@@ -675,6 +690,7 @@ class GuideScene:
         return handle
 
     def clear(self) -> None:
+        """Remove every module and its guide joints (one undo step)."""
         with nodes.undo_chunk("Trigger clear guides"):
             for entry in list(self.document.modules):
                 self.delete_guides(entry.instance_id)
@@ -767,6 +783,7 @@ class GuideScene:
         }
 
     def add_scene_group(self, name: str = "", nodes: Optional[list[str]] = None) -> str:
+        """Create a scene-nodes group; a free ``sceneNodesN`` name when none is given."""
         groups = self.scene_groups()
         taken = set(groups) | {handle.key for handle in self.instances()}
         if not name:
@@ -781,6 +798,7 @@ class GuideScene:
         return name
 
     def set_scene_group(self, name: str, nodes: list[str]) -> None:
+        """Replace the nodes of a scene-nodes group, dropping connections to removed ones."""
         groups = self.scene_groups()
         if name not in groups:
             raise GuideError(f"No scene-nodes group '{name}'.")
@@ -792,6 +810,7 @@ class GuideScene:
                 self.disconnect(item["input"])
 
     def rename_scene_group(self, old: str, new: str) -> None:
+        """Rename a scene-nodes group and the connections and layout that use it."""
         new = (new or "").strip()
         groups = self.scene_groups()
         if old not in groups:
@@ -808,6 +827,7 @@ class GuideScene:
         self.update_layout(scene_nodes=groups)
 
     def remove_scene_group(self, name: str) -> None:
+        """Delete a scene-nodes group and the connections that used its nodes."""
         groups = self.scene_groups()
         nodes = set(groups.pop(name, []))
         self.update_layout(scene_nodes=groups)
@@ -828,6 +848,7 @@ class GuideScene:
 
     # -------------------------------------------------------- connections
     def by_key(self, key: str) -> Optional[GuideHandle]:
+        """The handle for display key ``key`` (``L_arm``), or None."""
         entry = self.document.by_key(key)
         return GuideHandle(self, entry.instance_id) if entry is not None else None
 
@@ -850,6 +871,7 @@ class GuideScene:
         handle.set_input(input_name, source)
 
     def disconnect(self, target: str) -> None:
+        """Clear the input at ``<key>.<input>``."""
         key, _dot, input_name = target.rpartition(".")
         handle = self.by_key(key)
         if handle is None:
@@ -975,6 +997,7 @@ class GuideScene:
 
     # ------------------------------------------------------------- build
     def test_build(self, *handles: GuideHandle, rig_name: str = "test") -> Any:
+        """Build the given modules (or every module) into a throwaway rig."""
         scope = [handle.instance_id for handle in handles] or "scene"
         from tik.trigger.maya.build import Builder
 
@@ -986,6 +1009,7 @@ class GuideScene:
 
     # ------------------------------------------------------------ files
     def export(self, file_path, *handles: GuideHandle) -> Path:
+        """Write the given modules (or every module) to a ``.trg`` file."""
         wanted = {handle.instance_id for handle in handles} or None
         records = self.export_guide_records(wanted)
         keys = {handle.key for handle in (handles or self.instances())}
@@ -1017,6 +1041,7 @@ class GuideScene:
         return GuideFile(records, connections, designer=designer).save(file_path)
 
     def import_(self, file_path, reset: bool = False) -> list[GuideHandle]:
+        """Add the modules of a ``.trg`` file; ``reset`` clears the scene first."""
         guide_file = GuideFile.load(file_path)
         instances = guide_file.instances()
         if guide_file.unknown:

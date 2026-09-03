@@ -32,6 +32,7 @@ MODULE_CATEGORY = {
 
 
 def module_entries():
+    """``(tiles, palette entries)`` for every registered module type."""
     tiles, palette = [], []
     for module_cls in registry.iter_modules():
         category = MODULE_CATEGORY.get(module_cls.module_type, "generic")
@@ -155,6 +156,7 @@ class InputRow(QtWidgets.QWidget):
         self.clear.clicked.connect(lambda: self.choose(""))
 
     def set_source(self, source: str) -> None:
+        """Show ``source`` without reporting a change."""
         self._last = source or ""
         self.line.setText(self._last)
 
@@ -166,11 +168,13 @@ class InputRow(QtWidgets.QWidget):
         self.changed.emit(self.input.name, text)
 
     def choose(self, source: str) -> None:
+        """Set ``source`` and report the change."""
         self._last = source
         self.line.setText(source)
         self.changed.emit(self.input.name, source)
 
     def build_menu(self, parent=None) -> QtWidgets.QMenu:
+        """A menu of every module output and scene node this input could take."""
         menu = QtWidgets.QMenu(parent or self)
         modules, scene_nodes = self.sources() if self.sources else ([], [])
         for key, label, outputs in modules:
@@ -249,6 +253,7 @@ class SceneNodesPanel(QtWidgets.QWidget):
         return list(self.picker() or []) if self.picker else []
 
     def set_nodes(self, nodes: list[str]) -> None:
+        """Show one row per node."""
         self._last = [node for node in nodes if node]
         while self.rows_layout.count():
             item = self.rows_layout.takeAt(0)
@@ -259,6 +264,7 @@ class SceneNodesPanel(QtWidgets.QWidget):
             self._append_row(node)
 
     def nodes(self) -> list[str]:
+        """The non-empty node names typed into the rows."""
         return [row.text().strip() for row in self.rows if row.text().strip()]
 
     def _append_row(self, node: str) -> QtWidgets.QLineEdit:

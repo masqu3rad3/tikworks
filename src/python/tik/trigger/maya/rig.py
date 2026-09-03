@@ -70,6 +70,7 @@ class GuideDraft:
         parent: Any = None,
         radius: float = 1.0,
     ) -> tm.Joint:
+        """Create one tagged guide joint; the first one becomes the module root."""
         if (role, index) in self.created:
             raise GuideError(f"Guide '{role}' [{index}] created twice.")
         is_root = not self.created
@@ -178,6 +179,7 @@ class ModuleRig:
 
     # ------------------------------------------------------------- guides
     def guide(self, role: str, index: int = 0) -> tm.Joint:
+        """The guide joint for ``role``/``index``; raises when the module has none."""
         try:
             return self._guides[(role, index)]
         except KeyError:
@@ -196,6 +198,7 @@ class ModuleRig:
 
     # ------------------------------------------------------------- naming
     def name(self, *tokens, suffix: Optional[str] = None) -> str:
+        """A node name in this module's convention: ``<name>_<tokens>_<side>_<suffix>``."""
         return naming.format_name(
             *tokens, side=self.side.value, prefix=self.instance.name, suffix=suffix
         )
@@ -360,6 +363,7 @@ class ModuleRig:
         return self.deform_joint(joint)
 
     def deform_joint(self, node) -> tm.Joint:
+        """Tag ``node`` as one of this module's deform joints and register it."""
         tags.tag(
             node, **{tags.KIND: tags.DEFORM, tags.INSTANCE: self.instance.instance_id}
         )
@@ -367,6 +371,7 @@ class ModuleRig:
         return node
 
     def output(self, name: str, node) -> None:
+        """Publish ``node`` as the declared output ``name``."""
         if name not in self.module.output_names(self.module.values()):
             raise GuideError(
                 f"'{self.module.module_type}' does not declare output '{name}'."

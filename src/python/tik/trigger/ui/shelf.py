@@ -12,6 +12,8 @@ from .palette import PaletteEntry
 
 
 class ShelfTile(QtWidgets.QToolButton):
+    """A draggable action button on the shelf."""
+
     def __init__(
         self, entry: PaletteEntry, color: str, mime_type: str, parent=None
     ) -> None:
@@ -126,9 +128,11 @@ class Shelf(QtWidgets.QWidget):
 
     @property
     def collapsed(self) -> bool:
+        """True while only the header is shown."""
         return self._collapsed
 
     def set_collapsed(self, collapsed: bool) -> None:
+        """Show or hide the tiles."""
         self._collapsed = collapsed
         self.scroll.setVisible(not collapsed)
         self.handle.setText(("▸ " if collapsed else "◂ ") + self.title)

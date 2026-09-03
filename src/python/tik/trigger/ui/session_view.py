@@ -19,6 +19,7 @@ from .settings_panel import ActionSettingsPanel
 
 
 def action_entries(scope: str = BUILD) -> list[PaletteEntry]:
+    """Palette entries for the actions allowed in ``scope``."""
     return [
         PaletteEntry(
             cls.action_type,
@@ -31,6 +32,7 @@ def action_entries(scope: str = BUILD) -> list[PaletteEntry]:
 
 
 def tile_entries(scope: str = BUILD) -> list[TileEntry]:
+    """Shelf tiles for the actions allowed in ``scope``."""
     return [
         TileEntry(
             cls.action_type,
@@ -43,6 +45,8 @@ def tile_entries(scope: str = BUILD) -> list[TileEntry]:
 
 
 class PipelineTree(QtWidgets.QTreeView):
+    """The action tree; Tab opens the palette."""
+
     palette_requested = QtCore.Signal()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
@@ -56,6 +60,7 @@ class PipelineTree(QtWidgets.QTreeView):
 
 
 def pane(title: str, widget: QtWidgets.QWidget) -> QtWidgets.QWidget:
+    """``widget`` under an upper-case caption, as the panes of a view."""
     holder = QtWidgets.QWidget()
     layout = QtWidgets.QVBoxLayout(holder)
     layout.setContentsMargins(8, 8, 8, 8)
@@ -141,6 +146,7 @@ class SessionView(QtWidgets.QWidget):
 
     @property
     def on_designer_tab(self) -> bool:
+        """True when the Guide Designer sub-tab is current."""
         return self.sub_tabs.currentIndex() == DESIGNER_TAB
 
     def teardown(self) -> None:
@@ -327,9 +333,11 @@ class SessionView(QtWidgets.QWidget):
     # ------------------------------------------------------------ helpers
     @property
     def shelf_visible(self) -> bool:
+        """True while the shelf has width."""
         return self.splitter.sizes()[0] > 0
 
     def set_shelf_visible(self, visible: bool) -> None:
+        """Show or hide the shelf."""
         sizes = self.splitter.sizes()
         if visible and sizes[0] == 0:
             sizes[0] = 170
@@ -353,13 +361,16 @@ class SessionView(QtWidgets.QWidget):
 
     @property
     def focus_phase(self) -> str:
+        """The phase list (build or publish) that has the focus."""
         return self._focus_phase
 
     @property
     def current_phase(self) -> str:
+        """The phase list (build or publish) that has the focus."""
         return self._focus_phase
 
     def set_focus_phase(self, phase: str) -> None:
+        """Give the focus to ``phase`` and show its selection's settings."""
         if phase not in PHASES:
             return
         self._point_at(phase)
@@ -375,20 +386,25 @@ class SessionView(QtWidgets.QWidget):
 
     @property
     def current_model(self) -> PipelineModel:
+        """The model of the focused phase."""
         return self.models[self._focus_phase]
 
     @property
     def current_tree(self) -> PipelineTree:
+        """The tree of the focused phase."""
         return self.trees[self._focus_phase]
 
     def current_handle(self) -> Optional[ActionHandle]:
+        """The selected action in the focused phase, or None."""
         return self.current_model.handle(self.current_tree.currentIndex())
 
     def current_path(self) -> Optional[str]:
+        """The selected action's path, or None."""
         handle = self.current_handle()
         return handle.path if handle else None
 
     def select_path(self, path: Optional[str], phase: Optional[str] = None) -> None:
+        """Select the action at ``path`` (in ``phase``, default the focused one)."""
         if not path:
             return
         phase = phase or self._focus_phase
@@ -403,6 +419,7 @@ class SessionView(QtWidgets.QWidget):
             self.trees[phase].expandAll()
 
     def refresh(self, keep: Optional[str] = None) -> None:
+        """Rebuild both trees and reselect ``keep`` (default: the current path)."""
         keep = keep or self.current_path()
         phase = self._focus_phase
         self._rebuild_all()
@@ -440,6 +457,7 @@ class SessionView(QtWidgets.QWidget):
 
     # ------------------------------------------------------------ editing
     def show_palette(self) -> None:
+        """Open the action palette next to the selection."""
         tree = self.current_tree
         anchor = (
             tree.visualRect(tree.currentIndex())
@@ -452,6 +470,7 @@ class SessionView(QtWidgets.QWidget):
     def add_action(
         self, action_type: str, as_child: bool = False
     ) -> Optional[ActionHandle]:
+        """Add ``action_type`` after the selection, or under it with ``as_child``."""
         view = self.session.view(self._focus_phase)
         current = self.current_handle()
         try:
@@ -473,6 +492,7 @@ class SessionView(QtWidgets.QWidget):
         return handle
 
     def remove_current(self) -> None:
+        """Delete the selected action (not inside a reference)."""
         handle = self.current_handle()
         if handle is None or handle.is_linked:
             return
@@ -480,23 +500,28 @@ class SessionView(QtWidgets.QWidget):
         self.refresh(None)
 
     def duplicate_current(self) -> None:
+        """Copy the selected action next to itself."""
         handle = self.current_handle()
         if handle is None or handle.is_linked:
             return
         self.refresh(self.session.view(self._focus_phase).duplicate(handle.path).path)
 
     def rename_current(self) -> None:
+        """Start editing the selected action's name in place."""
         tree = self.current_tree
         index = tree.currentIndex()
         if index.isValid() and not self.current_model.handle(index).is_linked:
             tree.edit(index)
 
     def toggle_current(self) -> None:
+        """Flip the selected action's enabled flag."""
         index = self.current_tree.currentIndex()
         if index.isValid():
             self.current_model.toggle(index)
 
     def add_child_via_palette(self) -> None:
+        """Open the palette; the chosen action becomes a child of the selection."""
+
         def _once(key, _as_child):
             self.palette.chosen.disconnect(_once)
             self.add_action(key, as_child=True)
@@ -577,6 +602,7 @@ class SessionView(QtWidgets.QWidget):
             self.publish_button.setEnabled(True)
 
     def build(self) -> bool:
+        """Run the build list; True when it finished without errors."""
         return self._run(lambda: self.session.build())
 
     def build_and_publish(self) -> bool:
@@ -584,18 +610,22 @@ class SessionView(QtWidgets.QWidget):
         return self._run(lambda: self.session.build(publish=True))
 
     def build_until(self, path: Optional[str]) -> bool:
+        """Run the build list up to and including ``path``."""
         return bool(path) and self._run(lambda: self.session.build(until=path))
 
     def run_step(self, path: Optional[str]) -> bool:
+        """Run the single action at ``path``."""
         return bool(path) and self._run(lambda: self.session.run(path))
 
     def clear_statuses(self) -> None:
+        """Reset every run status, the progress bar and the counter."""
         for model in self.models.values():
             model.clear_status()
         self.progress.setValue(0)
         self.counter.setText("")
 
     def save_from_scene(self, path: str) -> None:
+        """Ask the action at ``path`` to store the scene state into its settings."""
         handle = self.session.view(self._focus_phase)[path]
         action = registry.get_action(handle.type)(settings=handle.settings)
         from tik.trigger.core.action import ActionContext

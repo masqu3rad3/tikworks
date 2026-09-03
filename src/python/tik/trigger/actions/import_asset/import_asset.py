@@ -21,9 +21,11 @@ class ImportAsset(Action):
     reference = BoolField(False, help="Reference instead of import")
 
     def resolve_path(self, ctx) -> Path:
+        """The asset path, made absolute against the session folder."""
         return ctx.resolve(self.file_path)
 
     def run(self, ctx) -> None:
+        """Import or reference the file into the scene."""
         from maya import cmds
 
         path = self.resolve_path(ctx)

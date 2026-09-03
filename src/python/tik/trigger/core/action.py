@@ -28,6 +28,7 @@ class ActionContext:
         return path
 
     def log(self, message: str, level: str = "info") -> None:
+        """Emit a log line to the UI, if an event bus is attached."""
         if self.events is not None:
             self.events.emit("log", level=level, message=message)
 
@@ -48,10 +49,12 @@ class Action(Schema):
 
     @classmethod
     def display_label(cls) -> str:
+        """The label shown in the UI (falls back to the type name)."""
         return cls.label or cls.action_type.replace("_", " ").title() or cls.__name__
 
     @classmethod
     def description(cls) -> str:
+        """The help text shown in the UI (falls back to the class docstring)."""
         return cls.info or (cls.__doc__ or "").strip()
 
     def summary(self) -> str:

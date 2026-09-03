@@ -105,14 +105,17 @@ class Twist(Module):
 
     @classmethod
     def output_names(cls, settings=None):
+        """One output per twist joint."""
         count = int((settings or {}).get("count", cls.count.default))
         return tuple(f"twist{index}" for index in range(count))
 
     def guide_count(self) -> int:
+        """One twist guide per ``count``."""
         return self.count
 
     # --------------------------------------------------------------- guides
     def draw_guides(self, guides) -> None:
+        """A base, an end, and ``count`` twist joints spread between them."""
         span = self.spacing * guides.side_mult
         base = guides.joint("base", (0, 0, 0), radius=1.5)
         guides.joint("end", (span, 0, 0), parent=base, radius=1.5)
@@ -176,6 +179,7 @@ class Twist(Module):
 
     # ---------------------------------------------------------------- build
     def build(self, rig) -> None:
+        """Twist extraction between the two sockets, spread over the twist joints."""
         base_guide, end_guide = rig.guides("base", "end")
         twist_guides = rig.chain("twist")
 

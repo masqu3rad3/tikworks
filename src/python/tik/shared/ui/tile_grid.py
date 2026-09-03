@@ -10,6 +10,8 @@ from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 
 
 class TileEntry:
+    """What one tile shows and drags: key, label, category and tooltip."""
+
     __slots__ = ("key", "label", "category", "tooltip")
 
     def __init__(
@@ -22,6 +24,8 @@ class TileEntry:
 
 
 class Tile(QtWidgets.QToolButton):
+    """A draggable button in a ``TileGrid``."""
+
     WIDTH = 66
     HEIGHT = 58
 
@@ -131,6 +135,7 @@ class TileGrid(QtWidgets.QScrollArea):
 
     @property
     def columns(self) -> int:
+        """How many tiles fit per row at the current width."""
         return self._columns
 
     def _reflow(self, columns: int) -> None:

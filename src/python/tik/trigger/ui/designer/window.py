@@ -379,21 +379,26 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
     # ------------------------------------------------------------ state
     @property
     def side(self) -> str:
+        """The side new modules get (``L`` when nothing is chosen)."""
         return self.side_combo.currentText() or "L"
 
     def set_side(self, side: str) -> None:
+        """Pick ``side`` in the side combo, if it is one of the choices."""
         index = self.side_combo.findText(side)
         if index >= 0:
             self.side_combo.setCurrentIndex(index)
 
     @property
     def current(self) -> Optional[GuideHandle]:
+        """The module whose properties are shown, or None."""
         return self._current
 
     def set_pane_visible(self, widget, visible: bool) -> None:
+        """Show or hide one of the designer's panes."""
         widget.setVisible(visible)
 
     def selected_handles(self) -> list[GuideHandle]:
+        """The modules selected in the tree."""
         handles = []
         for item in self.tree.selectedItems():
             handle = self.guides.get(item.data(0, QtCore.Qt.UserRole))
@@ -408,6 +413,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
 
     # --------------------------------------------------------------- refresh
     def refresh(self, *_args) -> None:
+        """Rebuild the tree and graph from the document and restore the selection."""
         if self._syncing:
             return
         self._syncing = True
@@ -587,6 +593,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         )
 
     def item_for(self, instance_id: str) -> Optional[QtWidgets.QTreeWidgetItem]:
+        """The tree item of ``instance_id``, or None."""
         iterator = QtWidgets.QTreeWidgetItemIterator(self.tree)
         while iterator.value():
             item = iterator.value()

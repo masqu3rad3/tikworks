@@ -57,16 +57,19 @@ class RibbonModule(Module):
 
     @classmethod
     def output_names(cls, settings=None):
+        """One output per ribbon joint."""
         count = int((settings or {}).get("joint_count", cls.joint_count.default))
         return tuple(f"joint{index}" for index in range(count))
 
     # --------------------------------------------------------------- guides
     def draw_guides(self, guides) -> None:
+        """A start and an end joint along X."""
         start = guides.joint("start", (0, 0, 0))
         guides.joint("end", (self.spacing * guides.side_mult, 0, 0), parent=start)
 
     # ---------------------------------------------------------------- build
     def build(self, rig) -> None:
+        """A ribbon between the two sockets with its joints bound."""
         start_guide, end_guide = rig.guides("start", "end")
         start_socket = rig.socket("start", match=start_guide)
         end_socket = rig.socket("end", match=end_guide)

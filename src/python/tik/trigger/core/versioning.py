@@ -20,6 +20,7 @@ def parse(file_path) -> tuple[str, Optional[int], str]:
 
 
 def with_version(file_path, version: int) -> Path:
+    """``path`` renamed to version ``version`` (``name_v003.tr``)."""
     path = Path(file_path)
     stem, _current, suffix = parse(path)
     return path.with_name(f"{stem}_v{version:0{PADDING}d}{suffix}")

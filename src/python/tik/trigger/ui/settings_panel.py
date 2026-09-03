@@ -17,6 +17,8 @@ from tik.trigger.session import ActionHandle
 
 
 class ActionSettingsPanel(QtWidgets.QWidget):
+    """Header, generated form and step buttons for the selected action."""
+
     run_requested = QtCore.Signal(str)  # path
     save_requested = QtCore.Signal(str)
     edited = QtCore.Signal(str)  # path
@@ -92,9 +94,11 @@ class ActionSettingsPanel(QtWidgets.QWidget):
     # ------------------------------------------------------------- binding
     @property
     def handle(self) -> Optional[ActionHandle]:
+        """The action being edited, or None."""
         return self._handle
 
     def set_handle(self, handle: Optional[ActionHandle]) -> None:
+        """Show the settings of ``handle`` (None shows the empty state)."""
         self._handle = handle
         enabled = handle is not None
         for widget in (self.run_button, self.info_button):

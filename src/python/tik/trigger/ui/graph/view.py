@@ -74,6 +74,7 @@ class GraphView(QtWidgets.QGraphicsView):
 
     # ------------------------------------------------------------ building
     def rebuild(self) -> None:
+        """Redraw every node and wire from the document and its layout."""
         layout = self.guides.layout
         positions = dict(layout.get("positions", {}))
         collapse = dict(layout.get("collapse", {}))
@@ -235,6 +236,7 @@ class GraphView(QtWidgets.QGraphicsView):
         self.graph.moved = set()
 
     def set_mode(self, key: str, mode: int) -> None:
+        """Set the collapse mode of node ``key`` and store it in the layout."""
         node = self.graph.nodes.get(key)
         if node is None:
             return
@@ -244,6 +246,7 @@ class GraphView(QtWidgets.QGraphicsView):
         self.guides.update_layout(collapse=collapse)
 
     def set_selected_mode(self, mode: int) -> None:
+        """Set the collapse mode of every selected node."""
         for node in self.graph.selected_nodes():
             self.set_mode(node.key, mode)
 
@@ -307,10 +310,12 @@ class GraphView(QtWidgets.QGraphicsView):
         return source_key
 
     def connect_input(self, input_key: str, source_key: str) -> None:
+        """Connect ``input_key`` to ``source_key`` through the guides."""
         source = self.resolve_source(source_key)
         self._apply(lambda: self.guides.connect(input_key, source))
 
     def disconnect_input(self, input_key: str) -> None:
+        """Clear ``input_key`` through the guides."""
         self._apply(lambda: self.guides.disconnect(input_key))
 
     def sever(self, key: str) -> None:
@@ -331,6 +336,7 @@ class GraphView(QtWidgets.QGraphicsView):
 
     # ----------------------------------------------------- scene groups
     def add_scene_group(self, name: str = "", nodes: Optional[list] = None) -> str:
+        """Create a scene-nodes group, redraw and select it."""
         name = self.guides.add_scene_group(name, nodes)
         self.rebuild()
         self.graph.select_key(name)
@@ -346,6 +352,7 @@ class GraphView(QtWidgets.QGraphicsView):
         self.rebuild()
 
     def remove_scene_group(self, name: str) -> None:
+        """Delete a scene-nodes group through the guides."""
         self._apply(lambda: self.guides.remove_scene_group(name))
 
     def scene_nodes(self) -> list[tuple[str, str]]:
@@ -357,19 +364,24 @@ class GraphView(QtWidgets.QGraphicsView):
         ]
 
     def delete_selected(self) -> bool:
+        """Disconnect selected wires and remove selected groups."""
         return self.graph.delete_selected()
 
     def select_key(self, key: Optional[str]) -> None:
+        """Select only the node with ``key`` (None clears)."""
         self.graph.select_key(key)
 
     def select_keys(self, keys) -> None:
+        """Select exactly the nodes with ``keys``."""
         self.graph.select_keys(keys)
 
     def set_grid(self, visible: bool) -> None:
+        """Show or hide the background grid."""
         self.graph.show_grid = bool(visible)
         self.viewport().update()
 
     def set_snap(self, enabled: bool) -> None:
+        """Snap dragged nodes to the grid or not."""
         self.graph.snap = bool(enabled)
 
     # ---------------------------------------------------------- navigation
@@ -474,6 +486,7 @@ class GraphView(QtWidgets.QGraphicsView):
         self.setCursor(QtCore.Qt.CrossCursor)
 
     def toggle_node_at(self, pos: QtCore.QPoint) -> None:
+        """Flip the selection of the node under viewport point ``pos``."""
         item = self.itemAt(pos)
         while item is not None and not isinstance(item, NodeItem):
             item = item.parentItem()

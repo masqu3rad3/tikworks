@@ -116,6 +116,7 @@ class _TableEditor(QtWidgets.QWidget):
         return widget
 
     def add_row(self, row: Optional[dict] = None) -> None:
+        """Append a row, filled from ``row`` or the column defaults."""
         row = row or {}
         index = self.table.rowCount()
         self.table.insertRow(index)
@@ -126,6 +127,7 @@ class _TableEditor(QtWidgets.QWidget):
         self._emit()
 
     def remove_row(self, index: int) -> None:
+        """Delete row ``index`` if it exists."""
         if 0 <= index < self.table.rowCount():
             self.table.removeRow(index)
             self._emit()
@@ -142,6 +144,7 @@ class _TableEditor(QtWidgets.QWidget):
         self._emit()
 
     def cell_widget(self, row: int, column: int):
+        """The editor widget at ``row``/``column``."""
         return self.table.cellWidget(row, column)
 
     # ------------------------------------------------------------ value
@@ -324,9 +327,11 @@ class FormBuilder(QtWidgets.QWidget):
     # ------------------------------------------------------------ building
     @property
     def target(self) -> Optional[Schema]:
+        """The schema object the form edits, or None."""
         return self._target
 
     def clear(self) -> None:
+        """Remove every field widget and forget the target."""
         self._clear_layout(self._layout)
         self._plain = None
         self._groups.clear()
@@ -357,6 +362,7 @@ class FormBuilder(QtWidgets.QWidget):
         return form
 
     def set_target(self, target: Optional[Schema]) -> None:
+        """Rebuild the form for ``target``'s fields (None clears it)."""
         self.clear()
         self._target = target
         if target is None:
@@ -424,6 +430,7 @@ class FormBuilder(QtWidgets.QWidget):
                 label.setToolTip("")
 
     def widget(self, name: str) -> QtWidgets.QWidget:
+        """The editor widget for field ``name``."""
         return self._widgets[name]
 
     def _make_widget(self, name: str, field: Field) -> QtWidgets.QWidget:
@@ -570,4 +577,5 @@ class FormBuilder(QtWidgets.QWidget):
         self.changed.emit(name, getattr(self._target, name))
 
     def values(self) -> dict:
+        """The target's current values, or ``{}`` without a target."""
         return self._target.values() if self._target is not None else {}

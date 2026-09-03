@@ -25,6 +25,8 @@ from .constants import (
 
 
 class Port(QtWidgets.QGraphicsEllipseItem):
+    """An input or output dot on a node; wires start and end here."""
+
     def __init__(
         self,
         node: "NodeItem",
@@ -50,9 +52,11 @@ class Port(QtWidgets.QGraphicsEllipseItem):
 
     @property
     def key(self) -> str:
+        """``<node key>.<port name>``."""
         return f"{self.node.key}.{self.name}"
 
     def set_connected(self, connected: bool) -> None:
+        """Record the connection state and recolour the dot."""
         self.connected = connected
         if self.space:
             self.setBrush(QtGui.QColor(PORT_SPACE))
@@ -99,6 +103,8 @@ class NodeSpec:
 
 
 class NodeItem(QtWidgets.QGraphicsItem):
+    """A module or scene-nodes group drawn as a box with ports."""
+
     def __init__(self, spec: NodeSpec) -> None:
         super().__init__()
         self.key = spec.key
@@ -128,6 +134,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
     # --------------------------------------------------------------- layout
     def visible_ports(self) -> tuple[list[Port], list[Port]]:
+        """``(inputs, outputs)`` shown in the current collapse mode."""
         if self.mode == MODE_MINIMAL:
             return [], []
         if self.mode == MODE_CONNECTED:
@@ -161,10 +168,12 @@ class NodeItem(QtWidgets.QGraphicsItem):
             self.scene().update_wires()
 
     def set_mode(self, mode: int) -> None:
+        """Set the collapse mode (minimal, connected or full) and relayout."""
         self.mode = max(MODE_MINIMAL, min(MODE_FULL, int(mode)))
         self.relayout()
 
     def glyph_rect(self) -> QtCore.QRectF:
+        """Where the collapse glyph is drawn, in item coordinates."""
         return QtCore.QRectF(NODE_WIDTH - GLYPH_WIDTH - 4, 0, GLYPH_WIDTH + 4, HEADER)
 
     def boundingRect(self) -> QtCore.QRectF:  # noqa: N802
@@ -271,6 +280,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
 
 
 class WireItem(QtWidgets.QGraphicsPathItem):
+    """A curve from an output port to an input port."""
+
     def __init__(self, source: Port, target: Port, primary: bool) -> None:
         super().__init__()
         self.source = source
@@ -282,10 +293,12 @@ class WireItem(QtWidgets.QGraphicsPathItem):
 
     @property
     def target_key(self) -> str:
+        """The input port's key."""
         return self.target.key
 
     @property
     def source_key(self) -> str:
+        """The output port's key."""
         return self.source.key
 
     def shape(
@@ -296,6 +309,7 @@ class WireItem(QtWidgets.QGraphicsPathItem):
         return stroker.createStroke(self.path())
 
     def refresh(self) -> None:
+        """Redraw the curve between the current port positions."""
         start = self.source.scenePos()
         end = self.target.scenePos()
         path = QtGui.QPainterPath(start)

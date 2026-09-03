@@ -37,16 +37,20 @@ class CollapsibleGroup(QtWidgets.QWidget):
 
     @property
     def content_layout(self) -> QtWidgets.QVBoxLayout:
+        """The layout to add widgets to."""
         return self._content_layout
 
     @property
     def title(self) -> str:
+        """The header text."""
         return self._button.text()
 
     def is_expanded(self) -> bool:
+        """True while the content is shown."""
         return self._button.isChecked()
 
     def set_expanded(self, expanded: bool) -> None:
+        """Show or hide the content."""
         self._button.setChecked(bool(expanded))
 
     def _on_toggled(self, checked: bool) -> None:

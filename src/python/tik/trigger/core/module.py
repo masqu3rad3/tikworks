@@ -78,6 +78,7 @@ class Module(Schema):
     # ------------------------------------------------------------ manifest
     @classmethod
     def display_label(cls) -> str:
+        """The label shown in the UI (falls back to the type or class name)."""
         return cls.label or cls.module_type or cls.__name__
 
     @classmethod
@@ -100,12 +101,14 @@ class Module(Schema):
 
     @classmethod
     def input_names(cls, settings=None) -> list[str]:
+        """Declared inputs followed by the space inputs ``settings`` add."""
         return [item.name for item in cls.inputs] + [
             item.name for item in cls.space_inputs(settings)
         ]
 
     @classmethod
     def primary_input(cls) -> Optional[Input]:
+        """The input marked primary, else the first declared one, else None."""
         for item in cls.inputs:
             if item.primary:
                 return item
@@ -147,6 +150,7 @@ class Module(Schema):
 
     @property
     def key(self) -> str:
+        """Display key: ``name`` for center modules, ``<side>_<name>`` otherwise."""
         return instance_key(self.name, self.side.value)
 
     def guide_count(self) -> int:

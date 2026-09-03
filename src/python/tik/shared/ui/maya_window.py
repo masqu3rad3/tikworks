@@ -36,6 +36,7 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
 
     # ---------------------------------------------------------- scriptjobs
     def register_script_job(self, job_id: int) -> int:
+        """Remember a scriptJob so it is killed when the window closes."""
         self._script_jobs.append(job_id)
         return job_id
 
@@ -59,6 +60,7 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
         super().closeEvent(event)
 
     def close(self):
+        """Close the window; a parentless window closes as a plain widget."""
         if self.parent() is None:
             return QtWidgets.QWidget.close(self)
         return super().close()

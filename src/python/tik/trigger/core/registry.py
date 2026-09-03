@@ -156,10 +156,12 @@ def allows(action_type: str, phase: str) -> bool:
 
 
 def is_module_registered(name: str) -> bool:
+    """True when a module type called ``name`` is registered."""
     return name in _MODULES
 
 
 def is_action_registered(name: str) -> bool:
+    """True when an action type called ``name`` is registered."""
     return name in _ACTIONS
 
 

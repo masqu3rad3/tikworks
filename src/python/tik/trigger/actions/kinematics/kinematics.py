@@ -44,6 +44,7 @@ class Kinematics(Action):
     )
 
     def run(self, ctx) -> None:
+        """Build the rig from the guides file, or from the session's own guides."""
         from tik.trigger.guides import GuideScene
         from tik.trigger.maya.build import Builder
 

@@ -33,6 +33,7 @@ class ActionNode:
     children: list["ActionNode"] = field(default_factory=list)
 
     def to_dict(self) -> dict:
+        """The JSON form stored in the ``.tr`` file."""
         return {
             "name": self.name,
             "type": self.type,
@@ -43,6 +44,7 @@ class ActionNode:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ActionNode":
+        """Rebuild a node from its JSON form (the old flat ``data`` key is accepted)."""
         settings = data.get("settings")
         if settings is None:  # old flat format used "data"
             settings = data.get("data", {})
@@ -55,14 +57,17 @@ class ActionNode:
         )
 
     def copy(self) -> "ActionNode":
+        """A deep copy, children included."""
         return ActionNode.from_dict(self.to_dict())
 
 
 def join_path(*parts: str) -> str:
+    """Join path parts with the separator, skipping empty ones."""
     return SEPARATOR.join(part for part in parts if part)
 
 
 def split_path(path: str) -> list[str]:
+    """Split an action path into its parts, skipping empty ones."""
     return [part for part in path.split(SEPARATOR) if part]
 
 
@@ -84,6 +89,7 @@ class Document:
 
     # ---------------------------------------------------------- serialize
     def to_dict(self) -> dict:
+        """The JSON form stored in the ``.tr`` file."""
         return {
             "schema": self.schema,
             "meta": dict(self.meta),
@@ -94,6 +100,7 @@ class Document:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Document":
+        """Rebuild a document from its JSON form, migrating older schemas."""
         if isinstance(data, list):  # very old: bare list of actions
             data = {"actions": data}
         schema = int(data.get("schema", 0))
@@ -111,6 +118,7 @@ class Document:
 
     @classmethod
     def load(cls, file_path) -> "Document":
+        """Read a ``.tr`` file; raises ``SessionLoadError`` on a bad file."""
         path = Path(file_path)
         try:
             return cls.from_dict(json.loads(path.read_text(encoding="utf-8")))
@@ -118,6 +126,7 @@ class Document:
             raise SessionLoadError(f"Cannot load '{path}': {error}") from error
 
     def save(self, file_path) -> Path:
+        """Write the document as JSON, creating the folder if needed."""
         path = Path(file_path)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,6 +136,7 @@ class Document:
         return path
 
     def copy(self) -> "Document":
+        """A deep copy of the whole document."""
         return Document.from_dict(self.to_dict())
 
     # --------------------------------------------------------------- tree
@@ -156,9 +166,11 @@ class Document:
         yield from _walk(self.roots(phase), None, "")
 
     def paths(self, phase: str = BUILD) -> list[str]:
+        """Every action path in ``phase``, depth first."""
         return [path for path, _node, _parent in self.walk(phase)]
 
     def find(self, path: str, phase: str = BUILD) -> Optional[ActionNode]:
+        """The node at ``path`` in ``phase``, or None."""
         nodes = self.roots(phase)
         node = None
         for part in split_path(path):
@@ -169,23 +181,27 @@ class Document:
         return node
 
     def require(self, path: str, phase: str = BUILD) -> ActionNode:
+        """The node at ``path``; raises ``SessionError`` when there is none."""
         node = self.find(path, phase)
         if node is None:
             raise SessionError(f"No action at '{path}'.")
         return node
 
     def parent_of(self, path: str, phase: str = BUILD) -> Optional[ActionNode]:
+        """The parent node of ``path``, or None for a root."""
         parts = split_path(path)
         return self.find(join_path(*parts[:-1]), phase) if len(parts) > 1 else None
 
     def siblings(
         self, parent_path: Optional[str], phase: str = BUILD
     ) -> list[ActionNode]:
+        """The children of ``parent_path``, or the roots when it is empty."""
         if not parent_path:
             return self.roots(phase)
         return self.require(parent_path, phase).children
 
     def path_of(self, node: ActionNode, phase: str = BUILD) -> Optional[str]:
+        """The path at which ``node`` sits, or None when it is not in ``phase``."""
         for path, candidate, _parent in self.walk(phase):
             if candidate is node:
                 return path
@@ -194,6 +210,7 @@ class Document:
     def unique_name(
         self, parent_path: Optional[str], base: str, phase: str = BUILD
     ) -> str:
+        """``base`` if free among the siblings, else the next numbered name."""
         names = {node.name for node in self.siblings(parent_path, phase)}
         if base not in names:
             return base
@@ -223,6 +240,7 @@ class Document:
         return join_path(parent or "", node.name)
 
     def remove(self, path: str, phase: str = BUILD) -> ActionNode:
+        """Detach and return the node at ``path``."""
         node = self.require(path, phase)
         parent = self.parent_of(path, phase)
         siblings = parent.children if parent is not None else self.roots(phase)
@@ -271,6 +289,7 @@ class Document:
         return join_path(parent or "", node.name)
 
     def rename(self, path: str, new_name: str, phase: str = BUILD) -> str:
+        """Rename the node at ``path``; returns its new path."""
         node = self.require(path, phase)
         if SEPARATOR in new_name or not new_name.strip():
             raise SessionError(f"Invalid action name '{new_name}'.")
@@ -283,6 +302,7 @@ class Document:
         return join_path(parent_path, new_name)
 
     def duplicate(self, path: str, phase: str = BUILD) -> str:
+        """Copy the node at ``path`` next to itself; returns the copy's path."""
         node = self.require(path, phase)
         parent = self.parent_of(path, phase)
         siblings = parent.children if parent is not None else self.roots(phase)

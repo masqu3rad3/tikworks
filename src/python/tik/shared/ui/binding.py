@@ -26,16 +26,19 @@ class MayaAttributeAdapter:
         self._job: Optional[int] = None
 
     def exists(self) -> bool:
+        """True while the plug is in the scene."""
         from maya import cmds
 
         return cmds.objExists(self.plug_path)
 
     def get(self) -> Any:
+        """The plug's current value."""
         from maya import cmds
 
         return cmds.getAttr(self.plug_path)
 
     def set(self, value: Any) -> None:
+        """Write ``value`` to the plug (strings need the typed setAttr)."""
         from maya import cmds
 
         if isinstance(value, str):
@@ -44,6 +47,7 @@ class MayaAttributeAdapter:
             cmds.setAttr(self.plug_path, value)
 
     def observe(self, callback: Callable[[], None]) -> None:
+        """Call ``callback`` whenever the plug changes."""
         from maya import cmds
 
         self.unobserve()
@@ -52,6 +56,7 @@ class MayaAttributeAdapter:
         )
 
     def unobserve(self) -> None:
+        """Stop watching the plug."""
         if self._job is None:
             return
         from maya import cmds
@@ -80,20 +85,25 @@ class Binder:
 
     # ---- mapping (override) --------------------------------------------
     def widget_value(self) -> Any:
+        """The widget's current value; subclasses map their widget type."""
         raise NotImplementedError
 
     def set_widget_value(self, value: Any) -> None:
+        """Show ``value`` in the widget; subclasses map their widget type."""
         raise NotImplementedError
 
     def widget_signal(self):
+        """The signal the widget emits when the user edits it."""
         raise NotImplementedError
 
     # ---- lifecycle ------------------------------------------------------
     @property
     def plug_path(self) -> str:
+        """The bound plug's path, or ``""`` for adapters without one."""
         return getattr(self.adapter, "plug_path", "")
 
     def start(self) -> bool:
+        """Wire the widget to the plug; False (and a disabled widget) when the plug is missing."""
         if not self.adapter.exists():
             self.widget.setEnabled(False)
             self.active = False
@@ -108,6 +118,7 @@ class Binder:
         return True
 
     def stop(self) -> None:
+        """Disconnect the widget from the plug."""
         if self.direction in ("both", "to_maya"):
             try:
                 self.widget_signal().disconnect(self._on_widget_changed)
@@ -117,6 +128,7 @@ class Binder:
         self.active = False
 
     def update_widget(self) -> None:
+        """Refresh the widget from the plug without echoing the change back."""
         if self._updating or not self.adapter.exists():
             return
         self._updating = True
@@ -140,43 +152,62 @@ class Binder:
 
 
 class IntSpinnerBinder(Binder):
+    """Binds a ``QSpinBox``."""
+
     def widget_value(self):
+        """The spin box value as an int."""
         return int(self.widget.value())
 
     def set_widget_value(self, value):
+        """Set the spin box value."""
         self.widget.setValue(int(value))
 
     def widget_signal(self):
+        """``valueChanged``."""
         return self.widget.valueChanged
 
 
 class DoubleSpinnerBinder(IntSpinnerBinder):
+    """Binds a ``QDoubleSpinBox``."""
+
     def widget_value(self):
+        """The spin box value as a float."""
         return float(self.widget.value())
 
     def set_widget_value(self, value):
+        """Set the spin box value."""
         self.widget.setValue(float(value))
 
 
 class CheckBoxBinder(Binder):
+    """Binds a ``QCheckBox``."""
+
     def widget_value(self):
+        """Whether the box is checked."""
         return bool(self.widget.isChecked())
 
     def set_widget_value(self, value):
+        """Check or uncheck the box."""
         self.widget.setChecked(bool(value))
 
     def widget_signal(self):
+        """``toggled``."""
         return self.widget.toggled
 
 
 class LineEditBinder(Binder):
+    """Binds a ``QLineEdit``."""
+
     def widget_value(self):
+        """The edit's text."""
         return self.widget.text()
 
     def set_widget_value(self, value):
+        """Set the edit's text (None shows empty)."""
         self.widget.setText("" if value is None else str(value))
 
     def widget_signal(self):
+        """``editingFinished``."""
         return self.widget.editingFinished
 
 
@@ -184,27 +215,35 @@ class ComboBinder(Binder):
     """Enum attribute (index) <-> combo box index."""
 
     def widget_value(self):
+        """The selected index."""
         return int(self.widget.currentIndex())
 
     def set_widget_value(self, value):
+        """Select the item at ``value``."""
         self.widget.setCurrentIndex(int(value))
 
     def widget_signal(self):
+        """``currentIndexChanged``."""
         return self.widget.currentIndexChanged
 
 
 class SliderBinder(Binder):
+    """Binds a ``QSlider``; ``scale`` maps the plug's float range onto the slider's ints."""
+
     def __init__(self, adapter, widget, direction="both", scale: float = 1.0) -> None:
         super().__init__(adapter, widget, direction)
         self.scale = scale
 
     def widget_value(self):
+        """The slider position divided by ``scale``."""
         return self.widget.value() / self.scale
 
     def set_widget_value(self, value):
+        """Move the slider to ``value * scale``."""
         self.widget.setValue(int(float(value) * self.scale))
 
     def widget_signal(self):
+        """``valueChanged``."""
         return self.widget.valueChanged
 
 
@@ -240,23 +279,27 @@ class BindingManager:
         self.poll_interval_ms = poll_interval_ms
 
     def add(self, binder: Binder) -> Binder:
+        """Start ``binder`` and keep it; polls for the plug when it is not there yet."""
         self.binders.append(binder)
         if not binder.start():
             self._ensure_polling()
         return binder
 
     def remove(self, binder: Binder) -> None:
+        """Stop and forget ``binder``."""
         binder.stop()
         if binder in self.binders:
             self.binders.remove(binder)
 
     def clear(self) -> None:
+        """Stop and forget every binder."""
         for binder in self.binders:
             binder.stop()
         self.binders.clear()
         self._stop_polling()
 
     def update_all(self) -> None:
+        """Refresh every active widget from its plug."""
         for binder in self.binders:
             if binder.active:
                 binder.update_widget()

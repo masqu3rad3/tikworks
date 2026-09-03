@@ -10,24 +10,30 @@ from typing import Callable, Optional
 # --- Data Container ---
 @dataclass
 class BenchmarkResult:
+    """The timings collected for one measured block."""
+
     name: str
     iterations: int
     times: list[float] = field(default_factory=list)
 
     @property
     def total(self):
+        """Seconds spent over every iteration."""
         return sum(self.times)
 
     @property
     def average(self):
+        """Mean seconds per iteration (0.0 with no timings)."""
         return statistics.mean(self.times) if self.times else 0.0
 
     @property
     def best(self):
+        """Fastest iteration in seconds (0.0 with no timings)."""
         return min(self.times) if self.times else 0.0
 
     @property
     def worst(self):
+        """Slowest iteration in seconds (0.0 with no timings)."""
         return max(self.times) if self.times else 0.0
 
     @property
@@ -60,6 +66,8 @@ class BenchmarkResult:
 
 # --- The Engine ---
 class Benchmark:
+    """Times named blocks of code and reports them side by side."""
+
     def __init__(self):
         self.results: dict[str, BenchmarkResult] = {}
 

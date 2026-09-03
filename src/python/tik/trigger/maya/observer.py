@@ -25,6 +25,7 @@ class SceneObserver:
         self.muted = False
 
     def start(self) -> None:
+        """Install one scriptJob per watched scene event."""
         self.stop()
         for event in EVENTS:
             job = cmds.scriptJob(
@@ -33,6 +34,7 @@ class SceneObserver:
             self._jobs.append(job)
 
     def stop(self) -> None:
+        """Remove the installed scriptJobs."""
         for job in self._jobs:
             try:
                 if cmds.scriptJob(exists=job):
@@ -47,6 +49,7 @@ class SceneObserver:
 
     @property
     def active(self) -> bool:
+        """True while the scriptJobs are installed."""
         return bool(self._jobs)
 
 
@@ -70,6 +73,7 @@ class ApiCallbacks:
         self.muted = False
 
     def start(self) -> None:
+        """Install the API callbacks for node removal and reparenting."""
         import maya.api.OpenMaya as om
 
         self.stop()
@@ -85,6 +89,7 @@ class ApiCallbacks:
         )
 
     def stop(self) -> None:
+        """Remove the installed API callbacks."""
         import maya.api.OpenMaya as om
 
         while self._ids:
@@ -99,4 +104,5 @@ class ApiCallbacks:
 
     @property
     def active(self) -> bool:
+        """True while the callbacks are installed."""
         return bool(self._ids)

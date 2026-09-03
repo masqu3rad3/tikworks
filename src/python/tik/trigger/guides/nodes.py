@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------- scene
 def new_scene() -> None:
+    """Open a new, empty scene without asking."""
     cmds.file(new=True, force=True)
 
 
@@ -98,6 +99,7 @@ def guide_nodes(instance_id: str) -> dict[tuple[str, int], tm.Joint]:
 
 
 def guide_node(instance_id: str, role: str, index: int = 0) -> tm.Joint:
+    """The joint drawn for ``role``/``index`` of an instance; raises when missing."""
     try:
         return guide_nodes(instance_id)[(role, index)]
     except KeyError:
@@ -284,17 +286,21 @@ def selected_guide() -> Optional[ParentRef]:
 
 
 def select_guides(instance_id: str) -> None:
+    """Select every guide joint of an instance."""
     tm.select_nodes(list(guide_nodes(instance_id).values()), replace=True)
 
 
 def select_nodes(nodes) -> None:
+    """Replace the selection with ``nodes`` (wrappers or names)."""
     tm.select_nodes(list(nodes), replace=True)
 
 
 def selected_node_names() -> list[str]:
+    """The names of the selected nodes."""
     return list(cmds.ls(selection=True) or [])
 
 
 def selected_node_name() -> str:
+    """The first selected node's name, or ``""``."""
     selected = cmds.ls(selection=True) or []
     return selected[0] if selected else ""

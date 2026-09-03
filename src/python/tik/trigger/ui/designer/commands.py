@@ -51,9 +51,11 @@ class DesignerCommands:
             self.refresh()
 
     def show_palette(self) -> None:
+        """Open the module palette under the cursor."""
         self.palette.popup(QtGui.QCursor.pos())
 
     def create_guides(self, module_type: str) -> list[GuideHandle]:
+        """Add a module (or a scene-nodes group) for the current side and select it."""
         if module_type == SCENE_NODE:
             name = self.graph.add_scene_group(nodes=self._selected_scene_nodes())
             self._on_external_selection(name)
@@ -101,6 +103,7 @@ class DesignerCommands:
         return created
 
     def reparent(self, instance_id: str, parent_id: Optional[str]) -> None:
+        """Point ``instance_id``'s primary input at ``parent_id`` (None detaches)."""
         handle = self.guides.get(instance_id)
         if handle is None:
             return
@@ -122,6 +125,7 @@ class DesignerCommands:
         self.refresh()
 
     def connect_dialog(self) -> None:
+        """Ask for a source and connect the current module's first input to it."""
         if self._current is None or not self._current.input_names():
             return
         text, ok = QtWidgets.QInputDialog.getText(
@@ -135,12 +139,14 @@ class DesignerCommands:
             self._on_input_changed(input_name.strip(), source.strip())
 
     def sever_current(self) -> None:
+        """Drop every connection of the selected modules."""
         for handle in self.selected_handles() or (
             [self._current] if self._current else []
         ):
             self.graph.sever(handle.key)
 
     def disconnect_primary(self) -> None:
+        """Clear the current module's primary input."""
         if self._current is None:
             return
         primary = self._current.module_class.primary_input()
@@ -163,11 +169,13 @@ class DesignerCommands:
                     getattr(root, "select", lambda: None)()
 
     def select_current(self) -> None:
+        """Select the guide joints of the selected modules in Maya."""
         with self.watcher.mute():
             for handle in self.selected_handles():
                 handle.select()
 
     def mirror_current(self) -> None:
+        """Mirror each selected module to the other side."""
         with self.watcher.mute():
             for handle in self.selected_handles():
                 try:
@@ -177,6 +185,7 @@ class DesignerCommands:
         self.refresh()
 
     def duplicate_current(self) -> list[GuideHandle]:
+        """Copy each selected module; returns the copies."""
         created = []
         with self.watcher.mute():
             for handle in self.selected_handles():
@@ -190,6 +199,7 @@ class DesignerCommands:
         return created
 
     def delete_current(self) -> None:
+        """Delete the selection: graph wires first, else the module or group."""
         if self.graph.hasFocus() and self.graph.delete_selected():
             return  # Delete in the graph disconnects wires / removes scene-node groups
         if self._current is None and self._external is not None:
@@ -205,6 +215,7 @@ class DesignerCommands:
         self.refresh()
 
     def clear_guides(self) -> None:
+        """Remove every module, group and layout entry."""
         with self.watcher.mute():
             self.guides.clear()
             self.guides.set_layout({})
@@ -214,6 +225,7 @@ class DesignerCommands:
         self.refresh()
 
     def test_build(self, all_modules: bool = False):
+        """Build the selected modules (or all) into a throwaway rig and report."""
         handles = [] if all_modules else self.selected_handles()
         try:
             with self.watcher.mute():
@@ -295,6 +307,7 @@ class DesignerCommands:
     def export_file(
         self, path: Optional[str] = None, ask: bool = False, selected: bool = False
     ) -> Optional[Path]:
+        """Write the modules (all, or ``selected``) to a ``.trg`` file."""
         path = path or ("" if ask else self.last_guide_file) or self._pick("save")
         if not path:
             return None
@@ -307,6 +320,7 @@ class DesignerCommands:
     def import_file(
         self, path: Optional[str] = None, reset: bool = False
     ) -> list[GuideHandle]:
+        """Add the modules of a ``.trg`` file; ``reset`` clears the scene first."""
         path = path or self._pick("open")
         if not path:
             return []
