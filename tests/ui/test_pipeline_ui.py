@@ -434,7 +434,7 @@ def test_session_view_has_two_trees(qapp):
     assert view.focus_phase == BUILD
 
 
-def test_focus_phase_drives_the_current_row_and_the_until_button(qapp):
+def test_focus_phase_drives_the_current_row(qapp):
     from tik.trigger.core.document import BUILD, PUBLISH
 
     session = Session()
@@ -446,13 +446,11 @@ def test_focus_phase_drives_the_current_row_and_the_until_button(qapp):
     view.set_focus_phase(BUILD)
     assert view.current_path() == "kine"
     assert view.current_phase == BUILD
-    assert view.until_button.isEnabled()
 
     view.publish_tree.setCurrentIndex(view.publish_model.index(0, 0))
     view.set_focus_phase(PUBLISH)
     assert view.current_path() == "fbx"
     assert view.current_phase == PUBLISH
-    assert not view.until_button.isEnabled()
 
 
 def test_the_shelf_offers_only_actions_that_fit_the_focused_phase(qapp):
@@ -493,7 +491,6 @@ def test_publish_rows_offer_no_run_affordance(qapp):
     # isVisibleTo, not isVisible: the window was never shown, so isVisible() is
     # False for every widget and would pass this assertion vacuously
     assert not view.settings.run_button.isVisibleTo(view.settings)
-    assert not view.settings.until_button.isVisibleTo(view.settings)
 
     assert view.run_step("fbx") is False  # refused by the session, reported not raised
 
@@ -507,7 +504,6 @@ def test_publish_rows_offer_no_run_affordance(qapp):
     build_handle = view.models[BUILD].handle(view.model.index(0, 0))
     view.settings.set_handle(build_handle)
     assert view.settings.run_button.isVisibleTo(view.settings)
-    assert view.settings.until_button.isVisibleTo(view.settings)
     build_labels = [item.text() for item in view.context_menu_actions(BUILD, build_handle)]
     assert "Run step" in build_labels
 

@@ -62,11 +62,13 @@ exit /b 0
 
 :tests_unit
 set PYTHONPATH=%CD%\src\python;%PYTHONPATH%
+set MAYA_PLUG_IN_PATH=%CD%\src\plugins\python;%MAYA_PLUG_IN_PATH%
 mayapy tests\unit\invoke.py
 exit /b 0
 
 :tests_integration
 set PYTHONPATH=%CD%\src\python;%PYTHONPATH%
+set MAYA_PLUG_IN_PATH=%CD%\src\plugins\python;%MAYA_PLUG_IN_PATH%
 mayapy tests\integration\invoke.py
 exit /b 0
 
@@ -79,11 +81,13 @@ exit /b 0
 
 :tests_cov_unit
 set PYTHONPATH=%CD%\src\python;%PYTHONPATH%
+set MAYA_PLUG_IN_PATH=%CD%\src\plugins\python;%MAYA_PLUG_IN_PATH%
 mayapy -m coverage run tests\unit\invoke.py
 exit /b 0
 
 :tests_cov_integration
 set PYTHONPATH=%CD%\src\python;%PYTHONPATH%
+set MAYA_PLUG_IN_PATH=%CD%\src\plugins\python;%MAYA_PLUG_IN_PATH%
 mayapy -m coverage run tests\integration\invoke.py
 exit /b 0
 

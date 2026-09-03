@@ -60,8 +60,8 @@ autoapi_ignore = [
     "*PyQt5*",
     "*PyQt6*",
     "*external/**/*",
-    # Third-party code shipped with the repository (the Qt.py shim and
-    # apiundo) is not TikWorks API.
+    # Third-party code shipped with the repository (the Qt.py shim) is not
+    # TikWorks API.
     "*/tik/vendor/*",
 ]
 autoapi_file_patterns = ["*.py"]
