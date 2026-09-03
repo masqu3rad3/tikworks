@@ -42,10 +42,22 @@ class Weights(Action):
         return ["x.trw"]
 
 
+# Scope is stamped on the class (like ``category`` and ``icon``), so a scoped
+# variant needs its own subclass rather than a second registration of ``Mark``.
+class Export(Mark):
+    label = "Export"
+
+
+class Either(Mark):
+    label = "Either"
+
+
 @pytest.fixture(autouse=True)
 def _registered():
     clear_registries()
     register_action("mark", category="build")(Mark)
+    register_action("export", category="utility", scope="publish")(Export)
+    register_action("either", category="utility", scope="both")(Either)
     register_action("boom", category="utility")(Boom)
     register_action("weights", category="deform")(Weights)
     from tik.trigger.actions.reference.reference import Reference
@@ -329,3 +341,80 @@ def test_space_rows_become_ports():
     settings = {"anim_spaces": [{"control": "ik", "mode": "parent", "label": "chest"}]}
     assert Spaced.input_names(settings) == ["root", "ik_chest"]
     assert [item.name for item in Spaced.space_inputs(settings)] == ["ik_chest"]
+
+
+# ------------------------------------------------------------ build/publish
+def test_model_can_be_built_on_the_publish_phase(qapp):
+    from tik.trigger.core.document import BUILD, PUBLISH
+    from tik.trigger.ui.model import PipelineModel
+
+    session = Session()
+    session.add("mark", "kine")
+    session.publish.add("export", "fbx")
+
+    build_model = PipelineModel(session)
+    publish_model = PipelineModel(session, phase=PUBLISH)
+    assert build_model.phase == BUILD
+    assert publish_model.phase == PUBLISH
+    assert build_model.rowCount() == 1
+    assert publish_model.rowCount() == 1
+    assert publish_model.data(publish_model.index(0, 0)) == "fbx"
+
+
+def test_shelf_drop_of_a_build_only_action_is_refused_by_the_publish_model(qapp):
+    from tik.trigger.core.document import PUBLISH
+    from tik.trigger.ui.model import MIME_TYPE, PipelineModel
+
+    session = Session()
+    model = PipelineModel(session, phase=PUBLISH)
+    data = QtCore.QMimeData()
+    data.setData(MIME_TYPE, b"mark")  # build-only
+    assert not model.canDropMimeData(data, QtCore.Qt.CopyAction, -1, -1, QtCore.QModelIndex())
+    assert not model.dropMimeData(data, QtCore.Qt.CopyAction, -1, -1, QtCore.QModelIndex())
+    assert session.publish.paths() == []
+
+    ok = QtCore.QMimeData()
+    ok.setData(MIME_TYPE, b"export")
+    assert model.canDropMimeData(ok, QtCore.Qt.CopyAction, -1, -1, QtCore.QModelIndex())
+    assert model.dropMimeData(ok, QtCore.Qt.CopyAction, -1, -1, QtCore.QModelIndex())
+    assert session.publish.paths() == ["export"]
+
+
+def test_mime_paths_carry_their_phase(qapp):
+    from tik.trigger.ui.model import MIME_PATH, PipelineModel
+
+    session = Session()
+    session.add("mark", "kine")
+    model = PipelineModel(session)
+    data = model.mimeData([model.index(0, 0)])
+    assert bytes(data.data(MIME_PATH)).decode("utf-8") == "build:kine"
+
+
+def test_dragging_a_both_scoped_action_between_the_two_trees(qapp):
+    from tik.trigger.core.document import PUBLISH
+    from tik.trigger.ui.model import PipelineModel
+
+    session = Session()
+    session.add("either", "hook")
+    build_model = PipelineModel(session)
+    publish_model = PipelineModel(session, phase=PUBLISH)
+
+    data = build_model.mimeData([build_model.index(0, 0)])
+    assert publish_model.dropMimeData(data, QtCore.Qt.MoveAction, -1, -1, QtCore.QModelIndex())
+    assert session.paths() == []
+    assert session.publish.paths() == ["hook"]
+
+
+def test_dragging_a_build_only_action_into_publish_is_refused_and_changes_nothing(qapp):
+    from tik.trigger.core.document import PUBLISH
+    from tik.trigger.ui.model import PipelineModel
+
+    session = Session()
+    session.add("mark", "kine")
+    build_model = PipelineModel(session)
+    publish_model = PipelineModel(session, phase=PUBLISH)
+
+    data = build_model.mimeData([build_model.index(0, 0)])
+    assert not publish_model.dropMimeData(data, QtCore.Qt.MoveAction, -1, -1, QtCore.QModelIndex())
+    assert session.paths() == ["kine"]
+    assert session.publish.paths() == []

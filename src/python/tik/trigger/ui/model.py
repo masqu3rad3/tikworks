@@ -6,6 +6,7 @@ from typing import Optional
 
 from tik.shared.ui.Qt import QtCore
 from tik.trigger.core import registry
+from tik.trigger.core.document import BUILD
 from tik.trigger.core.exceptions import SessionError
 from tik.trigger.session import ActionHandle, Session
 
@@ -34,23 +35,32 @@ class _Item:
 
 
 class PipelineModel(QtCore.QAbstractItemModel):
-    """Tree of ``ActionHandle`` snapshots; rebuilt from the session on every edit."""
+    """Tree of ``ActionHandle`` snapshots for one phase; rebuilt on every edit."""
 
     edited = QtCore.Signal()
+    #: emitted when a drop pulled an action out of the *other* phase, so the
+    #: view knows the other model is now stale
+    cross_phase_moved = QtCore.Signal()
 
-    def __init__(self, session: Session, parent=None) -> None:
+    def __init__(self, session: Session, parent=None, phase: str = BUILD) -> None:
         super().__init__(parent)
         self.session = session
+        self.phase = phase
         self._root = _Item(None, None)
         self._status: dict[str, str] = {}
         self._errors: dict[str, str] = {}
         self.rebuild()
 
+    @property
+    def view(self):
+        """The session's tree API for this model's phase."""
+        return self.session.view(self.phase)
+
     # ------------------------------------------------------------ building
     def rebuild(self) -> None:
         self.beginResetModel()
         self._root = _Item(None, None)
-        self._populate(self._root, self.session.actions)
+        self._populate(self._root, self.view.actions)
         self.endResetModel()
 
     def _populate(self, item: _Item, handles: list[ActionHandle]) -> None:
@@ -179,7 +189,7 @@ class PipelineModel(QtCore.QAbstractItemModel):
             if not new_name or new_name == handle.name:
                 return False
             try:
-                self.session.rename(handle.path, new_name)
+                self.view.rename(handle.path, new_name)
             except SessionError:
                 return False
             self.rebuild()
@@ -204,34 +214,67 @@ class PipelineModel(QtCore.QAbstractItemModel):
 
     def mimeData(self, indexes):  # noqa: N802
         data = QtCore.QMimeData()
-        paths = [self.handle(index).path for index in indexes if index.isValid()]
-        data.setData(MIME_PATH, ";".join(paths).encode("utf-8"))
+        # the phase travels with the path so a drop into the other tree knows
+        # where the action is coming from
+        tokens = [f"{self.phase}:{self.handle(index).path}"
+                  for index in indexes if index.isValid()]
+        data.setData(MIME_PATH, ";".join(tokens).encode("utf-8"))
         return data
 
     def canDropMimeData(self, data, action, row, column, parent):  # noqa: N802
         target = self.handle(parent) if parent.isValid() else None
         if target is not None and target.is_linked:
             return False
-        return data.hasFormat(MIME_PATH) or data.hasFormat(MIME_TYPE)
+        if data.hasFormat(MIME_TYPE):
+            action_type = bytes(data.data(MIME_TYPE)).decode("utf-8")
+            return registry.allows(action_type, self.phase)
+        return data.hasFormat(MIME_PATH)
 
     def dropMimeData(self, data, action, row, column, parent) -> bool:  # noqa: N802
         target = self.handle(parent) if parent.isValid() else None
         parent_path = target.path if target is not None else None
         index = None if row < 0 else row
+        crossed = False
         try:
             if data.hasFormat(MIME_PATH):
-                for path in bytes(data.data(MIME_PATH)).decode("utf-8").split(";"):
-                    if path:
-                        self.session.move(path, parent=parent_path, index=index)
-                        if index is not None:
-                            index += 1
+                for token in bytes(data.data(MIME_PATH)).decode("utf-8").split(";"):
+                    if not token:
+                        continue
+                    source_phase, _, path = token.partition(":")
+                    if source_phase == self.phase:
+                        self.view.move(path, parent=parent_path, index=index)
+                    elif self._move_across(source_phase, path, parent_path, index):
+                        crossed = True
+                    else:
+                        return False
+                    if index is not None:
+                        index += 1
             elif data.hasFormat(MIME_TYPE):
                 action_type = bytes(data.data(MIME_TYPE)).decode("utf-8")
-                self.session.add(action_type, parent=parent_path, index=index)
+                self.view.add(action_type, parent=parent_path, index=index)
             else:
                 return False
         except SessionError:
             return False
         self.rebuild()
         self.edited.emit()
+        if crossed:
+            self.cross_phase_moved.emit()
+        return True
+
+    def _move_across(self, source_phase: str, path: str,
+                     parent_path: Optional[str], index: Optional[int]) -> bool:
+        """Move one action from another phase into this one.
+
+        There is no cross-phase ``move``: the document removes it from one list
+        and adds it to the other. Scope is checked *before* the remove, so a
+        refused drop leaves both lists exactly as they were.
+        """
+        document = self.session.document
+        node = document.find(path, phase=source_phase)
+        if node is None or not registry.allows(node.type, self.phase):
+            return False
+        document.remove(path, phase=source_phase)
+        document.add(node, parent=parent_path, index=index, phase=self.phase)
+        self.session.touch()
         return True
