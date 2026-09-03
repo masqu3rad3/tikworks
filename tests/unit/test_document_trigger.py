@@ -135,3 +135,105 @@ def test_editing_guides_shows_up_in_the_documents_state():
     before = document.to_dict()
     document.guides.modules.append(ModuleEntry("id1", "fkchain", "tail", "C"))
     assert document.to_dict() != before
+
+
+# --------------------------------------------------------------- phases
+from tik.trigger.core.document import BUILD, PHASES, PUBLISH
+
+
+def _mixed():
+    doc = Document()
+    doc.add(ActionNode("import_model", "import_asset"))
+    doc.add(ActionNode("kinematics", "kinematics"))
+    doc.add(ActionNode("export_fbx", "script"), phase=PUBLISH)
+    doc.add(ActionNode("export_maya", "script"), phase=PUBLISH)
+    return doc
+
+
+def test_phase_constants():
+    assert (BUILD, PUBLISH) == ("build", "publish")
+    assert PHASES == (BUILD, PUBLISH)
+
+
+def test_publish_list_is_separate_from_build():
+    doc = _mixed()
+    assert doc.paths() == ["import_model", "kinematics"]
+    assert doc.paths(phase=PUBLISH) == ["export_fbx", "export_maya"]
+    assert doc.find("export_fbx") is None
+    assert doc.find("export_fbx", phase=PUBLISH).type == "script"
+    assert [node.name for node in doc.roots(PUBLISH)] == ["export_fbx", "export_maya"]
+
+
+def test_same_name_in_both_phases_does_not_collide():
+    doc = Document()
+    assert doc.add(ActionNode("export", "script")) == "export"
+    assert doc.add(ActionNode("export", "script"), phase=PUBLISH) == "export"
+    assert doc.paths() == ["export"]
+    assert doc.paths(phase=PUBLISH) == ["export"]
+
+
+def test_publish_tree_operations_mirror_build():
+    doc = _mixed()
+    doc.add(ActionNode("cleanup", "script"), parent="export_fbx", phase=PUBLISH)
+    assert doc.paths(phase=PUBLISH) == ["export_fbx", "export_fbx/cleanup", "export_maya"]
+    assert doc.move("export_maya", index=0, phase=PUBLISH) == "export_maya"
+    assert doc.paths(phase=PUBLISH)[0] == "export_maya"
+    assert doc.rename("export_fbx", "fbx", phase=PUBLISH) == "fbx"
+    assert doc.duplicate("fbx", phase=PUBLISH) == "fbx1"
+    doc.remove("fbx1", phase=PUBLISH)
+    assert doc.paths(phase=PUBLISH) == ["export_maya", "fbx", "fbx/cleanup"]
+    assert doc.parent_of("fbx/cleanup", phase=PUBLISH).name == "fbx"
+    # the build list is untouched throughout
+    assert doc.paths() == ["import_model", "kinematics"]
+
+
+def test_unknown_phase_raises():
+    with pytest.raises(SessionError):
+        Document().roots("nope")
+    with pytest.raises(SessionError):
+        Document().paths(phase="nope")
+
+
+def test_an_action_is_invisible_from_the_other_phase():
+    doc = _mixed()
+    with pytest.raises(SessionError):
+        doc.move("kinematics", index=0, phase=PUBLISH)
+    with pytest.raises(SessionError):
+        doc.rename("export_fbx", "x")  # build phase, where it does not exist
+
+
+def test_schema_6_round_trip(tmp_path):
+    doc = _mixed()
+    loaded = Document.load(doc.save(tmp_path / "s.tr"))
+    assert SCHEMA_VERSION == 6
+    assert loaded.schema == 6
+    assert loaded.paths() == ["import_model", "kinematics"]
+    assert loaded.paths(phase=PUBLISH) == ["export_fbx", "export_maya"]
+
+
+def test_schema_5_file_loads_with_an_empty_publish_list(tmp_path):
+    path = tmp_path / "old.tr"
+    path.write_text(
+        json.dumps(
+            {
+                "schema": 5,
+                "meta": {},
+                "guides": {},
+                "actions": [
+                    {"name": "kinematics", "type": "kinematics",
+                     "enabled": True, "settings": {}, "children": []}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    loaded = Document.load(path)
+    assert loaded.paths() == ["kinematics"]
+    assert loaded.publish == []
+    assert loaded.schema == SCHEMA_VERSION
+
+
+def test_copy_carries_both_lists():
+    clone = _mixed().copy()
+    assert clone.paths() == ["import_model", "kinematics"]
+    assert clone.paths(phase=PUBLISH) == ["export_fbx", "export_maya"]

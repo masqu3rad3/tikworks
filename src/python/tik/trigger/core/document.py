@@ -1,4 +1,4 @@
-"""The session document: actions and guides (``.tr`` schema 5)."""
+"""The session document: build + publish actions and guides (``.tr`` schema 6)."""
 
 from __future__ import annotations
 
@@ -11,9 +11,15 @@ from typing import Iterator, Optional
 from .exceptions import SessionError, SessionLoadError, SessionSaveError
 from .guide_document import GuideDocument
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 EXTENSION = ".tr"
 SEPARATOR = "/"
+
+#: The two action lists a session holds. ``build`` makes the rig; ``publish``
+#: runs only as the tail of a full build (see the 2026-09-03 design).
+BUILD = "build"
+PUBLISH = "publish"
+PHASES = (BUILD, PUBLISH)
 
 
 @dataclass
@@ -67,6 +73,10 @@ class Document:
     schema: int = SCHEMA_VERSION
     meta: dict = field(default_factory=dict)
     actions: list[ActionNode] = field(default_factory=list)
+    #: Post-build actions. Never run on their own: a publish action only ever
+    #: executes as the tail of a fresh build, so it is guaranteed to see a
+    #: scene that build just produced.
+    publish: list[ActionNode] = field(default_factory=list)
     #: The rig's guides. A live ``GuideDocument``: the session is their only
     #: store, so the Maya scene holds nothing but a rendering of them, and a
     #: ``.tr`` is a self-contained rig description.
@@ -78,6 +88,7 @@ class Document:
             "schema": self.schema,
             "meta": dict(self.meta),
             "actions": [node.to_dict() for node in self.actions],
+            "publish": [node.to_dict() for node in self.publish],
             "guides": self.guides.to_dict(),
         }
 
@@ -94,6 +105,7 @@ class Document:
             schema=SCHEMA_VERSION,
             meta=dict(data.get("meta", {})),
             actions=[ActionNode.from_dict(item) for item in data.get("actions", [])],
+            publish=[ActionNode.from_dict(item) for item in data.get("publish", [])],
             guides=GuideDocument.from_dict(data.get("guides") or {}),
         )
 
@@ -118,7 +130,19 @@ class Document:
         return Document.from_dict(self.to_dict())
 
     # --------------------------------------------------------------- tree
-    def walk(self) -> Iterator[tuple[str, ActionNode, Optional[ActionNode]]]:
+    def roots(self, phase: str = BUILD) -> list[ActionNode]:
+        """The top-level actions of one phase.
+
+        The single seam between the two lists: every tree method below resolves
+        its root through this, so there is one implementation, not two.
+        """
+        if phase == BUILD:
+            return self.actions
+        if phase == PUBLISH:
+            return self.publish
+        raise SessionError(f"Unknown phase '{phase}'.")
+
+    def walk(self, phase: str = BUILD) -> Iterator[tuple[str, ActionNode, Optional[ActionNode]]]:
         """Yield ``(path, node, parent)`` depth-first."""
 
         def _walk(nodes, parent, prefix):
@@ -127,13 +151,13 @@ class Document:
                 yield path, node, parent
                 yield from _walk(node.children, node, path)
 
-        yield from _walk(self.actions, None, "")
+        yield from _walk(self.roots(phase), None, "")
 
-    def paths(self) -> list[str]:
-        return [path for path, _node, _parent in self.walk()]
+    def paths(self, phase: str = BUILD) -> list[str]:
+        return [path for path, _node, _parent in self.walk(phase)]
 
-    def find(self, path: str) -> Optional[ActionNode]:
-        nodes = self.actions
+    def find(self, path: str, phase: str = BUILD) -> Optional[ActionNode]:
+        nodes = self.roots(phase)
         node = None
         for part in split_path(path):
             node = next((item for item in nodes if item.name == part), None)
@@ -142,29 +166,29 @@ class Document:
             nodes = node.children
         return node
 
-    def require(self, path: str) -> ActionNode:
-        node = self.find(path)
+    def require(self, path: str, phase: str = BUILD) -> ActionNode:
+        node = self.find(path, phase)
         if node is None:
             raise SessionError(f"No action at '{path}'.")
         return node
 
-    def parent_of(self, path: str) -> Optional[ActionNode]:
+    def parent_of(self, path: str, phase: str = BUILD) -> Optional[ActionNode]:
         parts = split_path(path)
-        return self.find(join_path(*parts[:-1])) if len(parts) > 1 else None
+        return self.find(join_path(*parts[:-1]), phase) if len(parts) > 1 else None
 
-    def siblings(self, parent_path: Optional[str]) -> list[ActionNode]:
+    def siblings(self, parent_path: Optional[str], phase: str = BUILD) -> list[ActionNode]:
         if not parent_path:
-            return self.actions
-        return self.require(parent_path).children
+            return self.roots(phase)
+        return self.require(parent_path, phase).children
 
-    def path_of(self, node: ActionNode) -> Optional[str]:
-        for path, candidate, _parent in self.walk():
+    def path_of(self, node: ActionNode, phase: str = BUILD) -> Optional[str]:
+        for path, candidate, _parent in self.walk(phase):
             if candidate is node:
                 return path
         return None
 
-    def unique_name(self, parent_path: Optional[str], base: str) -> str:
-        names = {node.name for node in self.siblings(parent_path)}
+    def unique_name(self, parent_path: Optional[str], base: str, phase: str = BUILD) -> str:
+        names = {node.name for node in self.siblings(parent_path, phase)}
         if base not in names:
             return base
         stem = base.rstrip("0123456789") or base
@@ -181,20 +205,21 @@ class Document:
         node: ActionNode,
         parent: Optional[str] = None,
         index: Optional[int] = None,
+        phase: str = BUILD,
     ) -> str:
         """Insert ``node`` and return its path (name made unique among siblings)."""
-        siblings = self.siblings(parent)
-        node.name = self.unique_name(parent, node.name)
+        siblings = self.siblings(parent, phase)
+        node.name = self.unique_name(parent, node.name, phase)
         if index is None:
             siblings.append(node)
         else:
             siblings.insert(index, node)
         return join_path(parent or "", node.name)
 
-    def remove(self, path: str) -> ActionNode:
-        node = self.require(path)
-        parent = self.parent_of(path)
-        siblings = parent.children if parent is not None else self.actions
+    def remove(self, path: str, phase: str = BUILD) -> ActionNode:
+        node = self.require(path, phase)
+        parent = self.parent_of(path, phase)
+        siblings = parent.children if parent is not None else self.roots(phase)
         siblings.remove(node)
         return node
 
@@ -204,24 +229,28 @@ class Document:
         parent: Optional[str] = None,
         index: Optional[int] = None,
         after: Optional[str] = None,
+        phase: str = BUILD,
     ) -> str:
-        """Move an action (and its subtree).
+        """Move an action (and its subtree) *within one phase*.
 
         ``after`` places it right after that sibling (its parent wins);
         otherwise it goes under ``parent`` at ``index`` (end when omitted).
+
+        There is no cross-phase move: the caller removes from one list and adds
+        to the other, which is what a drag between the two trees performs.
         """
-        node = self.require(path)
+        node = self.require(path, phase)
         if after is not None:
-            after_node = self.require(after)
+            after_node = self.require(after, phase)
             parts = split_path(after)
             parent = join_path(*parts[:-1]) or None
         if parent and (parent == path or parent.startswith(path + SEPARATOR)):
             raise SessionError("Cannot move an action under itself.")
-        old_parent = self.parent_of(path)
-        old_siblings = old_parent.children if old_parent is not None else self.actions
+        old_parent = self.parent_of(path, phase)
+        old_siblings = old_parent.children if old_parent is not None else self.roots(phase)
         old_index = old_siblings.index(node)
         old_siblings.pop(old_index)
-        new_siblings = self.siblings(parent)
+        new_siblings = self.siblings(parent, phase)
         if after is not None:
             index = new_siblings.index(after_node) + 1
         elif index is None:
@@ -229,26 +258,27 @@ class Document:
         elif new_siblings is old_siblings and index > old_index:
             index -= 1
         if new_siblings is not old_siblings:
-            node.name = self.unique_name(parent, node.name)
+            node.name = self.unique_name(parent, node.name, phase)
         new_siblings.insert(index, node)
         return join_path(parent or "", node.name)
 
-    def rename(self, path: str, new_name: str) -> str:
-        node = self.require(path)
+    def rename(self, path: str, new_name: str, phase: str = BUILD) -> str:
+        node = self.require(path, phase)
         if SEPARATOR in new_name or not new_name.strip():
             raise SessionError(f"Invalid action name '{new_name}'.")
-        parent = self.parent_of(path)
-        siblings = parent.children if parent is not None else self.actions
+        parent = self.parent_of(path, phase)
+        siblings = parent.children if parent is not None else self.roots(phase)
         if any(item is not node and item.name == new_name for item in siblings):
             raise SessionError(f"An action named '{new_name}' already exists here.")
         node.name = new_name
         parent_path = join_path(*split_path(path)[:-1])
         return join_path(parent_path, new_name)
 
-    def duplicate(self, path: str) -> str:
-        node = self.require(path)
-        parent = self.parent_of(path)
-        siblings = parent.children if parent is not None else self.actions
+    def duplicate(self, path: str, phase: str = BUILD) -> str:
+        node = self.require(path, phase)
+        parent = self.parent_of(path, phase)
+        siblings = parent.children if parent is not None else self.roots(phase)
         clone = node.copy()
         parent_path = join_path(*split_path(path)[:-1])
-        return self.add(clone, parent=parent_path or None, index=siblings.index(node) + 1)
+        return self.add(clone, parent=parent_path or None,
+                        index=siblings.index(node) + 1, phase=phase)

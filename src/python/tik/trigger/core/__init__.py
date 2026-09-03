@@ -23,7 +23,7 @@ from tik.core.side import Side
 
 from . import versioning
 from .action import Action, ActionContext
-from .document import ActionNode, Document
+from .document import BUILD, PHASES, PUBLISH, ActionNode, Document
 from .events import ERROR, LOG, PROGRESS, EventBus
 from .exceptions import (
     ActionError,
@@ -83,6 +83,9 @@ __all__ = [
     "ActionContext",
     "ActionNode",
     "Document",
+    "BUILD",
+    "PUBLISH",
+    "PHASES",
     "versioning",
     "EventBus",
     "PROGRESS",
