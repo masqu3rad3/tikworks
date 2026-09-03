@@ -7,25 +7,14 @@ from typing import Optional
 from maya import cmds
 
 from ..core.decorators import undo
-from ..core.plug import Plug
-from ..core.registry import resolve
+from ..core.plug import Plug, world_matrix_plug
+from ..core.registry import ensure_node
 from ..core.scene import create_node
-
-
-def _node(item):
-    return resolve(item) if isinstance(item, str) else item
-
-
-def _matrix_plug(item) -> Plug:
-    """Return a world-matrix plug for a node, a node name, or a matrix plug."""
-    if isinstance(item, Plug):
-        return item
-    return _node(item)["worldMatrix[0]"]
 
 
 def _label(item) -> str:
     """Short name for an item that may be a node or a plug."""
-    return item.node.name if isinstance(item, Plug) else _node(item).name
+    return item.node.name if isinstance(item, Plug) else ensure_node(item).name
 
 
 class Measure:
@@ -50,8 +39,8 @@ class Measure:
         """
         name = name or f"{_label(start)}_{_label(end)}"
         node = create_node("distanceBetween", name=f"{name}_distance")
-        _matrix_plug(start) >> node["inMatrix1"]
-        _matrix_plug(end) >> node["inMatrix2"]
+        world_matrix_plug(start) >> node["inMatrix1"]
+        world_matrix_plug(end) >> node["inMatrix2"]
         return cls(node, start, end, node["distance"].value)
 
     @property

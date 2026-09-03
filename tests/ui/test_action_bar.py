@@ -2,7 +2,6 @@
 
 import pytest
 
-from tik.shared.ui.Qt import QtWidgets
 from tik.trigger.ui.designer.action_bar import DesignerActionBar
 
 

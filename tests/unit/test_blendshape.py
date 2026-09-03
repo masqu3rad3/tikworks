@@ -531,7 +531,7 @@ class TestBlendShapeWeightPlugs:
 
     def test_get_weight_plug_returns_none_on_exception(self):
         """Test _get_weight_plug returns None when an exception occurs."""
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import patch
 
         base_mesh, _ = cmds.polySphere(name="plug_exception_base")
         blendshape = cmds.blendShape(base_mesh, name="plugExceptionBS")[0]

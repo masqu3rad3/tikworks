@@ -1,10 +1,9 @@
 """Shared UI kit: versioned field, tile grid, collapsible, scene watcher, tool window."""
 
-import pytest
 
 from tik.shared.ui.collapsible import CollapsibleGroup
 from tik.shared.ui.maya_window import HAS_MAYA, MayaToolWindow
-from tik.shared.ui.Qt import QtCore, QtWidgets
+from tik.shared.ui.Qt import QtWidgets
 from tik.shared.ui.scene_watcher import SceneWatcher
 from tik.shared.ui.status import StatusFields
 from tik.shared.ui.tile_grid import TileEntry, TileGrid

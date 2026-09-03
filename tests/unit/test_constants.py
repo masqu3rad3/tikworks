@@ -1,6 +1,6 @@
 """Unit tests for tik.maya.core.constants module."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from maya import cmds
 
 from tik.maya.core.constants import NodeNames, _NodeNamesConfig

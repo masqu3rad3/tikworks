@@ -7,21 +7,11 @@ import pytest
 from maya import cmds
 from maya.api import OpenMaya
 
-import tik.maya as tm
-import tik.trigger as trigger
-from tik.trigger.guides import GuideScene, nodes
-from tik.trigger.core import get_module
-from tik.trigger.maya import Builder, tags
+from tik.trigger.guides import nodes
+from tik.trigger.maya import tags
 from tik.trigger.core.exceptions import GuideError
-from tik.trigger.guides import GuideFile, GuideScene
 
 DATA = Path(__file__).resolve().parents[1] / "data"
-
-
-@pytest.fixture
-def guides():
-    trigger.load_plugins()
-    return GuideScene()
 
 
 def test_add_settings_attrs_export_import_roundtrip(guides, tmp_path):

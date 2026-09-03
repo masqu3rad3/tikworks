@@ -26,14 +26,10 @@ from maya import cmds
 from ..core.constants import TRANSFORM_CHANNELS
 from ..core.decorators import undo
 from ..core.plug import Plug
-from ..core.registry import resolve
+from ..core.registry import ensure_node
 from ..core.scene import create_node
 from ..types.transform import Transform
 from .measure import Measure
-
-
-def _node(item):
-    return resolve(item) if isinstance(item, str) else item
 
 
 class SoftIk:
@@ -80,12 +76,12 @@ class SoftIk:
             The construct.
         """
         soft = cls(name or "softIk")
-        soft.root = _node(root)
-        soft.goal = _node(goal)
+        soft.root = ensure_node(root)
+        soft.goal = ensure_node(goal)
 
         soft.group = Transform.create(name=f"{soft.name}_softIk_grp")
         if parent is not None:
-            soft.group.parent = _node(parent)
+            soft.group.parent = ensure_node(parent)
         soft.group["softIk"].create("float", default=0.0, min=0.0)
         soft.group["stretch"].create("float", default=0.0, min=0.0, max=1.0)
         # Held as an attribute rather than a floatConstant node: one fewer node

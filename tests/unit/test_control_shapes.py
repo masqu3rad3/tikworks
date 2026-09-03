@@ -2,9 +2,7 @@ import os
 import json
 import pytest
 from unittest.mock import patch, MagicMock
-from pathlib import Path
 from maya import cmds
-import maya.api.OpenMaya as om
 
 from tik.maya.utils import control_shapes
 from tik.maya.utils.control_shapes import (
@@ -19,8 +17,6 @@ from tik.maya.utils.control_shapes import (
     capture_thumbnail,
     _resolve_folder_path
 )
-from tik.maya.types.transform import Transform
-from tik.maya.types.nurbs import Nurbs
 
 @pytest.fixture
 def clean_library():

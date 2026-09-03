@@ -4,24 +4,9 @@ Unit tests for the tik.maya to maya.cmds converter.
 Tests the conversion rules, helper expansion, and overall conversion accuracy.
 """
 
-import pytest
 
-from tik.maya.utils.converter import Converter, convert, ConversionReport
-from tik.maya.utils.converter.report import EntryType
-from tik.maya.utils.converter.rules import (
-    TransformCreateRule,
-    JointCreateRule,
-    MeshCreateRule,
-    PlugGetRule,
-    PlugSetRule,
-    PlugConnectRule,
-    PlugRshiftRule,
-    TransformPropertySetRule,
-    NodeRenameRule,
-    NodeDeleteRule,
-    ResolveRule,
-    RuleContext,
-)
+from tik.maya.utils.converter import Converter, convert
+from tik.maya.utils.converter.rules import TransformCreateRule, JointCreateRule, MeshCreateRule, PlugGetRule, PlugSetRule, PlugConnectRule, PlugRshiftRule, TransformPropertySetRule, ResolveRule, RuleContext
 
 
 class TestTransformCreateRule:

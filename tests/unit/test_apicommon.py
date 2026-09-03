@@ -1,5 +1,4 @@
 """Unit tests for tik.maya.core.apicommon."""
-import pytest
 from maya import cmds
 from tik.maya.core import apicommon
 

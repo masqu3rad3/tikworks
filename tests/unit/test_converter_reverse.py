@@ -5,24 +5,9 @@ Tests the reverse conversion rules and overall conversion accuracy.
 """
 
 import ast
-import pytest
 
-from tik.maya.utils.converter import ReverseConverter, convert_to_tik
-from tik.maya.utils.converter.report import EntryType
-from tik.maya.utils.converter.rules_reverse import (
-    CreateNodeToTransformRule,
-    JointToJointCreateRule,
-    PolySphereToMeshCreateRule,
-    SetAttrToPlugSetRule,
-    SetAttrLockToPlugLockRule,
-    GetAttrToPlugGetRule,
-    ConnectAttrToPlugConnectRule,
-    RenameToNodeRenameRule,
-    DeleteToNodeDeleteRule,
-    SelectToNodeSelectRule,
-    MakeIdentityToFreezeRule,
-    ReverseRuleContext,
-)
+from tik.maya.utils.converter import convert_to_tik
+from tik.maya.utils.converter.rules_reverse import CreateNodeToTransformRule, JointToJointCreateRule, PolySphereToMeshCreateRule, SetAttrToPlugSetRule, SetAttrLockToPlugLockRule, GetAttrToPlugGetRule, ConnectAttrToPlugConnectRule, MakeIdentityToFreezeRule, ReverseRuleContext
 
 
 class TestCreateNodeToTransformRule:

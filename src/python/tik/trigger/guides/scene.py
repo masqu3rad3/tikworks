@@ -382,17 +382,6 @@ class GuideScene:
             raise GuideError(f"No module {instance_id}.")
         return entry
 
-    # ------------------------------------------------------------ layout
-    def read_layout(self) -> dict:
-        """Designer state, projected out of the document under display keys."""
-        return self.document.layout_as_keys()
-
-    def write_layout(self, layout: dict) -> None:
-        """Store designer state back into the document, keyed by id."""
-        self.document.layout_from_keys(layout)
-        with nodes.undo_chunk("Trigger designer layout"):
-            self._touch()
-
     # ------------------------------------------------------- .trg records
     def export_guide_records(self, instance_ids=None) -> list[dict]:
         """Serialize scene guides as ``.trg`` joint records."""
@@ -692,14 +681,17 @@ class GuideScene:
     # ------------------------------------------------------------ layout
     @property
     def layout(self) -> dict:
-        """Designer state stored with the guides: scene-node groups, node positions, collapse modes.
+        """Designer state stored with the guides, projected under display keys.
 
         ``{"scene_nodes": {group: [node, ...]}, "positions": {key: [x, y]}, "collapse": {key: 0|1|2}}``
         """
-        return self.read_layout()
+        return self.document.layout_as_keys()
 
     def set_layout(self, layout: dict) -> None:
-        self.write_layout(dict(layout))
+        """Store designer state back into the document, keyed by id."""
+        self.document.layout_from_keys(dict(layout))
+        with nodes.undo_chunk("Trigger designer layout"):
+            self._touch()
 
     def update_layout(self, **sections) -> dict:
         """Replace whole sections (``positions=``, ``scene_nodes=``, ``collapse=``)."""

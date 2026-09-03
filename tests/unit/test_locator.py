@@ -1,4 +1,3 @@
-import pytest
 from maya import cmds
 from tik.maya.types.locator import Locator
 from tik.maya.types.transform import Transform

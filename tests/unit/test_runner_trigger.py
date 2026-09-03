@@ -1,6 +1,5 @@
 """Runner: order, nesting, until/only, references, overrides, cycles."""
 
-import json
 
 import pytest
 

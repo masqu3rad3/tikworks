@@ -15,15 +15,11 @@ from maya.api import OpenMaya
 
 from ..core.decorators import undo
 from ..core.plug import Plug
-from ..core.registry import resolve
+from ..core.registry import ensure_node
 from ..core.scene import create_node
 from .matrix_constraint import MatrixConstraint
 
 WORLD = None  # sentinel driver meaning "world space"
-
-
-def _node(item):
-    return resolve(item) if isinstance(item, str) else item
 
 
 class MatrixSwitch:
@@ -65,7 +61,7 @@ class MatrixSwitch:
             skip_scale: Axes left unconnected (all by default).
             name: Prefix for created nodes (defaults to the driven name).
         """
-        driven = _node(driven)
+        driven = ensure_node(driven)
         name = name or f"{driven.name}_switch"
         if control is None:
             control = driven["switch"].create(
@@ -116,7 +112,7 @@ class MatrixSwitch:
             if rest_matrix is not None
             else OpenMaya.MMatrix(self.driven["worldMatrix[0]"].value)
         )
-        driver = _node(driver) if driver is not None else None
+        driver = ensure_node(driver) if driver is not None else None
 
         if driver is None:
             offset = driven_world if maintain_offset else OpenMaya.MMatrix()

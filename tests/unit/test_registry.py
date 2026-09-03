@@ -1,6 +1,5 @@
 import pytest
 
-import tik.maya
 
 try:
     from maya import cmds

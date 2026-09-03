@@ -3,19 +3,13 @@
 import pytest
 from maya import cmds
 
-import tik.trigger as trigger
 from tik.trigger.core import registry
-from tik.trigger.core.guide_document import GuideDocument, ModuleEntry, expand_guides
+from tik.trigger.core.guide_document import ModuleEntry, expand_guides
 from tik.trigger.guides import from_scene, nodes, regenerate
 from tik.trigger.maya import tags
 
 
-@pytest.fixture(autouse=True)
-def fresh_scene():
-    trigger.load_plugins()
-    cmds.file(new=True, force=True)
-    yield
-    cmds.file(new=True, force=True)
+pytestmark = pytest.mark.usefixtures("trigger_plugins")
 
 
 def drawn_chain(segments=2, instance_id="id1", name="tail", side="L", **settings):

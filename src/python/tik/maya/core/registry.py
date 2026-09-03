@@ -105,6 +105,15 @@ def resolve(name: str, class_name=None) -> Any:
     return cls(name)
 
 
+def ensure_node(item: Any) -> Any:
+    """Return the wrapper for a node name; anything else passes through.
+
+    Constructs accept names, wrappers and plugs alike. This is the one place
+    that turns a name into a wrapper without touching what is already one.
+    """
+    return resolve(item) if isinstance(item, str) else item
+
+
 def is_registered(node_type: str) -> bool:
     """Check if a node type is registered in the registry.
 

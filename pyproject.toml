@@ -13,3 +13,13 @@ readme = "README.md"
 [tool.setuptools]
 package-dir = {"" = "src/python"}
 packages = { find = {} }
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+extend-exclude = "vendor"
+
+[tool.isort]
+profile = "black"
+known_first_party = ["tik"]
+skip_glob = ["*/vendor/*"]

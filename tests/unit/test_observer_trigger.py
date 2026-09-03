@@ -3,16 +3,10 @@
 import pytest
 from maya import cmds
 
-import tik.trigger as trigger
 from tik.trigger.maya.observer import ApiCallbacks
 
 
-@pytest.fixture(autouse=True)
-def fresh_scene():
-    trigger.load_plugins()
-    cmds.file(new=True, force=True)
-    yield
-    cmds.file(new=True, force=True)
+pytestmark = pytest.mark.usefixtures("trigger_plugins")
 
 
 def test_node_removal_fires_a_callback():

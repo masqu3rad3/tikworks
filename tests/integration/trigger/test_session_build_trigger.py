@@ -73,7 +73,6 @@ def test_kinematics_roots_filter(scene, tmp_path):
 
 def test_kinematics_builds_from_the_sessions_own_guides():
     """No guides file: the rig description is self-contained."""
-    from tik.trigger.guides import GuideScene
     from tik.trigger.session import Session
 
     trigger.load_plugins()

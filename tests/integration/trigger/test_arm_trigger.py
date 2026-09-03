@@ -4,7 +4,6 @@ import pytest
 from maya import cmds
 
 import tik.maya as tm
-import tik.trigger as trigger
 from tik.trigger.core import ParentRef, get_module
 from tik.trigger.guides import GuideScene
 from tik.trigger.maya import Builder, tags

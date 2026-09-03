@@ -5,7 +5,7 @@ from typing import Optional
 from maya import cmds
 from maya.api import OpenMaya
 
-from .registry import resolve
+from .registry import ensure_node, resolve
 from .constants import NodeNames
 
 #: Friendly type name -> (addAttr flag, Maya type). The flag decides the rest:
@@ -1306,3 +1306,10 @@ class Plug:
     def __repr__(self):
         """Return a debug-friendly representation."""
         return f"<Plug '{self.path}'>"
+
+
+def world_matrix_plug(item) -> Plug:
+    """The ``worldMatrix[0]`` plug of a node or node name; a plug passes through."""
+    if isinstance(item, Plug):
+        return item
+    return ensure_node(item)["worldMatrix[0]"]

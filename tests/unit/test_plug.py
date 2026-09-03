@@ -2,7 +2,6 @@
 
 import pytest
 from maya import cmds
-from maya import OpenMaya
 from tik.maya.core.node import Node, Plug
 from tik.maya.core.constants import NodeNames
 

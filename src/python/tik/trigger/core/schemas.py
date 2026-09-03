@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
+from tik.trigger.core.ordering import dependency_order
 
 SCHEMA_VERSION = 3
 
@@ -159,26 +160,15 @@ def split_source(source: str) -> tuple[Optional[str], str]:
 def order_instances(instances: list[ModuleInstance]) -> list[ModuleInstance]:
     """Return instances parents-first, keeping the input order otherwise."""
     by_id = {instance.instance_id: instance for instance in instances}
-    ordered: list[ModuleInstance] = []
-    visiting: set[str] = set()
-    done: set[str] = set()
 
-    def visit(instance: ModuleInstance) -> None:
-        if instance.instance_id in done:
-            return
-        if instance.instance_id in visiting:
-            raise ValueError(f"Cyclic parenting at '{instance.name}'.")
-        visiting.add(instance.instance_id)
+    def parents(instance: ModuleInstance) -> list[ModuleInstance]:
         parent = by_id.get(instance.parent.instance_id) if instance.parent else None
-        if parent is not None:
-            visit(parent)
-        visiting.discard(instance.instance_id)
-        done.add(instance.instance_id)
-        ordered.append(instance)
+        return [parent] if parent is not None else []
 
-    for instance in instances:
-        visit(instance)
-    return ordered
+    return dependency_order(
+        instances, parents, lambda instance: instance.instance_id,
+        cycle_error=lambda instance: f"Cyclic parenting at '{instance.name}'.",
+    )
 
 
 def order_by_connections(instances: list[ModuleInstance], inputs_for) -> list[ModuleInstance]:
@@ -200,30 +190,22 @@ def order_by_connections(instances: list[ModuleInstance], inputs_for) -> list[Mo
         ValueError: On a cyclic connection, naming the instance.
     """
     by_key = {instance.key: instance for instance in instances}
-    ordered: list[ModuleInstance] = []
-    visiting: set[str] = set()
-    done: set[str] = set()
 
-    def visit(instance: ModuleInstance) -> None:
-        if instance.instance_id in done:
-            return
-        if instance.instance_id in visiting:
-            raise ValueError(f"Cyclic module connection at '{instance.name}'.")
-        visiting.add(instance.instance_id)
+    def producers(instance: ModuleInstance) -> list[ModuleInstance]:
+        found = []
         for source in (inputs_for(instance) or {}).values():
             if not source or "." not in source:
                 continue
             key, _dot, _output = source.rpartition(".")
             producer = by_key.get(key)
             if producer is not None and producer is not instance:
-                visit(producer)
-        visiting.discard(instance.instance_id)
-        done.add(instance.instance_id)
-        ordered.append(instance)
+                found.append(producer)
+        return found
 
-    for instance in instances:
-        visit(instance)
-    return ordered
+    return dependency_order(
+        instances, producers, lambda instance: instance.instance_id,
+        cycle_error=lambda instance: f"Cyclic module connection at '{instance.name}'.",
+    )
 
 
 __all__: list[Any] = [

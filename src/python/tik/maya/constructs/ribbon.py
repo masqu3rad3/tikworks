@@ -20,7 +20,7 @@ from maya import cmds
 
 from ..core.decorators import undo
 from ..core.plug import Plug
-from ..core.registry import resolve
+from ..core.registry import ensure_node
 from ..core.scene import create_node, ensure_plugin
 from ..types.joint import Joint
 from ..types.transform import Transform
@@ -29,10 +29,6 @@ from .matrix_spline import MatrixSpline
 from .measure import Measure
 
 ROTATE_ORDER_XYZ = 0
-
-
-def _node(item):
-    return resolve(item) if isinstance(item, str) else item
 
 
 class Ribbon:
@@ -92,7 +88,7 @@ class Ribbon:
                 ``ratio ** -0.5``.
             parent: Optional parent for the ribbon group.
         """
-        start, end = _node(start), _node(end)
+        start, end = ensure_node(start), ensure_node(end)
         if joint_count < 1:
             raise ValueError("Ribbon needs at least one deformer joint.")
         length = start.distance_to(end)
@@ -112,7 +108,7 @@ class Ribbon:
     def _create_group(self, parent) -> None:
         self.group = Transform.create(name=f"{self.name}_ribbon_grp")
         if parent is not None:
-            self.group.parent = _node(parent)
+            self.group.parent = ensure_node(parent)
 
     def _create_plugs(self, length: float, scaleable: bool) -> None:
         half = length * 0.5

@@ -1,6 +1,5 @@
 """SceneWatcher: relaunching the tool must not leave old watchers firing."""
 
-import pytest
 
 from tik.shared.ui.scene_watcher import SceneWatcher
 

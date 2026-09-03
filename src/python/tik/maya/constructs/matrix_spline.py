@@ -20,16 +20,12 @@ from tik.core.bspline import basis, clamp_degree
 
 from ..core.decorators import undo
 from ..core.plug import Plug
-from ..core.registry import resolve
+from ..core.registry import ensure_node
 from ..core.scene import create_node
 from ..types.transform import Transform
 
 AIM = 1  # aimMatrix.primaryMode "Aim"
 ALIGN = 2  # aimMatrix.secondaryMode "Align"
-
-
-def _node(item):
-    return resolve(item) if isinstance(item, str) else item
 
 
 @dataclass
@@ -83,7 +79,7 @@ class MatrixSpline:
             up_axis: Output axis aligned to ``up_matrix``.
             parent: Optional parent for the spline group.
         """
-        drivers = [_node(driver) for driver in drivers]
+        drivers = [ensure_node(driver) for driver in drivers]
         if len(drivers) < 2:
             raise ValueError("MatrixSpline needs at least two drivers.")
         parameters = [float(value) for value in parameters]
@@ -100,7 +96,7 @@ class MatrixSpline:
 
         # created in place under the parent so its local transform stays identity;
         # outputs carry world-space matrices and must not be transformed again
-        group_kwargs = {"parent": _node(parent).long_name} if parent is not None else {}
+        group_kwargs = {"parent": ensure_node(parent).long_name} if parent is not None else {}
         group = Transform.create(name=f"{name}_spline_grp", **group_kwargs)
         group["inheritsTransform"].value = False
 

@@ -1,7 +1,6 @@
 import pytest
 from maya import cmds
 from tik.maya.types.camera import Camera
-from tik.maya.types.transform import Transform
 
 class TestCamera:
     def test_create_camera(self):

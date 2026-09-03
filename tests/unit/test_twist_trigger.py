@@ -196,7 +196,6 @@ def test_twist_builds_on_an_arm():
 
 
 def _arm_with_twist(count=3):
-    from maya import cmds
 
     import tik.trigger as trigger
     from tik.trigger.guides import GuideScene

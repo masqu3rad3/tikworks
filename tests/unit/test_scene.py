@@ -1,4 +1,3 @@
-import pytest
 from maya import cmds
 from tik.maya.core.scene import (
     list_scene_nodes,

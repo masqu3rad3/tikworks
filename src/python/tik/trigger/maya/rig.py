@@ -12,15 +12,13 @@ from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
 import tik.maya as tm
-from tik.core.side import Side
 from tik.maya import naming
 from tik.maya.roles.controller import Controller
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.schemas import ModuleInstance
+from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_joint
 
 from . import tags
-
-SIDE_COLORS = {Side.LEFT: 6, Side.RIGHT: 13, Side.CENTER: 17}
 
 
 def node_of(value):
@@ -79,27 +77,9 @@ class GuideDraft:
             parent = self.parent_node if is_root else self.root
             if parent is None:
                 parent = self.holder
-        joint = tm.Joint.create(
-            name=naming.format_name(
-                self.module.name, role, index if index else None,
-                side=self.side.value, suffix="guide",
-            ),
-            parent=parent.long_name if hasattr(parent, "long_name") else parent,
-            radius=radius,
+        joint = create_guide_joint(
+            self.module, role, position, index=index, parent=parent, radius=radius
         )
-        joint.world_position = position
-        tags.tag(
-            joint,
-            **{
-                tags.KIND: tags.GUIDE,
-                tags.MODULE: self.module.module_type,
-                tags.INSTANCE: self.module.instance_id,
-                tags.ROLE: role,
-                tags.INDEX: index,
-                tags.SIDE: self.side.value,
-            },
-        )
-        joint.color = SIDE_COLORS[self.side]
         for declared in self.module.attrs_for_role(role):
             joint[declared.name].create(
                 "float", default=declared.default, keyable=declared.keyable
@@ -274,7 +254,7 @@ class ModuleRig:
             name=self.name(name, suffix="ctrl"),
             shape=shape,
             size=size,
-            color=color if color is not None else SIDE_COLORS[self.side],
+            color=color if color is not None else SIDE_COLORS[self.side.value],
             parent=node_of(parent).long_name if hasattr(node_of(parent), "long_name") else parent,
         )
         if match is not None:

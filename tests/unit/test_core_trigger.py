@@ -5,21 +5,7 @@ import json
 import pytest
 
 from toy_modules import ToyChain, ToyRoot
-from tik.trigger.core import (
-    DuplicateRegistrationError,
-    EventBus,
-    GuideLayout,
-    ModuleInstance,
-    NotFoundError,
-    ParentRef,
-    RigDocument,
-    Side,
-    clear_registries,
-    get_module,
-    register_action,
-    register_module,
-    unregister_module,
-)
+from tik.trigger.core import DuplicateRegistrationError, GuideLayout, ModuleInstance, NotFoundError, ParentRef, RigDocument, Side, clear_registries, get_module, register_action, register_module, unregister_module
 from tik.trigger.core.schemas import GuidePose, order_instances
 
 

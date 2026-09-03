@@ -3,21 +3,12 @@
 import json
 
 import pytest
-from maya import cmds
 
 import tik.maya as tm
 import tik.trigger as trigger
-from tik.trigger.guides import GuideScene
-from tik.trigger.core import ParentRef, get_module
+from tik.trigger.core import get_module
 from tik.trigger.maya import Builder
 from tik.trigger.core.exceptions import AttachError, GuideError
-from tik.trigger.guides import GuideFile, GuideScene
-
-
-@pytest.fixture
-def guides():
-    trigger.load_plugins()
-    return GuideScene()
 
 
 def test_manifest_inputs_outputs():

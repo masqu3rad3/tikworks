@@ -3,17 +3,11 @@
 import pytest
 from maya import cmds
 
-import tik.trigger as trigger
 from tik.trigger.core.exceptions import SessionError
 from tik.trigger.session import Session
 
 
-@pytest.fixture(autouse=True)
-def fresh_scene():
-    trigger.load_plugins()
-    cmds.file(new=True, force=True)
-    yield
-    cmds.file(new=True, force=True)
+pytestmark = pytest.mark.usefixtures("trigger_plugins")
 
 
 def drawn_names():

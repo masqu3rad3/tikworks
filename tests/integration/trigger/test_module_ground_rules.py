@@ -10,7 +10,6 @@ from maya import cmds
 
 import tik.maya as tm
 from tik.maya.roles.controller import Controller
-import tik.trigger as trigger
 from tik.trigger.guides import GuideScene
 from tik.trigger.maya import tags
 from tik.trigger.core import ParentRef, get_module

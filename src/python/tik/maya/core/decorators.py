@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from functools import wraps
 from typing import Any, Callable
@@ -51,6 +52,23 @@ def alias(alias_name):
         return func
 
     return decorator
+
+
+@contextlib.contextmanager
+def undo_chunk(label: str):
+    """One undo step; a failure inside rolls the whole chunk back."""
+    cmds.undoInfo(openChunk=True, chunkName=label)
+    try:
+        yield
+    except BaseException:
+        cmds.undoInfo(closeChunk=True)
+        try:
+            cmds.undo()
+        except RuntimeError:
+            pass
+        raise
+    else:
+        cmds.undoInfo(closeChunk=True)
 
 
 def undo(func):

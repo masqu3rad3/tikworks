@@ -73,6 +73,22 @@ def initialize():
     maya.standalone.uninitialize()
 
 
+@pytest.fixture
+def trigger_plugins():
+    """Register the built-in trigger modules and actions."""
+    import tik.trigger as trigger
+
+    trigger.load_plugins()
+
+
+@pytest.fixture
+def guides(trigger_plugins):
+    """A ``GuideScene`` over the fresh scene, with the plug-ins registered."""
+    from tik.trigger.guides import GuideScene
+
+    return GuideScene()
+
+
 @pytest.fixture(scope="function", autouse=True)
 def new_scene():
     """Reset Maya + tik.maya global state before/after each test.

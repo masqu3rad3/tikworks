@@ -5,7 +5,7 @@ import pytest
 from maya import cmds
 from maya import OpenMaya
 
-from tik.maya.core.node import Node, Plug
+from tik.maya.core.node import Node
 from tik.maya.core.dagnode import DagNode
 
 

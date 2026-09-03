@@ -10,7 +10,6 @@ tested; what the guides do in Maya is covered by ``tests/integration``.
 
 from __future__ import annotations
 
-import uuid
 from typing import Optional
 
 from tik.core.side import Side
@@ -281,12 +280,9 @@ class StubScene:
     # ------------------------------------------------------------ layout
     @property
     def layout(self) -> dict:
-        return self.read_layout()
-
-    def read_layout(self) -> dict:
         return self.document.layout_as_keys()
 
-    def write_layout(self, layout: dict) -> None:
+    def set_layout(self, layout: dict) -> None:
         document = self.document
         document.layout_from_keys(layout)
         self._scene_nodes = {
@@ -296,11 +292,8 @@ class StubScene:
         self._collapse = dict(document.collapse)
         self._invalidate()
 
-    def set_layout(self, layout: dict) -> None:
-        self.write_layout(layout)
-
     def update_layout(self, **sections) -> dict:
-        layout = self.read_layout()
+        layout = self.layout
         layout.update(sections)
         self.set_layout(layout)
         return layout
@@ -499,7 +492,7 @@ class StubScene:
         records = self.export_guide_records(wanted)
         keys = {handle.key for handle in (handles or self.instances())}
         connections = [item for item in self.connections() if item["input"].split(".")[0] in keys]
-        layout = self.read_layout()
+        layout = self.layout
         sources = {item["source"] for item in connections}
         groups = {name: nodes for name, nodes in layout.get("scene_nodes", {}).items()
                   if not handles or set(nodes) & sources}
@@ -521,7 +514,7 @@ class StubScene:
         created = self.import_guide_instances(instances)
         self._invalidate()
         if guide_file.designer:
-            layout = {} if reset else self.read_layout()
+            layout = {} if reset else self.layout
             for section in ("scene_nodes", "positions", "collapse"):
                 merged = dict(layout.get(section, {}))
                 merged.update(guide_file.designer.get(section, {}))

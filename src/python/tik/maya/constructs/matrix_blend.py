@@ -11,17 +11,8 @@ from typing import Optional, Sequence
 from maya import cmds
 
 from ..core.decorators import undo
-from ..core.plug import Plug
-from ..core.registry import resolve
+from ..core.plug import Plug, world_matrix_plug
 from ..core.scene import create_node
-
-
-def _matrix_plug(item) -> Plug:
-    """Return a world-matrix plug for a node, a node name, or a matrix plug."""
-    if isinstance(item, Plug):
-        return item
-    node = resolve(item) if isinstance(item, str) else item
-    return node["worldMatrix[0]"]
 
 
 class MatrixBlend:
@@ -58,9 +49,9 @@ class MatrixBlend:
             raise ValueError("weights must have one entry per target.")
         name = name or "matrixBlend"
         node = create_node("blendMatrix", name=f"{name}_blendMatrix")
-        _matrix_plug(base) >> node["inputMatrix"]
+        world_matrix_plug(base) >> node["inputMatrix"]
         for index, target in enumerate(targets):
-            _matrix_plug(target) >> node[f"target[{index}].targetMatrix"]
+            world_matrix_plug(target) >> node[f"target[{index}].targetMatrix"]
             weight = 1.0 if weights is None else weights[index]
             if isinstance(weight, Plug):
                 weight >> node[f"target[{index}].weight"]

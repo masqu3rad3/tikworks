@@ -7,7 +7,7 @@ from tik.shared.ui.Qt import QtCore
 from tik.trigger.core import Action, IntField, StringField, clear_registries, register_action
 from tik.trigger.session import Session
 from tik.trigger.ui.main import TriggerWindow
-from tik.trigger.ui.model import MIME_PATH, MIME_TYPE, EnabledRole, LinkedRole, StatusRole
+from tik.trigger.ui.model import MIME_TYPE, EnabledRole, LinkedRole, StatusRole
 from tik.trigger.ui.session_view import SessionView
 
 

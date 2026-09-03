@@ -180,7 +180,6 @@ class TestMayaBenchmark:
 
     def test_maya_benchmark_initialization(self):
         """Test MayaBenchmark initializes correctly."""
-        from maya import cmds
 
         benchmark = MayaBenchmark()
         assert benchmark.results == {}

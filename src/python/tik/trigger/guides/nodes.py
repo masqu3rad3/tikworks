@@ -7,7 +7,6 @@ the ``trg_*`` meta keys in :mod:`tik.trigger.maya.tags`.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from typing import Any, Optional, Sequence
 
@@ -15,6 +14,7 @@ from maya import cmds
 
 import tik.maya as tm
 from tik.maya import naming
+from tik.maya.core.decorators import undo_chunk  # noqa: F401 - the guides' undo step
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
@@ -28,23 +28,6 @@ logger = logging.getLogger(__name__)
 
 
 # ------------------------------------------------------------------- scene
-@contextlib.contextmanager
-def undo_chunk(label: str):
-    """One undo step; a failure inside rolls the whole chunk back."""
-    cmds.undoInfo(openChunk=True, chunkName=label)
-    try:
-        yield
-    except BaseException:
-        cmds.undoInfo(closeChunk=True)
-        try:
-            cmds.undo()
-        except RuntimeError:
-            pass
-        raise
-    else:
-        cmds.undoInfo(closeChunk=True)
-
-
 def new_scene() -> None:
     cmds.file(new=True, force=True)
 
@@ -287,11 +270,11 @@ def selected_guide() -> Optional[ParentRef]:
 
 
 def select_guides(instance_id: str) -> None:
-    cmds.select([node.long_name for node in guide_nodes(instance_id).values()], replace=True)
+    tm.select_nodes(list(guide_nodes(instance_id).values()), replace=True)
 
 
 def select_nodes(nodes) -> None:
-    cmds.select([getattr(node, "long_name", node) for node in nodes], replace=True)
+    tm.select_nodes(list(nodes), replace=True)
 
 
 def selected_node_names() -> list[str]:
