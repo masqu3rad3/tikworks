@@ -60,9 +60,6 @@ and every studio's helper is slightly different.
              ctrl[attr].locked = True
              ctrl[attr].visible = False
 
-         # or, since this is what everybody wants anyway:
-         tm.attribute.lock_and_hide(ctrl, ("sx", "sy", "sz"))
-
 Node networks are invisible in the code
 ---------------------------------------
 

@@ -8,7 +8,7 @@ def _holder(**attrs):
     node = tm.Transform.create(name="holder")
     plugs = {}
     for name, value in attrs.items():
-        plugs[name] = tm.attribute.add_float(node, name, default=value)
+        plugs[name] = node[name].create("float", default=value)
     return node, plugs
 
 

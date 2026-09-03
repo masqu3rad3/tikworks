@@ -51,7 +51,7 @@ def test_rest_plug_drives_tx_live():
 def test_a_factor_scales_every_segment():
     joints = _chain("factor")
     holder = tm.Transform.create(name="factor_holder")
-    factor = tm.attribute.add_float(holder, "factor", default=1.0)
+    factor = holder["factor"].create("float", default=1.0)
     lengths = tm.ChainLengths.create(joints, name="factor")
     lengths.add_factor(factor)
     assert abs(joints[1].translate.x - 4.0) < 1e-4
@@ -63,8 +63,8 @@ def test_a_factor_scales_every_segment():
 def test_factors_multiply_together():
     joints = _chain("two")
     holder = tm.Transform.create(name="two_holder")
-    first = tm.attribute.add_float(holder, "first", default=2.0)
-    second = tm.attribute.add_float(holder, "second", default=3.0)
+    first = holder["first"].create("float", default=2.0)
+    second = holder["second"].create("float", default=3.0)
     lengths = tm.ChainLengths.create(joints, name="two")
     lengths.add_factor(first)
     lengths.add_factor(second)
@@ -75,7 +75,7 @@ def test_factor_applies_after_the_side_sign():
     """A factor must scale the magnitude, never flip the direction."""
     joints = _chain("signed")
     holder = tm.Transform.create(name="signed_holder")
-    factor = tm.attribute.add_float(holder, "factor", default=2.0)
+    factor = holder["factor"].create("float", default=2.0)
     lengths = tm.ChainLengths.create(joints, side_sign=-1, name="signed")
     lengths.add_factor(factor)
     assert abs(joints[1].translate.x - (-8.0)) < 1e-4
@@ -84,9 +84,9 @@ def test_factor_applies_after_the_side_sign():
 def test_override_blends_towards_explicit_lengths():
     joints = _chain("pin")
     holder = tm.Transform.create(name="pin_holder")
-    weight = tm.attribute.add_float(holder, "pin", default=0.0, min=0.0, max=1.0)
-    upper = tm.attribute.add_float(holder, "upper", default=9.0)
-    lower = tm.attribute.add_float(holder, "lower", default=1.0)
+    weight = holder["pin"].create("float", default=0.0, min=0.0, max=1.0)
+    upper = holder["upper"].create("float", default=9.0)
+    lower = holder["lower"].create("float", default=1.0)
     lengths = tm.ChainLengths.create(joints, name="pin")
     lengths.add_override([upper, lower], weight)
     assert abs(joints[1].translate.x - 4.0) < 1e-4
@@ -108,10 +108,10 @@ def test_delete_removes_the_arithmetic_nodes_too():
     """Factors and side-sign multiplies are created by plug arithmetic."""
     joints = _chain("leak")
     holder = tm.Transform.create(name="leak_holder")
-    factor = tm.attribute.add_float(holder, "factor", default=2.0)
-    weight = tm.attribute.add_float(holder, "pin", default=0.0)
-    upper = tm.attribute.add_float(holder, "upper", default=9.0)
-    lower = tm.attribute.add_float(holder, "lower", default=1.0)
+    factor = holder["factor"].create("float", default=2.0)
+    weight = holder["pin"].create("float", default=0.0)
+    upper = holder["upper"].create("float", default=9.0)
+    lower = holder["lower"].create("float", default=1.0)
 
     before = set(cmds.ls(long=True))
     lengths = tm.ChainLengths.create(joints, side_sign=-1, name="leak")

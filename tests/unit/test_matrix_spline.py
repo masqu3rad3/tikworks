@@ -117,7 +117,7 @@ def test_outputs_are_world_space_regardless_of_parent():
 
 def test_twist_interpolates_with_position_weights():
     drivers = _drivers([(0, 0, 0), (5, 0, 0), (10, 0, 0)])
-    twists = [tm.attribute.add_float(driver, "twist") for driver in drivers]
+    twists = [driver["twist"].create("float") for driver in drivers]
     spline = MatrixSpline.create(drivers, [0.5], name="spl", degree=2, twists=twists)
     twists[0].value = 100.0
     twists[1].value = 20.0
@@ -127,7 +127,7 @@ def test_twist_interpolates_with_position_weights():
 
 def test_twist_is_unbounded_and_stays_out_of_the_matrix():
     drivers = _drivers([(0, 0, 0), (10, 0, 0)])
-    twists = [tm.attribute.add_float(driver, "twist") for driver in drivers]
+    twists = [driver["twist"].create("float") for driver in drivers]
     spline = MatrixSpline.create(drivers, [0.5], name="spl", twists=twists)
     twists[1].value = 900.0
     assert spline.outputs[0].twist.value == pytest.approx(450.0)
@@ -144,7 +144,7 @@ def test_missing_twists_leave_plug_at_zero():
 
 def test_delete_removes_network():
     drivers = _drivers([(0, 0, 0), (10, 0, 0)])
-    twists = [tm.attribute.add_float(driver, "twist") for driver in drivers]
+    twists = [driver["twist"].create("float") for driver in drivers]
     spline = MatrixSpline.create(drivers, [0.25, 0.75], name="spl", twists=twists)
     spline.delete()
     assert not cmds.objExists("spl_spline_grp")

@@ -25,7 +25,6 @@ from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
 import tik.maya as tm
-from tik.maya import attribute
 
 
 @dataclass
@@ -109,9 +108,9 @@ def build_ikfk_limb(
     control = result.ik_control  # animator-facing attributes
     driver = result.ik_tweak  # what the rig actually follows
 
-    attribute.add_separator(control, "segments_")
+    rig.separator(control, "segments_")
     segment_scales = [
-        attribute.add_float(control, f"s{label.capitalize()}", default=1.0, min=0.001)
+        control[f"s{label.capitalize()}"].create("float", default=1.0, min=0.001)
         for label in labels[:-1]
     ]
 
@@ -200,14 +199,17 @@ def _build_controls(rig, name, parent, size, labels, result) -> None:
         match=result.ik_joints[-1],
         mirror="world",
     )
-    attribute.lock_and_hide(result.ik_control, ("sx", "sy", "sz", "v"))
+    for channel in ("sx", "sy", "sz", "v"):
+        plug = result.ik_control[channel]
+        plug.locked = True
+        plug.visible = False
     # Created after the lock so it inherits the main's locked channels. The
     # tweak is what the rig follows; the main carries the attributes.
     result.ik_tweak = rig.tweak_control(result.ik_control, size=size * 0.6)
 
-    attribute.add_separator(result.ik_control, "ikfk_")
-    result.switch_plug = attribute.add_float(
-        result.ik_control, "ikFk", default=1.0, min=0.0, max=1.0
+    rig.separator(result.ik_control, "ikfk_")
+    result.switch_plug = result.ik_control["ikFk"].create(
+        "float", default=1.0, min=0.0, max=1.0
     )
 
     # Controllers live in control_grp and are *driven* by the limb's parent,
@@ -231,13 +233,16 @@ def _build_controls(rig, name, parent, size, labels, result) -> None:
         if 0 < index < last and result.hinge_axis is not None:
             # An elbow or knee is a hinge: only the derived axis stays.
             locked += [f"r{axis}" for axis in "xyz" if axis != result.hinge_axis]
-        attribute.lock_and_hide(fk_control, locked)
+        for channel in locked:
+            plug = fk_control[channel]
+            plug.locked = True
+            plug.visible = False
         tm.MatrixConstraint.create(
             fk_control, joint, maintain_offset=True, skip_scale="xyz"
         )
         # The switch must stay reachable from whichever set is visible: at
         # ikFk = 0 the IK controls are hidden, so FK carries the proxy.
-        attribute.add_proxy(fk_control, result.switch_plug, name="ikFk")
+        fk_control["ikFk"].create(proxy=result.switch_plug)
         result.fk_controls.append(fk_control)
         fk_parent = fk_control
 
@@ -278,7 +283,7 @@ def _build_soft_ik(rig, name, enabled, control, driver, result) -> None:
             name=rig.name(name),
             parent=rig.groups.rig,
         )
-        attribute.add_proxy(control, result.soft_ik.soft_plug, name="softIk")
+        control["softIk"].create(proxy=result.soft_ik.soft_plug)
         tm.MatrixConstraint.create(
             result.soft_ik.goal_matrix,
             result.ik_handle,
@@ -304,13 +309,13 @@ def _build_stretch(rig, name, stretch, squash, limit_default, control, driver, r
     """
     total = result.ik_lengths.total_length
     if stretch or squash:
-        attribute.add_separator(control, "stretch_")
+        rig.separator(control, "stretch_")
     if stretch:
-        stretch_plug = attribute.add_float(
-            control, "stretch", default=0.0, min=0.0, max=1.0
+        stretch_plug = control["stretch"].create(
+            "float", default=0.0, min=0.0, max=1.0
         )
-        limit_plug = attribute.add_float(
-            control, "stretchLimit", default=limit_default, min=0.0
+        limit_plug = control["stretchLimit"].create(
+            "float", default=limit_default, min=0.0
         )
         if result.soft_ik is not None:
             # The soft blend already folds the stretch amount into the gap.
@@ -327,8 +332,8 @@ def _build_stretch(rig, name, stretch, squash, limit_default, control, driver, r
         result.ik_lengths.add_factor((gap / total + 1.0).minimum(ceiling))
 
     if squash:
-        squash_plug = attribute.add_float(
-            control, "squash", default=0.0, min=0.0, max=1.0
+        squash_plug = control["squash"].create(
+            "float", default=0.0, min=0.0, max=1.0
         )
         measure = tm.Measure.create(
             result.pole_base["worldMatrix[0]"],
@@ -342,9 +347,9 @@ def _build_stretch(rig, name, stretch, squash, limit_default, control, driver, r
 # ----------------------------------------------------------------------- pole
 def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -> None:
     """Pole controller in a twist-aware auto space blended against a rest space."""
-    attribute.add_separator(control, "pole_")
-    pole_follow = attribute.add_float(
-        control, "poleFollow", default=1.0, min=0.0, max=1.0
+    rig.separator(control, "pole_")
+    pole_follow = control["poleFollow"].create(
+        "float", default=1.0, min=0.0, max=1.0
     )
     frame = tm.AimFrame.create(
         result.pole_base,
@@ -378,14 +383,15 @@ def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -
     # Relative, so the controller keeps its zeroed channels and simply inherits
     # the group's placement.
     result.pole_control.transform.set_parent(rest_group, relative=True)
-    attribute.lock_and_hide(
-        result.pole_control.transform, ("rx", "ry", "rz", "sx", "sy", "sz", "v")
-    )
+    for channel in ("rx", "ry", "rz", "sx", "sy", "sz", "v"):
+        plug = result.pole_control[channel]
+        plug.locked = True
+        plug.visible = False
     result.pole_tweak = rig.tweak_control(result.pole_control, size=size * 0.3)
     result.ik_handle.pole_vector(result.pole_tweak.transform)
 
     if pole_pin:
-        pin_plug = attribute.add_float(control, "polePin", default=0.0, min=0.0, max=1.0)
+        pin_plug = control["polePin"].create("float", default=0.0, min=0.0, max=1.0)
         upper = tm.Measure.create(
             result.pole_base["worldMatrix[0]"],
             result.pole_control["worldMatrix[0]"],

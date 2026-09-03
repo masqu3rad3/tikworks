@@ -23,7 +23,7 @@ from typing import Optional
 
 from maya import cmds
 
-from ..core import attribute
+from ..core.constants import TRANSFORM_CHANNELS
 from ..core.decorators import undo
 from ..core.plug import Plug
 from ..core.registry import resolve
@@ -86,13 +86,15 @@ class SoftIk:
         soft.group = Transform.create(name=f"{soft.name}_softIk_grp")
         if parent is not None:
             soft.group.parent = _node(parent)
-        attribute.add_float(soft.group, "softIk", default=0.0, min=0.0)
-        attribute.add_float(soft.group, "stretch", default=0.0, min=0.0, max=1.0)
+        soft.group["softIk"].create("float", default=0.0, min=0.0)
+        soft.group["stretch"].create("float", default=0.0, min=0.0, max=1.0)
         # Held as an attribute rather than a floatConstant node: one fewer node
         # type to depend on across Maya versions.
-        attribute.add_float(soft.group, "eConstant", default=math.e)
-        attribute.lock_and_hide(soft.group, attribute.TRANSFORM_ATTRS)
-        attribute.lock_and_hide(soft.group, ("eConstant",))
+        soft.group["eConstant"].create("float", default=math.e)
+        for channel in TRANSFORM_CHANNELS + ("eConstant",):
+            plug = soft.group[channel]
+            plug.locked = True
+            plug.visible = False
 
         soft.measure = Measure.create(
             soft.root["worldMatrix[0]"],

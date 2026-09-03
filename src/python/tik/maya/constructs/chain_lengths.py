@@ -16,7 +16,7 @@ from typing import Optional, Sequence
 
 from maya import cmds
 
-from ..core import attribute
+from ..core.constants import TRANSFORM_CHANNELS
 from ..core.decorators import undo
 from ..core.plug import Plug
 from ..core.registry import resolve
@@ -74,11 +74,14 @@ class ChainLengths:
             name=f"{chain.name}_lengths_grp",
             parent=parent.long_name if hasattr(parent, "long_name") else parent,
         )
-        attribute.lock_and_hide(chain.holder, attribute.TRANSFORM_ATTRS)
+        for channel in TRANSFORM_CHANNELS:
+            plug = chain.holder[channel]
+            plug.locked = True
+            plug.visible = False
 
         for index in range(len(joints) - 1):
             rest = abs(joints[index + 1].translate.x)
-            plug = attribute.add_float(chain.holder, f"restLength{index}", default=rest)
+            plug = chain.holder[f"restLength{index}"].create("float", default=rest)
             chain.rest_plugs.append(plug)
             chain._outputs.append(plug)
         chain._connect()

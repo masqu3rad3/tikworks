@@ -57,7 +57,7 @@ def test_world_target_is_static():
 def test_external_control_plug():
     first, second, driven = _setup()
     holder = tm.Transform.create(name="holder")
-    control = tm.attribute.add_enum(holder, "which", ["a", "b"])
+    control = holder["which"].create("enum", items=["a", "b"])
     switch = MatrixSwitch.create([first, second], driven, control=control, maintain_offset=False)
     assert switch.control.path == "holder.which"
     control.value = 1

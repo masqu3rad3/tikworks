@@ -15,7 +15,7 @@ def _rig(soft=1.0, stretch=0.0):
     root = tm.Transform.create(name="soft_root")
     goal = tm.Transform.create(name="soft_goal")
     holder = tm.Transform.create(name="soft_holder")
-    length = tm.attribute.add_float(holder, "chainLength", default=L)
+    length = holder["chainLength"].create("float", default=L)
     soft_ik = tm.SoftIk.create(root, goal, length, name="soft")
     soft_ik.soft_plug.value = soft
     soft_ik.stretch_plug.value = stretch

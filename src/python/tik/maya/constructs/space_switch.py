@@ -10,7 +10,6 @@ from typing import Optional, Sequence
 
 from maya import cmds
 
-from ..core import attribute
 from ..core.decorators import undo
 from ..core.plug import Plug
 from ..core.registry import resolve
@@ -76,7 +75,7 @@ class SpaceSwitch:
         offset = node.create_offset_group(name=f"{name}_grp")
         entries = [WORLD, *spaces] if world else list(spaces)
         names = ["world", *labels] if world else list(labels)
-        attr = attribute.add_enum(control, attr_name, names, default=default)
+        attr = control[attr_name].create("enum", items=names, default=default)
         switch = MatrixSwitch.create(
             entries,
             offset,

@@ -321,10 +321,24 @@ def test_tweak_copies_the_mirror_rule(scene):
 def test_tweak_inherits_locked_channels(scene):
     ctx = _built(scene)
     main = ctx.controller("hand", mirror="world")
-    tm.attribute.lock_and_hide(main.transform, ("sx", "sy", "sz", "v"))
+    for channel in ("sx", "sy", "sz", "v"):
+        plug = main.transform[channel]
+        plug.locked = True
+        plug.visible = False
     tweak = ctx.tweak_control(main)
     for attr in ("sx", "sy", "sz"):
         assert cmds.getAttr(f"{tweak.transform.long_name}.{attr}", lock=True)
+
+
+def test_separator_is_locked_and_visible(scene):
+    ctx = _built(scene)
+    main = ctx.controller("hand", mirror="world")
+    plug = ctx.separator(main, "settings_")
+    assert plug.node is main.transform
+    assert plug.exists()
+    assert plug.locked
+    assert cmds.getAttr(plug.path, channelBox=True)
+    assert not plug.keyable
 
 
 def test_connect_space_builds_a_named_switch(scene):

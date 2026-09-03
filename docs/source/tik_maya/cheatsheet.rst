@@ -63,12 +63,12 @@ Attributes
      - ``node["tx"].locked = True``
    * - ``cmds.setAttr("n.tx", keyable=False, channelBox=False)``
      - ``node["tx"].visible = False``
-   * - lock and hide scale
-     - ``tm.attribute.lock_and_hide(node, ["sx", "sy", "sz"])``
    * - ``cmds.addAttr("n", ln="stretch", at="double", dv=1, k=True)``
-     - ``tm.attribute.add_float(node, "stretch", default=1.0)``
+     - ``node["stretch"].create("float", default=1.0)``
    * - ``cmds.addAttr("n", ln="space", at="enum", en="a:b")``
-     - ``tm.attribute.add_enum(node, "space", ["a", "b"])``
+     - ``node["space"].create("enum", items=["a", "b"])``
+   * - ``cmds.addAttr("n", ln="notes", dt="string")``
+     - ``node["notes"].create("string")``
    * - ``cmds.attributeQuery("x", node="n", exists=True)``
      - ``node.has_attr("x")``
    * - ``cmds.deleteAttr("n.x")``

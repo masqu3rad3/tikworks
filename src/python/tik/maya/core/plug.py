@@ -1,10 +1,40 @@
 """Plug module for Maya core functionalities."""
 
+from typing import Optional
+
 from maya import cmds
 from maya.api import OpenMaya
 
 from .registry import resolve
 from .constants import NodeNames
+
+#: Friendly type name -> (addAttr flag, Maya type). The flag decides the rest:
+#: ``attributeType`` types are animatable, so they default to keyable;
+#: ``dataType`` types are not, and cannot carry a default through addAttr.
+_ATTR_TYPES = {
+    "float": ("attributeType", "double"),
+    "double": ("attributeType", "double"),
+    "int": ("attributeType", "long"),
+    "long": ("attributeType", "long"),
+    "bool": ("attributeType", "bool"),
+    "enum": ("attributeType", "enum"),
+    "angle": ("attributeType", "doubleAngle"),
+    "distance": ("attributeType", "doubleLinear"),
+    "time": ("attributeType", "time"),
+    "string": ("dataType", "string"),
+    "matrix": ("dataType", "matrix"),
+}
+
+#: Pythonic names accepted by :meth:`Plug.create` for the addAttr flags people
+#: actually reach for. Everything else is forwarded verbatim.
+_KWARG_ALIASES = {
+    "default": "defaultValue",
+    "min": "minValue",
+    "max": "maxValue",
+    "soft_min": "softMinValue",
+    "soft_max": "softMaxValue",
+    "items": "enumName",
+}
 
 
 class Plug:
@@ -206,13 +236,77 @@ class Plug:
         """
         return cmds.attributeQuery(self.attr, node=self._node.partial_name, exists=True)
 
-    def create(self, **kwargs):
-        """Add a new attribute to the node.
+    def create(self, attr_type: Optional[str] = None, **kwargs) -> "Plug":
+        """Add this attribute to the node and return the plug.
+
+        ``attr_type`` is a friendly type name (``"float"``, ``"int"``,
+        ``"bool"``, ``"enum"``, ``"angle"``, ``"distance"``, ``"time"``,
+        ``"string"``, ``"matrix"``) that picks the right ``addAttr`` flag. The
+        numeric and enum types default to ``keyable=True``, unlike
+        ``cmds.addAttr``.
+
+        Friendly keyword aliases are accepted alongside raw ``addAttr`` flags:
+        ``default``, ``min``, ``max``, ``soft_min``, ``soft_max`` and ``items``
+        (the enum labels). ``proxy`` takes a :class:`Plug` or an attribute path
+        and derives its type from the source. Anything else is forwarded to
+        ``cmds.addAttr`` untouched.
+
+        Example:
+            node["stretch"].create("float", default=0.0, min=0.0, max=1.0)
+            node["space"].create("enum", items=["world", "local"], default=1)
+            node["notes"].create("string", default="rev 2")
+            other["ikFk"].create(proxy=switch_plug)
 
         Args:
-            **kwargs: Additional keyword arguments to pass to cmds.addAttr.
+            attr_type (str, optional): Friendly type name. May be omitted when
+                ``attributeType``, ``dataType`` or ``proxy`` is given directly.
+            **kwargs: Aliases above, plus any ``cmds.addAttr`` flag.
+
+        Returns:
+            Plug: This plug, so it can be assigned or connected in one step.
+
+        Raises:
+            ValueError: If no attribute type can be determined, or
+                ``attr_type`` is not a known name.
         """
+        kwargs = {_KWARG_ALIASES.get(key, key): value for key, value in kwargs.items()}
+
+        items = kwargs.pop("enumName", None)
+        if items is not None and not isinstance(items, str):
+            items = ":".join(items)
+        if items is not None:
+            kwargs["enumName"] = items
+            attr_type = attr_type or "enum"
+
+        proxy = kwargs.get("proxy")
+        if proxy is not None:
+            kwargs["proxy"] = getattr(proxy, "path", proxy)
+
+        # A string default cannot travel through addAttr; it is set afterwards.
+        deferred_default = None
+
+        if attr_type is not None:
+            flag, maya_type = _ATTR_TYPES.get(attr_type, (None, None))
+            if flag is None:
+                raise ValueError(
+                    f"Unknown attribute type '{attr_type}'. "
+                    f"Expected one of {sorted(_ATTR_TYPES)}."
+                )
+            kwargs[flag] = maya_type
+            if flag == "attributeType":
+                kwargs.setdefault("keyable", True)
+            else:
+                deferred_default = kwargs.pop("defaultValue", None)
+        elif not {"attributeType", "dataType", "proxy"} & set(kwargs):
+            raise ValueError(
+                f"Cannot create '{self.attr}': pass an attr_type, or one of "
+                "attributeType / dataType / proxy."
+            )
+
         cmds.addAttr(self._node.long_name, longName=self.attr, **kwargs)
+        if deferred_default is not None:
+            self.set(deferred_default)
+        return self
 
     def delete(self):
         """Delete an attribute from the node."""

@@ -18,7 +18,6 @@ from maya import cmds
 
 from tik.core.bspline import basis, clamp_degree
 
-from ..core import attribute
 from ..core.decorators import undo
 from ..core.plug import Plug
 from ..core.registry import resolve
@@ -115,7 +114,7 @@ class MatrixSpline:
             aim = spline._create_aim(index, pick, target, up_matrix, aim_axis, up_axis)
             output = Transform.create(name=f"{name}_{index}_out", parent=group.long_name)
             aim["outputMatrix"] >> output["offsetParentMatrix"]
-            twist = attribute.add_float(output, "twist", default=0.0)
+            twist = output["twist"].create("float", default=0.0)
             twist_source, math_nodes = spline._weighted_sum(twists, weights)
             if twist_source is not None:
                 twist_source >> twist

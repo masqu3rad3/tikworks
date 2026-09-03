@@ -51,7 +51,22 @@ node["translateX"].value          # read (also .get() for kwargs like time=)
 node["translateX"].value = 5.0    # write (also .set(v) for kwargs)
 node.translate_x = 5.0            # Transform exposes snake_case TRS properties
 node["v"].locked = True           # plugs carry .locked / .keyable / .visible
+node["v"].visible = False         # hide from the channel box
 ```
+
+**New attributes come from the same handle** — `create()` is the only creator; there
+are no free `add_*` helpers. It returns the plug and defaults to `keyable=True`:
+
+```python
+stretch = ctrl["stretch"].create("float", default=0.0, min=0.0, max=1.0)
+ctrl["space"].create("enum", items=["world", "local"], default=1)
+ctrl["notes"].create("string", default="rev 2")
+fk_ctrl["ikFk"].create(proxy=stretch)          # a proxy of another plug
+ctrl["custom"].create(attributeType="double3")  # raw addAttr flags pass through
+```
+
+Types: `float` `int` `bool` `enum` `angle` `distance` `time` `string` `matrix`.
+Aliases: `default` `min` `max` `soft_min` `soft_max` `items`.
 
 **Connections are operators**:
 
@@ -80,8 +95,8 @@ tm.find_by_meta("kind", "guide", node_type="joint")
 `tm.MatrixConstraint.create(driver, driven, maintain_offset=True)`,
 `tm.SpaceSwitch.create(...)`, `tm.IkFkChain`, `tm.Ribbon`, `tm.MatrixSwitch`, `tm.Measure`.
 
-**Helpers**: `tm.attribute` (add_float / add_enum / add_bool / lock_and_hide / add_separator),
-`tm.naming` (`format_name`, `unique_name` — mechanics only; conventions belong to the caller),
+**Helpers**: `tm.naming` (`format_name`, `unique_name` — mechanics only; conventions
+belong to the caller), `tm.TRANSFORM_CHANNELS` / `tm.ALL_CHANNELS`,
 decorators `@undo` / `@keepselection` from `tik.maya.core.decorators`.
 
 **The cmds proxy escape hatch** — `tm.<anything>` that isn't a wrapper falls through to

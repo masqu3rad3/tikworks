@@ -3,11 +3,17 @@
 from maya import cmds
 
 import tik.maya as tm
+from tik.trigger.maya.rig import ModuleRig
 from tik.trigger.systems.limb_lock import build_limb_lock
 
 
 class _FakeRig:
-    """Minimal ModuleRig stand-in: naming plus the rig group."""
+    """Minimal ModuleRig stand-in: naming, the rig group, and the separator."""
+
+    #: Borrowed rather than reimplemented: ``separator`` touches no ModuleRig
+    #: state, and a copy here is exactly what lets a stub drift from the rig
+    #: whose contract it stands in for.
+    separator = ModuleRig.separator
 
     def __init__(self):
         self.root = tm.Transform.create(name="rig_grp")
