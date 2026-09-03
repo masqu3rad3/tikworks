@@ -266,7 +266,8 @@ class Builder:
             key, _output = split_source(source)
             if key is not None and key in known_keys and key not in by_key:
                 self.events.log(
-                    f"{instance.key}.{declared.name}: source '{source}' is outside the build scope; left unattached.",
+                    f"{instance.key}.{declared.name}: source '{source}' is "
+                    "outside the build scope; left unattached.",
                     level="warning",
                 )
                 continue
@@ -302,7 +303,8 @@ class Builder:
                 source = inputs.get(f"{control}_{label}")
                 if not source:
                     self.events.log(
-                        f"{instance.key}.{control}_{label}: no source connected; skipped.",
+                        f"{instance.key}.{control}_{label}: "
+                        "no source connected; skipped.",
                         level="warning",
                     )
                     continue
@@ -345,7 +347,8 @@ class Builder:
             if node is None and strict:
                 raise AttachError(
                     f"{where}: source '{source}' was not built "
-                    f"(available outputs: {sorted(producer.outputs) if producer else []}).",
+                    "(available outputs: "
+                    f"{sorted(producer.outputs) if producer else []}).",
                     instance_id=instance.instance_id if instance else None,
                     module_type=instance.module_type if instance else None,
                 )
@@ -381,7 +384,8 @@ class Builder:
             ]
             if missing:
                 raise BuildError(
-                    f"module '{instance.module_type}' did not produce output(s) {missing}",
+                    f"module '{instance.module_type}' did not produce "
+                    f"output(s) {missing}",
                     instance_id=instance.instance_id,
                     module_type=instance.module_type,
                 )

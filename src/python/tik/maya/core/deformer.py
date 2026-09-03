@@ -1,11 +1,10 @@
-# TODO: Audit all get/set deformer weights to ensure consistent use of DeformerWeights and WeightsIO
-#       Specifically: verify that SkinCluster.get_weights/set_weights and BlendShape.get_weights/set_weights
-#       always go through DeformerWeights/WeightsIO conversion paths.
+"""Deformer base class and the weight containers its subclasses share.
 
-"""Deformer is not an actual maya node representation. It is a base class for deformers like SkinCluster, BlendShape, etc.
-
-The Deformer class itself is not a falloff targer for any nodes.
-However, it is not an abstract class either. If wanted, deformer classes can be created directly from it.
+``Deformer`` is not a Maya node type of its own. It is the base the concrete
+wrappers (``SkinCluster``, ``BlendShape``) build on, and it can be instantiated
+directly for a deformer without a dedicated wrapper. Every ``get_*weights``
+method returns a ``DeformerWeights``; every ``set_*weights`` accepts one or a
+flat list. ``WeightsIO`` is the on-disk form (Maya's ``deformerWeights`` JSON).
 """
 
 from __future__ import annotations
@@ -33,7 +32,8 @@ class Deformer(Node):
         """Create a new deformer node of the specified type.
 
         Args:
-            deformer_type (str): The type of deformer to create (e.g., 'skinCluster', 'blendShape').
+                deformer_type (str): The type of deformer to create
+                    (e.g., 'skinCluster', 'blendShape').
             **kwargs: Additional keyword arguments to pass to the Maya command.
 
         Returns:
@@ -70,7 +70,7 @@ class Deformer(Node):
         """Load deformer weights from a file.
 
         Args:
-            file_path (str | Path): The path to the file from which weights will be loaded.
+                file_path (str | Path): The file to load the weights from.
         """
         file_dir, file_name = self._split_path(file_path, validate=False)
 
@@ -680,7 +680,7 @@ class WeightsIO:
         )
 
     def to_dict(self) -> dict[str, object]:
-        """Serialize WeightsIO to a dictionary matching Maya's deformerWeights format."""
+        """Serialize to a dict in Maya's ``deformerWeights`` format."""
         header_info = self._header.to_dict()
         shape_entries = [shape_info.to_dict() for shape_info in self.shapes]
         layer_entries = [
@@ -747,7 +747,8 @@ class WeightsIO:
             layer.influence or f"channel_{idx}" for idx, layer in enumerate(layers)
         ]
 
-        # Build flat weight array: [elem0_ch0, elem0_ch1, ..., elem1_ch0, elem1_ch1, ...]
+        # Build flat weight array: [elem0_ch0, elem0_ch1, ..., elem1_ch0, elem1_ch1,
+        # ...]
         weights = array.array("d")
         for elem_idx in range(element_count):
             for layer in layers:

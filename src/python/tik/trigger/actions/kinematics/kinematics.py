@@ -63,7 +63,8 @@ class Kinematics(Action):
             ]
             if not roots:
                 raise ActionExecutionError(
-                    f"kinematics: none of the roots {self.guide_roots} found in the guides."
+                    f"kinematics: none of the roots {self.guide_roots} "
+                    "found in the guides."
                 )
             scope = _descendants(guides, roots)
         else:

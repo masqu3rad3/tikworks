@@ -132,7 +132,10 @@ class MatrixSpline:
 
     @staticmethod
     def _weighted_sum(plugs: Sequence[Optional[Plug]], weights: Sequence[float]):
-        """Return ``(plug, nodes)`` for ``sum(w * plug)``; ``(None, [])`` if nothing contributes."""
+        """Return ``(plug, nodes)`` for ``sum(w * plug)``.
+
+        ``(None, [])`` when nothing contributes.
+        """
         total = None
         nodes: list = []
         for plug, weight in zip(plugs, weights):

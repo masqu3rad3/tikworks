@@ -138,7 +138,10 @@ class NodeItem(QtWidgets.QGraphicsItem):
         return list(self.inputs.values()), list(self.outputs.values())
 
     def relayout(self) -> None:
-        """Place ports for the current mode; hidden ports sit on the header edge so wires still reach them."""
+        """Place ports for the current mode.
+
+        Hidden ports sit on the header edge so wires still reach them.
+        """
         self.prepareGeometryChange()
         ins, outs = self.visible_ports()
         rows = max(len(ins), len(outs))

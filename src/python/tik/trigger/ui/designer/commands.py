@@ -219,7 +219,8 @@ class DesignerCommands:
             with self.watcher.mute():
                 report = self.guides.test_build(*handles)
             self.status.set_activity(
-                f"Test build: {report.count} module(s), {len(report.connections)} connection(s)"
+                f"Test build: {report.count} module(s), "
+                f"{len(report.connections)} connection(s)"
             )
             return report
         except TriggerError as error:

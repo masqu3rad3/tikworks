@@ -103,7 +103,8 @@ class Shelf(QtWidgets.QWidget):
                 current = entry.category
                 label = QtWidgets.QLabel(current.upper())
                 label.setStyleSheet(
-                    f"color: {theme.TEXT_DIM}; font-size: 9px; letter-spacing: 1px; margin-top: 6px;"
+                    f"color: {theme.TEXT_DIM}; font-size: 9px; "
+                    "letter-spacing: 1px; margin-top: 6px;"
                 )
                 self.body_layout.addWidget(label)
                 holder = QtWidgets.QWidget()

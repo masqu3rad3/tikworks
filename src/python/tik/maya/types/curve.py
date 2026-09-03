@@ -65,7 +65,7 @@ class Curve(ShapeNode):
             scale_factor : float
                 Uniform scale factor to apply to all CVs.
             pivot : str, optional
-                Pivot mode for scaling. Accepted values are "object", "center" or "custom".
+                Pivot mode for scaling: "object", "center" or "custom".
                 Default is "object".
             pivot_point : tuple of float, optional
                 Custom pivot point (x, y, z) if pivot_mode is "custom".

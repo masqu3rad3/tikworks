@@ -76,7 +76,7 @@ def test_mirror_and_test_build(guides):
 
 
 def test_duplicate_copies_everything_with_a_unique_name(guides):
-    body = guides.add("base", name="body")
+    guides.add("base", name="body")
     arm = guides.add("arm", side="L", name="arm", pole_pin=True)
     guides.connect("L_arm.root", "body.root")
     cmds.xform(arm.root.long_name, ws=True, t=(3, 12, 1))
@@ -334,7 +334,7 @@ def test_imported_guides_end_up_with_a_breadcrumb(guides, tmp_path):
 
 
 def test_guide_radius_and_colour_round_trip_through_a_trg(guides, tmp_path):
-    """Radius/colour are scene-only (no capture support yet); the .trg is their sole carrier."""
+    """Radius and colour are scene-only for now; the .trg is their sole carrier."""
     handle = guides.add("fkchain", name="tail", segments=1)
     node = guides.guide_node(handle.instance_id, "root", 0)
     node.radius = 2.5

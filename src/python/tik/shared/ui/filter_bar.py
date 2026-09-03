@@ -46,7 +46,7 @@ class FilterModel(QtCore.QObject):
         return self._keywords + ([self._pending] if self._pending else [])
 
     def matches(self, text) -> bool:
-        """OR logic: any term found in ``text`` is a match; no terms = everything matches."""
+        """Any term found in ``text`` matches; with no terms everything matches."""
         terms = self._terms()
         if not terms:
             return True

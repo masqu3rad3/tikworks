@@ -13,8 +13,8 @@ from tik.maya.types.transform import Transform
 def test_list_scene_nodes_returns_wrappers():
     # Setup
     cmds.file(new=True, force=True)
-    t1 = cmds.createNode("transform", name="testT1")
-    t2 = cmds.createNode("transform", name="testT2")
+    cmds.createNode("transform", name="testT1")
+    cmds.createNode("transform", name="testT2")
 
     # Execute
     nodes = list_scene_nodes(type="transform")

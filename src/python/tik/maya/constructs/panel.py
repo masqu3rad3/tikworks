@@ -156,7 +156,8 @@ class Panel:
         """Initialize the Panel construct.
 
         Args:
-            camera: The camera to look through (name, Camera wrapper, or Transform wrapper).
+            camera: The camera to look through (name, Camera wrapper, or
+                Transform wrapper).
             resolution: The initial resolution of the window (width, height).
             inherit: Whether to inherit settings from the active or existing panels.
             title: The title of the window.
@@ -242,7 +243,7 @@ class Panel:
         cmds.showWindow(self._window)
 
     def _inherit_panel_properties(self):
-        """Inherit properties from an existing model panel looking at the same camera."""
+        """Inherit the properties of an existing model panel on the same camera."""
         # Find existing panels for this camera
         camera_shape_name = self._camera.name
         # Also consider the transform name just in case
@@ -256,7 +257,8 @@ class Panel:
                 continue
 
             cam = cmds.modelPanel(panel, query=True, camera=True)
-            # cam returned by modelPanel might be transform or shape name, usually transform
+            # cam returned by modelPanel might be transform or shape name, usually
+            # transform
             if cam == camera_shape_name or cam == camera_transform_name:
                 candidate_panels.append(panel)
 

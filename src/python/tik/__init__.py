@@ -51,6 +51,7 @@ def __getattr__(name):
         "ShapeLibraryWidget",
     ):
         raise AttributeError(
-            f"tik.{name} requires Maya Qt widgets and is not available in this environment"
+            f"tik.{name} requires Maya Qt widgets and is not available "
+            "in this environment"
         )
     raise AttributeError(f"module 'tik' has no attribute '{name}'")

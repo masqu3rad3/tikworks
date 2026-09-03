@@ -114,7 +114,8 @@ class Plug:
                 )
 
         if self._mplug.isNull:
-            # Attempt to re-fetch in case it was deleted and recreated (Undo/Redo scenarios)
+            # Attempt to re-fetch in case it was deleted and recreated (Undo/Redo
+            # scenarios)
             self._mplug = self._find_plug()
             if self._mplug is None or self._mplug.isNull:
                 raise RuntimeError(
@@ -472,7 +473,7 @@ class Plug:
             target_plug_str (str): e.g. 'L_legIK_ctrl.fkIkBlend'
 
         Returns:
-            list: Plug name strings, e.g. ['R_legIK_ctrl.fkIkBlend', 'spine_ctrl.fkIkBlend']
+                list: Plug name strings such as ``'R_legIK_ctrl.fkIkBlend'``.
         """
         target_plug = self.mplug
 
@@ -498,7 +499,7 @@ class Plug:
         self.locked = False
 
     def __collect_proxy_plugs(self, plug_array, proxy_plugs):
-        """Collect proxy plugs from the given plug array into the given proxy plugs list."""
+        """Append the proxy plugs found in a plug array to the collected list."""
         for plug in plug_array:
             if OpenMaya.MFnAttribute(
                 plug.attribute()

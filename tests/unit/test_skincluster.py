@@ -436,7 +436,7 @@ def test_get_set_influence_weights_single_by_index(
     skincluster_setup: Dict[str, object],
 ):
     skincluster = skincluster_setup["skincluster"]
-    mesh_transform = skincluster_setup["mesh_transform"]
+    skincluster_setup["mesh_transform"]
 
     # Get weights for first influence by index
     dw = skincluster.get_influence_weights(0)
@@ -575,7 +575,7 @@ def test_set_influence_weights_invalid_type_in_list(
 def test_set_influence_weights_multiple_correct_length(
     skincluster_setup: Dict[str, object],
 ):
-    """Test set_influence_weights with correct length for multiple influences (covers line 457)."""
+    """set_influence_weights accepts the right length for multiple influences."""
     skincluster = skincluster_setup["skincluster"]
     joints = skincluster_setup["joints"]
     vertex_count = skincluster.vertex_count
@@ -594,7 +594,7 @@ def test_set_influence_weights_multiple_correct_length(
 def test_get_influence_weights_invalid_index_raises(
     skincluster_setup: Dict[str, object],
 ):
-    """Test get_influence_weights raises when influence index not found in skinCluster."""
+    """get_influence_weights raises for an influence index the skinCluster lacks."""
     skincluster = skincluster_setup["skincluster"]
 
     # Use a high index that doesn't exist in the skinCluster
@@ -605,7 +605,7 @@ def test_get_influence_weights_invalid_index_raises(
 def test_set_influence_weights_deformerweights_channel_mismatch(
     skincluster_setup: Dict[str, object],
 ):
-    """Test set_influence_weights raises when DeformerWeights channel_count doesn't match."""
+    """set_influence_weights rejects a DeformerWeights with the wrong channel_count."""
     skincluster = skincluster_setup["skincluster"]
     vertex_count = skincluster.vertex_count
     joint_name = skincluster_setup["joints"][0]  # Use actual joint name from fixture
@@ -621,7 +621,7 @@ def test_set_influence_weights_deformerweights_channel_mismatch(
 def test_set_influence_weights_deformerweights_element_mismatch(
     skincluster_setup: Dict[str, object],
 ):
-    """Test set_influence_weights raises when DeformerWeights element_count doesn't match."""
+    """set_influence_weights rejects a DeformerWeights with the wrong element_count."""
     skincluster = skincluster_setup["skincluster"]
     joint_name = skincluster_setup["joints"][0]  # Use actual joint name from fixture
 
@@ -634,10 +634,10 @@ def test_set_influence_weights_deformerweights_element_mismatch(
 def test_set_influence_weights_single_influence_wrong_length(
     skincluster_setup: Dict[str, object],
 ):
-    """Test set_influence_weights raises when list length is wrong for single influence."""
+    """set_influence_weights rejects a wrong-length list for a single influence."""
     skincluster = skincluster_setup["skincluster"]
     joint_name = skincluster_setup["joints"][0]  # Use actual joint name from fixture
-    vertex_count = skincluster.vertex_count
+    skincluster.vertex_count
 
     # Single influence, wrong length - should raise before reaching line 449
     with pytest.raises(ValueError, match="Weight length"):
@@ -647,7 +647,7 @@ def test_set_influence_weights_single_influence_wrong_length(
 def test_set_influence_weights_single_influence_correct_length(
     skincluster_setup: Dict[str, object],
 ):
-    """Test set_influence_weights with correct length for single influence (covers line 449)."""
+    """set_influence_weights accepts the right length for a single influence."""
     skincluster = skincluster_setup["skincluster"]
     joint_name = skincluster_setup["joints"][0]  # Use actual joint name from fixture
     vertex_count = skincluster.vertex_count

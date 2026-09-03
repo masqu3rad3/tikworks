@@ -55,7 +55,11 @@ def next_version(file_path) -> Path:
 
 
 def resolve(file_path, version: str = "") -> Path:
-    """Resolve ``version`` (``""``/``"pinned"`` = as given, ``"latest"``, or ``"v007"``/``7``)."""
+    """Resolve ``version``.
+
+    ``""`` or ``"pinned"`` keep the file as given; ``"latest"`` picks the
+    newest; ``"v007"`` or ``7`` pick that version.
+    """
     path = Path(file_path)
     if not version or version == "pinned":
         return path

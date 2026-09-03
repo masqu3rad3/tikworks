@@ -1,4 +1,4 @@
-"""Explicit module inputs/outputs: connections in .trg, scene sources, mirror, pre-fill (Maya)."""
+"""Explicit module inputs/outputs: .trg connections, scene sources, mirror."""
 
 import json
 
@@ -43,7 +43,7 @@ def test_prefill_connect_disconnect_and_keys(guides):
 
 def test_build_connects_to_scene_node_and_errors(guides):
     body = guides.add("base", name="body")
-    tail = guides.add("fkchain", name="tail", parent=body, segments=2)
+    guides.add("fkchain", name="tail", parent=body, segments=2)
     guides.connect("tail.root", "anchor_jnt")
     with pytest.raises(AttachError) as info:
         Builder().build(document=guides.document, rig_name="a", afterlife="keep")
@@ -77,7 +77,7 @@ def test_export_import_keeps_connections_and_mirror_maps_sides(guides, tmp_path)
         and {"input": "tail.root", "source": "L_arm.hand"} in data["connections"]
     )
     guides.clear()
-    handles = guides.import_(path)
+    guides.import_(path)
     tail = guides.by_key("tail")
     assert tail.inputs == {"root": "L_arm.hand"}
     assert guides.by_key("R_arm").inputs == {"root": "body.root"}

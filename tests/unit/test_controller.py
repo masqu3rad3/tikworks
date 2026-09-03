@@ -45,7 +45,7 @@ class TestController:
         assert isinstance(ctrl.transform, Transform)
 
         # Verify default attributes
-        assert cmds.getAttr("test_ctrl.isController") == True
+        assert cmds.getAttr("test_ctrl.isController") is True
         assert cmds.getAttr("test_ctrl.isHistoricallyInteresting") == 0
 
     def test_create_controller_with_dict_shape(self):
@@ -98,14 +98,16 @@ class TestController:
         """Test validation in __init__."""
         # Create a mesh (transform + shape)
         m_trans = cmds.createNode("transform", name="mesh_trans")
-        m_shape = cmds.createNode("mesh", parent=m_trans, name="mesh_shape")
+        cmds.createNode("mesh", parent=m_trans, name="mesh_shape")
 
         # Controller expects a Transform wrapper.
-        # If we pass a node that resolves to something else (e.g. Camera), it should fail.
+        # If we pass a node that resolves to something else (e.g. Camera), it should
+        # fail.
         # But Transform wraps "transform" nodes.
         # Let's try passing a shape node directly.
 
-        # resolve("mesh_shape") returns a Mesh object (which inherits DagNode, not Transform).
+        # resolve("mesh_shape") returns a Mesh object (which inherits DagNode, not
+        # Transform).
         # Controller checks isinstance(node, Transform).
 
         with pytest.raises(TypeError):
@@ -161,7 +163,8 @@ class TestController:
         assert len(ctrl.shapes) == 1
 
         # Verify knots
-        # cmds.getAttr(f"{ctrl.shapes[0].name}.knots") might work or use getAttr with multi-index
+        # cmds.getAttr(f"{ctrl.shapes[0].name}.knots") might work or use getAttr with
+        # multi-index
         # But just successful creation is enough to cover the line.
 
     def test_set_shape_string(self, monkeypatch):
@@ -191,7 +194,7 @@ class TestController:
         """Test replace_shape method."""
         shape1 = {"curves": [{"point": [(0, 0, 0), (1, 0, 0)], "degree": 1}]}
         ctrl = Controller.create("replace_ctrl", shape=shape1)
-        original_shape_name = ctrl.shapes[0].name
+        ctrl.shapes[0].name
 
         shape2 = {"curves": [{"point": [(0, 0, 0), (0, 1, 0)], "degree": 1}]}
 
@@ -202,7 +205,8 @@ class TestController:
         assert cmds.ls(sl=True)[0] == ctrl.node.name
 
         # Verify shape changed (by checking CV position)
-        # The original shape node might be reused or replaced depending on implementation details of replace_curve
+        # The original shape node might be reused or replaced depending on
+        # implementation details of replace_curve
         # But the geometry should match shape2
         cv_pos = cmds.pointPosition(f"{ctrl.shapes[0].name}.cv[1]", world=True)
         assert cv_pos == [0.0, 1.0, 0.0]

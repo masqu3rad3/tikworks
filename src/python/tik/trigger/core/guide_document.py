@@ -277,7 +277,8 @@ class GuideDocument:
         schema = int(data.get("schema", SCHEMA_VERSION))
         if schema > SCHEMA_VERSION:
             raise ValueError(
-                f"Guide document schema {schema} is newer than supported {SCHEMA_VERSION}."
+                f"Guide document schema {schema} is newer than "
+                f"supported {SCHEMA_VERSION}."
             )
         return cls(
             schema=SCHEMA_VERSION,

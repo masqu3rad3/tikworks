@@ -94,7 +94,7 @@ class MetaStore:
         return list(self.as_dict().items())
 
     def as_dict(self) -> dict:
-        """Read every metadata key in one go (one ``listAttr`` + one ``getAttr`` per key).
+        """Read every metadata key in one go (one listAttr and one getAttr per key).
 
         Much cheaper than ``meta[key]`` in a loop, which pays an
         ``attributeQuery`` per key; use it when several keys are needed.

@@ -37,7 +37,8 @@ def test_get_home_dir(monkeypatch):
     # Test Linux/Other
     monkeypatch.setattr(control_shapes, "CURRENT_PLATFORM", "Linux")
     monkeypatch.setenv("HOME", "/home/test")
-    # os.path.normpath might convert slashes depending on the OS running the test (Windows)
+    # os.path.normpath might convert slashes depending on the OS running the test
+    # (Windows)
     expected = os.path.normpath("/home/test")
     assert get_home_dir() == expected
 
@@ -118,7 +119,8 @@ class TestControlShapeLibrary:
 
         paths = lib.search_paths
         assert env_dir in paths
-        # The empty segment should be skipped, and invalid_path (if it doesn't exist) might be in the list
+        # The empty segment should be skipped, and invalid_path (if it doesn't exist)
+        # might be in the list
         # but filtered out later or just added as Path object.
         # The code splits by pathsep and checks `if not env_path_str: continue`.
         # So we just verify it doesn't crash and handles the valid one.
@@ -144,7 +146,8 @@ class TestControlShapeLibrary:
         # Should not crash
         lib.refresh()
 
-        # Verify they are not scanned (cache should be empty if no other paths have shapes)
+        # Verify they are not scanned (cache should be empty if no other paths have
+        # shapes)
         assert not lib._cache
 
     def test_refresh_handles_root_json(clean_library, tmp_path):
@@ -275,7 +278,7 @@ def test_save_to_disk(tmp_path):
 
 def test_capture_to_disk(tmp_path, clean_library):
     cmds.file(new=True, force=True)
-    circle = cmds.circle(name="diskCircle")[0]
+    cmds.circle(name="diskCircle")[0]
 
     # Mock capture_thumbnail to avoid playblast issues
     with patch("tik.maya.utils.control_shapes.capture_thumbnail") as mock_thumb:
@@ -323,7 +326,7 @@ def test_resolve_folder_path(tmp_path):
 
 def test_capture_thumbnail(tmp_path):
     cmds.file(new=True, force=True)
-    cube = cmds.polyCube(name="thumbCube")[0]
+    cmds.polyCube(name="thumbCube")[0]
 
     # Mock playblast to avoid headless issues and verify it's called
     with patch("maya.cmds.playblast") as mock_playblast:

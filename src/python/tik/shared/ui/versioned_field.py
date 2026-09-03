@@ -162,7 +162,9 @@ class VersionedFileField(QtWidgets.QWidget):
         self.badge.setText(badge)
         self.badge.setVisible(bool(badge))
         self.badge.setStyleSheet(
-            f"QLabel {{ color: {text}; background: {fill}; border: 1px solid {border}; border-radius: 8px; padding: 0 6px; font-size: 10px; }}"
+            f"QLabel {{ color: {text}; background: {fill}; "
+            f"border: 1px solid {border}; border-radius: 8px; "
+            "padding: 0 6px; font-size: 10px; }"
         )
 
     # ------------------------------------------------------------ actions

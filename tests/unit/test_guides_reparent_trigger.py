@@ -1,4 +1,4 @@
-"""Maya scene: reparenting guides from the GuideLayout handler (drag-parenting in the Designer)."""
+"""Reparenting guides through the scene handler (drag-parenting in the Designer)."""
 
 import pytest
 from maya import cmds

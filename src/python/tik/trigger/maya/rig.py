@@ -211,7 +211,7 @@ class ModuleRig:
         )
 
     def socket(self, input_name: str, *, match=None) -> tm.Transform:
-        """This module's socket for a declared input, optionally aligned to ``match``."""
+        """The socket for a declared input, optionally aligned to ``match``."""
         try:
             node = self.attachments[input_name]
         except KeyError:

@@ -11,8 +11,10 @@ class TestNurbsCreate:
         assert isinstance(surface, Nurbs)
         assert cmds.nodeType(surface.name) == "nurbsSurface"
         # nurbsPlane returns transform usually, but Nurbs wrapper wraps the shape
-        # The create method handles the return value of cmds.nurbsPlane which is [transform, shape] usually
-        # Let's verify what cmds.nurbsPlane returns. It returns [transform, makeNurbsPlane].
+        # The create method handles the return value of cmds.nurbsPlane which is
+        # [transform, shape] usually
+        # Let's verify what cmds.nurbsPlane returns. It returns [transform,
+        # makeNurbsPlane].
         # Wait, cmds.nurbsPlane returns [transform, makeNurbsPlane] (history node).
         # The create method in nurbs.py says:
         # result = getattr(cmds, cmd)(**kwargs)

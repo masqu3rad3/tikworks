@@ -295,8 +295,10 @@ class FormBuilder(QtWidgets.QWidget):
         Args:
             target: The Schema instance to edit.
             node_picker: Callable returning a node name for NodeRefField pickers.
-            file_browser: Optional ``(mode, extensions, current) -> path`` replacing the dialogs.
-            file_extras: ``{extension: (label, callback(path))}`` extra button on matching FileFields.
+            file_browser: Optional ``(mode, extensions, current) -> path``
+                replacing the dialogs.
+            file_extras: ``{extension: (label, callback(path))}``: an extra
+                button on matching FileFields.
         """
         super().__init__(parent)
         self._layout = QtWidgets.QVBoxLayout(self)
@@ -405,7 +407,10 @@ class FormBuilder(QtWidgets.QWidget):
         self.refresh()
 
     def mark_overrides(self, names, reference_values: Optional[dict] = None) -> None:
-        """Highlight fields carrying an override; ``reference_values`` show in tooltips."""
+        """Highlight fields carrying an override.
+
+        ``reference_values`` show in the tooltips.
+        """
         self._overridden = set(names)
         self._reference = dict(reference_values or {})
         for name, label in self._labels.items():

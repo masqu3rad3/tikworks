@@ -85,7 +85,7 @@ def test_handing_back_restores_the_first_sessions_guides():
     second = Session()
 
     Session.hand_over(first, second)
-    body = second.guides.add("base", side="C", name="body")
+    second.guides.add("base", side="C", name="body")
     Session.hand_over(second, first)
 
     assert drawn_names() == {tail.instance_id}

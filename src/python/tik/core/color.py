@@ -169,7 +169,8 @@ class Color:
         """Generate a random color with optional mode and seed.
 
         Args:
-            mode: One of RANDOM_ANY, RANDOM_PASTEL, RANDOM_NEON, RANDOM_METALLIC, RANDOM_DARK
+                mode: One of RANDOM_ANY, RANDOM_PASTEL, RANDOM_NEON,
+                    RANDOM_METALLIC, RANDOM_DARK
             seed: Optional random seed for reproducibility
 
         Returns:

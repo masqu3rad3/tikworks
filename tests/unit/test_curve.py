@@ -18,8 +18,10 @@ class TestCurveCreate:
         # When name is provided, the shape should be renamed to <name>Shape
         curve = Curve.create(d=1, p=[(0, 0, 0), (1, 0, 0)], name="myCurve")
         assert isinstance(curve, Curve)
-        # The transform should be named "myCurve" because cmds.curve(name="myCurve") names the transform
-        # But wait, cmds.curve(name="myCurve") creates "myCurve" transform and "curveShape1" (or similar).
+        # The transform should be named "myCurve" because cmds.curve(name="myCurve")
+        # names the transform
+        # But wait, cmds.curve(name="myCurve") creates "myCurve" transform and
+        # "curveShape1" (or similar).
         # The code does:
         # curve = cls(result) -> wraps shape
         # if kwargs.get("name"): curve.rename(f"{kwargs.get('name')}Shape")
@@ -105,7 +107,7 @@ class TestCurveScaleCvs:
         curve = Curve.create(d=1, p=[(-1, 0, 0), (0, 0, 0), (1, 0, 0)])
 
         # Get center before scaling
-        cvs_before = curve.cvs(space="object")
+        curve.cvs(space="object")
 
         # Scale by 0.5 with center pivot
         curve.scale_points(0.5, pivot="center")

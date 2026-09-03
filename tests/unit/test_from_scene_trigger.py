@@ -31,7 +31,7 @@ def test_a_drawn_module_comes_back_whole():
 
 
 def test_poses_survive_the_round_trip():
-    entry = drawn_chain(2)
+    drawn_chain(2)
     joint = nodes.guide_nodes("id1")[("segment", 0)]
     cmds.xform(joint.long_name, worldSpace=True, translation=(5.0, 6.0, 7.0))
     document, _report = from_scene.read()

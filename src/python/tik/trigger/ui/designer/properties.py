@@ -99,7 +99,8 @@ class DesignerProperties:
         except TriggerError as error:
             self.events.log(str(error), level="warning")
             return
-        self.graph.rebuild()  # keep the rows the user is typing in; only the graph/tree change
+        # keep the rows the user is typing in; only the graph and tree change
+        self.graph.rebuild()
         self.graph.select_key(self._external)
         connections = self.guides.connections()
         self.status.set("connections", f"{len(connections)} connection(s)")

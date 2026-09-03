@@ -123,7 +123,10 @@ class Module(Schema):
 
     @classmethod
     def output_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
-        """Outputs an instance exposes; override when a setting adds outputs (e.g. chain segments)."""
+        """Outputs an instance exposes.
+
+        Override when a setting adds outputs (chain segments, say).
+        """
         return tuple(cls.outputs)
 
     @classmethod

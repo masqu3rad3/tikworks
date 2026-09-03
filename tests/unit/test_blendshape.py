@@ -578,7 +578,6 @@ class TestBlendShapeWeightPlugs:
         blendshape_node = BlendShape(blendshape)
 
         # Mock the __getitem__ method to raise an exception
-        original_getitem = BlendShape.__getitem__
 
         def raising_getitem(self, key):
             raise RuntimeError("Simulated plug access error")
@@ -735,7 +734,7 @@ class TestBlendShapeAdditionalCoverage:
             blendshape.set_influence_weights(idx, dw)
 
     def test_set_influence_weights_deformerweights_element_mismatch(self):
-        """Test set_influence_weights raises when DeformerWeights element_count != vertex_count."""
+        """set_influence_weights rejects a DeformerWeights with a bad element_count."""
         base_mesh, _ = cmds.polySphere(name="set_inf_elem_base", sx=2, sy=2)
         blendshape = BlendShape.create(geometry=base_mesh, name="setInfElemBS")
 

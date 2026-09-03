@@ -207,7 +207,6 @@ class StubScene:
         return GuideHandle(self, instance.instance_id)
 
     def remove(self, handle: GuideHandle) -> None:
-        key = handle.key  # read before the instance is gone
         self.delete_guides(handle.instance_id)
 
     def delete_guides(self, instance_id: str) -> None:

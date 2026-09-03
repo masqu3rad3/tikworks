@@ -91,7 +91,8 @@ class Benchmark:
 
         for res in sorted_results:
             print(
-                f"{res.name:<25} | {res.average * 1000:<10.4f} | {res.total:<10.4f} | {res.best * 1000:<10.4f}"
+                f"{res.name:<25} | {res.average * 1000:<10.4f} | "
+                f"{res.total:<10.4f} | {res.best * 1000:<10.4f}"
             )
         print(f"{'=' * 60}\n")
 
@@ -121,7 +122,8 @@ class _BenchmarkContext:
         times = []
 
         # Warmup (Run without timing to load caches/compile)
-        # Disable GC during run to prevent spikes (optional but recommended for pure algos)
+        # Disable GC during run to prevent spikes (optional but recommended for pure
+        # algos)
         gc_old = gc.isenabled()
         gc.disable()
 

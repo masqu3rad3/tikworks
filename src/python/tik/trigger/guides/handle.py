@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 def mirror_source(source: str, side: str, target_side: str) -> str:
-    """``L_arm.hand`` -> ``R_arm.hand`` when mirroring; center/scene sources unchanged."""
+    """Mirror ``L_arm.hand`` to ``R_arm.hand``; center and scene sources unchanged."""
     key, dot, output = source.rpartition(".")
     if dot and key.startswith(f"{side}_"):
         return f"{target_side}_{key[2:]}{dot}{output}"
@@ -160,7 +160,7 @@ class GuideHandle:
     # ------------------------------------------------------------ inputs
     @property
     def inputs(self) -> dict:
-        """``{input name: source}``; sources are ``"<key>.<output>"`` or a scene node."""
+        """``{input name: source}``; a source is ``"<key>.<output>"`` or a node."""
         return self._guides.inputs_as_keys(self.entry)
 
     @property

@@ -1,4 +1,4 @@
-"""Tests for tik.trigger.io module - ConfigIO and related functions are now in tik.shared.io and tik.core.jsonio."""
+"""tik.shared.io and tik.core.jsonio (formerly tik.trigger.io)."""
 
 import json
 import tempfile

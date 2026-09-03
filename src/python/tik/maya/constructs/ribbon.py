@@ -128,7 +128,10 @@ class Ribbon:
             )
 
     def _create_up_frame(self) -> None:
-        """``Rx(-start_twist) * start_plug.worldMatrix``: swings with the pin, no twist."""
+        """``Rx(-start_twist) * start_plug.worldMatrix``.
+
+        Swings with the pin, without its twist.
+        """
         ensure_plugin("matrixNodes")
         compose = create_node(
             "composeMatrix", name=f"{self.name}_upFrame_composeMatrix"
@@ -198,7 +201,8 @@ class Ribbon:
         self.joint_group = Transform.create(
             name=f"{self.name}_joints_grp", parent=self.group.long_name
         )
-        # joints hold world-space channel values; the group must not transform them again
+        # joints hold world-space channel values; the group must not transform them
+        # again
         self.joint_group["inheritsTransform"].value = False
         for index, output in enumerate(self.spline.outputs):
             joint = Joint.create(

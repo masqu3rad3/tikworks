@@ -4,3 +4,7 @@ extend-ignore = E203, W503
 exclude = .git, __pycache__, venv, build, docs/build, src/python/tik/vendor, src/python/tik/tools/polish, src/python/tik/utils/converter, src/python/tik/maya/utils/converter, .claude
 per-file-ignores =
     __init__.py: F401
+    src/python/tik/shared/ui/theme/__init__.py: E501
+    src/python/tik/shared/ui/feedback.py: E501
+    src/python/tik/shared/scene_data.py: E501
+    src/python/tik/shared/user_settings.py: E501

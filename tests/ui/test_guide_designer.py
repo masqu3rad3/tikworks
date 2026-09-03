@@ -274,7 +274,7 @@ def test_create_prefills_primary_input_and_tree_graph_agree(designer):
 
 def test_inputs_panel_edits_connections(designer):
     designer.set_side("C")
-    body = designer.create_guides("toy_root")[0]
+    designer.create_guides("toy_root")[0]
     designer.guides.selection = None
     designer.tree.clearSelection()
     designer._set_current(None)
@@ -312,7 +312,7 @@ def test_inputs_panel_edits_connections(designer):
 
 def test_graph_wiring_and_disconnect(designer):
     designer.set_side("C")
-    body = designer.create_guides("toy_root")[0]
+    designer.create_guides("toy_root")[0]
     designer.tree.clearSelection()
     designer._set_current(None)
     designer.guides.selection = None
@@ -359,7 +359,7 @@ def test_tree_drag_sets_primary_and_scene_sync(designer):
 
 def test_pick_up_wire_delete_and_sever(designer):
     designer.set_side("C")
-    body = designer.create_guides("toy_root")[0]
+    designer.create_guides("toy_root")[0]
     designer.set_side("L")
     chain = designer.create_guides("toy_chain")[0]
     graph = designer.graph.graph
@@ -370,7 +370,8 @@ def test_pick_up_wire_delete_and_sever(designer):
     assert graph._detached == "L_toy_chain.root" and graph.wires == []
     graph.finish_wire(None)
     assert designer.guides.get(chain.instance_id).inputs == {}
-    # reconnect, select the wire, Delete in the graph disconnects (and does not delete modules)
+    # reconnect, select the wire, Delete in the graph disconnects (and does not delete
+    # modules)
     designer.guides.connect("L_toy_chain.root", "toy_root.root")
     designer.refresh()
     graph = designer.graph.graph
@@ -403,7 +404,8 @@ def test_scene_node_groups_and_side_combo(designer):
     assert designer.guides.get(chain.instance_id).inputs == {
         "space": "hip_jnt"
     }  # plain scene node name
-    # Scene Nodes from the shelf/palette: group named in the properties, rows pre-filled from the selection
+    # Scene Nodes from the shelf/palette: group named in the properties, rows pre-filled
+    # from the selection
     designer.guides.selected_names = ["pelvis_jnt"]
     designer.create_guides("__scene_node__")
     assert (
@@ -434,7 +436,8 @@ def test_scene_node_groups_and_side_combo(designer):
         designer.guides.get(chain.instance_id).inputs == {}
         and "world" not in designer.graph.graph.nodes
     )
-    # right-click menu on an input field lists other modules -> outputs, and scene nodes by group
+    # right-click menu on an input field lists other modules -> outputs, and scene nodes
+    # by group
     designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
     modules, scene_nodes = designer._input_rows["root"].sources()
     assert [module[0] for module in modules] == [] and scene_nodes == [
@@ -722,7 +725,8 @@ def test_tree_filter_and_ctrl_click_toggle(designer, qapp):
     assert all(
         not designer.item_for(handle.instance_id).isHidden() for handle in chains
     )
-    # Ctrl+click toggles selection without slicing; the graph selection is not echoed back by the tree
+    # Ctrl+click toggles selection without slicing; the graph selection is not echoed
+    # back by the tree
     view = designer.graph
     view.graph.select_keys([])
     view.toggle_node_at(

@@ -15,7 +15,7 @@ def mock_ui_cmds():
     """Mock Maya UI commands that fail in standalone mode."""
     with (
         patch("maya.cmds.window") as m_window,
-        patch("maya.cmds.paneLayout") as m_paneLayout,
+        patch("maya.cmds.paneLayout"),
         patch("maya.cmds.modelPanel") as m_modelPanel,
         patch("maya.cmds.modelEditor") as m_modelEditor,
         patch("maya.cmds.showWindow") as m_showWindow,
@@ -139,7 +139,7 @@ def test_inherit_panel_properties(mock_ui_cmds):
 
     mock_ui_cmds["modelEditor"].side_effect = model_editor_side_effect
 
-    panel = Panel(cam_shape, inherit=True)
+    Panel(cam_shape, inherit=True)
 
     # Verify modelEditor was called to set properties on new panel
     # We expect calls like: cmds.modelEditor('tik_panel', e=True, grid=True)
@@ -489,7 +489,7 @@ def test_inherit_panel_properties_self_check(mock_ui_cmds):
     # Mock modelPanel to return camera for tik_panel (should be skipped anyway)
     mock_ui_cmds["modelPanel"].return_value = "tik_panel"
 
-    panel = Panel(cam_shape, inherit=True)
+    Panel(cam_shape, inherit=True)
 
     # Check that modelEditor was NOT called with query=True on tik_panel
     calls = mock_ui_cmds["modelEditor"].mock_calls
@@ -511,7 +511,7 @@ def test_inherit_panel_properties_no_candidates(mock_ui_cmds):
 
     mock_ui_cmds["modelPanel"].side_effect = model_panel_side_effect
 
-    panel = Panel(cam_shape, inherit=True)
+    Panel(cam_shape, inherit=True)
 
     # Should return early
     calls = mock_ui_cmds["modelEditor"].mock_calls
@@ -545,7 +545,7 @@ def test_inherit_panel_properties_active_panel(mock_ui_cmds):
 
     mock_ui_cmds["modelEditor"].side_effect = model_editor_side_effect
 
-    panel = Panel(cam_shape, inherit=True)
+    Panel(cam_shape, inherit=True)
 
     # Should have picked modelPanel2 (active) -> grid=True
     mock_ui_cmds["modelEditor"].assert_any_call("tik_panel", edit=True, grid=True)
@@ -577,7 +577,7 @@ def test_inherit_panel_properties_multiple_candidates(mock_ui_cmds):
 
     mock_ui_cmds["modelEditor"].side_effect = model_editor_side_effect
 
-    panel = Panel(cam_shape, inherit=True)
+    Panel(cam_shape, inherit=True)
 
     # Should have picked modelPanel2 (last) -> grid=True
     mock_ui_cmds["modelEditor"].assert_any_call("tik_panel", edit=True, grid=True)
@@ -606,7 +606,7 @@ def test_inherit_panel_properties_runtime_error(mock_ui_cmds):
     mock_ui_cmds["modelEditor"].side_effect = model_editor_side_effect
 
     # Should not crash
-    panel = Panel(cam_shape, inherit=True)
+    Panel(cam_shape, inherit=True)
 
 
 def test_panel_isolate_normalize_list(mock_ui_cmds):
@@ -616,7 +616,7 @@ def test_panel_isolate_normalize_list(mock_ui_cmds):
     cubes = [cmds.polyCube()[0], cmds.polyCube()[0]]
 
     with (
-        patch("maya.cmds.isolateSelect") as m_isolateSelect,
+        patch("maya.cmds.isolateSelect"),
         patch("tik.maya.core.scene.select_nodes") as m_select_nodes,
     ):
 

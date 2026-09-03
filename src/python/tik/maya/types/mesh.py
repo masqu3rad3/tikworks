@@ -122,7 +122,7 @@ class Mesh(ShapeNode):
         """Get vertex colors.
 
         Args:
-            indices (list[int], optional): List of vertex indices to retrieve colors for.
+            indices (list[int], optional): Vertex indices to retrieve colors for.
 
         Returns:
             OpenMaya.MColorArray or None: Vertex colors if they exist, else None.
@@ -152,7 +152,7 @@ class Mesh(ShapeNode):
         """Set vertex color for vertices.
 
         Args:
-            color (tuple or color.Color): RGB color values as a tuple of three floats (0.0 to 1.0)
+            color (tuple or color.Color): RGB as three floats (0.0 to 1.0).
                 or color.Color object.
             indices (list[int], optional): List of vertex indices to set color for.
         """

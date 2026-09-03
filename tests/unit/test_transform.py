@@ -256,8 +256,8 @@ def test_collect_children_recursive():
     #   |- child2
     root = Transform.create(name="root")
     child1 = Transform.create(name="child1", parent=root.name)
-    grandChild1 = Transform.create(name="grandChild1", parent=child1.name)
-    child2 = Transform.create(name="child2", parent=root.name)
+    Transform.create(name="grandChild1", parent=child1.name)
+    Transform.create(name="child2", parent=root.name)
 
     collected = root.collect_hierarchy()
     names = {node.name for node in collected}
@@ -267,7 +267,7 @@ def test_collect_children_recursive():
 def test_collect_children_with_depth_limit():
     root = Transform.create(name="rootD")
     child1 = Transform.create(name="child1D", parent=root.name)
-    grandChild1 = Transform.create(name="grandChild1D", parent=child1.name)
+    Transform.create(name="grandChild1D", parent=child1.name)
 
     collected = root.collect_hierarchy(max_depth=1)
     names = {node.name for node in collected}
@@ -284,9 +284,9 @@ def test_collect_children_include_self():
 
 def test_collect_children_filter_type():
     root = Transform.create(name="rootT")
-    child1 = Transform.create(name="child1T", parent=root.name)
+    Transform.create(name="child1T", parent=root.name)
     # Add a shape
-    shape = cmds.createNode("mesh", parent=root.name, name="meshShape")
+    cmds.createNode("mesh", parent=root.name, name="meshShape")
 
     # Filter for transforms only
     collected = root.collect_hierarchy(node_types=["transform"])
@@ -306,8 +306,8 @@ def test_collect_shape_transforms():
     child1 = Transform.create(name="child1ST", parent=root.name)
 
     # Add shapes
-    s1 = cmds.createNode("mesh", parent=root.name, name="s1")
-    s2 = cmds.createNode("nurbsCurve", parent=child1.name, name="s2")
+    cmds.createNode("mesh", parent=root.name, name="s1")
+    cmds.createNode("nurbsCurve", parent=child1.name, name="s2")
 
     transforms = root.collect_shape_transforms()
     names = {transform.name for transform in transforms}
@@ -318,7 +318,7 @@ def test_collect_shape_transforms():
 
 def test_collect_hierarchy_with_string_node_type():
     root = Transform.create(name="rootStr")
-    child1 = Transform.create(name="child1Str", parent=root.name)
+    Transform.create(name="child1Str", parent=root.name)
 
     collected = root.collect_hierarchy(node_types="transform")
     names = {node.name for node in collected}

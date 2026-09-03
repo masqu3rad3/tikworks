@@ -159,7 +159,7 @@ def test_collar_is_a_behaviour_control(scene):
 
 
 def test_builds_without_a_ribbon(scene):
-    ctx = _arm_ctx(scene)
+    _arm_ctx(scene)
     assert not cmds.ls(type="nurbsSurface")
     assert not cmds.ls("*ribbon*")
 
@@ -189,7 +189,7 @@ def test_segment_scale_and_soft_ik_are_always_present(scene):
 
 
 def test_stretch_off_builds_a_smaller_graph(scene):
-    ctx = _arm_ctx(scene, stretch=False, squash=False)
+    _arm_ctx(scene, stretch=False, squash=False)
     lean = len(cmds.ls(type="condition"))
     cmds.file(new=True, force=True)
     fresh = GuideScene()

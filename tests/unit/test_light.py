@@ -41,7 +41,8 @@ def test_create_light_with_name():
 
 def test_create_light_invalid_type_non_dag():
     """Test creating a light with a non-DAG node type."""
-    # Using a non-DAG node type should fail because Light inherits ShapeNode which expects a DAG path
+    # Using a non-DAG node type should fail because Light inherits ShapeNode which
+    # expects a DAG path
     # OpenMaya.MSelectionList().getDagPath(0) raises TypeError for non-DAG nodes
     with pytest.raises(TypeError):
         Light.create(light_type="multiplyDivide")

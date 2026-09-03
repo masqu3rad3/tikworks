@@ -174,7 +174,8 @@ class _NodeNamesConfig:
             try:
                 self._cached_version = int(cmds.about(version=True))
             except (AttributeError, RuntimeError, ValueError):
-                # Default to 2026 if accessed during uninitialized states (e.g., test collection)
+                # Default to 2026 if accessed during uninitialized states (e.g., test
+                # collection)
                 self._cached_version = 2026
         return self._cached_version
 

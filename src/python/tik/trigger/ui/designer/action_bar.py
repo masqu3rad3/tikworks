@@ -59,7 +59,8 @@ class DesignerActionBar(QtWidgets.QFrame):
         self.auto_check = QtWidgets.QCheckBox("Auto")
         self.auto_check.setChecked(True)
         self.auto_check.setToolTip(
-            "Follow the scene automatically. Off, the session updates only when you press Sync."
+            "Follow the scene automatically. "
+            "Off, the session updates only when you press Sync."
         )
         layout.addWidget(self.auto_check)
         self.drift_pill = QtWidgets.QLabel("")

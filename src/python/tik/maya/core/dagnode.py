@@ -71,7 +71,8 @@ class DagNode(Node):
         """Return the parent as a wrapped node (or None if no parent).
 
         Returns:
-            Node wrapper or None: The parent node, or None if this is a world-level node.
+            Node wrapper or None: The parent node, or None for a world-level
+                node.
         """
         return self.get_parent()
 

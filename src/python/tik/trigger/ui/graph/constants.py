@@ -13,7 +13,8 @@ GLYPH_WIDTH = 16
 WIRE_PRIMARY = QtGui.QColor(theme.ACCENT)
 WIRE_SECONDARY = QtGui.QColor("#8fa4c0")
 PORT_SPACE = "#c9a227"  # space ports read apart from input ports at a glance
-WORLD = 100000.0  # scene rect half-size: effectively infinite canvas so panning is never clamped
+# scene rect half-size: effectively infinite canvas, so panning is never clamped
+WORLD = 100000.0
 GRID = 20
 MODE_MINIMAL, MODE_CONNECTED, MODE_FULL = 0, 1, 2
 COLUMN_GAP = 60

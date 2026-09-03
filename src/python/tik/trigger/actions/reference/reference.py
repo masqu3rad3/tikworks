@@ -61,7 +61,8 @@ class Reference(Action):
         key = str(path.resolve())
         if key in chain:
             raise SessionError(
-                f"reference cycle: {' > '.join(Path(item).name for item in chain)} > {path.name}"
+                "reference cycle: "
+                f"{' > '.join(Path(item).name for item in chain)} > {path.name}"
             )
         document = loader(path)
         Reference.apply_overrides(
@@ -75,7 +76,7 @@ class Reference(Action):
     def apply_overrides(
         document: Document, include: list, overrides: dict
     ) -> list[str]:
-        """Apply include list and overrides in place; return unresolved override paths."""
+        """Apply the include list and overrides; return unresolved override paths."""
         if include:
             wanted = set(include)
             for path, item, _parent in document.walk():

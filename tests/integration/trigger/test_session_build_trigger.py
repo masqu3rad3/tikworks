@@ -1,4 +1,4 @@
-"""The rebuild story: author guides -> export .trg -> session builds from files, twice."""
+"""The rebuild story: author guides, export .trg, build from files twice."""
 
 import pytest
 from maya import cmds
@@ -23,7 +23,7 @@ def _author(scene, tmp_path):
 
 
 def test_session_builds_from_files_and_rebuilds(scene, tmp_path):
-    guides_path = _author(scene, tmp_path)
+    _author(scene, tmp_path)
     model = tmp_path / "geo" / "hero_model.ma"
     cmds.file(new=True, force=True)
     cmds.polySphere(name="hero_geo")
@@ -43,7 +43,10 @@ def test_session_builds_from_files_and_rebuilds(scene, tmp_path):
     rig.add(
         "script",
         "tag",
-        code="import maya.cmds as cmds\ncmds.createNode('transform', name='from_script')",
+        code=(
+            "import maya.cmds as cmds\n"
+            "cmds.createNode('transform', name='from_script')"
+        ),
     )
     rig.save()
 

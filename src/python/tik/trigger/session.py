@@ -764,7 +764,7 @@ class Session:
         reset_scene: bool = True,
         publish: bool = False,
     ) -> list[StepResult]:
-        """Reset the scene and run the build list; with ``publish``, the publish list after it.
+        """Reset the scene and run the build list, then the publish list if asked.
 
         ``until`` stops after that build action -- and forbids ``publish``,
         because a partial build is not a rig anyone should be exporting.
@@ -772,7 +772,8 @@ class Session:
         until = until.path if isinstance(until, ActionHandle) else until
         if publish and until is not None:
             raise SessionError(
-                "'until' cannot be combined with publish: a partial build must not publish."
+                "'until' cannot be combined with publish: "
+                "a partial build must not publish."
             )
         self.events.log(f"Building{' and publishing' if publish else ''} {self.name}")
         # The runner resets the scene, so the guides have to be in the document
@@ -798,7 +799,8 @@ class Session:
         path = path.path if isinstance(path, ActionHandle) else path
         if self.document.find(path, phase=PUBLISH) is not None:
             raise SessionError(
-                f"'{path}' is a publish action; publish actions run only with Build & Publish."
+                f"'{path}' is a publish action; "
+                "publish actions run only with Build & Publish."
             )
         self.capture_guides()
         return self._runner().run(

@@ -167,7 +167,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.side_combo = QtWidgets.QComboBox()
         self.side_combo.addItems(SIDES)
         self.side_combo.setToolTip(
-            "Side of the modules you add next (Both = L and R, Auto = follow the selected module)"
+            "Side of the modules you add next "
+            "(Both = L and R, Auto = follow the selected module)"
         )
         left_layout.addWidget(self.side_combo)
         modules_header = QtWidgets.QLabel("MODULES")
@@ -332,7 +333,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.graph.addAction(action)
 
     def module_menu(self) -> QtWidgets.QMenu:
-        """Right-click menu for the selected module(s); shared by the tree and the graph."""
+        """Right-click menu for the selected modules; shared by tree and graph."""
         menu = QtWidgets.QMenu(self)
         handles = self.selected_handles()
         menu.addAction("Select root", self.select_root)
@@ -541,7 +542,10 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self._syncing = False
 
     def _clear_tree(self) -> None:
-        """Drop every row without Qt signalling into a half-torn-down tree (PySide crashed on plain clear())."""
+        """Drop every row without Qt signalling into a half-torn-down tree.
+
+        PySide crashed on a plain ``clear()``.
+        """
         tree = self.tree
         tree.blockSignals(True)
         try:
@@ -595,7 +599,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
     def _select_handles(
         self, handles: list[GuideHandle], sync_graph: bool = True
     ) -> None:
-        """Properties for one module, or for several of the same type (edited together)."""
+        """Properties for one module, or several of one type edited together."""
         handles = [handle for handle in handles if handle is not None]
         if sync_graph:
             self.graph.select_keys([handle.key for handle in handles])
@@ -608,7 +612,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         else:
             self._set_current(None)
             self.multi_label.setText(
-                f"{len(handles)} modules of {len(types)} different types — nothing to edit together."
+                f"{len(handles)} modules of {len(types)} different types "
+                "— nothing to edit together."
             )
             self.multi_label.setVisible(True)
             self.status.set_activity(f"{len(handles)} modules selected (mixed types)")
@@ -627,7 +632,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self._set_current_external(name)
 
     def _set_current_external(self, name: str) -> None:
-        """Properties for a scene-nodes group: its name and the scene nodes it exposes."""
+        """Properties for a scene-nodes group: its name and the nodes it exposes."""
         self._set_current(None)
         self._external = name
         self.name_edit.setText(name)
@@ -774,7 +779,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.name_edit.setEnabled(False)
             self.name_edit.setText(", ".join(item.key for item in self._multi))
             self.multi_label.setText(
-                f"Editing {len(self._multi)} {module_cls.display_label()} modules together — every change applies to all of them."
+                f"Editing {len(self._multi)} {module_cls.display_label()} "
+                "modules together — every change applies to all of them."
             )
             self.multi_label.setVisible(True)
             self.inputs_caption.setVisible(False)

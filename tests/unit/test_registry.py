@@ -56,7 +56,7 @@ class TestRegistry:
             resolve("nonexistent_node")
 
     def test_get_node_with_default_factory(self):
-        """Test that get_node uses the default factory when no specific type is registered."""
+        """get_node uses the default factory when no specific type is registered."""
         # Create a Transform node
         node_name = cmds.createNode("multiplyDivide", name="test_transform")
 
@@ -99,7 +99,10 @@ class TestRegistry:
             # Expect a LookupError when no default factory is set
             with pytest.raises(
                 LookupError,
-                match="No wrapper registered for 'multiplyDivide' and no default factory set.",
+                match=(
+                    "No wrapper registered for 'multiplyDivide' "
+                    "and no default factory set."
+                ),
             ):
                 resolve(node_name)
         finally:
@@ -114,14 +117,17 @@ class TestRegistry:
             pass
 
         node_name = cmds.createNode("transform", name="special")
-        # Even though it's a transform, we force it to be wrapped as MySpecialNode (if compatible or just forced)
-        # The resolve function just instantiates cls(name). Node.__init__ checks existence.
+        # Even though it's a transform, we force it to be wrapped as MySpecialNode (if
+        # compatible or just forced)
+        # The resolve function just instantiates cls(name). Node.__init__ checks
+        # existence.
 
         # We need to register it by name so we can look it up by class_name string?
         # Wait, _NODE_TYPES keys are node types (strings).
         # resolve(name, class_name="...") looks up _NODE_TYPES.get(class_name).
         # But _NODE_TYPES keys are usually maya node types like "transform", "joint".
-        # If I register with @register("mySpecialNode"), then class_name should be "mySpecialNode".
+        # If I register with @register("mySpecialNode"), then class_name should be
+        # "mySpecialNode".
 
         node = resolve(node_name, class_name="mySpecialNode")
         assert isinstance(node, MySpecialNode)
@@ -136,7 +142,7 @@ class TestRegistry:
             resolve(node_name, class_name="UnknownType")
 
     def test_resolve_returns_instance_if_already_wrapper(self):
-        """Test resolve returns the object itself if it is already a registered wrapper instance."""
+        """resolve returns an already-wrapped instance unchanged."""
 
         @register("knownType")
         class KnownType(Node):

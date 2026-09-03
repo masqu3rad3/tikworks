@@ -48,8 +48,10 @@ class SkinCluster(Deformer):
         # if only one of the influences or geometry is None, raise an error
         if geometry is None or influences is None:
             raise ValueError(
-                "To create skincluster with connections, geometry and influences must be provided.\n"
-                "Alternatively, call SkinCluster.create() without geometry and influences to create an unbound skinCluster node."
+                "To create skincluster with connections, geometry and "
+                "influences must be provided.\n"
+                "Alternatively, call SkinCluster.create() without geometry "
+                "and influences to create an unbound skinCluster node."
             )
 
         default_kwargs = {
@@ -120,7 +122,7 @@ class SkinCluster(Deformer):
 
     @property
     def original_geometry(self):
-        """Return the first original geometry shape name connected to the skinCluster."""
+        """The first original-geometry shape connected to the skinCluster."""
         return self.original_geometries[0] if self.original_geometries else None
 
     @property
@@ -371,7 +373,8 @@ class SkinCluster(Deformer):
         for logical_idx in requested_indices:
             if logical_idx not in pos_map:
                 raise ValueError(
-                    f"Influence index {logical_idx} not found on skinCluster '{self.name}'"
+                    f"Influence index {logical_idx} not found on "
+                    f"skinCluster '{self.name}'"
                 )
             selected_positions.append(pos_map[logical_idx])
             channel_names.append(name_map.get(logical_idx, None))
@@ -439,15 +442,18 @@ class SkinCluster(Deformer):
         selected_count = len(requested_indices)
         vertex_count = self.vertex_count
 
-        # Normalize incoming weights to flat vertex-major list for the requested channels
+        # Normalize incoming weights to flat vertex-major list for the requested
+        # channels
         if isinstance(weights, DeformerWeights):
             if weights.channel_count != selected_count:
                 raise ValueError(
-                    f"DeformerWeights.channel_count {weights.channel_count} != requested {selected_count}"
+                    f"DeformerWeights.channel_count {weights.channel_count} "
+                    f"!= requested {selected_count}"
                 )
             if weights.element_count != vertex_count:
                 raise ValueError(
-                    f"DeformerWeights.element_count {weights.element_count} != {vertex_count}"
+                    f"DeformerWeights.element_count {weights.element_count} "
+                    f"!= {vertex_count}"
                 )
             flat_weights = list(weights.weights)
         else:
@@ -472,7 +478,8 @@ class SkinCluster(Deformer):
         for idx_pos, logical_idx in enumerate(requested_indices):
             influence_indices_array[idx_pos] = int(logical_idx)
 
-        # Convert to MDoubleArray and set weights (API will accept vertex-major ordering)
+        # Convert to MDoubleArray and set weights (API will accept vertex-major
+        # ordering)
         weight_array = OpenMaya.MDoubleArray(flat_weights)
         skin_fn.setWeights(
             dag_path, vertex_component, influence_indices_array, weight_array, normalize
@@ -736,10 +743,6 @@ class SkinCluster(Deformer):
         default_kwargs.update(kwargs)
 
         self._save_deformer_weights(file_path, **default_kwargs)
-
-        # cmds.deformerWeights(
-        #     file_name, export=True, deformer=self.name, path=file_dir, **default_kwargs
-        # )
 
     def load_weights(self, file_path, method="index", **kwargs):
         """Import skinCluster weights from a file.

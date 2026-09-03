@@ -6,7 +6,14 @@ from pathlib import Path
 import pytest
 
 from tik.trigger.core import versioning
-from tik.trigger.core.document import SCHEMA_VERSION, ActionNode, Document
+from tik.trigger.core.document import (
+    BUILD,
+    PHASES,
+    PUBLISH,
+    SCHEMA_VERSION,
+    ActionNode,
+    Document,
+)
 from tik.trigger.core.exceptions import SessionError, SessionLoadError
 
 DATA = Path(__file__).resolve().parents[1] / "data"
@@ -168,7 +175,6 @@ def test_editing_guides_shows_up_in_the_documents_state():
 
 
 # --------------------------------------------------------------- phases
-from tik.trigger.core.document import BUILD, PHASES, PUBLISH
 
 
 def _mixed():

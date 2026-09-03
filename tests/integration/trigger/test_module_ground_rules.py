@@ -147,7 +147,7 @@ def test_bind_joints_carry_live_trs(module_type):
 
 @pytest.mark.parametrize("module_type", MODULE_TYPES)
 def test_module_builds_without_a_cycle(module_type):
-    ctx = _solo(module_type)
+    _solo(module_type)
     cmds.dgdirty(allPlugs=True)
     cycles = cmds.cycleCheck(all=True) or []
     assert not cycles, f"'{module_type}' evaluates with a cycle: {cycles}"

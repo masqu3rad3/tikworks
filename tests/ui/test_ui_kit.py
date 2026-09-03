@@ -1,4 +1,4 @@
-"""Shared UI kit: versioned field, tile grid, collapsible, scene watcher, tool window."""
+"""Shared UI kit: versioned field, tile grid, collapsible, watcher, window."""
 
 from tik.shared.ui.collapsible import CollapsibleGroup
 from tik.shared.ui.maya_window import HAS_MAYA, MayaToolWindow

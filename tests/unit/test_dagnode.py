@@ -45,7 +45,7 @@ def test_parent_set_to_new_parent_node_and_updates_children():
 
 def test_parent_set_to_new_parent_by_name_and_cache_refresh():
     pA = cmds.createNode("transform", name="pA")
-    pB = cmds.createNode("transform", name="pB")
+    cmds.createNode("transform", name="pB")
     node = cmds.createNode("transform", name="n", parent=pA)
 
     n_node = resolve(cmds.ls(node, long=True)[0])
@@ -312,7 +312,8 @@ def test_get_color_returns_raw_tuple_when_as_color_is_false():
     # Check default (Color object)
     # node.color returns a Color object which might behave like a tuple or have .rgb,
     # but exact equality fails due to float precision.
-    # Assuming Color object is iterable or comparable to tuple, we use approx on elements.
+    # Assuming Color object is iterable or comparable to tuple, we use approx on
+    # elements.
     retrieved_color = node.color
     # If it's a Color object, get its rgb component or cast to tuple if logical
     if hasattr(retrieved_color, "rgb"):

@@ -211,7 +211,10 @@ class GraphScene(QtWidgets.QGraphicsScene):
         super().keyPressEvent(event)
 
     def delete_selected(self) -> bool:
-        """Disconnect selected wires and remove selected scene-node groups. True when anything was selected."""
+        """Disconnect selected wires and remove selected scene-node groups.
+
+        Returns True when anything was selected.
+        """
         wires = [item for item in self.selectedItems() if isinstance(item, WireItem)]
         externals = [
             item

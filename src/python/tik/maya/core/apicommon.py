@@ -37,7 +37,8 @@ def obj_exists(name):
 def node_type(name):
     """Get the type of a Maya node.
 
-    Faster equivalent of cmds.nodeType(name) (without inherited=True) using Maya API 2.0.
+    Faster equivalent of ``cmds.nodeType(name)`` (without ``inherited=True``)
+    using Maya API 2.0.
 
     Args:
         name: Name of the node.

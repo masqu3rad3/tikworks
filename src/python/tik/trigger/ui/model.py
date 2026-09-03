@@ -126,7 +126,9 @@ class PipelineModel(QtCore.QAbstractItemModel):
             return self.createIndex(row, column, item.children[row])
         return QtCore.QModelIndex()
 
-    def parent(self, index: QtCore.QModelIndex) -> QtCore.QModelIndex:  # type: ignore[override]
+    def parent(  # type: ignore[override]
+        self, index: QtCore.QModelIndex
+    ) -> QtCore.QModelIndex:
         item = self._item(index)
         if item is self._root or item.parent is None or item.parent is self._root:
             return QtCore.QModelIndex()

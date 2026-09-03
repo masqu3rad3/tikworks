@@ -66,7 +66,8 @@ class GuideFile:
         )  # {"input": "L_arm.root", "source": "body.root"}
         self.meta: dict = dict(meta or {})
         # Guide Designer state that belongs to the asset, not the window:
-        # {"scene_nodes": {group: [scene node, ...]}, "positions": {key: [x, y]}, "collapse": {key: 0|1|2}}
+        # {"scene_nodes": {group: [scene node, ...]},
+        #  "positions": {key: [x, y]}, "collapse": {key: 0|1|2}}
         self.designer: dict = dict(designer or {})
         self.unknown: list[str] = []  # module types no registered module claims
 
@@ -103,7 +104,7 @@ class GuideFile:
         return path
 
     def inputs_for(self, key: str) -> dict:
-        """``{input name: source}`` for the instance ``key`` from the connections list."""
+        """``{input name: source}`` for instance ``key`` from the connections."""
         found = {}
         for item in self.connections:
             target = str(item.get("input", ""))
@@ -154,7 +155,7 @@ class GuideFile:
         return instances
 
     def _resolve_inputs(self, instances: list[GuideInstance]) -> None:
-        """Explicit connections win; otherwise derive the primary input from the parent joint."""
+        """Explicit connections win; else the parent joint gives the primary input."""
         by_joint: dict[str, tuple[GuideInstance, str]] = {}
         for instance in instances:
             for (role, _index), record in instance.joints.items():

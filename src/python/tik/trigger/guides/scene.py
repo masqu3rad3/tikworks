@@ -32,7 +32,7 @@ from .snapshot import snapshot
 
 
 class GuideScene:
-    """The guides in the current Maya scene: author, connect, import/export, test build."""
+    """The guides in the current Maya scene: author, connect, exchange, build."""
 
     def __init__(self, events: Optional[EventBus] = None, session=None) -> None:
         self.events = events or EventBus()
@@ -316,7 +316,7 @@ class GuideScene:
             self._apply(entry)
 
     def reparent_guides(self, instance_id: str, parent: Optional[ParentRef]) -> None:
-        """Hang an instance's root guide under another instance's guide (or the holder)."""
+        """Hang an instance's root guide under another's guide, or the holder."""
         root = self._root_node(instance_id)
         if parent is None:
             target = nodes.holder()
@@ -499,7 +499,7 @@ class GuideScene:
             scratch.delete()
 
     def import_guide_instances(self, guide_instances) -> list[ModuleInstance]:
-        """Recreate guide joints from ``GuideInstance`` records; returns scene instances."""
+        """Recreate guide joints from ``GuideInstance`` records; return instances."""
         holder = nodes.holder()
         created_nodes: dict = {}  # record name -> joint
         built: list = []
@@ -621,13 +621,17 @@ class GuideScene:
             document.modules.append(entry)
             entries[module.instance_id] = (entry, guide_instance)
             original_keys[guide_instance.key] = entry.instance_id
+
+        def as_instance_source(source: str) -> str:
+            """``<file key>.<output>`` -> ``<instance id>.<output>``; nodes as-is."""
+            key, dot, output = source.rpartition(".")
+            if dot and key in original_keys:
+                return f"{original_keys[key]}.{output}"
+            return source
+
         for entry, guide_instance in entries.values():
             entry.inputs = {
-                name: (
-                    f"{original_keys[source.rpartition('.')[0]]}.{source.rpartition('.')[2]}"
-                    if "." in source and source.rpartition(".")[0] in original_keys
-                    else source
-                )
+                name: as_instance_source(source)
                 for name, source in guide_instance.inputs.items()
                 if source
             }
@@ -735,7 +739,8 @@ class GuideScene:
     def layout(self) -> dict:
         """Designer state stored with the guides, projected under display keys.
 
-        ``{"scene_nodes": {group: [node, ...]}, "positions": {key: [x, y]}, "collapse": {key: 0|1|2}}``
+        ``{"scene_nodes": {group: [node, ...]}, "positions": {key: [x, y]},
+        "collapse": {key: 0|1|2}}``
         """
         return self.document.layout_as_keys()
 
@@ -755,7 +760,7 @@ class GuideScene:
 
     # ------------------------------------------------------ scene nodes
     def scene_groups(self) -> dict[str, list[str]]:
-        """``{group name: [scene node, ...]}`` — arbitrary Maya nodes modules connect to."""
+        """``{group name: [scene node, ...]}``: Maya nodes modules connect to."""
         return {
             name: list(nodes)
             for name, nodes in self.layout.get("scene_nodes", {}).items()
@@ -827,7 +832,10 @@ class GuideScene:
         return GuideHandle(self, entry.instance_id) if entry is not None else None
 
     def connect(self, target: str, source: str) -> None:
-        """``connect("L_arm.root", "body.root")`` or ``connect("tail.space", "some_jnt")``."""
+        """Connect an input to a module output or a scene node.
+
+        ``connect("L_arm.root", "body.root")`` or ``connect("tail.space", "jnt")``.
+        """
         key, _dot, input_name = target.rpartition(".")
         handle = self.by_key(key)
         if handle is None or not input_name:
@@ -836,7 +844,8 @@ class GuideScene:
         producer = self.by_key(source_key) if source_key else None
         if producer is not None and output not in producer.outputs:
             raise GuideError(
-                f"'{source_key}' has no output '{output}' (has {list(producer.outputs)})."
+                f"'{source_key}' has no output '{output}' "
+                f"(has {list(producer.outputs)})."
             )
         handle.set_input(input_name, source)
 
@@ -946,7 +955,10 @@ class GuideScene:
         return GuideHandle(self, module.instance_id)
 
     def duplicate(self, handle: GuideHandle, name: Optional[str] = None) -> GuideHandle:
-        """Copy a module: same type/side/settings/inputs/poses, a unique name (``arm`` -> ``arm1``)."""
+        """Copy a module with a unique name (``arm`` -> ``arm1``).
+
+        Type, side, settings, inputs and poses are copied.
+        """
         instance = handle.instance
         module = handle.module_class(
             name=name or instance.name, side=instance.side, settings=instance.settings

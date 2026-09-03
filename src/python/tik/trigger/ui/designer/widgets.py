@@ -9,7 +9,8 @@ from tik.trigger.core import registry
 from ..palette import PaletteEntry
 
 MIME_MODULE = "application/x-trigger-module-type"
-SCENE_NODE = "__scene_node__"  # pseudo module: a group of arbitrary scene nodes modules can connect to
+# pseudo module: a group of arbitrary scene nodes that modules can connect to
+SCENE_NODE = "__scene_node__"
 MODULE_COLORS = {
     "body": "#c9a24a",
     "limbs": "#5b8fd0",
@@ -106,7 +107,8 @@ class GuideTree(QtWidgets.QTreeWidget):
         moved_id = moved.data(0, QtCore.Qt.UserRole)
         target_id = target.data(0, QtCore.Qt.UserRole) if target is not None else None
         if target_id != moved_id:
-            # rebuilding the tree while Qt is still inside the drop crashes; do it next tick
+            # rebuilding the tree while Qt is still inside the drop crashes; do it next
+            # tick
             QtCore.QTimer.singleShot(
                 0, lambda: self.reparent_requested.emit(moved_id, target_id)
             )
@@ -125,8 +127,10 @@ class InputRow(QtWidgets.QWidget):
         super().__init__(parent)
         self.input = input_decl
         self.picker = picker
-        self.sources = sources  # callable -> (modules: [(key, label, [outputs])], scene_nodes: [(group, node)])
-        self._last = ""  # last source we showed or reported; editingFinished fires on focus loss too
+        # callable -> (modules: [(key, label, [outputs])], scene_nodes: [(group, node)])
+        self.sources = sources
+        # last source shown or reported; editingFinished fires on focus loss too
+        self._last = ""
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
@@ -203,7 +207,10 @@ class InputRow(QtWidgets.QWidget):
 
 
 class SceneNodesPanel(QtWidgets.QWidget):
-    """Outputs of a scene-nodes group: one scene node per row, pickable from the Maya selection."""
+    """Outputs of a scene-nodes group.
+
+    One scene node per row, pickable from the Maya selection.
+    """
 
     changed = QtCore.Signal(list)  # new node list
 

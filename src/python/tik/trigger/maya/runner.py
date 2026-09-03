@@ -118,7 +118,8 @@ class Runner:
             plan,
             phase,
         )
-        # a reference may also carry its own (local) children, run after the referenced ones
+        # a reference may also carry its own (local) children, run after the referenced
+        # ones
         self._collect(
             node.children, path, base_dir, chain, depth + 1, False, plan, phase
         )
@@ -142,7 +143,8 @@ class Runner:
         """
         if publish and until is not None:
             raise SessionError(
-                "'until' cannot be combined with publish: a partial build must not publish."
+                "'until' cannot be combined with publish: "
+                "a partial build must not publish."
             )
         steps = list(
             self.plan(document, base_dir, until=until, only=only, phase=BUILD).steps

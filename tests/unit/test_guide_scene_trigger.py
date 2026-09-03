@@ -69,7 +69,7 @@ def test_find_instances_reads_hierarchy_and_poses(scene):
 
 
 def test_find_instances_scopes(scene):
-    root = scene.create_guides(get_module("base")(name="body"))
+    scene.create_guides(get_module("base")(name="body"))
     other = scene.create_guides(get_module("fkchain")(name="tail"))
     assert [item.name for item in scene.find_instances([other.instance_id])] == ["tail"]
     cmds.select(scene.guide_node(other.instance_id, "segment", 1).long_name)

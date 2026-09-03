@@ -1,4 +1,7 @@
-"""Search palette (Tab): type to filter, Enter adds after the selection, Shift+Enter as a child."""
+"""Search palette (Tab).
+
+Type to filter; Enter adds after the selection, Shift+Enter adds a child.
+"""
 
 from __future__ import annotations
 
@@ -53,7 +56,8 @@ class SearchPalette(QtWidgets.QFrame):
         self.recent: list[str] = []
         self.setObjectName("SearchPalette")
         self.setStyleSheet(
-            f"#SearchPalette {{ background: {theme.INPUT}; border: 1px solid {theme.LINE}; border-radius: 6px; }}"
+            f"#SearchPalette {{ background: {theme.INPUT}; "
+            f"border: 1px solid {theme.LINE}; border-radius: 6px; }}"
         )
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)

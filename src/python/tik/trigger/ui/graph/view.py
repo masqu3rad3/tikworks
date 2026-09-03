@@ -29,7 +29,7 @@ from .scene import GraphScene
 
 
 class GraphView(QtWidgets.QGraphicsView):
-    """Renders a ``GuideScene``'s instances and connections; edits go back through it."""
+    """Renders a ``GuideScene``'s instances and connections; edits go through it."""
 
     selection_changed = QtCore.Signal(str)
     external_selection_changed = QtCore.Signal(str)
@@ -83,7 +83,8 @@ class GraphView(QtWidgets.QGraphicsView):
         self.graph.clear_graph()
         handles = self.guides.instances()
         by_key = {handle.key: handle for handle in handles}
-        # scene sources nobody grouped yet -> implicit "scene" group (shown, not written)
+        # scene sources nobody grouped yet -> implicit "scene" group (shown, not
+        # written)
         grouped = {node for nodes in groups.values() for node in nodes}
         for handle in handles:
             for source in handle.inputs.values():
@@ -295,7 +296,10 @@ class GraphView(QtWidgets.QGraphicsView):
         return True
 
     def resolve_source(self, source_key: str) -> str:
-        """``group.node`` on a scene-nodes group -> plain scene node name; module sources unchanged."""
+        """``group.node`` on a scene-nodes group -> plain scene node name.
+
+        Module sources are returned unchanged.
+        """
         node_key, _dot, port = source_key.rpartition(".")
         node = self.graph.nodes.get(node_key)
         if node is not None and node.external:
@@ -310,7 +314,7 @@ class GraphView(QtWidgets.QGraphicsView):
         self._apply(lambda: self.guides.disconnect(input_key))
 
     def sever(self, key: str) -> None:
-        """Drop every connection into or out of the node ``key`` (module or scene-nodes group)."""
+        """Drop every connection into or out of node ``key`` (module or group)."""
         group_nodes = set(self.guides.scene_groups().get(key, []))
 
         def run():
@@ -333,7 +337,7 @@ class GraphView(QtWidgets.QGraphicsView):
         return name
 
     def add_scene_node(self, name: str, group: str = "scene") -> None:
-        """Convenience: put scene node ``name`` into ``group`` (created when missing)."""
+        """Put scene node ``name`` into ``group``, creating the group if needed."""
         groups = self.guides.scene_groups()
         if group not in groups:
             self.guides.add_scene_group(group, [name])
@@ -417,7 +421,7 @@ class GraphView(QtWidgets.QGraphicsView):
         origin: QtCore.QPoint,
         anchor: Optional[QtCore.QPointF] = None,
     ) -> None:
-        """Scale by ``factor`` keeping scene point ``anchor`` under viewport point ``origin``."""
+        """Scale by ``factor``, keeping scene ``anchor`` under viewport ``origin``."""
         anchor = self.mapToScene(origin) if anchor is None else anchor
         self.setTransformationAnchor(QtWidgets.QGraphicsView.NoAnchor)
         try:

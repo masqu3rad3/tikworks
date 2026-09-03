@@ -16,7 +16,8 @@ def test_init_with_transform_without_shape_raises():
 
 def test_construct_with_shape_name_returns_same_shape_and_transform():
     transform, shape = cmds.polyCube(name="boxX")
-    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya bug.
+    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya
+    # bug.
     shape = cmds.listRelatives(transform, shapes=True, fullPath=True)[0]
     shape_long = cmds.ls(shape, long=True)[0]
     sn = ShapeNode(shape_long)
@@ -38,7 +39,8 @@ def test_construct_with_transform_name_uses_first_shape():
 
 def test_transform_property_cached_and_refreshes_after_transform_rename():
     transform, shape = cmds.polyCube(name="geoA")
-    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya bug.
+    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya
+    # bug.
     shape = cmds.listRelatives(transform, shapes=True, fullPath=True)[0]
     sn = ShapeNode(cmds.ls(shape, long=True)[0])
     first = sn.transform
@@ -59,7 +61,8 @@ def test_shape_property_returns_self():
 def test_transform_property_returns_transform_with_full_long_name_in_hierarchy():
     grp = cmds.createNode("transform", name="GRP")
     transform, shape = cmds.polyCube(name="childT")
-    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya bug.
+    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya
+    # bug.
     shape = cmds.listRelatives(transform, shapes=True, fullPath=False)[0]
     cmds.parent(transform, grp)
     sn = ShapeNode(cmds.ls(shape, long=True)[0])
@@ -162,7 +165,7 @@ def test_parent_setter_accepts_string_name():
     s1 = cmds.listRelatives(t1, shapes=True, fullPath=True)[0]
     sn = ShapeNode(s1)
 
-    t2 = cmds.createNode("transform", name="targetString")
+    cmds.createNode("transform", name="targetString")
 
     sn.parent = "targetString"
     assert sn.transform.name == "targetString"
@@ -188,7 +191,8 @@ def test_shapenode_with_instanced_shape_resolves_correct_transform_robust():
 
     # Get all paths for the shape node
     # We can use the shape name (short name) to list all paths
-    # But listing relatives of the new parent is more reliable to find the specific path we just created
+    # But listing relatives of the new parent is more reliable to find the specific path
+    # we just created
     children = cmds.listRelatives(g2, shapes=True, fullPath=True)
     if not children:
         pytest.fail(

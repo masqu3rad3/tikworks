@@ -11,7 +11,7 @@ from tik.trigger.core import (
     clear_registries,
     register_action,
 )
-from tik.trigger.core.document import ActionNode, Document
+from tik.trigger.core.document import BUILD, PUBLISH, ActionNode, Document
 from tik.trigger.core.exceptions import ActionExecutionError, SessionError
 from tik.trigger.maya.runner import STEP_FAILED, STEP_FINISHED, Runner
 
@@ -210,7 +210,6 @@ def test_reference_include_and_missing_and_cycle(tmp_path):
 
 
 # ---------------------------------------------------------------- phases
-from tik.trigger.core.document import BUILD, PUBLISH
 
 
 def _both_phases():

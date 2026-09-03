@@ -468,7 +468,8 @@ def test_plug_access_deleted_attr_raises_runtime_error_with_refresh_attempt():
     node.delete_attr("tempDel")
 
     # Now access it again.
-    # plug.get() calls cmds.getAttr directly, which raises ValueError immediately if attr is gone.
+    # plug.get() calls cmds.getAttr directly, which raises ValueError immediately if
+    # attr is gone.
     with pytest.raises(ValueError):
         _ = plug.get()
 
@@ -540,7 +541,8 @@ def test_list_inputs_returns_nodes_and_plugs():
     inputs_plugs = dst_plug.list_inputs(plugs=True)
     assert len(inputs_plugs) == 1
     assert isinstance(inputs_plugs[0], Plug)
-    # Maya listConnections usually returns the long name 'translateX' even if we connected 'tx'
+    # Maya listConnections usually returns the long name 'translateX' even if we
+    # connected 'tx'
     assert inputs_plugs[0].path == f"{src_node.name}.translateX"
 
     # Test empty
@@ -793,7 +795,8 @@ def test_math_pow_compound_value():
     res1 = node["t"] ** 2.0
     assert res1.get() == [(4.0, 9.0, 16.0)]
 
-    # Plug ** list (unsupported by multiplyDivide usually? Wait, multiplyDivide has power operation)
+    # Plug ** list (unsupported by multiplyDivide usually? Wait, multiplyDivide has
+    # power operation)
     # Power operation in multiplyDivide: input1 ^ input2 (component wise)
 
     res2 = node["t"] ** [2.0, 1.0, 0.5]
@@ -848,7 +851,7 @@ def test_math_compound_invalid_operands():
 
 
 def test_math_scalar_invalid_operands():
-    """Test scalar math operations with invalid operands (lines 755-760, 861-866, 932-937)."""
+    """Test scalar math operations with invalid operands."""
     node = Node.create("transform", name="mathScalarError")
     node.add_attr("val", attributeType="double")
     plug = node["val"]  # scalar
@@ -918,7 +921,7 @@ def test_reverse_math_compound_with_tuple():
 
 
 def test_reverse_math_compound_invalid_operand():
-    """Test reverse math ops on compound plugs with invalid operands (lines 738-741, 844-847, 914-917)."""
+    """Test reverse math ops on compound plugs with invalid operands."""
     node = Node.create("transform", name="compoundReverseInvalid")
     plug = node["translate"]  # compound double3
 
@@ -936,7 +939,7 @@ def test_reverse_math_compound_invalid_operand():
 
 
 def test_reverse_math_on_non_numeric_attribute():
-    """Test reverse math ops on non-numeric attributes (lines 755-760, 861-866, 932-937)."""
+    """Test reverse math ops on non-numeric attributes."""
     node = Node.create("transform", name="nonNumericReverseMath")
     node.add_attr("strAttr", dataType="string")
     plug = node["strAttr"]  # string attribute, non-numeric

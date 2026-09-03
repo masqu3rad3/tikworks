@@ -41,7 +41,8 @@ class BlendShape(Deformer):
         if geometry is None:
             raise ValueError(
                 "To create blendshape with connections, geometry must be provided.\n"
-                "Alternatively, call SkinCluster.create() without geometry and targets to create an unbound skinCluster node."
+                "Alternatively, call SkinCluster.create() without geometry "
+                "and targets to create an unbound skinCluster node."
             )
 
         default_kwargs = {
@@ -106,7 +107,8 @@ class BlendShape(Deformer):
                 geom_index = long_connected.index(target_geo_long)
             except ValueError:
                 raise ValueError(
-                    f"Geometry '{geometry}' is not connected to blendShape '{self.name}'"
+                    f"Geometry '{geometry}' is not connected to "
+                    f"blendShape '{self.name}'"
                 )
         else:
             target_geo_long = cmds.ls(connected_geos[0], long=True)[0]
@@ -129,7 +131,8 @@ class BlendShape(Deformer):
                 except RuntimeError:  # Older Maya versions
                     return self[f"inputTarget[{geom_index}]"]["baseWeights"].mplug
             else:
-                # path: inputTarget[geom_index].inputTargetGroup[target_id].targetWeights
+                # path:
+                # inputTarget[geom_index].inputTargetGroup[target_id].targetWeights
                 return self[f"inputTarget[{geom_index}]"][
                     f"inputTargetGroup[{target_id}]"
                 ]["targetWeights"].mplug
@@ -299,18 +302,21 @@ class BlendShape(Deformer):
         if isinstance(weights, DeformerWeights):
             if weights.channel_count != target_count:
                 raise ValueError(
-                    f"Channel count {weights.channel_count} != target count {target_count}"
+                    f"Channel count {weights.channel_count} "
+                    f"!= target count {target_count}"
                 )
             if weights.element_count != vertex_count:
                 raise ValueError(
-                    f"Element count {weights.element_count} != {geo_name} count {vertex_count}"
+                    f"Element count {weights.element_count} "
+                    f"!= {geo_name} count {vertex_count}"
                 )
             flat_weights = weights.weights
         else:
             expected_count = vertex_count * target_count
             if len(weights) != expected_count:
                 raise ValueError(
-                    f"Weight length {len(weights)} != {geo_name} expected {expected_count}"
+                    f"Weight length {len(weights)} "
+                    f"!= {geo_name} expected {expected_count}"
                 )
             flat_weights = weights
 
@@ -377,7 +383,8 @@ class BlendShape(Deformer):
         if isinstance(weights, DeformerWeights):
             if weights.channel_count != 1:
                 raise ValueError(
-                    f"Expected DeformerWeights.channel_count==1 for a single target, got {weights.channel_count}"
+                    "Expected DeformerWeights.channel_count==1 for a single "
+                    f"target, got {weights.channel_count}"
                 )
             if weights.element_count != count:
                 raise ValueError(
@@ -421,7 +428,8 @@ class BlendShape(Deformer):
         if isinstance(weights, DeformerWeights):
             if weights.channel_count != 1:
                 raise ValueError(
-                    f"Expected DeformerWeights.channel_count==1 for a single target, got {weights.channel_count}"
+                    "Expected DeformerWeights.channel_count==1 for a single "
+                    f"target, got {weights.channel_count}"
                 )
             if weights.element_count != count:
                 raise ValueError(
@@ -487,7 +495,8 @@ class BlendShape(Deformer):
         Args:
             file_path (str or Path Object): The file path to import weights from.
             method (str): The method to use for importing weights.
-                Valid values are: "index", "nearest", "barycentric", "bilinear" and "over"
+                    Valid values are: "index", "nearest", "barycentric",
+                    "bilinear" and "over"
         """
         default_kwargs = {"ignoreName": True, "attribute": ["origin", "envelope"]}
         # update the default kwargs with any user-provided kwargs

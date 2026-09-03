@@ -1,4 +1,4 @@
-"""Pipeline UI: model tree, DnD nesting, palette, settings, statuses, main window (no Maya)."""
+"""Pipeline UI: tree model, nesting, palette, settings, statuses, main window."""
 
 import pytest
 
@@ -107,14 +107,14 @@ def test_add_via_palette_and_shelf(view):
 
 
 def test_settings_panel_edits_session(view):
-    handle = view.add_action("mark")
+    view.add_action("mark")
     view.settings.form.widget("amount").setValue(5)
     assert view.session["mark"].amount == 5
     view.settings.form.widget("tag").setText("hello")
     view.settings.form.widget("tag").editingFinished.emit()
     assert view.session["mark"].tag == "hello"
     assert view.session.is_modified
-    weights = view.add_action("weights")
+    view.add_action("weights")
     assert view.settings.save_button.isVisible()
     view.settings.save_button.click()
     assert ("saved", "weights") in CALLS

@@ -1,4 +1,7 @@
-"""Settings of the selected action: header, generated form, override marks, step buttons."""
+"""Settings of the selected action.
+
+Header, generated form, override marks and the step buttons.
+"""
 
 from __future__ import annotations
 
@@ -130,7 +133,8 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.save_button.setVisible(self._has_save(action_cls))
         if handle.is_linked:
             self.linked_note.setText(
-                "Referenced action — edits here are stored as overrides in this session."
+                "Referenced action — "
+                "edits here are stored as overrides in this session."
             )
             self._refresh_override_marks()
         else:
