@@ -5,6 +5,26 @@ Aim: readability and maintainability with **no behaviour change**. Nothing was e
 
 Tools used for the baseline: black 26.1, isort 9.0 (profile black), flake8 7.3 (line length 88), pyflakes 3.4, vulture 2.16, plus an AST sweep for function length, nesting, docstrings, naming and duplicate definitions. Every dead-code candidate below was confirmed by grepping the whole tracked repo (src, tests, snippets, docs).
 
+## 0. Outcome (applied the same day)
+
+The approved fixes landed as eight commits on `refactoring`, in this order. Every suite (1,400 Maya tests, 151 UI tests) passed after each one, and `make lint` is clean at the end.
+
+| Commit | What |
+|---|---|
+| `2e3e347` | Unused imports, the dead ternary, the unread `keep_graph` argument, the shadowed loop variable, the `auto_switchers` field, `.coverage` untracked |
+| `bfd0b73` | Duplicated helpers folded (`ensure_node`, `world_matrix_plug`, `dependency_order`, `undo_chunk`, `get_main_window`, the layout API); `create_guide_joint` reused by `GuideDraft.joint`; shared test fixtures; lint config and `make lint` / `make format` |
+| `e22d075` | `from __future__ import annotations` everywhere, builtin generics, `TYPE_CHECKING` forward refs, explicit re-exports instead of the star import, every broad except explained, `NodeSpec`, every single-letter variable renamed (src and tests) |
+| `0f9857f` | black + isort, no code changes |
+| `595048c` | flake8 baseline cleared: long lines, unused test locals, late imports; the deformer TODO closed by its audit |
+| `d746858`, `0c38c18` | 441 docstrings for public functions and classes |
+| `3243750` | `GuideScene` split into `exchange.py` and `scene_groups.py` mixins; `ActionHandle`/`PhaseView` moved to `tik.trigger.handles`; menu and pane builders split into one method each; `SkinCluster` influence helper; restating comments dropped |
+
+Left as instructed: `feedback.py`, `scene_data.py`, `user_settings.py`, `tools/polish`, the dead methods in 2.2 (except `create_guide_joint`), the raw `cmds` calls in 3.1, `plug.py`. Left by judgement: the three `unique_name` helpers (different numbering semantics, merging would rename things), `print` in `core/benchmark.py` (its tests assert on stdout), and dataclass signatures for `build_reach` / `build_ikfk_limb` / `make_record` (keyword-only and documented; a dataclass would not read better). Two claims in the original findings were wrong and are corrected below: `Session.paths` was never a property, and `guides/scene.py:45` is a spec citation, not an unbalanced quote.
+
+### Converter: recommendation is to drop it
+
+`maya/utils/converter` (4,400 lines, 58 tests) was probed in both directions on a ten-line rig snippet. tik.maya to cmds left `Transform.create`, `Joint.create`, plug arithmetic, `>>`, `.create("float")` and `MatrixConstraint` untouched, and the one statement it did convert became invalid Python (`cmds.getAttr(...) = 5.0`). cmds to tik.maya reported "rule applied" on `setAttr` and `connectAttr` but emitted the same cmds calls, and turned `addAttr` into `'L_arm_ctrl'.add_attr(...)`, an API tik.maya does not have. The tests exercise the rule plumbing, not real conversions, so they pass while the output is unusable. A working version would have to track every tik.maya idiom by hand, which is the effort of maintaining a second API. `EXAMPLES.md` in that folder is worth keeping as documentation (the tik-maya skill points at it); the code is not.
+
 ## 1. At a glance
 
 | Measure | Result |
@@ -178,7 +198,7 @@ What is working: the tik.trigger code comments explain *why* and cite spec secti
 
 To fix:
 - **Wrong**: `src/python/tik/__init__.py` docstring describes a widget that is not there.
-- **Stale**: three comments name the dead `create_guide_joint` (2.2). `guides/scene.py:45` has an unbalanced quotation mark mid-comment. `deformer.py:1` TODO banner.
+- **Stale**: three comments name the dead `create_guide_joint` (2.2). `deformer.py:1` TODO banner. (An earlier draft flagged `guides/scene.py:45` for an unbalanced quote; it is a two-line spec citation and is fine.)
 - **Restating the code**: `converter/engine_reverse.py` (9), `converter/engine.py` (7), `constructs/panel.py` (6), `core/dagnode.py` (3) — comments like `# Copy settings`, `# Build the set() call`. Delete or turn into a "why".
 - **Two banner styles**: `# ======` blocks only in `converter/*` and `polish/*`; everywhere else uses `# ---- name` section rules. Standardize on the rule style.
 - **Missing**: `trigger/ui` (17%) and `shared/ui` (21%) public methods. One-liners are enough for Qt overrides; the custom methods (`GraphView.rebuild`, `PipelineModel.dropMimeData`, `GuideDesigner.refresh`) need the "what state does this reconcile" sentence.
