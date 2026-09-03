@@ -418,3 +418,133 @@ def test_dragging_a_build_only_action_into_publish_is_refused_and_changes_nothin
     assert not publish_model.dropMimeData(data, QtCore.Qt.MoveAction, -1, -1, QtCore.QModelIndex())
     assert session.paths() == ["kine"]
     assert session.publish.paths() == []
+
+
+def test_session_view_has_two_trees(qapp):
+    from tik.trigger.core.document import BUILD, PUBLISH
+
+    session = Session()
+    session.add("mark", "kine")
+    session.publish.add("export", "fbx")
+    view = SessionView(session)
+
+    assert view.trees[BUILD] is view.tree
+    assert view.trees[PUBLISH] is view.publish_tree
+    assert view.models[PUBLISH].rowCount() == 1
+    assert view.focus_phase == BUILD
+
+
+def test_focus_phase_drives_the_current_row_and_the_until_button(qapp):
+    from tik.trigger.core.document import BUILD, PUBLISH
+
+    session = Session()
+    session.add("mark", "kine")
+    session.publish.add("export", "fbx")
+    view = SessionView(session)
+
+    view.tree.setCurrentIndex(view.model.index(0, 0))
+    view.set_focus_phase(BUILD)
+    assert view.current_path() == "kine"
+    assert view.current_phase == BUILD
+    assert view.until_button.isEnabled()
+
+    view.publish_tree.setCurrentIndex(view.publish_model.index(0, 0))
+    view.set_focus_phase(PUBLISH)
+    assert view.current_path() == "fbx"
+    assert view.current_phase == PUBLISH
+    assert not view.until_button.isEnabled()
+
+
+def test_the_shelf_offers_only_actions_that_fit_the_focused_phase(qapp):
+    from tik.trigger.core.document import BUILD, PUBLISH
+
+    view = SessionView(Session())
+    build_keys = set(view.shelves[BUILD].tiles)
+    publish_keys = set(view.shelves[PUBLISH].tiles)
+    assert "mark" in build_keys and "mark" not in publish_keys
+    assert "export" in publish_keys and "export" not in build_keys
+    assert "either" in build_keys and "either" in publish_keys
+
+    view.set_focus_phase(PUBLISH)
+    assert view.shelf_stack.currentWidget() is view.shelves[PUBLISH]
+    assert {entry.key for entry in view.palette.entries} == publish_keys
+
+
+def test_adding_from_the_shelf_lands_in_the_focused_phase(qapp):
+    from tik.trigger.core.document import PUBLISH
+
+    session = Session()
+    view = SessionView(session)
+    view.set_focus_phase(PUBLISH)
+    view.add_action("export")
+    assert session.publish.paths() == ["export"]
+    assert session.paths() == []
+
+
+def test_publish_rows_offer_no_run_affordance(qapp):
+    from tik.trigger.core.document import BUILD, PUBLISH
+
+    session = Session()
+    session.publish.add("export", "fbx")
+    view = SessionView(session)
+    handle = view.models[PUBLISH].handle(view.publish_model.index(0, 0))
+
+    view.settings.set_handle(handle)
+    # isVisibleTo, not isVisible: the window was never shown, so isVisible() is
+    # False for every widget and would pass this assertion vacuously
+    assert not view.settings.run_button.isVisibleTo(view.settings)
+    assert not view.settings.until_button.isVisibleTo(view.settings)
+
+    assert view.run_step("fbx") is False  # refused by the session, reported not raised
+
+    labels = [item.text() for item in view.context_menu_actions(PUBLISH, handle)]
+    assert "Run step" not in labels
+    assert "Build until here" not in labels
+    assert "Delete" in labels  # the rest of the menu is unchanged
+
+    session.add("mark", "kine")
+    view.refresh()
+    build_handle = view.models[BUILD].handle(view.model.index(0, 0))
+    view.settings.set_handle(build_handle)
+    assert view.settings.run_button.isVisibleTo(view.settings)
+    assert view.settings.until_button.isVisibleTo(view.settings)
+    build_labels = [item.text() for item in view.context_menu_actions(BUILD, build_handle)]
+    assert "Run step" in build_labels
+
+
+def test_build_and_publish_button_is_wired(qapp):
+    session = Session()
+    session.add("mark", "kine")
+    session.publish.add("either", "fbx")
+    view = SessionView(session)
+
+    assert view.publish_button.isEnabled()
+    CALLS.clear()
+    view.publish_button.click()
+    assert [item[1] for item in CALLS if item[0] == "mark"] == ["kine", "fbx"]
+
+
+def test_build_alone_leaves_the_publish_list_alone(qapp):
+    session = Session()
+    session.add("mark", "kine")
+    session.publish.add("either", "fbx")
+    view = SessionView(session)
+
+    CALLS.clear()
+    assert view.build()
+    assert [item[1] for item in CALLS if item[0] == "mark"] == ["kine"]
+
+
+def test_statuses_are_routed_to_the_right_tree(qapp):
+    from tik.trigger.core.document import BUILD, PUBLISH
+
+    session = Session()
+    session.add("mark", "kine")
+    session.publish.add("either", "fbx")
+    view = SessionView(session)
+    assert view.build_and_publish()
+
+    assert view.models[BUILD].data(view.model.index(0, 0), StatusRole) == "done"
+    assert view.models[PUBLISH].data(view.publish_model.index(0, 0), StatusRole) == "done"
+    view.clear_statuses()
+    assert view.models[PUBLISH].data(view.publish_model.index(0, 0), StatusRole) == ""
