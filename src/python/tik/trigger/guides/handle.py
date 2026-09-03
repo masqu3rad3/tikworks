@@ -183,7 +183,7 @@ class GuideHandle:
         return self.module_class.output_names(self.settings)
 
     def set_input(self, input_name: str, source: Optional[str]) -> None:
-        """Connect ``input_name`` to ``source`` (``<key>.<output>`` or a node); None clears."""
+        """Point ``input_name`` at ``source`` (``key.output`` or node); None clears."""
         if self.module_class.get_input(input_name, self.settings) is None:
             raise GuideError(f"'{self.module_type}' has no input '{input_name}'.")
         self._guides.set_input(self.instance_id, input_name, source)

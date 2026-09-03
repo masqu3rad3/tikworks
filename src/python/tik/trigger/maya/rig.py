@@ -198,7 +198,7 @@ class ModuleRig:
 
     # ------------------------------------------------------------- naming
     def name(self, *tokens, suffix: Optional[str] = None) -> str:
-        """A node name in this module's convention: ``<name>_<tokens>_<side>_<suffix>``."""
+        """``<name>_<tokens>_<side>_<suffix>``, this module's naming convention."""
         return naming.format_name(
             *tokens, side=self.side.value, prefix=self.instance.name, suffix=suffix
         )

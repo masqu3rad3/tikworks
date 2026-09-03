@@ -20,7 +20,7 @@ class EventBus:
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
 
     def subscribe(self, event: str, callback: Callable) -> Callable:
-        """Call ``callback`` on every ``event``; returns it so it can be used as a decorator."""
+        """Call ``callback`` on ``event``; returns it, so it works as a decorator."""
         self._subscribers[event].append(callback)
         return callback
 

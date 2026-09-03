@@ -105,7 +105,7 @@ class Field:
         return value
 
     def validate(self, value: Any) -> Any:
-        """Coerce ``value`` and check it against ``choices``; raises ``FieldValidationError``."""
+        """Coerce ``value`` and check ``choices``; raises ``FieldValidationError``."""
         value = self.coerce(value)
         if self.choices is not None and value not in self.choices:
             raise FieldValidationError(
@@ -406,7 +406,7 @@ class TableField(Field):
         super().__init__([dict(row) for row in default] if default else [], **kwargs)
 
     def coerce(self, value):
-        """Accept a list of row dicts; unknown columns are dropped, missing ones defaulted."""
+        """Accept a list of row dicts; unknown columns dropped, missing defaulted."""
         if value is None:
             return []
         if isinstance(value, (str, bytes)) or not isinstance(value, Iterable):

@@ -217,7 +217,7 @@ class GuideScene:
         return nodes.find_instances(scope, self.document)
 
     def guide_node(self, instance_id: str, role: str, index: int = 0):
-        """The joint drawn for ``role``/``index`` of an instance; raises when missing."""
+        """The joint for ``role``/``index`` of an instance; raises when missing."""
         return nodes.guide_node(instance_id, role, index)
 
     def guide_nodes(self, instance_id: str) -> dict:
@@ -305,7 +305,7 @@ class GuideScene:
         return nodes.instance_from_nodes(module.instance_id, created, entry=entry)
 
     def delete_guides(self, instance_id: str) -> None:
-        """Delete an instance's guide joints, keeping other instances' guides under them."""
+        """Delete an instance's guides, keeping other instances' guides under them."""
         found = nodes.guide_nodes(instance_id)
         if not found:
             return
@@ -783,7 +783,7 @@ class GuideScene:
         }
 
     def add_scene_group(self, name: str = "", nodes: Optional[list[str]] = None) -> str:
-        """Create a scene-nodes group; a free ``sceneNodesN`` name when none is given."""
+        """Create a scene-nodes group; unnamed ones get a free ``sceneNodesN``."""
         groups = self.scene_groups()
         taken = set(groups) | {handle.key for handle in self.instances()}
         if not name:
@@ -798,7 +798,7 @@ class GuideScene:
         return name
 
     def set_scene_group(self, name: str, nodes: list[str]) -> None:
-        """Replace the nodes of a scene-nodes group, dropping connections to removed ones."""
+        """Replace a group's nodes, dropping connections to the removed ones."""
         groups = self.scene_groups()
         if name not in groups:
             raise GuideError(f"No scene-nodes group '{name}'.")

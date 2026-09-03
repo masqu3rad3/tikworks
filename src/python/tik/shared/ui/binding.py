@@ -103,7 +103,7 @@ class Binder:
         return getattr(self.adapter, "plug_path", "")
 
     def start(self) -> bool:
-        """Wire the widget to the plug; False (and a disabled widget) when the plug is missing."""
+        """Wire the widget to the plug; False (widget disabled) when it is missing."""
         if not self.adapter.exists():
             self.widget.setEnabled(False)
             self.active = False
@@ -228,7 +228,7 @@ class ComboBinder(Binder):
 
 
 class SliderBinder(Binder):
-    """Binds a ``QSlider``; ``scale`` maps the plug's float range onto the slider's ints."""
+    """Binds a ``QSlider``; ``scale`` maps the plug's floats onto the slider's ints."""
 
     def __init__(self, adapter, widget, direction="both", scale: float = 1.0) -> None:
         super().__init__(adapter, widget, direction)

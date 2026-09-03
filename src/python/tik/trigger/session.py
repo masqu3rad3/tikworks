@@ -343,7 +343,7 @@ class PhaseView:
         index: Optional[int] = None,
         after: Optional[str] = None,
     ) -> ActionHandle:
-        """Move an action under ``parent``, to ``index`` or right ``after`` a sibling."""
+        """Move an action under ``parent``, to ``index``, or ``after`` a sibling."""
         return self._session.move(
             path, parent=parent, index=index, after=after, phase=self._phase
         )
@@ -405,7 +405,7 @@ class Session:
             self._last_state = state
 
     def undo(self) -> bool:
-        """Restore the document state before the last edit; False when nothing to undo."""
+        """Undo the last document edit; False when there is nothing to undo."""
         if not self._undo:
             return False
         self._redo.append(self.document.to_dict())
@@ -467,7 +467,7 @@ class Session:
         self.events.log(f"Session loaded: {path}")
 
     def save(self, file_path: Optional[str] = None, increment: bool = False) -> Path:
-        """Write the document; ``increment`` saves to the next version number instead."""
+        """Write the document; ``increment`` saves as the next version instead."""
         target = Path(file_path) if file_path else self.file_path
         if target is None:
             raise SessionSaveError("No file path given for the session.")
@@ -729,7 +729,7 @@ class Session:
         after: Optional[str] = None,
         phase: str = BUILD,
     ) -> ActionHandle:
-        """Move an action under ``parent``, to ``index`` or right ``after`` a sibling."""
+        """Move an action under ``parent``, to ``index``, or ``after`` a sibling."""
         path = path.path if isinstance(path, ActionHandle) else path
         new_path = self.document.move(
             path, parent=parent, index=index, after=after, phase=phase

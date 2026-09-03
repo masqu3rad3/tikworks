@@ -14,7 +14,7 @@ class MayaBenchmark(Benchmark):
     """
 
     def measure(self, name, iterations=10, warmup=2, new_scene=False):
-        """Like ``Benchmark.measure``; ``new_scene`` resets the scene before each run."""
+        """Like ``Benchmark.measure``; ``new_scene`` resets the scene per run."""
         context = super().measure(name, iterations, warmup)
         context._new_scene = new_scene  # Store it on the context object
         original_run = context.run
