@@ -14,11 +14,7 @@ stores its own state (node positions, collapse modes, scene-node groups) in
 * **Scene Nodes** groups (dashed) expose arbitrary Maya nodes as outputs.
 """
 
-from .constants import (
-    MODE_CONNECTED,
-    MODE_FULL,
-    MODE_MINIMAL,
-)
+from .constants import MODE_CONNECTED, MODE_FULL, MODE_MINIMAL
 from .items import NodeItem, Port, WireItem
 from .scene import GraphScene
 from .view import GraphView

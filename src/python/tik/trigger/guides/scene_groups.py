@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Optional
+
 from tik.trigger.core.exceptions import GuideError
 
 
