@@ -13,6 +13,7 @@ from tik.trigger.core.steps import STEP_FAILED, STEP_FINISHED, STEP_STARTED
 from tik.trigger.session import ActionHandle, Session
 
 from .delegates import PipelineDelegate
+from .iconography import icon_for_tile
 from .model import MIME_TYPE, PipelineModel
 from .palette import PaletteEntry, SearchPalette
 from .settings_panel import ActionSettingsPanel
@@ -224,15 +225,21 @@ class SessionView(QtWidgets.QWidget):
         self.sub_tabs.addTab(self._designer_page, "Guide Designer")
         self.sub_tabs.currentChanged.connect(self._on_sub_tab_changed)
 
-        self.palette = SearchPalette(action_entries(BUILD), self)
+        self.palette = SearchPalette(
+            action_entries(BUILD), self, icon_provider=icon_for_tile
+        )
         self.palette.chosen.connect(self.add_action)
 
         self._connect_signals()
 
     def _build_shelf_pane(self) -> QtWidgets.QWidget:
         self.shelves = {
-            BUILD: TileGrid(tile_entries(BUILD), MIME_TYPE),
-            PUBLISH: TileGrid(tile_entries(PUBLISH), MIME_TYPE),
+            BUILD: TileGrid(
+                tile_entries(BUILD), MIME_TYPE, icon_provider=icon_for_tile
+            ),
+            PUBLISH: TileGrid(
+                tile_entries(PUBLISH), MIME_TYPE, icon_provider=icon_for_tile
+            ),
         }
         self.shelf_stack = QtWidgets.QStackedWidget()
         for phase in PHASES:

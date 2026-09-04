@@ -167,3 +167,39 @@ def test_action_with_no_artwork_falls_back_to_initials(qapp, monkeypatch):
     monkeypatch.setattr(icons, "find", lambda cls: None)
     icon = iconography.action_icon(registry.get_action("script"), size=22)
     assert _drawn(icon, 22) > 100, "the initials chip is a filled square"
+
+
+def test_tile_grid_uses_an_injected_icon_provider(qapp):
+    from tik.shared.ui.tile_grid import TileEntry, TileGrid
+
+    calls = []
+
+    def provider(entry, size):
+        calls.append((entry.key, size))
+        return QtGui.QIcon()
+
+    grid = TileGrid(
+        [TileEntry("kinematics", "Kinematics", "build")],
+        "application/x-test",
+        icon_provider=provider,
+    )
+    assert calls and calls[0][0] == "kinematics"
+    assert grid.tiles["kinematics"] is not None
+
+
+def test_tile_grid_without_a_provider_still_draws_the_glyph(qapp):
+    from tik.shared.ui.tile_grid import TileEntry, TileGrid
+
+    grid = TileGrid(
+        [TileEntry("kinematics", "Kinematics", "build")], "application/x-test"
+    )
+    assert not grid.tiles["kinematics"].icon().isNull()
+
+
+def test_session_shelf_tiles_show_the_authored_action_art(qapp):
+    from tik.trigger.ui import iconography
+    from tik.trigger.ui.session_view import tile_entries
+
+    entry = next(item for item in tile_entries() if item.key == "import_asset")
+    icon = iconography.icon_for_tile(entry, 22)
+    assert len(_colours(icon, 22)) > 4, "should be the colour crate, not a flat chip"

@@ -52,10 +52,12 @@ class SearchPalette(QtWidgets.QFrame):
         entries: Sequence[PaletteEntry],
         parent=None,
         colors: Optional[dict] = None,
+        icon_provider=None,
     ) -> None:
         super().__init__(parent, QtCore.Qt.Popup | QtCore.Qt.FramelessWindowHint)
         self.entries = list(entries)
         self.colors = colors or theme.CATEGORY
+        self.icon_provider = icon_provider
         self.recent: list[str] = []
         self.setObjectName("SearchPalette")
         self.setStyleSheet(
@@ -136,13 +138,14 @@ class SearchPalette(QtWidgets.QFrame):
         self.list.addItem(item)
 
     def _add_entry(self, entry: PaletteEntry) -> None:
-        item = QtWidgets.QListWidgetItem(
-            glyph_icon(
+        if self.icon_provider is not None:
+            icon = self.icon_provider(entry, 18)
+        else:
+            icon = glyph_icon(
                 initials(entry.label),
                 self.colors.get(entry.category, theme.CATEGORY["utility"]),
-            ),
-            entry.label,
-        )
+            )
+        item = QtWidgets.QListWidgetItem(icon, entry.label)
         item.setData(QtCore.Qt.UserRole, entry.key)
         item.setToolTip(f"{entry.key} · {entry.category}")
         self.list.addItem(item)

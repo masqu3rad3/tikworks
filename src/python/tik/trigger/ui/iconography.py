@@ -53,6 +53,22 @@ def module_icon(
     return pick.tinted_icon(found.path, colour, size)
 
 
+def icon_for_tile(entry, size: int = DEFAULT_SIZE) -> QtGui.QIcon:
+    """Icon for a shelf/palette entry, whichever family its key belongs to.
+
+    Entries carry a key and a category rather than a class, so the shared
+    widgets stay ignorant of the registry; this is the trigger-side adapter.
+    """
+    from tik.trigger.core import registry
+
+    if registry.is_action_registered(entry.key):
+        return action_icon(registry.get_action(entry.key), size=size)
+    if registry.is_module_registered(entry.key):
+        return module_icon(registry.get_module(entry.key), size=size)
+    colour = theme.CATEGORY.get(entry.category, theme.CATEGORY["utility"])
+    return glyph_icon(initials(entry.label), colour, size=size)
+
+
 def guide_count(module_cls: type) -> int:
     """How many guides the module declares, counting one for a multi role."""
     layout = getattr(module_cls, "guides", None)

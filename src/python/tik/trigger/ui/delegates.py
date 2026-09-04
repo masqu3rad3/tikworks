@@ -12,6 +12,8 @@ from __future__ import annotations
 from tik.shared.ui import theme
 from tik.shared.ui.icons import glyph_icon, initials
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
+from tik.trigger.core import registry
+from tik.trigger.ui.iconography import action_icon
 
 from .model import (
     CategoryRole,
@@ -103,11 +105,15 @@ class PipelineDelegate(QtWidgets.QStyledItemDelegate):
             painter.drawRoundedRect(box, 2, 2)
             pen_x += 17
 
-        icon = glyph_icon(
-            initials(index.data(LabelRole) or index.data(TypeRole) or "?"),
-            category_color,
-            size=16,
-        )
+        action_type = index.data(TypeRole)
+        if action_type and registry.is_action_registered(action_type):
+            icon = action_icon(registry.get_action(action_type), size=16)
+        else:
+            icon = glyph_icon(
+                initials(index.data(LabelRole) or action_type or "?"),
+                category_color,
+                size=16,
+            )
         icon.paint(painter, QtCore.QRect(pen_x, rect.center().y() - 8, 16, 16))
         pen_x += 22
 
