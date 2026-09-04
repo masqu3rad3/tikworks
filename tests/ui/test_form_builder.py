@@ -93,10 +93,12 @@ def test_table_widget_round_trips_rows():
     from tik.core.fields import Column, TableField
 
     class Holder(Schema):
-        rows = TableField(columns=(
-            Column("mode", "choice", choices=("parent", "point")),
-            Column("label", "string"),
-        ))
+        rows = TableField(
+            columns=(
+                Column("mode", "choice", choices=("parent", "point")),
+                Column("label", "string"),
+            )
+        )
 
     holder = Holder()
     holder.rows = [{"mode": "point", "label": "chest"}]
@@ -126,7 +128,9 @@ def test_table_widget_resolves_choices_from_the_target():
 
     class Holder(Schema):
         controls = ("ik", "pole")
-        rows = TableField(columns=(Column("control", "choice", choices_from="controls"),))
+        rows = TableField(
+            columns=(Column("control", "choice", choices_from="controls"),)
+        )
 
     builder = FormBuilder(Holder())
     widget = builder.widget("rows")
@@ -150,8 +154,7 @@ def test_vector_editor_clamps_to_the_field_bounds(qapp):
 def test_vector_editor_shows_a_caption_per_component(qapp):
     form = FormBuilder(Settings())
     captions = [
-        widget.text()
-        for widget in form.widget("span").findChildren(QtWidgets.QLabel)
+        widget.text() for widget in form.widget("span").findChildren(QtWidgets.QLabel)
     ]
     assert captions == ["Lower", "Upper"]
 

@@ -53,6 +53,7 @@ class GuideRecord:
 
     @property
     def pair(self) -> tuple:
+        """``(role, index)``, the identity of a guide within its module."""
         return (self.role, self.index)
 
     @property
@@ -61,13 +62,16 @@ class GuideRecord:
         return self.position is not None
 
     def to_dict(self) -> dict:
+        """The JSON form stored in the document."""
         return {
             "role": self.role,
             "index": self.index,
             "position": list(self.position) if self.position is not None else None,
             "rotation": list(self.rotation) if self.rotation is not None else None,
             "rotate_order": self.rotate_order,
-            "joint_orient": list(self.joint_orient) if self.joint_orient is not None else None,
+            "joint_orient": (
+                list(self.joint_orient) if self.joint_orient is not None else None
+            ),
             "radius": self.radius,
             "color": self.color,
             "attrs": dict(self.attrs),
@@ -76,6 +80,7 @@ class GuideRecord:
 
     @classmethod
     def from_dict(cls, data: dict) -> "GuideRecord":
+        """Rebuild a record from its JSON form; missing fields stay ``None``."""
         parent = data.get("parent")
         position = data.get("position")
         rotation = data.get("rotation")
@@ -91,7 +96,9 @@ class GuideRecord:
             joint_orient=None if joint_orient is None else _triple(joint_orient),
             radius=None if radius is None else float(radius),
             color=None if color is None else int(color),
-            attrs={key: float(value) for key, value in (data.get("attrs") or {}).items()},
+            attrs={
+                key: float(value) for key, value in (data.get("attrs") or {}).items()
+            },
             parent=(str(parent[0]), int(parent[1])) if parent else None,
         )
 
@@ -116,15 +123,18 @@ class ModuleEntry:
 
     @property
     def pairs(self) -> list:
+        """``(role, index)`` of every guide this module owns."""
         return [record.pair for record in self.guides]
 
     def guide(self, role: str, index: int = 0) -> Optional[GuideRecord]:
+        """The record for ``role``/``index``, or None."""
         for record in self.guides:
             if record.role == role and record.index == index:
                 return record
         return None
 
     def to_dict(self) -> dict:
+        """The JSON form stored in the document."""
         return {
             "instance_id": self.instance_id,
             "module_type": self.module_type,
@@ -137,6 +147,7 @@ class ModuleEntry:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ModuleEntry":
+        """Rebuild an entry from its JSON form."""
         return cls(
             instance_id=data["instance_id"],
             module_type=data["module_type"],
@@ -157,10 +168,12 @@ class SceneGroup:
     nodes: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
+        """The JSON form stored in the document."""
         return {"group_id": self.group_id, "name": self.name, "nodes": list(self.nodes)}
 
     @classmethod
     def from_dict(cls, data: dict) -> "SceneGroup":
+        """Rebuild a group from its JSON form."""
         return cls(
             group_id=data["group_id"],
             name=data.get("name", data["group_id"]),
@@ -184,6 +197,7 @@ class GuideDocument:
     dismissed: bool = field(default=False, compare=False)
 
     def module(self, instance_id: str) -> Optional[ModuleEntry]:
+        """The entry with ``instance_id``, or None."""
         for entry in self.modules:
             if entry.instance_id == instance_id:
                 return entry
@@ -197,6 +211,7 @@ class GuideDocument:
         return None
 
     def group(self, group_id: str) -> Optional[SceneGroup]:
+        """The scene group with ``group_id``, or None."""
         for entry in self.scene_groups:
             if entry.group_id == group_id:
                 return entry
@@ -223,13 +238,15 @@ class GuideDocument:
         labels = {value: key for key, value in self.node_ids().items()}
 
         def relabel(table):
-            return {
-                labels[key]: value for key, value in table.items() if key in labels
-            }
+            return {labels[key]: value for key, value in table.items() if key in labels}
 
         sections = {
-            "scene_nodes": {group.name: list(group.nodes) for group in self.scene_groups},
-            "positions": {key: list(value) for key, value in relabel(self.positions).items()},
+            "scene_nodes": {
+                group.name: list(group.nodes) for group in self.scene_groups
+            },
+            "positions": {
+                key: list(value) for key, value in relabel(self.positions).items()
+            },
             "collapse": dict(relabel(self.collapse)),
         }
         # empty sections are omitted, so an untouched layout is simply ``{}``
@@ -258,6 +275,7 @@ class GuideDocument:
         }
 
     def to_dict(self) -> dict:
+        """The JSON form stored in the ``.tr`` file."""
         return {
             "schema": self.schema,
             "modules": [entry.to_dict() for entry in self.modules],
@@ -268,17 +286,25 @@ class GuideDocument:
 
     @classmethod
     def from_dict(cls, data: dict) -> "GuideDocument":
+        """Rebuild a guide document from its JSON form."""
         schema = int(data.get("schema", SCHEMA_VERSION))
         if schema > SCHEMA_VERSION:
             raise ValueError(
-                f"Guide document schema {schema} is newer than supported {SCHEMA_VERSION}."
+                f"Guide document schema {schema} is newer than "
+                f"supported {SCHEMA_VERSION}."
             )
         return cls(
             schema=SCHEMA_VERSION,
             modules=[ModuleEntry.from_dict(item) for item in data.get("modules", [])],
-            scene_groups=[SceneGroup.from_dict(item) for item in data.get("scene_groups", [])],
-            positions={key: list(value) for key, value in (data.get("positions") or {}).items()},
-            collapse={key: int(value) for key, value in (data.get("collapse") or {}).items()},
+            scene_groups=[
+                SceneGroup.from_dict(item) for item in data.get("scene_groups", [])
+            ],
+            positions={
+                key: list(value) for key, value in (data.get("positions") or {}).items()
+            },
+            collapse={
+                key: int(value) for key, value in (data.get("collapse") or {}).items()
+            },
         )
 
 

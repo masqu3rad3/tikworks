@@ -1,15 +1,20 @@
-"""Maya specific UI/QT related functions"""
+"""Maya-specific Qt helpers."""
 
-from maya import OpenMayaUI
+from __future__ import annotations
+
+from typing import Optional
 
 from tik.shared.ui.Qt import QtCompat, QtWidgets
 
 
-def get_main_window():
-    """Get the memory adress of the main window to connect Qt dialog to it.
-    Returns:
-        (long or int) Memory Adress
-    """
-    win = OpenMayaUI.MQtUtil.mainWindow()
-    ptr = QtCompat.wrapInstance(int(win), QtWidgets.QMainWindow)
-    return ptr
+def get_main_window() -> Optional[QtWidgets.QMainWindow]:
+    """Maya's main window as a QWidget, or ``None`` when headless."""
+    try:
+        from maya import OpenMayaUI
+
+        pointer = OpenMayaUI.MQtUtil.mainWindow()
+    except Exception:  # noqa: BLE001 - no Maya, or a mocked one without UI
+        return None
+    if pointer is None:
+        return None
+    return QtCompat.wrapInstance(int(pointer), QtWidgets.QMainWindow)

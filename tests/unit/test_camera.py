@@ -1,7 +1,8 @@
 import pytest
 from maya import cmds
+
 from tik.maya.types.camera import Camera
-from tik.maya.types.transform import Transform
+
 
 class TestCamera:
     def test_create_camera(self):
@@ -113,7 +114,7 @@ class TestCamera:
         grp = cmds.createNode("transform", name="normalGrp")
         cmds.parent(cam.transform.name, grp)
 
-        assert cam.aim is None # Parent is "transform", not "lookAt"
+        assert cam.aim is None  # Parent is "transform", not "lookAt"
 
     def test_up_property_returns_none_if_not_aim_up_camera(self):
         cam = Camera.create()
@@ -122,4 +123,3 @@ class TestCamera:
         grp = cmds.createNode("transform", name="normalGrp2")
         cmds.parent(cam.transform.name, grp)
         assert cam.up is None
-

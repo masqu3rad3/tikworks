@@ -7,25 +7,20 @@ compensation strand so the driven rotation stays clean.
 
 from __future__ import annotations
 
-from typing import Iterable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Iterable, Optional, Sequence, Union
 
 from maya import cmds
 from maya.api import OpenMaya
 
 from ..core.decorators import undo
-from ..core.plug import Plug
+from ..core.plug import Plug, world_matrix_plug
 from ..core.registry import resolve
 from ..core.scene import create_node, ensure_plugin
 
+if TYPE_CHECKING:
+    from ..types.transform import Transform
+
 DriverType = Union[str, "Transform", Plug, Sequence[Union[str, "Transform", Plug]]]
-
-
-def _matrix_plug(driver) -> Plug:
-    """Return a world matrix plug for a node/name, or the plug itself."""
-    if isinstance(driver, Plug):
-        return driver
-    node = resolve(driver) if isinstance(driver, str) else driver
-    return node["worldMatrix[0]"]
 
 
 class MatrixConstraint:
@@ -81,7 +76,7 @@ class MatrixConstraint:
         skip_scale = {axis.lower() for axis in skip_scale}
 
         drivers = list(driver) if isinstance(driver, (list, tuple)) else [driver]
-        driver_plugs = [_matrix_plug(item) for item in drivers]
+        driver_plugs = [world_matrix_plug(item) for item in drivers]
 
         average = None
         if len(driver_plugs) > 1:
@@ -127,8 +122,12 @@ class MatrixConstraint:
                 name, driven, parent, source_plug, offset
             )
 
-        cls._connect_channels(decompose, "outputTranslate", driven, "translate", skip_translate)
-        cls._connect_channels(rotate_source, "outputRotate", driven, "rotate", skip_rotate)
+        cls._connect_channels(
+            decompose, "outputTranslate", driven, "translate", skip_translate
+        )
+        cls._connect_channels(
+            rotate_source, "outputRotate", driven, "rotate", skip_rotate
+        )
         cls._connect_channels(decompose, "outputScale", driven, "scale", skip_scale)
 
         return cls(driven, mult_matrix, decompose, average, rotate_nodes)
@@ -168,7 +167,13 @@ class MatrixConstraint:
         index += 1
         inverse["outputMatrix"] >> second_mult[f"matrixIn[{index}]"]
         second_mult["matrixSum"] >> rotate_decompose["inputMatrix"]
-        return rotate_decompose, [compose, first_mult, inverse, second_mult, rotate_decompose]
+        return rotate_decompose, [
+            compose,
+            first_mult,
+            inverse,
+            second_mult,
+            rotate_decompose,
+        ]
 
     @staticmethod
     def _connect_channels(source_node, source_attr, target, target_attr, skip):

@@ -19,12 +19,8 @@ from maya import cmds
 from ..core.constants import TRANSFORM_CHANNELS
 from ..core.decorators import undo
 from ..core.plug import Plug
-from ..core.registry import resolve
+from ..core.registry import ensure_node
 from ..types.transform import Transform
-
-
-def _node(item):
-    return resolve(item) if isinstance(item, str) else item
 
 
 class ChainLengths:
@@ -63,7 +59,7 @@ class ChainLengths:
         Returns:
             The construct.
         """
-        joints = [_node(joint) for joint in joints]
+        joints = [ensure_node(joint) for joint in joints]
         if len(joints) < 2:
             raise ValueError("ChainLengths needs at least two joints.")
         chain = cls(name or "chainLengths")

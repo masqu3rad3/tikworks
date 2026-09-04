@@ -12,7 +12,7 @@ from maya import cmds
 
 from ..core.decorators import undo
 from ..core.plug import Plug
-from ..core.registry import resolve
+from ..core.registry import ensure_node
 from .matrix_switch import WORLD, MatrixSwitch
 
 _MODES = {
@@ -20,10 +20,6 @@ _MODES = {
     "point": {"skip_rotate": ("x", "y", "z")},
     "orient": {"skip_translate": ("x", "y", "z")},
 }
-
-
-def _node(item):
-    return resolve(item) if isinstance(item, str) else item
 
 
 class SpaceSwitch:
@@ -66,9 +62,9 @@ class SpaceSwitch:
         """
         if mode not in _MODES:
             raise ValueError(f"Unknown mode '{mode}'. Use one of {sorted(_MODES)}.")
-        node = _node(node)
-        control = _node(control) if control is not None else node
-        spaces = [_node(space) for space in spaces]
+        node = ensure_node(node)
+        control = ensure_node(control) if control is not None else node
+        spaces = [ensure_node(space) for space in spaces]
         labels = list(labels) if labels else [space.name for space in spaces]
         name = name or f"{node.name}_space"
 
@@ -89,13 +85,15 @@ class SpaceSwitch:
     @property
     def labels(self) -> list[str]:
         """Return the enum labels, world first."""
-        listed = cmds.attributeQuery(self.attr.attr, node=self.attr.node.long_name, listEnum=True)
+        listed = cmds.attributeQuery(
+            self.attr.attr, node=self.attr.node.long_name, listEnum=True
+        )
         return listed[0].split(":") if listed else []
 
     @undo
     def add_space(self, target, label: Optional[str] = None) -> int:
         """Append a new space and extend the enum; returns its index."""
-        target = _node(target)
+        target = ensure_node(target)
         label = label or target.name
         new_labels = [*self.labels, label]
         cmds.addAttr(self.attr.path, edit=True, enumName=":".join(new_labels))

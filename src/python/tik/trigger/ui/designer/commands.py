@@ -16,8 +16,7 @@ from tik.trigger.core import registry
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.guides import EXTENSION as GUIDE_EXTENSION
 
-from ..palette import SearchPalette
-from .widgets import SCENE_NODE, module_entries
+from .widgets import SCENE_NODE
 
 if TYPE_CHECKING:
     from tik.trigger.guides import GuideHandle
@@ -52,9 +51,11 @@ class DesignerCommands:
             self.refresh()
 
     def show_palette(self) -> None:
+        """Open the module palette under the cursor."""
         self.palette.popup(QtGui.QCursor.pos())
 
     def create_guides(self, module_type: str) -> list[GuideHandle]:
+        """Add a module (or a scene-nodes group) for the current side and select it."""
         if module_type == SCENE_NODE:
             name = self.graph.add_scene_group(nodes=self._selected_scene_nodes())
             self._on_external_selection(name)
@@ -62,7 +63,9 @@ class DesignerCommands:
             self.name_edit.selectAll()
             return []
         module_cls = registry.get_module(module_type)
-        parent_handle = self._current  # tree/graph selection only; nothing selected = no connection
+        parent_handle = (
+            self._current
+        )  # tree/graph selection only; nothing selected = no connection
         inputs = {}
         primary = module_cls.primary_input()
         if parent_handle is not None and primary is not None and parent_handle.outputs:
@@ -73,14 +76,23 @@ class DesignerCommands:
         elif choice == "Both":
             sides = [Side.LEFT, Side.RIGHT]
         elif choice == "Auto":
-            sides = [parent_handle.side if parent_handle is not None and parent_handle.side is not Side.CENTER else Side.LEFT]
+            sides = [
+                (
+                    parent_handle.side
+                    if parent_handle is not None
+                    and parent_handle.side is not Side.CENTER
+                    else Side.LEFT
+                )
+            ]
         else:
             sides = [Side.from_value(choice)]
         created = []
         try:
             with self.watcher.mute():
                 for side in sides:
-                    created.append(self.guides.add(module_type, side=side.value, inputs=inputs))
+                    created.append(
+                        self.guides.add(module_type, side=side.value, inputs=inputs)
+                    )
         except TriggerError as error:
             self.events.log(str(error), level="warning")
         self.refresh()
@@ -91,6 +103,7 @@ class DesignerCommands:
         return created
 
     def reparent(self, instance_id: str, parent_id: Optional[str]) -> None:
+        """Point ``instance_id``'s primary input at ``parent_id`` (None detaches)."""
         handle = self.guides.get(instance_id)
         if handle is None:
             return
@@ -101,7 +114,10 @@ class DesignerCommands:
         try:
             with self.watcher.mute():
                 if parent is not None:
-                    self.guides.connect(f"{handle.key}.{primary.name}", f"{parent.key}.{parent.outputs[0]}")
+                    self.guides.connect(
+                        f"{handle.key}.{primary.name}",
+                        f"{parent.key}.{parent.outputs[0]}",
+                    )
                 else:
                     self.guides.disconnect(f"{handle.key}.{primary.name}")
         except TriggerError as error:
@@ -109,18 +125,28 @@ class DesignerCommands:
         self.refresh()
 
     def connect_dialog(self) -> None:
+        """Ask for a source and connect the current module's first input to it."""
         if self._current is None or not self._current.input_names():
             return
-        text, ok = QtWidgets.QInputDialog.getText(self, "Connect input", f"{self._current.key}.<input> = <source>", text=f"{self._current.input_names()[0]} = ")
+        text, ok = QtWidgets.QInputDialog.getText(
+            self,
+            "Connect input",
+            f"{self._current.key}.<input> = <source>",
+            text=f"{self._current.input_names()[0]} = ",
+        )
         if ok and "=" in text:
             input_name, _eq, source = text.partition("=")
             self._on_input_changed(input_name.strip(), source.strip())
 
     def sever_current(self) -> None:
-        for handle in self.selected_handles() or ([self._current] if self._current else []):
+        """Drop every connection of the selected modules."""
+        for handle in self.selected_handles() or (
+            [self._current] if self._current else []
+        ):
             self.graph.sever(handle.key)
 
     def disconnect_primary(self) -> None:
+        """Clear the current module's primary input."""
         if self._current is None:
             return
         primary = self._current.module_class.primary_input()
@@ -131,7 +157,11 @@ class DesignerCommands:
         """Select the root guide joint(s) of the selected module(s) in the viewport."""
         select = getattr(self.guides, "select_nodes", None)
         with self.watcher.mute():
-            roots = [handle.root for handle in self.selected_handles() if handle.root is not None]
+            roots = [
+                handle.root
+                for handle in self.selected_handles()
+                if handle.root is not None
+            ]
             if select is not None:
                 select(roots)
             else:
@@ -139,11 +169,13 @@ class DesignerCommands:
                     getattr(root, "select", lambda: None)()
 
     def select_current(self) -> None:
+        """Select the guide joints of the selected modules in Maya."""
         with self.watcher.mute():
             for handle in self.selected_handles():
                 handle.select()
 
     def mirror_current(self) -> None:
+        """Mirror each selected module to the other side."""
         with self.watcher.mute():
             for handle in self.selected_handles():
                 try:
@@ -153,6 +185,7 @@ class DesignerCommands:
         self.refresh()
 
     def duplicate_current(self) -> list[GuideHandle]:
+        """Copy each selected module; returns the copies."""
         created = []
         with self.watcher.mute():
             for handle in self.selected_handles():
@@ -166,6 +199,7 @@ class DesignerCommands:
         return created
 
     def delete_current(self) -> None:
+        """Delete the selection: graph wires first, else the module or group."""
         if self.graph.hasFocus() and self.graph.delete_selected():
             return  # Delete in the graph disconnects wires / removes scene-node groups
         if self._current is None and self._external is not None:
@@ -181,6 +215,7 @@ class DesignerCommands:
         self.refresh()
 
     def clear_guides(self) -> None:
+        """Remove every module, group and layout entry."""
         with self.watcher.mute():
             self.guides.clear()
             self.guides.set_layout({})
@@ -190,11 +225,15 @@ class DesignerCommands:
         self.refresh()
 
     def test_build(self, all_modules: bool = False):
+        """Build the selected modules (or all) into a throwaway rig and report."""
         handles = [] if all_modules else self.selected_handles()
         try:
             with self.watcher.mute():
                 report = self.guides.test_build(*handles)
-            self.status.set_activity(f"Test build: {report.count} module(s), {len(report.connections)} connection(s)")
+            self.status.set_activity(
+                f"Test build: {report.count} module(s), "
+                f"{len(report.connections)} connection(s)"
+            )
             return report
         except TriggerError as error:
             self.events.log(str(error), level="error")
@@ -265,7 +304,10 @@ class DesignerCommands:
         self.auto_sync_changed.emit(bool(on))
         QtCore.QSettings("tikworks", "trigger").setValue("designer/auto_sync", bool(on))
 
-    def export_file(self, path: Optional[str] = None, ask: bool = False, selected: bool = False) -> Optional[Path]:
+    def export_file(
+        self, path: Optional[str] = None, ask: bool = False, selected: bool = False
+    ) -> Optional[Path]:
+        """Write the modules (all, or ``selected``) to a ``.trg`` file."""
         path = path or ("" if ask else self.last_guide_file) or self._pick("save")
         if not path:
             return None
@@ -275,7 +317,10 @@ class DesignerCommands:
         self.events.log(f"GuideLayout exported: {written}")
         return written
 
-    def import_file(self, path: Optional[str] = None, reset: bool = False) -> list[GuideHandle]:
+    def import_file(
+        self, path: Optional[str] = None, reset: bool = False
+    ) -> list[GuideHandle]:
+        """Add the modules of a ``.trg`` file; ``reset`` clears the scene first."""
         path = path or self._pick("open")
         if not path:
             return []
@@ -287,9 +332,21 @@ class DesignerCommands:
 
     def _pick(self, mode: str) -> str:
         if self.file_browser is not None:
-            return self.file_browser(mode, [GUIDE_EXTENSION], self.last_guide_file) or ""
+            return (
+                self.file_browser(mode, [GUIDE_EXTENSION], self.last_guide_file) or ""
+            )
         if mode == "save":
-            path, _f = QtWidgets.QFileDialog.getSaveFileName(self, "Export guides", self.last_guide_file, f"GuideLayout (*{GUIDE_EXTENSION})")
+            path, _f = QtWidgets.QFileDialog.getSaveFileName(
+                self,
+                "Export guides",
+                self.last_guide_file,
+                f"GuideLayout (*{GUIDE_EXTENSION})",
+            )
         else:
-            path, _f = QtWidgets.QFileDialog.getOpenFileName(self, "Import guides", self.last_guide_file, f"GuideLayout (*{GUIDE_EXTENSION})")
+            path, _f = QtWidgets.QFileDialog.getOpenFileName(
+                self,
+                "Import guides",
+                self.last_guide_file,
+                f"GuideLayout (*{GUIDE_EXTENSION})",
+            )
         return path

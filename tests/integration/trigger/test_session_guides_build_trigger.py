@@ -3,17 +3,9 @@
 import pytest
 from maya import cmds
 
-import tik.trigger as trigger
-from tik.trigger.guides import GuideScene
 from tik.trigger.session import Session
 
-
-@pytest.fixture(autouse=True)
-def fresh_scene():
-    trigger.load_plugins()
-    cmds.file(new=True, force=True)
-    yield
-    cmds.file(new=True, force=True)
+pytestmark = pytest.mark.usefixtures("trigger_plugins")
 
 
 def author_base_and_arm(session=None):
@@ -56,10 +48,16 @@ def test_the_arm_survives_the_round_trip_through_the_document(tmp_path):
 def test_posed_guides_survive_the_round_trip(tmp_path):
     """Closer to real use: the guides get moved before the rig is built."""
     session, scene, body, arm = author_base_and_arm()
-    cmds.xform(scene.guide_nodes(arm.instance_id)[("shoulder", 0)].long_name,
-               worldSpace=True, translation=(5.0, 14.0, 0.0))
-    cmds.xform(scene.guide_nodes(arm.instance_id)[("elbow", 0)].long_name,
-               worldSpace=True, translation=(9.0, 14.0, -1.0))
+    cmds.xform(
+        scene.guide_nodes(arm.instance_id)[("shoulder", 0)].long_name,
+        worldSpace=True,
+        translation=(5.0, 14.0, 0.0),
+    )
+    cmds.xform(
+        scene.guide_nodes(arm.instance_id)[("elbow", 0)].long_name,
+        worldSpace=True,
+        translation=(9.0, 14.0, -1.0),
+    )
     scene.sync()
     session.add("kinematics", rig_name="hero")
     session.save(tmp_path / "hero.tr")

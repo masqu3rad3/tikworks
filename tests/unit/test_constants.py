@@ -1,6 +1,7 @@
 """Unit tests for tik.maya.core.constants module."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 from maya import cmds
 
 from tik.maya.core.constants import NodeNames, _NodeNamesConfig
@@ -28,7 +29,9 @@ class TestNodeNamesConfig:
         config._cached_version = None
 
         # Mock cmds.about to raise RuntimeError
-        with patch.object(cmds, "about", side_effect=RuntimeError("Maya not initialized")):
+        with patch.object(
+            cmds, "about", side_effect=RuntimeError("Maya not initialized")
+        ):
             version = config.maya_version
 
         assert version == 2026

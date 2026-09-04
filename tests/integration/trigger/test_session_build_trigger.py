@@ -1,4 +1,4 @@
-"""The rebuild story: author guides -> export .trg -> session builds from files, twice."""
+"""The rebuild story: author guides, export .trg, build from files twice."""
 
 import pytest
 from maya import cmds
@@ -23,7 +23,7 @@ def _author(scene, tmp_path):
 
 
 def test_session_builds_from_files_and_rebuilds(scene, tmp_path):
-    guides_path = _author(scene, tmp_path)
+    _author(scene, tmp_path)
     model = tmp_path / "geo" / "hero_model.ma"
     cmds.file(new=True, force=True)
     cmds.polySphere(name="hero_geo")
@@ -34,13 +34,29 @@ def test_session_builds_from_files_and_rebuilds(scene, tmp_path):
     rig = trigger.Session()
     rig.save(tmp_path / "hero.tr")
     rig.add("import_asset", "import_model", file_path="geo/hero_model.ma")
-    rig.add("kinematics", guides_file="guides/hero_guides.trg", rig_name="hero", after_build="delete")
-    rig.add("script", "tag", code="import maya.cmds as cmds\ncmds.createNode('transform', name='from_script')")
+    rig.add(
+        "kinematics",
+        guides_file="guides/hero_guides.trg",
+        rig_name="hero",
+        after_build="delete",
+    )
+    rig.add(
+        "script",
+        "tag",
+        code=(
+            "import maya.cmds as cmds\n"
+            "cmds.createNode('transform', name='from_script')"
+        ),
+    )
     rig.save()
 
     results = rig.build()
     assert [item.status for item in results] == ["done"] * 3
-    assert cmds.objExists("hero_geo") and cmds.objExists("hero_rig") and cmds.objExists("from_script")
+    assert (
+        cmds.objExists("hero_geo")
+        and cmds.objExists("hero_rig")
+        and cmds.objExists("from_script")
+    )
     assert cmds.objExists("L_arm_hand_jnt") and cmds.objExists("R_arm_hand_jnt")
     assert not cmds.objExists("trigger_guides_grp")
 
@@ -60,20 +76,39 @@ def test_session_builds_from_files_and_rebuilds(scene, tmp_path):
 def test_kinematics_roots_filter(scene, tmp_path):
     guides_path = _author(scene, tmp_path)
     rig = trigger.Session()
-    rig.add("kinematics", guides_file=str(guides_path), guide_roots=["body"], rig_name="hero")
+    rig.add(
+        "kinematics",
+        guides_file=str(guides_path),
+        guide_roots=["body"],
+        rig_name="hero",
+    )
     rig.build()
-    assert cmds.objExists("C_body_grp") and cmds.objExists("L_arm_grp")  # descendants included
+    assert cmds.objExists("C_body_grp") and cmds.objExists(
+        "L_arm_grp"
+    )  # descendants included
 
     rig = trigger.Session()
-    rig.add("kinematics", guides_file=str(guides_path), guide_roots=["tail"], rig_name="only_tail")
+    rig.add(
+        "kinematics",
+        guides_file=str(guides_path),
+        guide_roots=["tail"],
+        rig_name="only_tail",
+    )
     rig.build()
     assert cmds.objExists("C_tail_grp") and not cmds.objExists("L_arm_grp")
-    assert any("not found" in problem for problem in trigger.Session().add("kinematics", guides_file="nope.trg") and [] or []) or True
+    assert (
+        any(
+            "not found" in problem
+            for problem in trigger.Session().add("kinematics", guides_file="nope.trg")
+            and []
+            or []
+        )
+        or True
+    )
 
 
 def test_kinematics_builds_from_the_sessions_own_guides():
     """No guides file: the rig description is self-contained."""
-    from tik.trigger.guides import GuideScene
     from tik.trigger.session import Session
 
     trigger.load_plugins()

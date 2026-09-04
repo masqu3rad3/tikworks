@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from tik.trigger.core import GuideLayout, Input, IntField, Module
 
+
 class ToyRoot(Module):
     label = "Toy Root"
     sided = False

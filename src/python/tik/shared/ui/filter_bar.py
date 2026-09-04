@@ -9,8 +9,6 @@ by ``tik.shared.ui.theme``.
 
 from __future__ import annotations
 
-from typing import List
-
 from tik.shared.ui.Qt import QtCore, QtWidgets
 
 
@@ -21,30 +19,38 @@ class FilterModel(QtCore.QObject):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._keywords: List[str] = []
+        self._keywords: list[str] = []
         self._pending = ""
 
     def set_keywords(self, keywords) -> None:
-        self._keywords = [k.strip().lower() for k in keywords or () if k and k.strip()]
+        """Replace the committed keywords (lower-cased, blanks dropped)."""
+        self._keywords = [
+            keyword.strip().lower()
+            for keyword in keywords or ()
+            if keyword and keyword.strip()
+        ]
         self.filter_changed.emit()
 
     def set_pending_text(self, text) -> None:
+        """The text being typed, matched before it becomes a keyword."""
         self._pending = (text or "").strip().lower()
         self.filter_changed.emit()
 
     @property
-    def keywords(self) -> List[str]:
+    def keywords(self) -> list[str]:
+        """The committed keywords."""
         return list(self._keywords)
 
     @property
     def is_active(self) -> bool:
+        """True when any keyword or pending text would filter."""
         return bool(self._keywords or self._pending)
 
-    def _terms(self) -> List[str]:
+    def _terms(self) -> list[str]:
         return self._keywords + ([self._pending] if self._pending else [])
 
     def matches(self, text) -> bool:
-        """OR logic: any term found in ``text`` is a match; no terms = everything matches."""
+        """Any term found in ``text`` matches; with no terms everything matches."""
         terms = self._terms()
         if not terms:
             return True
@@ -75,6 +81,7 @@ class _Pill(QtWidgets.QFrame):
         layout.addWidget(close)
 
     def keyword(self) -> str:
+        """The keyword this pill shows."""
         return self._keyword
 
 
@@ -93,11 +100,13 @@ class FilterBar(QtWidgets.QWidget):
 
     filter_changed = QtCore.Signal()
 
-    def __init__(self, parent=None, placeholder: str = "Filter…  (Enter to keep a keyword)") -> None:
+    def __init__(
+        self, parent=None, placeholder: str = "Filter…  (Enter to keep a keyword)"
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("FilterBar")
         self._model = FilterModel(self)
-        self._pills: List[_Pill] = []
+        self._pills: list[_Pill] = []
         self._line_edit = _FilterLineEdit(self)
         self._line_edit.setObjectName("FilterInput")
         self._line_edit.setPlaceholderText(placeholder)
@@ -120,23 +129,29 @@ class FilterBar(QtWidgets.QWidget):
 
     @property
     def model(self) -> FilterModel:
+        """The filter model the bar edits."""
         return self._model
 
     @property
-    def keywords(self) -> List[str]:
+    def keywords(self) -> list[str]:
+        """The committed keywords."""
         return self._model.keywords
 
     @property
     def line_edit(self) -> QtWidgets.QLineEdit:
+        """The text field, for focus and key handling."""
         return self._line_edit
 
     def matches(self, text) -> bool:
+        """True when ``text`` passes the current filter."""
         return self._model.matches(text)
 
     def set_text(self, text: str) -> None:
+        """Replace the pending text."""
         self._line_edit.setText(text)
 
     def clear(self) -> None:
+        """Drop every keyword and the pending text."""
         for pill in list(self._pills):
             self._discard_pill(pill)
         self._pills = []
@@ -149,7 +164,7 @@ class FilterBar(QtWidgets.QWidget):
         keyword = self._line_edit.text().strip()
         if not keyword:
             return
-        if keyword.lower() in [p.keyword().lower() for p in self._pills]:
+        if keyword.lower() in [pill.keyword().lower() for pill in self._pills]:
             self._line_edit.clear()
             return
         pill = _Pill(keyword, self._pill_row)
@@ -179,4 +194,4 @@ class FilterBar(QtWidgets.QWidget):
         pill.deleteLater()
 
     def _publish(self) -> None:
-        self._model.set_keywords([p.keyword() for p in self._pills])
+        self._model.set_keywords([pill.keyword() for pill in self._pills])

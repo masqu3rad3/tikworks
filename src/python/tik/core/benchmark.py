@@ -1,31 +1,39 @@
-import time
-import statistics
+from __future__ import annotations
+
 import gc
+import statistics
+import time
 from dataclasses import dataclass, field
-from typing import List, Callable, Dict, Optional
+from typing import Callable, Optional
 
 
 # --- Data Container ---
 @dataclass
 class BenchmarkResult:
+    """The timings collected for one measured block."""
+
     name: str
     iterations: int
-    times: List[float] = field(default_factory=list)
+    times: list[float] = field(default_factory=list)
 
     @property
     def total(self):
+        """Seconds spent over every iteration."""
         return sum(self.times)
 
     @property
     def average(self):
+        """Mean seconds per iteration (0.0 with no timings)."""
         return statistics.mean(self.times) if self.times else 0.0
 
     @property
     def best(self):
+        """Fastest iteration in seconds (0.0 with no timings)."""
         return min(self.times) if self.times else 0.0
 
     @property
     def worst(self):
+        """Slowest iteration in seconds (0.0 with no timings)."""
         return max(self.times) if self.times else 0.0
 
     @property
@@ -58,8 +66,10 @@ class BenchmarkResult:
 
 # --- The Engine ---
 class Benchmark:
+    """Times named blocks of code and reports them side by side."""
+
     def __init__(self):
-        self.results: Dict[str, BenchmarkResult] = {}
+        self.results: dict[str, BenchmarkResult] = {}
 
     def measure(self, name: str, iterations: int = 10, warmup: int = 2):
         """Measure a block of code, as a context manager or a decorator.
@@ -79,22 +89,24 @@ class Benchmark:
 
         print(f"\n{'COMPARISON REPORT':^60}")
         print(f"{'=' * 60}")
-        print(
-            f"{'Name':<25} | {'Avg (ms)':<10} | {'Total (s)':<10} | {'Best':<10}")
+        print(f"{'Name':<25} | {'Avg (ms)':<10} | {'Total (s)':<10} | {'Best':<10}")
         print(f"{'-' * 60}")
 
         # Sort by average time (fastest first)
-        sorted_results = sorted(self.results.values(), key=lambda r: r.average)
+        sorted_results = sorted(
+            self.results.values(), key=lambda result: result.average
+        )
 
         for res in sorted_results:
             print(
-                f"{res.name:<25} | {res.average * 1000:<10.4f} | {res.total:<10.4f} | {res.best * 1000:<10.4f}")
+                f"{res.name:<25} | {res.average * 1000:<10.4f} | "
+                f"{res.total:<10.4f} | {res.best * 1000:<10.4f}"
+            )
         print(f"{'=' * 60}\n")
 
 
 class _BenchmarkContext:
-    def __init__(self, parent: Benchmark, name: str, iterations: int,
-                 warmup: int):
+    def __init__(self, parent: Benchmark, name: str, iterations: int, warmup: int):
         self.parent = parent
         self.name = name
         self.iterations = iterations
@@ -118,7 +130,8 @@ class _BenchmarkContext:
         times = []
 
         # Warmup (Run without timing to load caches/compile)
-        # Disable GC during run to prevent spikes (optional but recommended for pure algos)
+        # Disable GC during run to prevent spikes (optional but recommended for pure
+        # algos)
         gc_old = gc.isenabled()
         gc.disable()
 
@@ -142,5 +155,3 @@ class _BenchmarkContext:
         self.parent.results[self.name] = result
         print(result)  # Immediate feedback
         return result
-
-

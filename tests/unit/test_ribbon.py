@@ -3,8 +3,8 @@
 import math
 
 import pytest
+from approx import axes, close
 from maya import cmds
-from maya.api import OpenMaya
 
 import tik.maya as tm
 from tik.core.bspline import basis
@@ -16,18 +16,6 @@ def _endpoints():
     end = tm.Transform.create(name="end")
     end.translate = (10, 0, 0)
     return start, end
-
-
-def _close(vector, expected, tolerance=1e-4):
-    return all(abs(a - b) < tolerance for a, b in zip(vector, expected))
-
-
-def _axes(transform):
-    matrix = transform.world_matrix
-    return (
-        OpenMaya.MVector(matrix[0], matrix[1], matrix[2]),
-        OpenMaya.MVector(matrix[4], matrix[5], matrix[6]),
-    )
 
 
 def test_ribbon_creates_expected_nodes():
@@ -49,7 +37,7 @@ def test_joints_are_distributed_between_endpoints():
     ribbon = Ribbon.create(start, end, name="rbn", joint_count=3, mid_count=0)
     assert ribbon.control_spline is None
     for index, joint in enumerate(ribbon.deformer_joints):
-        assert _close(joint.world_translation, (10 * (index + 0.5) / 3, 0, 0))
+        assert close(joint.world_translation, (10 * (index + 0.5) / 3, 0, 0))
 
 
 def test_joints_match_basis_weighted_positions_after_bending():
@@ -59,19 +47,22 @@ def test_joints_match_basis_weighted_positions_after_bending():
     positions = [(0, 0, 0), (5, 3, 0), (10, 0, 0)]
     for index, joint in enumerate(ribbon.deformer_joints):
         weights = basis((index + 0.5) / 5, 3, 2)
-        expected = [sum(w * p[axis] for w, p in zip(weights, positions)) for axis in range(3)]
-        assert _close(joint.world_translation, expected)
+        expected = [
+            sum(weight * position[axis] for weight, position in zip(weights, positions))
+            for axis in range(3)
+        ]
+        assert close(joint.world_translation, expected)
 
 
 def test_plugs_sit_on_endpoints_and_joints_aim_along_strip():
     start, end = _endpoints()
     end.translate = (0, 10, 0)
     ribbon = Ribbon.create(start, end, name="rbn", up_vector=(0, 0, 1))
-    assert _close(ribbon.start_plug.world_translation, start.world_translation)
-    assert _close(ribbon.end_plug.world_translation, end.world_translation)
-    x_axis, y_axis = _axes(ribbon.deformer_joints[0])
-    assert _close(x_axis, (0, 1, 0))
-    assert _close(y_axis, (0, 0, 1))
+    assert close(ribbon.start_plug.world_translation, start.world_translation)
+    assert close(ribbon.end_plug.world_translation, end.world_translation)
+    x_axis, y_axis = axes(ribbon.deformer_joints[0])
+    assert close(x_axis, (0, 1, 0))
+    assert close(y_axis, (0, 0, 1))
 
 
 def test_deformer_joints_are_flat_with_live_channels():
@@ -80,8 +71,10 @@ def test_deformer_joints_are_flat_with_live_channels():
     for joint in ribbon.deformer_joints:
         assert joint.parent.name == ribbon.joint_group.name
         assert joint["rotateOrder"].value == 0
-        assert not cmds.listConnections(f"{joint.long_name}.offsetParentMatrix", source=True, destination=False)
-        assert _close(joint.translate, joint.world_translation)
+        assert not cmds.listConnections(
+            f"{joint.long_name}.offsetParentMatrix", source=True, destination=False
+        )
+        assert close(joint.translate, joint.world_translation)
     ribbon.end_plug.translate = (5, 4, 0)
     assert ribbon.deformer_joints[1]["translateY"].value == pytest.approx(3.0, abs=1e-4)
     assert ribbon.deformer_joints[1]["translateX"].value == pytest.approx(7.5, abs=1e-4)
@@ -102,9 +95,11 @@ def test_twist_interpolates_as_unbounded_floats():
     for index, joint in enumerate(ribbon.deformer_joints):
         angle = 270 * (index + 0.5) / 3  # 45, 135, 225
         assert joint["rotateX"].value == pytest.approx(angle, abs=1e-3)
-        x_axis, y_axis = _axes(joint)
-        assert _close(x_axis, (1, 0, 0))
-        assert _close(y_axis, (0, math.cos(math.radians(angle)), math.sin(math.radians(angle))))
+        x_axis, y_axis = axes(joint)
+        assert close(x_axis, (1, 0, 0))
+        assert close(
+            y_axis, (0, math.cos(math.radians(angle)), math.sin(math.radians(angle)))
+        )
 
 
 def test_mid_plug_roll_adds_local_twist():
@@ -112,8 +107,10 @@ def test_mid_plug_roll_adds_local_twist():
     ribbon = Ribbon.create(start, end, name="rbn", joint_count=3, mid_count=1)
     ribbon.mid_plugs[0].rotate = (90, 0, 0)
     weights = basis(0.5, 3, 2)
-    assert ribbon.deformer_joints[1]["rotateX"].value == pytest.approx(weights[1] * 90, abs=1e-3)
-    assert _close(ribbon.deformer_joints[1].world_translation, (5, 0, 0))
+    assert ribbon.deformer_joints[1]["rotateX"].value == pytest.approx(
+        weights[1] * 90, abs=1e-3
+    )
+    assert close(ribbon.deformer_joints[1].world_translation, (5, 0, 0))
 
 
 def test_start_roll_beyond_180_with_twist_wired_does_not_flip():
@@ -125,9 +122,9 @@ def test_start_roll_beyond_180_with_twist_wired_does_not_flip():
     ribbon.end_plug.rotate = (270, 0, 0)
     for joint in ribbon.deformer_joints:
         assert joint["rotateX"].value == pytest.approx(270, abs=1e-3)
-        x_axis, y_axis = _axes(joint)
-        assert _close(x_axis, (1, 0, 0))
-        assert _close(y_axis, (0, 0, -1))
+        x_axis, y_axis = axes(joint)
+        assert close(x_axis, (1, 0, 0))
+        assert close(y_axis, (0, 0, -1))
 
 
 def test_invalid_arguments():
@@ -194,9 +191,9 @@ def test_pinned_start_roll_with_wired_twist_follows_without_flip():
     end.rotate = (450, 0, 0)
     for joint in ribbon.deformer_joints:
         assert joint["rotateX"].value == pytest.approx(450, abs=1e-3)
-        x_axis, y_axis = _axes(joint)
-        assert _close(x_axis, (1, 0, 0))
-        assert _close(y_axis, (0, 0, 1))
+        x_axis, y_axis = axes(joint)
+        assert close(x_axis, (1, 0, 0))
+        assert close(y_axis, (0, 0, 1))
 
 
 def test_delete():
@@ -205,7 +202,15 @@ def test_delete():
     ribbon.delete()
     assert not cmds.objExists("rbn_ribbon_grp")
     assert not cmds.objExists("rbn_ribbon_distance")
-    assert not cmds.ls(type=["parentMatrix", "pickMatrix", "aimMatrix", "decomposeMatrix", "composeMatrix"])
+    assert not cmds.ls(
+        type=[
+            "parentMatrix",
+            "pickMatrix",
+            "aimMatrix",
+            "decomposeMatrix",
+            "composeMatrix",
+        ]
+    )
 
 
 def test_create_is_one_undo_step():
@@ -234,7 +239,9 @@ def test_pin_mid_drives_the_strip():
     ribbon.pin_mid(0, driver)
     before = ribbon.deformer_joints[2].world_position
     driver.translate = (
-        driver.translate[0], driver.translate[1] + 5.0, driver.translate[2],
+        driver.translate[0],
+        driver.translate[1] + 5.0,
+        driver.translate[2],
     )
     after = ribbon.deformer_joints[2].world_position
     assert (after - before).length() > 1e-3

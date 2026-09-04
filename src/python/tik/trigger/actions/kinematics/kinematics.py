@@ -5,7 +5,6 @@ from __future__ import annotations
 from tik.trigger.core import (
     AFTERLIFE_MODES,
     Action,
-    BoolField,
     ChoiceField,
     FieldGroup,
     FileField,
@@ -15,8 +14,8 @@ from tik.trigger.core import (
 )
 from tik.trigger.core.exceptions import ActionExecutionError
 
-
 BUILD_OPTIONS = FieldGroup("Build Options", collapsed=True)
+
 
 @register_action("kinematics", category="build", icon="kinematics")
 class Kinematics(Action):
@@ -25,24 +24,27 @@ class Kinematics(Action):
     label = "Kinematics"
 
     guides_file = FileField(
-        "", extensions=[".trg"], label="GuideLayout file",
+        "",
+        extensions=[".trg"],
+        label="GuideLayout file",
         help="Leave empty to build this session's own guides; set a path to "
-             "build a shared guide library instead.",
+        "build a shared guide library instead.",
     )
     guide_roots = ListField(
-        item_type=str, help="Root guide names to build; empty = all",
+        item_type=str,
+        help="Root guide names to build; empty = all",
         group=BUILD_OPTIONS,
     )
     rig_name = StringField("trigger", label="Rig name")
     after_build = ChoiceField(
-        "delete", choices=list(AFTERLIFE_MODES), label="GuideLayout after build",
+        "delete",
+        choices=list(AFTERLIFE_MODES),
+        label="GuideLayout after build",
         group=BUILD_OPTIONS,
-    )
-    auto_switchers = BoolField(
-        True, help="Create automatic space switchers", group=BUILD_OPTIONS
     )
 
     def run(self, ctx) -> None:
+        """Build the rig from the guides file, or from the session's own guides."""
         from tik.trigger.guides import GuideScene
         from tik.trigger.maya.build import Builder
 
@@ -55,16 +57,23 @@ class Kinematics(Action):
             document = ctx.session.document.guides
         if self.guide_roots:
             wanted = set(self.guide_roots)
-            roots = [handle for handle in handles if handle.name in wanted or handle.root.name in wanted]
+            roots = [
+                handle
+                for handle in handles
+                if handle.name in wanted or handle.root.name in wanted
+            ]
             if not roots:
                 raise ActionExecutionError(
-                    f"kinematics: none of the roots {self.guide_roots} found in the guides."
+                    f"kinematics: none of the roots {self.guide_roots} "
+                    "found in the guides."
                 )
             scope = _descendants(guides, roots)
         else:
             scope = [handle.instance_id for handle in handles]
         report = Builder(ctx.events).build(
-            scope=scope, document=document, rig_name=self.rig_name,
+            scope=scope,
+            document=document,
+            rig_name=self.rig_name,
             afterlife=self.after_build,
         )
         source = self.guides_file or "this session"
@@ -93,13 +102,19 @@ class Kinematics(Action):
 
 def _descendants(guides, roots) -> list[str]:
     """Instance ids of ``roots`` and everything parented under them."""
-    all_instances = {handle.instance_id: handle.instance for handle in guides.instances()}
+    all_instances = {
+        handle.instance_id: handle.instance for handle in guides.instances()
+    }
     wanted = {handle.instance_id for handle in roots}
     changed = True
     while changed:
         changed = False
         for instance_id, instance in all_instances.items():
-            if instance_id not in wanted and instance.parent and instance.parent.instance_id in wanted:
+            if (
+                instance_id not in wanted
+                and instance.parent
+                and instance.parent.instance_id in wanted
+            ):
                 wanted.add(instance_id)
                 changed = True
     return list(wanted)

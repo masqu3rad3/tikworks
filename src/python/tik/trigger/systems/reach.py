@@ -234,7 +234,7 @@ def build_reach(
     socket_z = (socket_matrix[8], socket_matrix[9], socket_matrix[10])
     azimuth_sign = (
         -1.0
-        if sum(a * b for a, b in zip(frame_z, socket_z)) < 0.0
+        if sum(left * right for left, right in zip(frame_z, socket_z)) < 0.0
         else 1.0
     )
 

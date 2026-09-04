@@ -7,7 +7,9 @@ from tik.maya.constructs.matrix_constraint import MatrixConstraint
 
 
 def _close(vector, expected, tolerance=1e-5):
-    return all(abs(a - b) < tolerance for a, b in zip(vector, expected))
+    return all(
+        abs(actual - expected) < tolerance for actual, expected in zip(vector, expected)
+    )
 
 
 def test_follows_driver_without_offset():
@@ -164,5 +166,10 @@ def test_maintain_offset_joint_follows_the_driver_rigidly():
     driver.rotate = (0, 20, 0)
 
     # The joint keeps its own 35 degrees and adds the driver's 20.
-    assert abs(joint.world_axis("x").angle(tm.Transform("rigid_driver").world_axis("x"))
-               - __import__("math").radians(35)) < 1e-3
+    assert (
+        abs(
+            joint.world_axis("x").angle(tm.Transform("rigid_driver").world_axis("x"))
+            - __import__("math").radians(35)
+        )
+        < 1e-3
+    )

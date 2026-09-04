@@ -28,6 +28,7 @@ class ActionContext:
         return path
 
     def log(self, message: str, level: str = "info") -> None:
+        """Emit a log line to the UI, if an event bus is attached."""
         if self.events is not None:
             self.events.emit("log", level=level, message=message)
 
@@ -48,10 +49,12 @@ class Action(Schema):
 
     @classmethod
     def display_label(cls) -> str:
+        """The label shown in the UI (falls back to the type name)."""
         return cls.label or cls.action_type.replace("_", " ").title() or cls.__name__
 
     @classmethod
     def description(cls) -> str:
+        """The help text shown in the UI (falls back to the class docstring)."""
         return cls.info or (cls.__doc__ or "").strip()
 
     def summary(self) -> str:
@@ -67,7 +70,10 @@ class Action(Schema):
         """Return pre-flight problems (empty = ok)."""
         problems: list[str] = []
         for name, field_obj in self.fields().items():
-            if field_obj.type_name == "file" and getattr(field_obj, "mode", "") == "open":
+            if (
+                field_obj.type_name == "file"
+                and getattr(field_obj, "mode", "") == "open"
+            ):
                 value = getattr(self, name)
                 if value and not ctx.resolve(value).exists():
                     problems.append(f"{name}: file not found ({value})")

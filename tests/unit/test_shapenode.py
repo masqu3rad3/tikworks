@@ -1,6 +1,7 @@
 # python
-import pytest
 from unittest.mock import patch
+
+import pytest
 from maya import cmds
 
 from tik.maya.core.shapenode import ShapeNode
@@ -14,10 +15,11 @@ def test_init_with_transform_without_shape_raises():
 
 
 def test_construct_with_shape_name_returns_same_shape_and_transform():
-    t, s = cmds.polyCube(name="boxX")
-    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya bug.
-    s = cmds.listRelatives(t, shapes=True, fullPath=True)[0]
-    shape_long = cmds.ls(s, long=True)[0]
+    transform, shape = cmds.polyCube(name="boxX")
+    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya
+    # bug.
+    shape = cmds.listRelatives(transform, shapes=True, fullPath=True)[0]
+    shape_long = cmds.ls(shape, long=True)[0]
     sn = ShapeNode(shape_long)
     assert sn.name == "boxXShape"
     assert sn.long_name.endswith("|boxX|boxXShape")
@@ -36,59 +38,61 @@ def test_construct_with_transform_name_uses_first_shape():
 
 
 def test_transform_property_cached_and_refreshes_after_transform_rename():
-    t, s = cmds.polyCube(name="geoA")
-    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya bug.
-    s = cmds.listRelatives(t, shapes=True, fullPath=True)[0]
-    sn = ShapeNode(cmds.ls(s, long=True)[0])
+    transform, shape = cmds.polyCube(name="geoA")
+    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya
+    # bug.
+    shape = cmds.listRelatives(transform, shapes=True, fullPath=True)[0]
+    sn = ShapeNode(cmds.ls(shape, long=True)[0])
     first = sn.transform
     second = sn.transform
     assert first is second
-    cmds.rename(t, "geoB")
+    cmds.rename(transform, "geoB")
     refreshed = sn.transform
     assert refreshed.name == "geoB"
 
 
 def test_shape_property_returns_self():
-    t, _ = cmds.polyCube(name="selfS")
-    s = cmds.listRelatives(t, shapes=True, fullPath=True)[0]
-    sn = ShapeNode(s)
+    transform, _ = cmds.polyCube(name="selfS")
+    shape = cmds.listRelatives(transform, shapes=True, fullPath=True)[0]
+    sn = ShapeNode(shape)
     assert sn.shape is sn
 
 
 def test_transform_property_returns_transform_with_full_long_name_in_hierarchy():
     grp = cmds.createNode("transform", name="GRP")
-    t, s = cmds.polyCube(name="childT")
-    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya bug.
-    s = cmds.listRelatives(t, shapes=True, fullPath=False)[0]
-    cmds.parent(t, grp)
-    sn = ShapeNode(cmds.ls(s, long=True)[0])
+    transform, shape = cmds.polyCube(name="childT")
+    # initially the shape name is not getting the <name>Shape suffix. Probably a Maya
+    # bug.
+    shape = cmds.listRelatives(transform, shapes=True, fullPath=False)[0]
+    cmds.parent(transform, grp)
+    sn = ShapeNode(cmds.ls(shape, long=True)[0])
     tr = sn.transform
     assert tr.long_name.endswith("|GRP|childT")
 
 
 def test_construct_with_transform_long_name_works():
-    t, s = cmds.polyCube(name="longT")
-    t_long = cmds.ls(t, long=True)[0]
+    transform, shape = cmds.polyCube(name="longT")
+    t_long = cmds.ls(transform, long=True)[0]
     sn = ShapeNode(t_long)
     assert sn.name == "longTShape"
     assert sn.transform.name == "longT"
 
 
 def test_parent_getter_returns_transform_wrapper():
-    t, _ = cmds.polyCube(name="parentGetter")
-    s = cmds.listRelatives(t, shapes=True, fullPath=True)[0]
-    sn = ShapeNode(s)
+    transform, _ = cmds.polyCube(name="parentGetter")
+    shape = cmds.listRelatives(transform, shapes=True, fullPath=True)[0]
+    sn = ShapeNode(shape)
 
-    p = sn.parent
-    assert isinstance(p, Transform)
-    assert p.name == "parentGetter"
-    assert p.long_name == "|parentGetter"
+    parent = sn.parent
+    assert isinstance(parent, Transform)
+    assert parent.name == "parentGetter"
+    assert parent.long_name == "|parentGetter"
 
 
 def test_parent_setter_raises_value_error_when_none():
-    t, _ = cmds.polyCube(name="parentNone")
-    s = cmds.listRelatives(t, shapes=True, fullPath=True)[0]
-    sn = ShapeNode(s)
+    transform, _ = cmds.polyCube(name="parentNone")
+    shape = cmds.listRelatives(transform, shapes=True, fullPath=True)[0]
+    sn = ShapeNode(shape)
 
     with pytest.raises(ValueError, match="Shape nodes cannot be parented to world"):
         sn.parent = None
@@ -148,11 +152,11 @@ def test_parent_setter_handles_shape_as_target_by_using_its_transform():
 
 
 def test_init_with_mesh_node_name_directly():
-    t, _ = cmds.polyCube(name="directShape")
-    shapes = cmds.listRelatives(t, shapes=True)
-    s = shapes[0]
-    sn = ShapeNode(s)
-    assert sn.name == s
+    transform, _ = cmds.polyCube(name="directShape")
+    shapes = cmds.listRelatives(transform, shapes=True)
+    shape = shapes[0]
+    sn = ShapeNode(shape)
+    assert sn.name == shape
     assert sn.transform.name == "directShape"
 
 
@@ -161,7 +165,7 @@ def test_parent_setter_accepts_string_name():
     s1 = cmds.listRelatives(t1, shapes=True, fullPath=True)[0]
     sn = ShapeNode(s1)
 
-    t2 = cmds.createNode("transform", name="targetString")
+    cmds.createNode("transform", name="targetString")
 
     sn.parent = "targetString"
     assert sn.transform.name == "targetString"
@@ -187,10 +191,13 @@ def test_shapenode_with_instanced_shape_resolves_correct_transform_robust():
 
     # Get all paths for the shape node
     # We can use the shape name (short name) to list all paths
-    # But listing relatives of the new parent is more reliable to find the specific path we just created
+    # But listing relatives of the new parent is more reliable to find the specific path
+    # we just created
     children = cmds.listRelatives(g2, shapes=True, fullPath=True)
     if not children:
-        pytest.fail(f"Group2 has no children. Instancing failed. s_long: {s_long}, g2: {g2}")
+        pytest.fail(
+            f"Group2 has no children. Instancing failed. s_long: {s_long}, g2: {g2}"
+        )
 
     path2 = children[0]
 
@@ -245,8 +252,8 @@ def test_long_name_fallback_after_reparent():
 
 
 def test_parent_property_returns_none_when_fullpath_empty():
-    t, _ = cmds.polyCube(name="mockTestCube")
-    shapes = cmds.listRelatives(t, shapes=True, fullPath=True)
+    transform, _ = cmds.polyCube(name="mockTestCube")
+    shapes = cmds.listRelatives(transform, shapes=True, fullPath=True)
     s_long = shapes[0]
     sn = ShapeNode(s_long)
 
@@ -258,4 +265,3 @@ def test_parent_property_returns_none_when_fullpath_empty():
         mock_instance.fullPathName.return_value = ""
 
         assert sn.parent is None
-

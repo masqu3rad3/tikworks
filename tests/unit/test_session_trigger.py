@@ -4,10 +4,15 @@ import pytest
 from maya import cmds
 
 from tik.core.fields import FieldValidationError, FileField
-from tik.trigger.core import Action, IntField, StringField, clear_registries, register_action
+from tik.trigger.core import (
+    Action,
+    IntField,
+    StringField,
+    clear_registries,
+    register_action,
+)
 from tik.trigger.core.exceptions import SessionError, SessionSaveError
 from tik.trigger.session import Session
-
 
 CALLS: list = []
 
@@ -51,9 +56,13 @@ def _registered():
     register_action("mark", category="build")(Mark)
     register_action("weights", category="deform")(Weights)
     register_action("mark_build_only", category="build")(MarkBuildOnly)
-    register_action("mark_publish_only", category="utility", scope="publish")(MarkPublishOnly)
+    register_action("mark_publish_only", category="utility", scope="publish")(
+        MarkPublishOnly
+    )
     register_action("mark_either", category="utility", scope="both")(MarkEither)
-    register_action("weights_publish", category="utility", scope="publish")(WeightsPublish)
+    register_action("weights_publish", category="utility", scope="publish")(
+        WeightsPublish
+    )
     from tik.trigger.actions.reference.reference import Reference
 
     register_action("reference", category="structure")(Reference)
@@ -152,9 +161,16 @@ def test_reference_handles_and_overrides(tmp_path):
         "kinematics": {"settings": {"tag": "KIN-OVERRIDE"}},
     }
     assert ref["kinematics"].tag == "KIN-OVERRIDE" and not linked.enabled
-    assert [handle.path for handle in ref.children] == ["base/kinematics", "base/scripts"]
+    assert [handle.path for handle in ref.children] == [
+        "base/kinematics",
+        "base/scripts",
+    ]
     assert [handle.path for handle in rig.walk()] == [
-        "base", "base/kinematics", "base/scripts", "base/scripts/head_rotation", "base/scripts/fingers",
+        "base",
+        "base/kinematics",
+        "base/scripts",
+        "base/scripts/head_rotation",
+        "base/scripts/fingers",
     ]
     with pytest.raises(SessionError):
         linked.add("mark")

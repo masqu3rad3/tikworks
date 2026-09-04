@@ -1,7 +1,10 @@
 """Blendshape type for Maya integration."""
+
+from __future__ import annotations
+
 from array import array
 from functools import partial
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 from maya import cmds
 
@@ -14,16 +17,11 @@ from ..core.scene import proxy_wrapper
 @register("blendShape")
 class BlendShape(Deformer):
     """Blendshape node type for Maya."""
+
     tm_blendshape = partial(proxy_wrapper, "blendShape")
 
     @classmethod
-    def create(
-            cls,
-            geometry = None,
-            targets = None,
-            name = None,
-            **kwargs
-    ) -> "BlendShape":
+    def create(cls, geometry=None, targets=None, name=None, **kwargs) -> "BlendShape":
         """Create Blendshape node type for Maya.
 
         Args:
@@ -41,8 +39,11 @@ class BlendShape(Deformer):
 
         # if only one of the influences or geometry is None, raise an error
         if geometry is None:
-            raise ValueError("To create blendshape with connections, geometry must be provided.\n"
-                             "Alternatively, call SkinCluster.create() without geometry and targets to create an unbound skinCluster node.")
+            raise ValueError(
+                "To create blendshape with connections, geometry must be provided.\n"
+                "Alternatively, call SkinCluster.create() without geometry "
+                "and targets to create an unbound skinCluster node."
+            )
 
         default_kwargs = {
             "frontOfChain": True,
@@ -106,7 +107,8 @@ class BlendShape(Deformer):
                 geom_index = long_connected.index(target_geo_long)
             except ValueError:
                 raise ValueError(
-                    f"Geometry '{geometry}' is not connected to blendShape '{self.name}'"
+                    f"Geometry '{geometry}' is not connected to "
+                    f"blendShape '{self.name}'"
                 )
         else:
             target_geo_long = cmds.ls(connected_geos[0], long=True)[0]
@@ -124,32 +126,33 @@ class BlendShape(Deformer):
         try:
             if target_id is None:
                 # This corresponds to the top-level node weight in Paint Tool
-                try: # Maya 2025+
+                try:  # Maya 2025+
                     return self[f"weightList[{geom_index}]"]["weights"].mplug
-                except RuntimeError: # Older Maya versions
+                except RuntimeError:  # Older Maya versions
                     return self[f"inputTarget[{geom_index}]"]["baseWeights"].mplug
             else:
-                # path: inputTarget[geom_index].inputTargetGroup[target_id].targetWeights
+                # path:
+                # inputTarget[geom_index].inputTargetGroup[target_id].targetWeights
                 return self[f"inputTarget[{geom_index}]"][
                     f"inputTargetGroup[{target_id}]"
                 ]["targetWeights"].mplug
-        except Exception:
+        except Exception:  # noqa: BLE001 - any missing plug means "no weights"
             return None
 
     def _read_weights(self, plug, vert_count):
         """Reads sparse weights from plug, filling defaults with 1.0."""
         if plug is None:
-            return array('d', [1.0]) * vert_count
+            return array("d", [1.0]) * vert_count
 
         indices = plug.getExistingArrayAttributeIndices()
-        weights = array('d', [1.0]) * vert_count
+        weights = array("d", [1.0]) * vert_count
 
         for physical_idx, logical_idx in enumerate(indices):
             if logical_idx < vert_count:
                 element = plug.elementByPhysicalIndex(physical_idx)
                 try:
                     value = element.asDouble()
-                except Exception:
+                except Exception:  # noqa: BLE001 - float-typed weight plugs
                     value = element.asFloat()
                 weights[logical_idx] = float(value)
 
@@ -251,11 +254,13 @@ class BlendShape(Deformer):
             channel_names = []
 
         target_weights_by_target = [
-            self._read_weights(self._get_weight_plug(geom_index, target_id=target_index), vertex_count)
+            self._read_weights(
+                self._get_weight_plug(geom_index, target_id=target_index), vertex_count
+            )
             for target_index in range(target_count)
         ]
 
-        flat_weights = array('d', [0.0]) * (vertex_count * target_count)
+        flat_weights = array("d", [0.0]) * (vertex_count * target_count)
         for vertex_index in range(vertex_count):
             base_offset = vertex_index * target_count
             for target_index in range(target_count):
@@ -272,7 +277,7 @@ class BlendShape(Deformer):
 
     def set_weights(
         self,
-        weights: Union[DeformerWeights, List[float]],
+        weights: Union[DeformerWeights, list[float]],
         geometry: Optional[str] = None,
     ) -> None:
         """Set all weights for the geometry.
@@ -297,18 +302,21 @@ class BlendShape(Deformer):
         if isinstance(weights, DeformerWeights):
             if weights.channel_count != target_count:
                 raise ValueError(
-                    f"Channel count {weights.channel_count} != target count {target_count}"
+                    f"Channel count {weights.channel_count} "
+                    f"!= target count {target_count}"
                 )
             if weights.element_count != vertex_count:
                 raise ValueError(
-                    f"Element count {weights.element_count} != {geo_name} count {vertex_count}"
+                    f"Element count {weights.element_count} "
+                    f"!= {geo_name} count {vertex_count}"
                 )
             flat_weights = weights.weights
         else:
             expected_count = vertex_count * target_count
             if len(weights) != expected_count:
                 raise ValueError(
-                    f"Weight length {len(weights)} != {geo_name} expected {expected_count}"
+                    f"Weight length {len(weights)} "
+                    f"!= {geo_name} expected {expected_count}"
                 )
             flat_weights = weights
 
@@ -375,7 +383,8 @@ class BlendShape(Deformer):
         if isinstance(weights, DeformerWeights):
             if weights.channel_count != 1:
                 raise ValueError(
-                    f"Expected DeformerWeights.channel_count==1 for a single target, got {weights.channel_count}"
+                    "Expected DeformerWeights.channel_count==1 for a single "
+                    f"target, got {weights.channel_count}"
                 )
             if weights.element_count != count:
                 raise ValueError(
@@ -419,7 +428,8 @@ class BlendShape(Deformer):
         if isinstance(weights, DeformerWeights):
             if weights.channel_count != 1:
                 raise ValueError(
-                    f"Expected DeformerWeights.channel_count==1 for a single target, got {weights.channel_count}"
+                    "Expected DeformerWeights.channel_count==1 for a single "
+                    f"target, got {weights.channel_count}"
                 )
             if weights.element_count != count:
                 raise ValueError(
@@ -479,14 +489,14 @@ class BlendShape(Deformer):
         default_kwargs.update(kwargs)
         self._save_deformer_weights(file_path, **default_kwargs)
 
-
     def load_weights(self, file_path, method="index", **kwargs):
         """Import blendshape weights from a file.
 
         Args:
             file_path (str or Path Object): The file path to import weights from.
             method (str): The method to use for importing weights.
-                Valid values are: "index", "nearest", "barycentric", "bilinear" and "over"
+                    Valid values are: "index", "nearest", "barycentric",
+                    "bilinear" and "over"
         """
         default_kwargs = {"ignoreName": True, "attribute": ["origin", "envelope"]}
         # update the default kwargs with any user-provided kwargs

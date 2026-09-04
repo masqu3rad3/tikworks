@@ -1,5 +1,7 @@
 """DAG (Directed Acyclic Graph) node wrapper for Maya."""
+
 from __future__ import annotations
+
 from typing import Any
 
 from maya import cmds
@@ -69,7 +71,8 @@ class DagNode(Node):
         """Return the parent as a wrapped node (or None if no parent).
 
         Returns:
-            Node wrapper or None: The parent node, or None if this is a world-level node.
+            Node wrapper or None: The parent node, or None for a world-level
+                node.
         """
         return self.get_parent()
 
@@ -126,7 +129,6 @@ class DagNode(Node):
             parent_inverse_matrix = new_dag_path.exclusiveMatrixInverse()
             # Compute new local matrix to maintain world position
             new_local_matrix = world_matrix_before * parent_inverse_matrix
-            # Apply the new local transformation
             transform_fn = OpenMaya.MFnTransform(new_dag_path)
             transform_fn.setTransformation(
                 OpenMaya.MTransformationMatrix(new_local_matrix)

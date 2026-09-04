@@ -49,7 +49,9 @@ def rigged(guides):
     for role, arm_role in (("start", "shoulder"), ("end", "elbow")):
         node = guides.guide_node(upper.instance_id, role, 0)
         node.world_position = arm_guide(arm_role).world_position
-    report = Builder().build(document=guides.document, rig_name="hero", afterlife="keep")
+    report = Builder().build(
+        document=guides.document, rig_name="hero", afterlife="keep"
+    )
     return report, arm, fore, upper
 
 
@@ -117,6 +119,6 @@ def test_twist_joints_track_the_segment_end_to_end(rigged):
             to_joint = joint.world_position - base.world_position
             fraction = (to_joint * axis) / (axis * axis)
             closest = base.world_position + axis * fraction
-            assert (joint.world_position - closest).length() < 1e-3, (
-                f"{name} left the segment at {pose}"
-            )
+            assert (
+                joint.world_position - closest
+            ).length() < 1e-3, f"{name} left the segment at {pose}"

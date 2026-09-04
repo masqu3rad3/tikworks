@@ -181,7 +181,9 @@ def build_limb_lock(
     result.rest.snap_to(target)
     tm.MatrixConstraint.create(follows, result.rest, maintain_offset=True)
 
-    push_at = _root_space_translate(result.push, rig.rig_root, rig.name(name, "lockPushAt"))
+    push_at = _root_space_translate(
+        result.push, rig.rig_root, rig.name(name, "lockPushAt")
+    )
     anchor_at = _root_space_translate(
         result.anchor, rig.rig_root, rig.name(name, "lockAnchorAt")
     )

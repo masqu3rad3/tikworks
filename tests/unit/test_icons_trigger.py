@@ -49,7 +49,9 @@ def test_png_wins_over_svg(plugin):
 
 
 def test_declared_icon_name_beats_registered_type(plugin):
-    folder, cls = plugin("script", icon="terminal", files=["script.svg", "terminal.svg"])
+    folder, cls = plugin(
+        "script", icon="terminal", files=["script.svg", "terminal.svg"]
+    )
     assert icons.find(cls).path == folder / "terminal.svg"
 
 

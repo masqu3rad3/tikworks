@@ -20,7 +20,10 @@ class TestPlugMathOperatorsSingle:
         result_plug = node_a["tx"] + node_b["tx"]
 
         # Verify an addDL node was created
-        assert "addDL" in result_plug._node.type or "addDoubleLinear" in result_plug._node.type
+        assert (
+            "addDL" in result_plug._node.type
+            or "addDoubleLinear" in result_plug._node.type
+        )
         # Verify connections
         input1_conns = cmds.listConnections(
             f"{result_plug._node.name}.input1", plugs=True, source=True
@@ -43,9 +46,10 @@ class TestPlugMathOperatorsSingle:
 
         # Verify input2 is set to 8, not connected
         assert cmds.getAttr(f"{result_plug._node.name}.input2") == 8.0
-        assert cmds.listConnections(
-            f"{result_plug._node.name}.input2", source=True
-        ) is None
+        assert (
+            cmds.listConnections(f"{result_plug._node.name}.input2", source=True)
+            is None
+        )
         assert result_plug.value == 18.0
 
     def test_radd_numeric_to_plug(self, new_scene):
@@ -97,7 +101,10 @@ class TestPlugMathOperatorsSingle:
         result_plug = node_a["tx"] * node_b["tx"]
 
         # Verify a multDL node was created
-        assert "multDL" in result_plug._node.type or "multDoubleLinear" in result_plug._node.type
+        assert (
+            "multDL" in result_plug._node.type
+            or "multDoubleLinear" in result_plug._node.type
+        )
         assert result_plug.value == 12.0
 
     def test_mul_plug_by_numeric(self, new_scene):
@@ -411,11 +418,11 @@ class TestPlugConnectionOperators:
         node_b["tx"] << node_a["tx"]
 
         assert node_b["tx"].value == 42.0
-        connections = cmds.listConnections(
-            node_b["tx"].path, plugs=True, source=True
-        )
+        connections = cmds.listConnections(node_b["tx"].path, plugs=True, source=True)
         # Maya may return the full attribute name (translateX)
-        assert any("nodeA" in conn and "translate" in conn.lower() for conn in connections)
+        assert any(
+            "nodeA" in conn and "translate" in conn.lower() for conn in connections
+        )
 
     def test_lshift_returns_self(self, new_scene):
         """Test << operator returns self for potential chaining."""
@@ -440,9 +447,7 @@ class TestPlugConnectionOperators:
         node_a["tx"] // node_b["tx"]
 
         # Verify disconnection
-        connections = cmds.listConnections(
-            node_b["tx"].path, plugs=True, source=True
-        )
+        connections = cmds.listConnections(node_b["tx"].path, plugs=True, source=True)
         assert connections is None
 
     def test_floordiv_returns_none(self, new_scene):
@@ -503,7 +508,11 @@ class TestPlugOperatorEdgeCases:
         # Maya's divide node returns 0 for division by zero (with a warning)
         # This is expected Maya behavior
         import math
+
         result_value = result_plug.value
         # Accept inf, very large value, or 0 (Maya's divide node returns 0)
-        assert math.isinf(result_value) or abs(result_value) >= 100000.0 or result_value == 0.0
-
+        assert (
+            math.isinf(result_value)
+            or abs(result_value) >= 100000.0
+            or result_value == 0.0
+        )

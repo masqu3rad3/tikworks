@@ -1,5 +1,7 @@
 """Camera node types wrapper."""
 
+from __future__ import annotations
+
 from maya import cmds, mel
 
 from ..core.registry import register
@@ -80,7 +82,7 @@ class Camera(ShapeNode):
         return cam_parent["worldUpMatrix"].get_input()
 
     def delete(self):
-        """Override the deleted method to also delete potential parent aim/up locators."""
+        """Delete the camera and any parent aim/up locators it came with."""
         cam_parent = self.transform.parent
         super().delete()
         if cam_parent and cam_parent.type == "lookAt":

@@ -18,6 +18,7 @@ _maya_available = False
 if not os.environ.get("TIK_TESTS_NO_MAYA"):
     try:
         import maya.standalone
+
         _maya_available = True
     except ImportError:
         pass
@@ -27,8 +28,8 @@ def _create_mock_maya():
     """Create a mock maya module for headless test environments."""
     mock_maya = types.ModuleType("maya")
     mock_maya.cmds = types.ModuleType("maya.cmds")
-    mock_maya.cmds.file = lambda *a, **k: ""
-    mock_maya.cmds.select = lambda *a, **k: None
+    mock_maya.cmds.file = lambda *args, **kwargs: ""
+    mock_maya.cmds.select = lambda *args, **kwargs: None
     mock_maya.standalone = types.ModuleType("maya.standalone")
     mock_maya.standalone.initialize = lambda: None
     mock_maya.standalone.uninitialize = lambda: None
@@ -50,7 +51,7 @@ if not _maya_available:
     _create_mock_maya()
 
 
-@pytest.fixture(scope='session', autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def initialize():
     """Initialize Maya standalone session before running tests.
 
@@ -67,10 +68,28 @@ def initialize():
         # Maya is already initialized
         pass
     # Import tik.maya to ensure all node wrappers and the default factory are registered
-    import tik.maya  # noqa: F401
     from maya import cmds  # noqa: F401
+
+    import tik.maya  # noqa: F401
+
     yield
     maya.standalone.uninitialize()
+
+
+@pytest.fixture
+def trigger_plugins():
+    """Register the built-in trigger modules and actions."""
+    import tik.trigger as trigger
+
+    trigger.load_plugins()
+
+
+@pytest.fixture
+def guides(trigger_plugins):
+    """A ``GuideScene`` over the fresh scene, with the plug-ins registered."""
+    from tik.trigger.guides import GuideScene
+
+    return GuideScene()
 
 
 @pytest.fixture(scope="function", autouse=True)

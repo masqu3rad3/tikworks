@@ -20,7 +20,7 @@ from maya import cmds
 
 from ..core.decorators import undo
 from ..core.plug import Plug
-from ..core.registry import resolve
+from ..core.registry import ensure_node
 from ..core.scene import create_node
 from ..types.transform import Transform
 
@@ -30,10 +30,6 @@ TWIST_TARGETS = {
     "Y": (1.0, 0.0, 0.0),
     "Z": (1.0, 0.0, 0.0),
 }
-
-
-def _node(item):
-    return resolve(item) if isinstance(item, str) else item
 
 
 class AimFrame:
@@ -81,9 +77,9 @@ class AimFrame:
         Returns:
             The construct.
         """
-        base = _node(base)
-        aim_target = _node(aim_target)
-        up_target = _node(up_target) if up_target is not None else aim_target
+        base = ensure_node(base)
+        aim_target = ensure_node(aim_target)
+        up_target = ensure_node(up_target) if up_target is not None else aim_target
         twist = twist_axis.upper()
         if twist not in TWIST_TARGETS:
             raise ValueError(f"twist_axis must be X, Y or Z, got {twist_axis!r}.")
@@ -117,7 +113,7 @@ class AimFrame:
         position, and those are exactly the channels that must stay zero so a
         caller can offset along the frame.
         """
-        parent = _node(parent) if parent is not None else None
+        parent = ensure_node(parent) if parent is not None else None
         transform = Transform.create(
             name=f"{self.name}_frame",
             parent=parent.long_name if parent is not None else None,
