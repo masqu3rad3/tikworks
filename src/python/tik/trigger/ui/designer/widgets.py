@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from tik.shared.ui.Qt import QtCore, QtWidgets
-from tik.shared.ui.theme import MODULE_COLORS  # noqa: F401 - re-exported
 from tik.shared.ui.tile_grid import TileEntry
 from tik.trigger.core import registry
 

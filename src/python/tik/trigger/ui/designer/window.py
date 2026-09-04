@@ -30,6 +30,7 @@ from tik.shared.ui.icons import glyph_icon
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.scene_watcher import SceneWatcher
 from tik.shared.ui.status import StatusFields
+from tik.shared.ui.theme import MODULE_COLORS
 from tik.shared.ui.tile_grid import TileGrid
 from tik.trigger.core.schemas import split_source
 
@@ -43,14 +44,7 @@ from ..session_view import pane
 from .action_bar import DesignerActionBar
 from .commands import DesignerCommands
 from .properties import DesignerProperties
-from .widgets import (
-    MIME_MODULE,
-    MODULE_COLORS,
-    GuideTree,
-    InputRow,
-    SceneNodesPanel,
-    module_entries,
-)
+from .widgets import MIME_MODULE, GuideTree, InputRow, SceneNodesPanel, module_entries
 
 SIDES = ("L", "R", "C", "Both", "Auto")
 

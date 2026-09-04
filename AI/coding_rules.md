@@ -224,7 +224,7 @@ These rules apply when writing tools that use tik.maya.
 ### tik.trigger Specific
 - **Registry Decorators:** Use `@register_action` / `@register_module` for plugin registration
 - **Folder Discovery:** Each action/module is a folder with named `.py` file
-- **JSON Configs:** Use JSON files for UI definitions and defaults
+- **JSON Configs:** Python field declarations are the schema (the UI is generated from them by `FormBuilder`); an optional `defaults.json` beside a module/action overrides field default values only
 - **DCC-Agnostic Core:** `core/` imports no Maya modules
 
 #### tik.trigger Core Development
