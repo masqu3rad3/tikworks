@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable
 
 from tik.core.fields import DictField, FieldGroup, FileField, ListField, StringField
-from tik.trigger.core import Action, register_action
-from tik.trigger.core import versioning
-from tik.trigger.core.document import Document, ActionNode
+from tik.trigger.core import Action, register_action, versioning
+from tik.trigger.core.document import ActionNode, Document
 from tik.trigger.core.exceptions import SessionError
-
 
 SCOPE = FieldGroup("Scope", collapsed=True)
 
@@ -30,14 +28,18 @@ class Reference(Action):
     include = ListField(
         item_type=str, help="Action paths to include; empty = all", group=SCOPE
     )
-    overrides = DictField(help="{action path: {enabled: bool, settings: {...}}}", hidden=True)
+    overrides = DictField(
+        help="{action path: {enabled: bool, settings: {...}}}", hidden=True
+    )
 
     def run(self, ctx) -> None:  # expanded by the runner; nothing to do here
+        """Nothing: the runner expands a reference into its actions."""
         return None
 
     # ------------------------------------------------------------ expansion
     @staticmethod
     def resolve_file(node: ActionNode, base_dir: str) -> Path:
+        """The referenced ``.tr`` path, made absolute against ``base_dir``."""
         file_value = node.settings.get("file", "")
         if not file_value:
             raise SessionError("reference has no file.")
@@ -60,18 +62,31 @@ class Reference(Action):
         path = Reference.resolve_file(node, base_dir)
         key = str(path.resolve())
         if key in chain:
-            raise SessionError(f"reference cycle: {' > '.join(Path(item).name for item in chain)} > {path.name}")
+            raise SessionError(
+                "reference cycle: "
+                f"{' > '.join(Path(item).name for item in chain)} > {path.name}"
+            )
         document = loader(path)
-        Reference.apply_overrides(document, node.settings.get("include") or [], node.settings.get("overrides") or {})
+        Reference.apply_overrides(
+            document,
+            node.settings.get("include") or [],
+            node.settings.get("overrides") or {},
+        )
         return document, str(path.parent), key
 
     @staticmethod
-    def apply_overrides(document: Document, include: list, overrides: dict) -> list[str]:
-        """Apply include list and overrides in place; return unresolved override paths."""
+    def apply_overrides(
+        document: Document, include: list, overrides: dict
+    ) -> list[str]:
+        """Apply the include list and overrides; return unresolved override paths."""
         if include:
             wanted = set(include)
             for path, item, _parent in document.walk():
-                if path not in wanted and not any(want.startswith(path + "/") for want in wanted) and not any(path.startswith(want + "/") for want in wanted):
+                if (
+                    path not in wanted
+                    and not any(want.startswith(path + "/") for want in wanted)
+                    and not any(path.startswith(want + "/") for want in wanted)
+                ):
                     item.enabled = False
         missing = []
         for path, override in overrides.items():
@@ -87,4 +102,5 @@ class Reference(Action):
 
     # --------------------------------------------------------------- summary
     def summary(self) -> str:
+        """The referenced file name, for the pipeline list."""
         return Path(self.file).name if self.file else ""

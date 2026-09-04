@@ -7,4 +7,10 @@
 from .widgets import GuideTree, InputRow, SceneNodesPanel, module_entries
 from .window import GuideDesigner
 
-__all__ = ["GuideDesigner", "GuideTree", "InputRow", "SceneNodesPanel", "module_entries"]
+__all__ = [
+    "GuideDesigner",
+    "GuideTree",
+    "InputRow",
+    "SceneNodesPanel",
+    "module_entries",
+]

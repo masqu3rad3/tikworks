@@ -6,8 +6,9 @@ joints and these two facts about them, and nothing that is read as authority.
 
 from __future__ import annotations
 
-import tik.maya as tm
 from maya import cmds
+
+import tik.maya as tm
 from tik.trigger.maya import tags
 
 from . import nodes

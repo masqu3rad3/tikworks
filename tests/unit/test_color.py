@@ -179,7 +179,7 @@ class TestColorModifiers:
     def test_set_hsv_modifies_color(self):
         """Test set_hsv modifies color HSV values."""
         color = Color("red")
-        result = color.set_hsv(h=0.5, s=0.8, v=0.9)
+        result = color.set_hsv(hue=0.5, saturation=0.8, value=0.9)
         # Verify method returns self for chaining
         assert result is color
         hue, sat, val = color.hsv
@@ -191,7 +191,7 @@ class TestColorModifiers:
         """Test set_hsv with None keeps original values."""
         color = Color("red")
         original_h, _, original_v = color.hsv
-        color.set_hsv(s=0.5)  # Only modify saturation
+        color.set_hsv(saturation=0.5)  # Only modify saturation
         new_h, new_s, new_v = color.hsv
         assert new_h == pytest.approx(original_h, rel=1e-2)
         assert new_s == pytest.approx(0.5, rel=1e-2)

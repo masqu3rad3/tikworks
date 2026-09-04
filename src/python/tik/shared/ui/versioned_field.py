@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
-from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
+from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.trigger.core import versioning
 
 STATE_STYLES = {
@@ -30,6 +30,7 @@ class _HoverKeyFilter(QtCore.QObject):
 
     @classmethod
     def ensure(cls) -> "_HoverKeyFilter":
+        """The one application-wide filter, installed on first use."""
         if cls._instance is None:
             cls._instance = cls()
             app = QtWidgets.QApplication.instance()
@@ -38,7 +39,10 @@ class _HoverKeyFilter(QtCore.QObject):
         return cls._instance
 
     def eventFilter(self, obj, event) -> bool:  # noqa: N802
-        if event.type() == QtCore.QEvent.KeyPress and event.modifiers() & QtCore.Qt.AltModifier:
+        if (
+            event.type() == QtCore.QEvent.KeyPress
+            and event.modifiers() & QtCore.Qt.AltModifier
+        ):
             if event.key() in (QtCore.Qt.Key_Up, QtCore.Qt.Key_Down):
                 for field in list(self.fields):
                     try:
@@ -52,6 +56,8 @@ class _HoverKeyFilter(QtCore.QObject):
 
 
 class VersionedFileField(QtWidgets.QWidget):
+    """A file path field that shows the version badge and steps through versions."""
+
     changed = QtCore.Signal(object)
 
     def __init__(
@@ -94,7 +100,13 @@ class VersionedFileField(QtWidgets.QWidget):
         self.browse.clicked.connect(self._browse)
         self.setToolTip("Alt+Up / Alt+Down while hovering: step versions")
         _HoverKeyFilter.ensure().fields.append(self)
-        self.destroyed.connect(lambda: _HoverKeyFilter.fields.remove(self) if self in _HoverKeyFilter.fields else None)
+        self.destroyed.connect(
+            lambda: (
+                _HoverKeyFilter.fields.remove(self)
+                if self in _HoverKeyFilter.fields
+                else None
+            )
+        )
         self._state = "empty"
         self.refresh_state()
 
@@ -107,10 +119,12 @@ class VersionedFileField(QtWidgets.QWidget):
         self.refresh_state()
 
     def set_base_dir(self, base_dir: Optional[Callable[[], str]]) -> None:
+        """Resolve relative paths against ``base_dir()`` from now on."""
         self._base_dir = base_dir
         self.refresh_state()
 
     def resolved(self) -> Optional[Path]:
+        """The absolute path the text points at, or None when empty."""
         text = self.value().strip()
         if not text:
             return None
@@ -127,9 +141,11 @@ class VersionedFileField(QtWidgets.QWidget):
     # ------------------------------------------------------------- state
     @property
     def state(self) -> str:
+        """``empty``, ``missing``, ``pinned`` or ``latest``."""
         return self._state
 
     def refresh_state(self) -> None:
+        """Recompute the state and badge from the current text."""
         path = self.resolved()
         if path is None:
             state, badge = "empty", ""
@@ -141,7 +157,10 @@ class VersionedFileField(QtWidgets.QWidget):
             elif not path.exists():
                 state, badge = "missing", f"v{version:03d} missing"
             elif latest is not None and versioning.parse(latest)[1] > version:
-                state, badge = "older", f"v{version:03d} · latest v{versioning.parse(latest)[1]:03d}"
+                state, badge = (
+                    "older",
+                    f"v{version:03d} · latest v{versioning.parse(latest)[1]:03d}",
+                )
             else:
                 state, badge = "latest", "latest"
         self._state = state
@@ -150,7 +169,9 @@ class VersionedFileField(QtWidgets.QWidget):
         self.badge.setText(badge)
         self.badge.setVisible(bool(badge))
         self.badge.setStyleSheet(
-            f"QLabel {{ color: {text}; background: {fill}; border: 1px solid {border}; border-radius: 8px; padding: 0 6px; font-size: 10px; }}"
+            f"QLabel {{ color: {text}; background: {fill}; "
+            f"border: 1px solid {border}; border-radius: 8px; "
+            "padding: 0 6px; font-size: 10px; }"
         )
 
     # ------------------------------------------------------------ actions
@@ -188,11 +209,17 @@ class VersionedFileField(QtWidgets.QWidget):
         if self.browser is not None:
             picked = self.browser(self.mode, self.extensions, start)
         elif self.mode == "dir":
-            picked = QtWidgets.QFileDialog.getExistingDirectory(self, "Choose folder", start)
+            picked = QtWidgets.QFileDialog.getExistingDirectory(
+                self, "Choose folder", start
+            )
         elif self.mode == "save":
-            picked, _f = QtWidgets.QFileDialog.getSaveFileName(self, "Save", start, self._filter())
+            picked, _f = QtWidgets.QFileDialog.getSaveFileName(
+                self, "Save", start, self._filter()
+            )
         else:
-            picked, _f = QtWidgets.QFileDialog.getOpenFileName(self, "Open", start, self._filter())
+            picked, _f = QtWidgets.QFileDialog.getOpenFileName(
+                self, "Open", start, self._filter()
+            )
         if picked:
             self.line.setText(str(picked).replace("\\", "/"))
             self._commit()

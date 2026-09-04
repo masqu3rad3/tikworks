@@ -3,6 +3,8 @@
 from pathlib import Path
 
 import pytest
+from stub import StubScene
+from toy_modules import ToyChain, ToyRoot
 
 from tik.shared.ui.binding import BindingManager, bind
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
@@ -11,10 +13,8 @@ from tik.trigger.core.guide_document import ModuleEntry
 from tik.trigger.core.reconcile import GuideDiff
 from tik.trigger.core.schemas import ParentRef
 from tik.trigger.session import Session
-from tik.trigger.ui.graph import WireItem
 from tik.trigger.ui.designer import GuideDesigner
-from stub import StubScene
-from toy_modules import ToyChain, ToyRoot
+from tik.trigger.ui.graph import WireItem
 
 
 class FakeAdapter:
@@ -76,7 +76,9 @@ def designer(qapp):
     scene = StubScene()
 
     def adapter_factory(plug_path):
-        FakeAdapter.store.setdefault(plug_path, 2 if plug_path.endswith("segments") else True)
+        FakeAdapter.store.setdefault(
+            plug_path, 2 if plug_path.endswith("segments") else True
+        )
         return FakeAdapter(plug_path)
 
     window = GuideDesigner(scene=scene, binding_adapter=adapter_factory)
@@ -115,7 +117,9 @@ def test_auto_sync_survives_a_relaunch(designer, qapp):
     # Designer picks the setting back up -- not just that the raw value was
     # written.
     def adapter_factory(plug_path):
-        FakeAdapter.store.setdefault(plug_path, 2 if plug_path.endswith("segments") else True)
+        FakeAdapter.store.setdefault(
+            plug_path, 2 if plug_path.endswith("segments") else True
+        )
         return FakeAdapter(plug_path)
 
     relaunched = GuideDesigner(scene=StubScene(), binding_adapter=adapter_factory)
@@ -143,7 +147,9 @@ def test_opening_a_designer_does_not_modify_a_clean_session(qapp):
 
     def _sync_like_a_real_capture(regenerate_stale=True):
         session.document.guides.modules.append(
-            ModuleEntry(instance_id="ghost", module_type="fkchain", name="ghost", side="C")
+            ModuleEntry(
+                instance_id="ghost", module_type="fkchain", name="ghost", side="C"
+            )
         )
         session.touch()
         return GuideDiff()
@@ -194,7 +200,13 @@ def _keys(tree):
     iterator = QtWidgets.QTreeWidgetItemIterator(tree)
     while iterator.value():
         item = iterator.value()
-        found.append((item.text(0), item.parent().text(0) if item.parent() else None, item.text(3)))
+        found.append(
+            (
+                item.text(0),
+                item.parent().text(0) if item.parent() else None,
+                item.text(3),
+            )
+        )
         iterator += 1
     return found
 
@@ -219,11 +231,11 @@ def test_the_palette_opens(designer):
 
 def test_designer_is_a_page_not_a_window(designer):
     assert not isinstance(designer, QtWidgets.QMainWindow)
-    assert designer.status_strip is not None                # built, not installed
+    assert designer.status_strip is not None  # built, not installed
     # the view toggles it owns, for the graph's own shortcuts
     assert designer.grid_action.isChecked() and designer.snap_action.isChecked()
     designer.teardown()
-    designer.teardown()                                     # idempotent
+    designer.teardown()  # idempotent
 
 
 def test_create_prefills_primary_input_and_tree_graph_agree(designer):
@@ -234,7 +246,11 @@ def test_create_prefills_primary_input_and_tree_graph_agree(designer):
     assert [item.side.value for item in chains] == ["L", "R"]
     assert all(item.inputs == {"root": "toy_root.root"} for item in chains)
     rows = _keys(designer.tree)
-    assert ("L_toy_chain", "toy_root", "toy_root.root") in rows and ("R_toy_chain", "toy_root", "toy_root.root") in rows
+    assert ("L_toy_chain", "toy_root", "toy_root.root") in rows and (
+        "R_toy_chain",
+        "toy_root",
+        "toy_root.root",
+    ) in rows
     graph = designer.graph.graph
     assert set(graph.nodes) == {"toy_root", "L_toy_chain", "R_toy_chain"}
     assert len(graph.wires) == 2 and all(wire.primary for wire in graph.wires)
@@ -245,7 +261,9 @@ def test_create_prefills_primary_input_and_tree_graph_agree(designer):
     designer.set_side("L")
     child = designer.create_guides("toy_chain")[0]
     assert child.inputs == {"root": "L_toy_chain.root"}
-    assert all(call[0] != "reparent" for call in designer.guides.calls)  # joints are never parented
+    assert all(
+        call[0] != "reparent" for call in designer.guides.calls
+    )  # joints are never parented
     # nothing selected -> no connection at all
     designer.tree.clearSelection()
     designer._set_current(None)
@@ -256,7 +274,7 @@ def test_create_prefills_primary_input_and_tree_graph_agree(designer):
 
 def test_inputs_panel_edits_connections(designer):
     designer.set_side("C")
-    body = designer.create_guides("toy_root")[0]
+    designer.create_guides("toy_root")[0]
     designer.guides.selection = None
     designer.tree.clearSelection()
     designer._set_current(None)
@@ -270,9 +288,14 @@ def test_inputs_panel_edits_connections(designer):
     space = designer._input_rows["space"]
     space.line.setText("some_jnt")
     space.line.editingFinished.emit()
-    assert designer.guides.get(chain.instance_id).inputs == {"root": "toy_root.root", "space": "some_jnt"}
+    assert designer.guides.get(chain.instance_id).inputs == {
+        "root": "toy_root.root",
+        "space": "some_jnt",
+    }
     assert "missing scene node" in designer.status.text("connections")
-    scene = designer.graph.graph.nodes["scene"]  # ungrouped scene sources show under an implicit group
+    scene = designer.graph.graph.nodes[
+        "scene"
+    ]  # ungrouped scene sources show under an implicit group
     assert scene.external and "some_jnt" in scene.outputs
     designer.guides.scene_nodes.add("some_jnt")
     designer.refresh()
@@ -289,7 +312,7 @@ def test_inputs_panel_edits_connections(designer):
 
 def test_graph_wiring_and_disconnect(designer):
     designer.set_side("C")
-    body = designer.create_guides("toy_root")[0]
+    designer.create_guides("toy_root")[0]
     designer.tree.clearSelection()
     designer._set_current(None)
     designer.guides.selection = None
@@ -318,7 +341,9 @@ def test_tree_drag_sets_primary_and_scene_sync(designer):
     chain = designer.create_guides("toy_chain")[0]
     designer.reparent(chain.instance_id, body.instance_id)
     assert designer.guides.get(chain.instance_id).inputs == {"root": "toy_root.root"}
-    assert all(call[0] != "reparent" for call in designer.guides.calls)  # data only, no scene parenting
+    assert all(
+        call[0] != "reparent" for call in designer.guides.calls
+    )  # data only, no scene parenting
     designer.reparent(chain.instance_id, None)
     assert designer.guides.get(chain.instance_id).inputs == {}
     # scene selection does NOT drive the UI selection any more; structure events refresh
@@ -334,7 +359,7 @@ def test_tree_drag_sets_primary_and_scene_sync(designer):
 
 def test_pick_up_wire_delete_and_sever(designer):
     designer.set_side("C")
-    body = designer.create_guides("toy_root")[0]
+    designer.create_guides("toy_root")[0]
     designer.set_side("L")
     chain = designer.create_guides("toy_chain")[0]
     graph = designer.graph.graph
@@ -345,7 +370,8 @@ def test_pick_up_wire_delete_and_sever(designer):
     assert graph._detached == "L_toy_chain.root" and graph.wires == []
     graph.finish_wire(None)
     assert designer.guides.get(chain.instance_id).inputs == {}
-    # reconnect, select the wire, Delete in the graph disconnects (and does not delete modules)
+    # reconnect, select the wire, Delete in the graph disconnects (and does not delete
+    # modules)
     designer.guides.connect("L_toy_chain.root", "toy_root.root")
     designer.refresh()
     graph = designer.graph.graph
@@ -369,19 +395,33 @@ def test_scene_node_groups_and_side_combo(designer):
     assert designer.graph.graph.nodes["world"].external
     assert list(designer.graph.graph.nodes["world"].outputs) == ["hip_jnt", "chest_jnt"]
     designer.refresh()  # persisted in the layout, survives a refresh while unconnected
-    assert "world" in designer.graph.graph.nodes and designer.guides.scene_groups() == {"world": ["hip_jnt", "chest_jnt"]}
+    assert "world" in designer.graph.graph.nodes and designer.guides.scene_groups() == {
+        "world": ["hip_jnt", "chest_jnt"]
+    }
     graph = designer.graph.graph
     graph.start_wire(graph.nodes["world"].outputs["hip_jnt"], QtCore.QPointF(0, 0))
     graph.finish_wire(graph.nodes["L_toy_chain"].inputs["space"])
-    assert designer.guides.get(chain.instance_id).inputs == {"space": "hip_jnt"}  # plain scene node name
-    # Scene Nodes from the shelf/palette: group named in the properties, rows pre-filled from the selection
+    assert designer.guides.get(chain.instance_id).inputs == {
+        "space": "hip_jnt"
+    }  # plain scene node name
+    # Scene Nodes from the shelf/palette: group named in the properties, rows pre-filled
+    # from the selection
     designer.guides.selected_names = ["pelvis_jnt"]
     designer.create_guides("__scene_node__")
-    assert designer._external == "sceneNodes1" and designer.name_edit.text() == "sceneNodes1"
-    assert designer.scene_panel.isVisible() and designer.scene_panel.nodes() == ["pelvis_jnt"]
+    assert (
+        designer._external == "sceneNodes1"
+        and designer.name_edit.text() == "sceneNodes1"
+    )
+    assert designer.scene_panel.isVisible() and designer.scene_panel.nodes() == [
+        "pelvis_jnt"
+    ]
     designer.name_edit.setText("anchors")
     designer.name_edit.editingFinished.emit()
-    assert designer._external == "anchors" and "anchors" in designer.graph.graph.nodes and "sceneNodes1" not in designer.guides.scene_groups()
+    assert (
+        designer._external == "anchors"
+        and "anchors" in designer.graph.graph.nodes
+        and "sceneNodes1" not in designer.guides.scene_groups()
+    )
     designer.guides.selected_names = []
     designer.scene_panel.add_button.click()
     designer.scene_panel.rows[-1].setText("neck_jnt")
@@ -392,16 +432,24 @@ def test_scene_node_groups_and_side_combo(designer):
     designer.guides.set_scene_group("anchors", ["pelvis_jnt"])
     assert designer.guides.get(chain.instance_id).inputs == {"space": "hip_jnt"}
     designer.graph.remove_scene_group("world")
-    assert designer.guides.get(chain.instance_id).inputs == {} and "world" not in designer.graph.graph.nodes
-    # right-click menu on an input field lists other modules -> outputs, and scene nodes by group
+    assert (
+        designer.guides.get(chain.instance_id).inputs == {}
+        and "world" not in designer.graph.graph.nodes
+    )
+    # right-click menu on an input field lists other modules -> outputs, and scene nodes
+    # by group
     designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
     modules, scene_nodes = designer._input_rows["root"].sources()
-    assert [m[0] for m in modules] == [] and scene_nodes == [("anchors", "pelvis_jnt")]
+    assert [module[0] for module in modules] == [] and scene_nodes == [
+        ("anchors", "pelvis_jnt")
+    ]
     designer.set_side("C")
     designer.create_guides("toy_root")
     designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
     modules, _ = designer._input_rows["root"].sources()
-    assert modules == [("toy_root", "Toy Root", ["root"])] or modules[0][0] == "toy_root"
+    assert (
+        modules == [("toy_root", "Toy Root", ["root"])] or modules[0][0] == "toy_root"
+    )
     menu = designer._input_rows["root"].build_menu()
     assert any(action.menu() is not None for action in menu.actions())
     designer.tree.clearSelection()
@@ -409,7 +457,10 @@ def test_scene_node_groups_and_side_combo(designer):
     assert designer.side == "C"
     designer.set_side("Both")
     assert designer.side_combo.currentText() == "Both"
-    assert [item.side.value for item in designer.create_guides("toy_chain")] == ["L", "R"]
+    assert [item.side.value for item in designer.create_guides("toy_chain")] == [
+        "L",
+        "R",
+    ]
 
 
 def test_properties_binding_rename_mirror_delete(designer):
@@ -423,7 +474,10 @@ def test_properties_binding_rename_mirror_delete(designer):
     designer.name_edit.editingFinished.emit()
     assert designer.current.name == "tail" and designer.current.key == "L_tail"
     designer.mirror_current()
-    assert sorted(handle.key for handle in designer.guides.instances()) == ["L_tail", "R_tail"]
+    assert sorted(handle.key for handle in designer.guides.instances()) == [
+        "L_tail",
+        "R_tail",
+    ]
     designer.tree.setCurrentItem(designer.item_for(chain.instance_id))
     designer.delete_current()
     assert [handle.key for handle in designer.guides.instances()] == ["R_tail"]
@@ -432,12 +486,17 @@ def test_properties_binding_rename_mirror_delete(designer):
 def test_unique_names_layout_persistence_and_slice(designer, tmp_path):
     designer.set_side("L")
     first = designer.create_guides("toy_chain")[0]
-    second = designer.create_guides("toy_chain")[0]  # connected to first, and uniquely named
+    second = designer.create_guides("toy_chain")[
+        0
+    ]  # connected to first, and uniquely named
     assert (first.key, second.key) == ("L_toy_chain", "L_toy_chain1")
     designer.tree.setCurrentItem(designer.item_for(second.instance_id))
     designer.name_edit.setText("toy_chain")
     designer.name_edit.editingFinished.emit()  # refused: reverts
-    assert designer.guides.get(second.instance_id).key == "L_toy_chain1" and designer.name_edit.text() == "toy_chain1"
+    assert (
+        designer.guides.get(second.instance_id).key == "L_toy_chain1"
+        and designer.name_edit.text() == "toy_chain1"
+    )
     # positions / collapse are layout data
     node = designer.graph.graph.nodes["L_toy_chain1"]
     node.setPos(300, 40)
@@ -448,14 +507,19 @@ def test_unique_names_layout_persistence_and_slice(designer, tmp_path):
     designer.refresh()
     node = designer.graph.graph.nodes["L_toy_chain1"]
     assert node.pos() == QtCore.QPointF(300, 40) and node.mode == 1
-    assert node.inputs["root"].isVisible() and not node.inputs["space"].isVisible()  # connected plugs only
+    assert (
+        node.inputs["root"].isVisible() and not node.inputs["space"].isVisible()
+    )  # connected plugs only
     designer.graph.select_keys(["L_toy_chain1"])
     designer.graph.set_selected_mode(0)
     assert not node.inputs["root"].isVisible() and node.boundingRect().height() < 40
     # renaming keeps the layout entry
     designer.name_edit.setText("tail")
     designer.name_edit.editingFinished.emit()
-    assert designer.guides.layout["positions"]["L_tail"] == [300.0, 40.0] and "L_toy_chain1" not in designer.guides.layout["positions"]
+    assert (
+        designer.guides.layout["positions"]["L_tail"] == [300.0, 40.0]
+        and "L_toy_chain1" not in designer.guides.layout["positions"]
+    )
     designer.graph.add_scene_group("world", ["hip_jnt"])
     designer.guides.connect("L_toy_chain.space", "hip_jnt")
     designer.refresh()
@@ -463,14 +527,26 @@ def test_unique_names_layout_persistence_and_slice(designer, tmp_path):
     graph = designer.graph.graph
     wire = graph.wires[0]
     middle = wire.path().pointAtPercent(0.5)
-    cut = graph.slice_wires(QtCore.QLineF(middle.x(), middle.y() - 50, middle.x(), middle.y() + 50))
-    assert cut and all(designer.guides.by_key(key.rsplit(".", 1)[0]).inputs.get(key.rsplit(".", 1)[1]) is None for key in cut)
+    cut = graph.slice_wires(
+        QtCore.QLineF(middle.x(), middle.y() - 50, middle.x(), middle.y() + 50)
+    )
+    assert cut and all(
+        designer.guides.by_key(key.rsplit(".", 1)[0]).inputs.get(key.rsplit(".", 1)[1])
+        is None
+        for key in cut
+    )
     # auto layout writes positions (undoable via the backend) and grid/snap toggles
     designer.graph.auto_layout()
-    assert set(designer.guides.layout["positions"]) >= {"L_toy_chain", "L_tail", "world"}
+    assert set(designer.guides.layout["positions"]) >= {
+        "L_toy_chain",
+        "L_tail",
+        "world",
+    }
     designer.grid_action.trigger()
     designer.snap_action.trigger()
-    assert not designer.graph.graph.show_grid and not designer.graph.graph.snap  # on by default, toggled off
+    assert (
+        not designer.graph.graph.show_grid and not designer.graph.graph.snap
+    )  # on by default, toggled off
     designer.grid_action.trigger()
     designer.snap_action.trigger()
     assert designer.graph.graph.show_grid and designer.graph.graph.snap
@@ -482,9 +558,13 @@ def test_unique_names_layout_persistence_and_slice(designer, tmp_path):
     # position only survives if its module does.
     path = designer.export_file(str(tmp_path / "g.trg"))
     import json
+
     data = json.loads(path.read_text())
     assert data["designer"]["scene_nodes"] == {"world": ["hip_jnt"]}
-    assert data["designer"]["positions"]["L_tail"] == [40.0, 40.0] and data["designer"]["collapse"]["L_tail"] == 0
+    assert (
+        data["designer"]["positions"]["L_tail"] == [40.0, 40.0]
+        and data["designer"]["collapse"]["L_tail"] == 0
+    )
     designer.clear_guides()
     assert designer.guides.layout == {}
     designer.import_file(str(path))
@@ -500,19 +580,32 @@ def test_multi_selection_edits_same_type_together(designer, qapp):
     designer.tree.clearSelection()
     for chain in chains:
         designer.item_for(chain.instance_id).setSelected(True)
-    assert designer.multi_label.isVisible() and "2 Toy Chain" in designer.multi_label.text()
+    assert (
+        designer.multi_label.isVisible()
+        and "2 Toy Chain" in designer.multi_label.text()
+    )
     assert not designer.name_edit.isEnabled()
     qapp.processEvents()  # Qt shows freshly added children on the next event round
-    assert designer.form.widget("segments").isVisible()  # the fields really are there to edit
+    assert designer.form.widget(
+        "segments"
+    ).isVisible()  # the fields really are there to edit
     designer.form.widget("segments").setValue(5)
-    assert all(designer.guides.settings[chain.instance_id]["segments"] == 5 for chain in chains)
+    assert all(
+        designer.guides.settings[chain.instance_id]["segments"] == 5 for chain in chains
+    )
     designer.item_for(body.instance_id).setSelected(True)
     assert designer.current is None and "different types" in designer.multi_label.text()
     assert "segments" not in designer.form._widgets
     # the shared context menu works from the tree and the graph
     menu = designer.module_menu()
     labels = [action.text() for action in menu.actions() if not action.isSeparator()]
-    assert labels[:5] == ["Select root", "Select all guides", "Mirror", "Duplicate	Ctrl+D", "Build"]
+    assert labels[:5] == [
+        "Select root",
+        "Select all guides",
+        "Mirror",
+        "Duplicate	Ctrl+D",
+        "Build",
+    ]
     designer.select_root()
     assert designer.guides.calls[-1][0] == "select_nodes"
 
@@ -543,25 +636,39 @@ def test_a_refresh_does_not_scan_the_scene(designer):
     assert calls["n"] == 0
     backend.find_instances = original
 
+
 def test_export_import_and_test_build(designer, tmp_path, monkeypatch):
     designer.set_side("C")
     designer.create_guides("toy_root")
     calls = []
-    monkeypatch.setattr(designer.guides, "export", lambda path, *handles: calls.append(("export", str(path), len(handles))) or tmp_path / "g.trg")
-    monkeypatch.setattr(designer.guides, "import_", lambda path, reset=False: calls.append(("import", str(path), reset)) or [])
+    monkeypatch.setattr(
+        designer.guides,
+        "export",
+        lambda path, *handles: calls.append(("export", str(path), len(handles)))
+        or tmp_path / "g.trg",
+    )
+    monkeypatch.setattr(
+        designer.guides,
+        "import_",
+        lambda path, reset=False: calls.append(("import", str(path), reset)) or [],
+    )
     designer.export_file(str(tmp_path / "g.trg"))
     assert calls[-1] == ("export", str(tmp_path / "g.trg"), 0)
     assert designer.status.text("file") == "g.trg"
     designer.import_file(str(tmp_path / "g.trg"), reset=True)
     assert calls[-1] == ("import", str(tmp_path / "g.trg"), True)
+
     # The build itself is proven by tests/integration; here we only check the
     # designer delegates to it with the right scope.
     class Report:
         count = 1
         connections = [("L_toy_chain.root", "toy_root.root")]
 
-    monkeypatch.setattr(designer.guides, "test_build",
-                        lambda *handles, **kwargs: calls.append(("build", len(handles))) or Report())
+    monkeypatch.setattr(
+        designer.guides,
+        "test_build",
+        lambda *handles, **kwargs: calls.append(("build", len(handles))) or Report(),
+    )
     report = designer.test_build(all_modules=True)
     assert calls[-1] == ("build", 0) and report.count == 1
     designer.action_bar.build_all_button.click()
@@ -590,8 +697,12 @@ def test_grid_snap_default_and_free_placement(designer):
     other = designer.create_guides("toy_chain")[0]
     nodes = designer.graph.graph.nodes
     rect = lambda key: nodes[key].sceneBoundingRect()  # noqa: E731
-    assert not rect(other.key).intersects(rect(body.key)) and not rect(other.key).intersects(rect(chain.key))
-    assert nodes[other.key].pos().x() % 20 == 0 and nodes[other.key].pos().y() % 20 == 0  # snapped
+    assert not rect(other.key).intersects(rect(body.key)) and not rect(
+        other.key
+    ).intersects(rect(chain.key))
+    assert (
+        nodes[other.key].pos().x() % 20 == 0 and nodes[other.key].pos().y() % 20 == 0
+    )  # snapped
 
 
 def test_tree_filter_and_ctrl_click_toggle(designer, qapp):
@@ -611,20 +722,34 @@ def test_tree_filter_and_ctrl_click_toggle(designer, qapp):
     designer.tree_filter.clear()
     assert designer.status.text("modules") == "3 module(s)"
     designer.refresh()
-    assert all(not designer.item_for(h.instance_id).isHidden() for h in chains)
-    # Ctrl+click toggles selection without slicing; the graph selection is not echoed back by the tree
+    assert all(
+        not designer.item_for(handle.instance_id).isHidden() for handle in chains
+    )
+    # Ctrl+click toggles selection without slicing; the graph selection is not echoed
+    # back by the tree
     view = designer.graph
     view.graph.select_keys([])
-    view.toggle_node_at(view.mapFromScene(view.graph.nodes["L_toy_chain"].sceneBoundingRect().center()))
-    view.toggle_node_at(view.mapFromScene(view.graph.nodes["R_toy_chain"].sceneBoundingRect().center()))
-    assert {n.key for n in view.graph.selected_nodes()} == {"L_toy_chain", "R_toy_chain"}
+    view.toggle_node_at(
+        view.mapFromScene(view.graph.nodes["L_toy_chain"].sceneBoundingRect().center())
+    )
+    view.toggle_node_at(
+        view.mapFromScene(view.graph.nodes["R_toy_chain"].sceneBoundingRect().center())
+    )
+    assert {node.key for node in view.graph.selected_nodes()} == {
+        "L_toy_chain",
+        "R_toy_chain",
+    }
     assert len(designer.selected_handles()) == 2 and designer.multi_label.isVisible()
     qapp.processEvents()
     assert designer.form.widget("segments").isVisible()
     designer.form.widget("segments").setValue(9)
-    assert all(designer.guides.settings[c.instance_id]["segments"] == 9 for c in chains)
-    view.toggle_node_at(view.mapFromScene(view.graph.nodes["L_toy_chain"].sceneBoundingRect().center()))
-    assert {n.key for n in view.graph.selected_nodes()} == {"R_toy_chain"}
+    assert all(
+        designer.guides.settings[chain.instance_id]["segments"] == 9 for chain in chains
+    )
+    view.toggle_node_at(
+        view.mapFromScene(view.graph.nodes["L_toy_chain"].sceneBoundingRect().center())
+    )
+    assert {node.key for node in view.graph.selected_nodes()} == {"R_toy_chain"}
     assert len(view.graph.wires) == 2  # nothing sliced
 
 
@@ -637,6 +762,7 @@ def test_multi_selection_edits_every_module_of_one_type(designer):
         designer.item_for(handle.instance_id).setSelected(True)
     copies = designer.duplicate_current()
     assert len(copies) == len(designer.selected_handles())
+
 
 def test_watcher_uninstalls_when_its_owner_dies():
     """The zero-timer can fire after the widget's C++ side is gone."""
@@ -744,10 +870,12 @@ def test_drift_counts_structure_and_pose_together(designer):
     """The pill reports work the document has not been told about -- posing included."""
     from tik.trigger.core.reconcile import GuideDiff, ModuleDiff
 
-    diff = GuideDiff(modules={
-        "a": ModuleDiff("a", missing=[("root", 0)]),  # structural
-        "b": ModuleDiff("b", drifted=[("root", 0)]),  # pose only
-    })
+    diff = GuideDiff(
+        modules={
+            "a": ModuleDiff("a", missing=[("root", 0)]),  # structural
+            "b": ModuleDiff("b", drifted=[("root", 0)]),  # pose only
+        }
+    )
     designer._show_drift(diff)
     assert "2" in designer.action_bar.drift_pill.text()
 
@@ -756,9 +884,11 @@ def test_drift_deduplicates_a_module_that_is_both(designer):
     """A module both structurally stale and drifted counts once, not twice."""
     from tik.trigger.core.reconcile import GuideDiff, ModuleDiff
 
-    diff = GuideDiff(modules={
-        "a": ModuleDiff("a", missing=[("root", 0)], drifted=[("root", 0)]),
-    })
+    diff = GuideDiff(
+        modules={
+            "a": ModuleDiff("a", missing=[("root", 0)], drifted=[("root", 0)]),
+        }
+    )
     designer._show_drift(diff)
     assert "1" in designer.action_bar.drift_pill.text()
 

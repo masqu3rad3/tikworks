@@ -15,21 +15,19 @@ from maya.api import OpenMaya
 
 from ..core.decorators import undo
 from ..core.plug import Plug
-from ..core.registry import resolve
+from ..core.registry import ensure_node
 from ..core.scene import create_node
 from .matrix_constraint import MatrixConstraint
 
 WORLD = None  # sentinel driver meaning "world space"
 
 
-def _node(item):
-    return resolve(item) if isinstance(item, str) else item
-
-
 class MatrixSwitch:
     """Wrapper for a switchable matrix constraint network."""
 
-    def __init__(self, driven, blend, control: Plug, constraint: MatrixConstraint, name: str) -> None:
+    def __init__(
+        self, driven, blend, control: Plug, constraint: MatrixConstraint, name: str
+    ) -> None:
         self.driven = driven
         self.blend = blend
         self.control = control
@@ -65,7 +63,7 @@ class MatrixSwitch:
             skip_scale: Axes left unconnected (all by default).
             name: Prefix for created nodes (defaults to the driven name).
         """
-        driven = _node(driven)
+        driven = ensure_node(driven)
         name = name or f"{driven.name}_switch"
         if control is None:
             control = driven["switch"].create(
@@ -116,7 +114,7 @@ class MatrixSwitch:
             if rest_matrix is not None
             else OpenMaya.MMatrix(self.driven["worldMatrix[0]"].value)
         )
-        driver = _node(driver) if driver is not None else None
+        driver = ensure_node(driver) if driver is not None else None
 
         if driver is None:
             offset = driven_world if maintain_offset else OpenMaya.MMatrix()
@@ -124,14 +122,18 @@ class MatrixSwitch:
         else:
             driver_world = OpenMaya.MMatrix(driver["worldMatrix[0]"].value)
             if maintain_offset:
-                mult = create_node("multMatrix", name=f"{self.name}_target{index}_multMatrix")
+                mult = create_node(
+                    "multMatrix", name=f"{self.name}_target{index}_multMatrix"
+                )
                 mult["matrixIn[0]"].value = list(driven_world * driver_world.inverse())
                 driver["worldMatrix[0]"] >> mult["matrixIn[1]"]
                 mult["matrixSum"] >> self.blend[f"target[{index}].targetMatrix"]
             else:
                 driver["worldMatrix[0]"] >> self.blend[f"target[{index}].targetMatrix"]
 
-        condition = create_node("condition", name=f"{self.name}_target{index}_condition")
+        condition = create_node(
+            "condition", name=f"{self.name}_target{index}_condition"
+        )
         condition["operation"].value = 0  # equal
         condition["secondTerm"].value = index
         condition["colorIfTrueR"].value = 1.0
@@ -148,7 +150,9 @@ class MatrixSwitch:
             if source is not None:
                 source >> self.blend["inputMatrix"]
             else:
-                self.blend["inputMatrix"].value = self.blend[f"target[{index}].targetMatrix"].value
+                self.blend["inputMatrix"].value = self.blend[
+                    f"target[{index}].targetMatrix"
+                ].value
         return index
 
     @property

@@ -7,6 +7,8 @@ A Controller is a semantic wrapper around a Transform node that:
 - exposes a controller-centric API
 """
 
+from __future__ import annotations
+
 import logging
 
 from maya import cmds
@@ -25,8 +27,9 @@ def replace_curve(orig_curve, new_curve, snap=True, transfer_color=True):
     Args:
         orig_curve: Name of the original nurbsCurve transform to replace.
         new_curve: Name of the new nurbsCurve transform to replace with.
-        snap: Whether to match the position of the new curve to the original (default: True).
-        transfer_color: Whether to transfer the color override from new to original (default: True).
+            snap: Match the new curve's position to the original (default True).
+            transfer_color: Transfer the color override from the new curve to
+                the original (default True).
     """
     if snap:
         new_curve = cmds.duplicate(new_curve, rc=1)[0]
@@ -293,7 +296,7 @@ class Controller:
             shape: Shape name from library (str) or raw curve data (dict).
             size: Scale multiplier (default: 1.0).
             snap: Whether to match the position of the new shape (default: True).
-            transfer_color: Whether to transfer color from the old shape (default: True).
+                transfer_color: Transfer the color from the old shape (default True).
         """
 
         # Create new temporary shapes and replace
@@ -371,4 +374,3 @@ class Controller:
             Plug: The plug on the transform node.
         """
         return self.node[item]
-

@@ -1,12 +1,14 @@
 """Plug module for Maya core functionalities."""
 
+from __future__ import annotations
+
 from typing import Optional
 
 from maya import cmds
 from maya.api import OpenMaya
 
-from .registry import resolve
 from .constants import NodeNames
+from .registry import ensure_node, resolve
 
 #: Friendly type name -> (addAttr flag, Maya type). The flag decides the rest:
 #: ``attributeType`` types are animatable, so they default to keyable;
@@ -112,7 +114,8 @@ class Plug:
                 )
 
         if self._mplug.isNull:
-            # Attempt to re-fetch in case it was deleted and recreated (Undo/Redo scenarios)
+            # Attempt to re-fetch in case it was deleted and recreated (Undo/Redo
+            # scenarios)
             self._mplug = self._find_plug()
             if self._mplug is None or self._mplug.isNull:
                 raise RuntimeError(
@@ -470,16 +473,20 @@ class Plug:
             target_plug_str (str): e.g. 'L_legIK_ctrl.fkIkBlend'
 
         Returns:
-            list: Plug name strings, e.g. ['R_legIK_ctrl.fkIkBlend', 'spine_ctrl.fkIkBlend']
+                list: Plug name strings such as ``'R_legIK_ctrl.fkIkBlend'``.
         """
         target_plug = self.mplug
 
         proxy_plugs = []
         # Proxy connection direction:  original(src) -> proxy(dst)
-        self.__collect_proxy_plugs(target_plug.connectedTo(False, True), proxy_plugs)  # asSrc=True  -> destinations
+        self.__collect_proxy_plugs(
+            target_plug.connectedTo(False, True), proxy_plugs
+        )  # asSrc=True  -> destinations
 
         # Safety net: check the reverse direction too
-        self.__collect_proxy_plugs(target_plug.connectedTo(True, False), proxy_plugs)  # asDst=True  -> sources
+        self.__collect_proxy_plugs(
+            target_plug.connectedTo(True, False), proxy_plugs
+        )  # asDst=True  -> sources
 
         return proxy_plugs
 
@@ -492,9 +499,11 @@ class Plug:
         self.locked = False
 
     def __collect_proxy_plugs(self, plug_array, proxy_plugs):
-        """Collect proxy plugs from the given plug array into the given proxy plugs list."""
+        """Append the proxy plugs found in a plug array to the collected list."""
         for plug in plug_array:
-            if OpenMaya.MFnAttribute(plug.attribute()).isProxyAttribute:  # property, no ()
+            if OpenMaya.MFnAttribute(
+                plug.attribute()
+            ).isProxyAttribute:  # property, no ()
                 proxy_plugs.append(plug.name())
 
     def __getitem__(self, attr):
@@ -1306,3 +1315,10 @@ class Plug:
     def __repr__(self):
         """Return a debug-friendly representation."""
         return f"<Plug '{self.path}'>"
+
+
+def world_matrix_plug(item) -> Plug:
+    """The ``worldMatrix[0]`` plug of a node or node name; a plug passes through."""
+    if isinstance(item, Plug):
+        return item
+    return ensure_node(item)["worldMatrix[0]"]

@@ -20,16 +20,12 @@ from tik.core.bspline import basis, clamp_degree
 
 from ..core.decorators import undo
 from ..core.plug import Plug
-from ..core.registry import resolve
+from ..core.registry import ensure_node
 from ..core.scene import create_node
 from ..types.transform import Transform
 
 AIM = 1  # aimMatrix.primaryMode "Aim"
 ALIGN = 2  # aimMatrix.secondaryMode "Align"
-
-
-def _node(item):
-    return resolve(item) if isinstance(item, str) else item
 
 
 @dataclass
@@ -83,7 +79,7 @@ class MatrixSpline:
             up_axis: Output axis aligned to ``up_matrix``.
             parent: Optional parent for the spline group.
         """
-        drivers = [_node(driver) for driver in drivers]
+        drivers = [ensure_node(driver) for driver in drivers]
         if len(drivers) < 2:
             raise ValueError("MatrixSpline needs at least two drivers.")
         parameters = [float(value) for value in parameters]
@@ -100,30 +96,46 @@ class MatrixSpline:
 
         # created in place under the parent so its local transform stays identity;
         # outputs carry world-space matrices and must not be transformed again
-        group_kwargs = {"parent": _node(parent).long_name} if parent is not None else {}
+        group_kwargs = (
+            {"parent": ensure_node(parent).long_name} if parent is not None else {}
+        )
         group = Transform.create(name=f"{name}_spline_grp", **group_kwargs)
         group["inheritsTransform"].value = False
 
         spline = cls(name, group, drivers, degree)
-        blends = [spline._create_blend(index, u) for index, u in enumerate(parameters)]
-        for index, (u, (pick, weights, nodes)) in enumerate(zip(parameters, blends)):
+        blends = [
+            spline._create_blend(index, parameter)
+            for index, parameter in enumerate(parameters)
+        ]
+        for index, (parameter, (pick, weights, nodes)) in enumerate(
+            zip(parameters, blends)
+        ):
             if index + 1 < len(blends):
                 target = blends[index + 1][0]["outputMatrix"]
             else:
                 target = drivers[-1]["worldMatrix[0]"]
             aim = spline._create_aim(index, pick, target, up_matrix, aim_axis, up_axis)
-            output = Transform.create(name=f"{name}_{index}_out", parent=group.long_name)
+            output = Transform.create(
+                name=f"{name}_{index}_out", parent=group.long_name
+            )
             aim["outputMatrix"] >> output["offsetParentMatrix"]
             twist = output["twist"].create("float", default=0.0)
             twist_source, math_nodes = spline._weighted_sum(twists, weights)
             if twist_source is not None:
                 twist_source >> twist
-            spline.outputs.append(SplineOutput(u, weights, output, twist, [*nodes, aim, *math_nodes]))
+            spline.outputs.append(
+                SplineOutput(
+                    parameter, weights, output, twist, [*nodes, aim, *math_nodes]
+                )
+            )
         return spline
 
     @staticmethod
     def _weighted_sum(plugs: Sequence[Optional[Plug]], weights: Sequence[float]):
-        """Return ``(plug, nodes)`` for ``sum(w * plug)``; ``(None, [])`` if nothing contributes."""
+        """Return ``(plug, nodes)`` for ``sum(w * plug)``.
+
+        ``(None, [])`` when nothing contributes.
+        """
         total = None
         nodes: list = []
         for plug, weight in zip(plugs, weights):
@@ -152,9 +164,9 @@ class MatrixSpline:
         if self.group.exists():
             cmds.delete(self.group.long_name)
 
-    def _create_blend(self, index: int, u: float):
+    def _create_blend(self, index: int, parameter: float):
         """parentMatrix (weighted drivers) -> pickMatrix (translate + scale only)."""
-        weights = basis(u, len(self.drivers), self.degree)
+        weights = basis(parameter, len(self.drivers), self.degree)
         blend = create_node("parentMatrix", name=f"{self.name}_{index}_parentMatrix")
         for slot, (driver, weight) in enumerate(zip(self.drivers, weights)):
             driver["worldMatrix[0]"] >> blend[f"target[{slot}].targetMatrix"]
@@ -165,7 +177,9 @@ class MatrixSpline:
         blend["outputMatrix"] >> pick["inputMatrix"]
         return pick, weights, [blend, pick]
 
-    def _create_aim(self, index: int, pick, target: Plug, up_matrix: Plug, aim_axis, up_axis):
+    def _create_aim(
+        self, index: int, pick, target: Plug, up_matrix: Plug, aim_axis, up_axis
+    ):
         aim = create_node("aimMatrix", name=f"{self.name}_{index}_aimMatrix")
         pick["outputMatrix"] >> aim["inputMatrix"]
         aim["primaryMode"].value = AIM

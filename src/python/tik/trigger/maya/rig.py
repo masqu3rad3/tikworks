@@ -12,15 +12,13 @@ from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
 import tik.maya as tm
-from tik.core.side import Side
 from tik.maya import naming
 from tik.maya.roles.controller import Controller
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.schemas import ModuleInstance
+from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_joint
 
 from . import tags
-
-SIDE_COLORS = {Side.LEFT: 6, Side.RIGHT: 13, Side.CENTER: 17}
 
 
 def node_of(value):
@@ -72,6 +70,7 @@ class GuideDraft:
         parent: Any = None,
         radius: float = 1.0,
     ) -> tm.Joint:
+        """Create one tagged guide joint; the first one becomes the module root."""
         if (role, index) in self.created:
             raise GuideError(f"Guide '{role}' [{index}] created twice.")
         is_root = not self.created
@@ -79,27 +78,9 @@ class GuideDraft:
             parent = self.parent_node if is_root else self.root
             if parent is None:
                 parent = self.holder
-        joint = tm.Joint.create(
-            name=naming.format_name(
-                self.module.name, role, index if index else None,
-                side=self.side.value, suffix="guide",
-            ),
-            parent=parent.long_name if hasattr(parent, "long_name") else parent,
-            radius=radius,
+        joint = create_guide_joint(
+            self.module, role, position, index=index, parent=parent, radius=radius
         )
-        joint.world_position = position
-        tags.tag(
-            joint,
-            **{
-                tags.KIND: tags.GUIDE,
-                tags.MODULE: self.module.module_type,
-                tags.INSTANCE: self.module.instance_id,
-                tags.ROLE: role,
-                tags.INDEX: index,
-                tags.SIDE: self.side.value,
-            },
-        )
-        joint.color = SIDE_COLORS[self.side]
         for declared in self.module.attrs_for_role(role):
             joint[declared.name].create(
                 "float", default=declared.default, keyable=declared.keyable
@@ -159,11 +140,21 @@ class ModuleRig:
 
     # ------------------------------------------------------------- groups
     def _create_groups(self) -> RigGroups:
-        limb = tm.Transform.create(name=self.name(suffix="grp"), parent=self.rig_root.long_name)
-        socket = tm.Transform.create(name=self.name("socket", suffix="grp"), parent=limb.long_name)
-        control = tm.Transform.create(name=self.name("control", suffix="grp"), parent=limb.long_name)
-        rig = tm.Transform.create(name=self.name("rig", suffix="grp"), parent=limb.long_name)
-        bind = tm.Transform.create(name=self.name("bind", suffix="grp"), parent=limb.long_name)
+        limb = tm.Transform.create(
+            name=self.name(suffix="grp"), parent=self.rig_root.long_name
+        )
+        socket = tm.Transform.create(
+            name=self.name("socket", suffix="grp"), parent=limb.long_name
+        )
+        control = tm.Transform.create(
+            name=self.name("control", suffix="grp"), parent=limb.long_name
+        )
+        rig = tm.Transform.create(
+            name=self.name("rig", suffix="grp"), parent=limb.long_name
+        )
+        bind = tm.Transform.create(
+            name=self.name("bind", suffix="grp"), parent=limb.long_name
+        )
 
         self.separator(limb, "visibility_")
         limb["controlVisibility"].create("bool", default=True) >> control["visibility"]
@@ -188,6 +179,7 @@ class ModuleRig:
 
     # ------------------------------------------------------------- guides
     def guide(self, role: str, index: int = 0) -> tm.Joint:
+        """The guide joint for ``role``/``index``; raises when the module has none."""
         try:
             return self._guides[(role, index)]
         except KeyError:
@@ -206,20 +198,23 @@ class ModuleRig:
 
     # ------------------------------------------------------------- naming
     def name(self, *tokens, suffix: Optional[str] = None) -> str:
+        """``<name>_<tokens>_<side>_<suffix>``, this module's naming convention."""
         return naming.format_name(
             *tokens, side=self.side.value, prefix=self.instance.name, suffix=suffix
         )
 
     def group(self, *tokens, under="rig") -> tm.Transform:
         """A named group placed under one of the module's groups (or a node)."""
-        parent = getattr(self.groups, under) if isinstance(under, str) else node_of(under)
+        parent = (
+            getattr(self.groups, under) if isinstance(under, str) else node_of(under)
+        )
         return tm.Transform.create(
             name=self.name(*tokens, suffix="grp"),
             parent=parent.long_name if hasattr(parent, "long_name") else parent,
         )
 
     def socket(self, input_name: str, *, match=None) -> tm.Transform:
-        """This module's socket for a declared input, optionally aligned to ``match``."""
+        """The socket for a declared input, optionally aligned to ``match``."""
         try:
             node = self.attachments[input_name]
         except KeyError:
@@ -274,8 +269,12 @@ class ModuleRig:
             name=self.name(name, suffix="ctrl"),
             shape=shape,
             size=size,
-            color=color if color is not None else SIDE_COLORS[self.side],
-            parent=node_of(parent).long_name if hasattr(node_of(parent), "long_name") else parent,
+            color=color if color is not None else SIDE_COLORS[self.side.value],
+            parent=(
+                node_of(parent).long_name
+                if hasattr(node_of(parent), "long_name")
+                else parent
+            ),
         )
         if match is not None:
             controller.transform.align_to(node_of(match))
@@ -364,17 +363,25 @@ class ModuleRig:
         return self.deform_joint(joint)
 
     def deform_joint(self, node) -> tm.Joint:
-        tags.tag(node, **{tags.KIND: tags.DEFORM, tags.INSTANCE: self.instance.instance_id})
+        """Tag ``node`` as one of this module's deform joints and register it."""
+        tags.tag(
+            node, **{tags.KIND: tags.DEFORM, tags.INSTANCE: self.instance.instance_id}
+        )
         self.deform_joints.append(node)
         return node
 
     def output(self, name: str, node) -> None:
+        """Publish ``node`` as the declared output ``name``."""
         if name not in self.module.output_names(self.module.values()):
-            raise GuideError(f"'{self.module.module_type}' does not declare output '{name}'.")
+            raise GuideError(
+                f"'{self.module.module_type}' does not declare output '{name}'."
+            )
         self.outputs[name] = node
 
     def attach(self, input_name: str, node) -> None:
         """Re-point an input at a node you built yourself, instead of its socket."""
         if self.module.get_input(input_name) is None:
-            raise GuideError(f"'{self.module.module_type}' does not declare input '{input_name}'.")
+            raise GuideError(
+                f"'{self.module.module_type}' does not declare input '{input_name}'."
+            )
         self.attachments[input_name] = node

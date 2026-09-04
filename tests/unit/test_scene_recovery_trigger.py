@@ -1,8 +1,8 @@
 """Rebuilding a session out of what the scene carries. Pure: no Maya."""
 
 import pytest
-
 from toy_modules import ToyChain
+
 from tik.trigger.core import clear_registries, register_module
 from tik.trigger.core.reconcile import RenderedGuide
 from tik.trigger.core.scene_recovery import SceneModule, document_from_scene
@@ -29,17 +29,34 @@ def _registered_modules():
 
 def rendered(instance_id, role, index=0, position=(1.0, 2.0, 3.0), parent=None):
     return RenderedGuide(
-        instance_id=instance_id, role=role, index=index,
-        node=f"|{role}{index}", position=position, rotation=(0.0, 0.0, 0.0),
-        rotate_order=0, attrs={}, parent=parent,
+        instance_id=instance_id,
+        role=role,
+        index=index,
+        node=f"|{role}{index}",
+        position=position,
+        rotation=(0.0, 0.0, 0.0),
+        rotate_order=0,
+        attrs={},
+        parent=parent,
     )
 
 
 def test_a_breadcrumb_restores_name_settings_and_inputs():
-    scene = [SceneModule("id1", "toy_chain", "L", {
-        "instance_id": "id1", "module_type": "toy_chain", "name": "tail",
-        "side": "L", "settings": {"segments": 2}, "inputs": {"parent": "id0.root"},
-    })]
+    scene = [
+        SceneModule(
+            "id1",
+            "toy_chain",
+            "L",
+            {
+                "instance_id": "id1",
+                "module_type": "toy_chain",
+                "name": "tail",
+                "side": "L",
+                "settings": {"segments": 2},
+                "inputs": {"parent": "id0.root"},
+            },
+        )
+    ]
     document, report = document_from_scene(scene, [rendered("id1", "root")])
     entry = document.module("id1")
     assert entry.name == "tail"
@@ -50,14 +67,27 @@ def test_a_breadcrumb_restores_name_settings_and_inputs():
 
 def test_poses_come_from_the_joints_not_the_breadcrumb():
     """The breadcrumb has no poses by design; the rendering supplies them."""
-    scene = [SceneModule("id1", "toy_chain", "C", {
-        "instance_id": "id1", "module_type": "toy_chain", "name": "tail",
-        "side": "C", "settings": {}, "inputs": {},
-    })]
+    scene = [
+        SceneModule(
+            "id1",
+            "toy_chain",
+            "C",
+            {
+                "instance_id": "id1",
+                "module_type": "toy_chain",
+                "name": "tail",
+                "side": "C",
+                "settings": {},
+                "inputs": {},
+            },
+        )
+    ]
     document, _report = document_from_scene(
         scene, [rendered("id1", "root", position=(7.0, 8.0, 9.0))]
     )
-    assert document.module("id1").guide("root", 0).position == pytest.approx((7.0, 8.0, 9.0))
+    assert document.module("id1").guide("root", 0).position == pytest.approx(
+        (7.0, 8.0, 9.0)
+    )
 
 
 def test_without_a_breadcrumb_it_degrades_and_says_so():
@@ -65,8 +95,8 @@ def test_without_a_breadcrumb_it_degrades_and_says_so():
     scene = [SceneModule("id1", "toy_chain", "R", None)]
     document, report = document_from_scene(scene, [rendered("id1", "root")])
     entry = document.module("id1")
-    assert entry.name == "toy_chain"   # falls back to the module type
-    assert entry.side == "R"           # trg_side is on every joint
+    assert entry.name == "toy_chain"  # falls back to the module type
+    assert entry.side == "R"  # trg_side is on every joint
     assert entry.settings == {}
     assert entry.inputs == {}
     assert not report.is_lossless
@@ -75,10 +105,19 @@ def test_without_a_breadcrumb_it_degrades_and_says_so():
 
 def test_a_mixed_scene_reports_a_mixed_result():
     scene = [
-        SceneModule("id1", "toy_chain", "C", {
-            "instance_id": "id1", "module_type": "toy_chain", "name": "tail",
-            "side": "C", "settings": {}, "inputs": {},
-        }),
+        SceneModule(
+            "id1",
+            "toy_chain",
+            "C",
+            {
+                "instance_id": "id1",
+                "module_type": "toy_chain",
+                "name": "tail",
+                "side": "C",
+                "settings": {},
+                "inputs": {},
+            },
+        ),
         SceneModule("id2", "toy_chain", "C", None),
     ]
     _document, report = document_from_scene(
@@ -104,10 +143,19 @@ def test_a_mixed_scene_with_an_unknown_type_is_not_lossless():
     ``unknown_types`` check can still pull ``is_lossless`` down to False.
     """
     scene = [
-        SceneModule("id1", "toy_chain", "C", {
-            "instance_id": "id1", "module_type": "toy_chain", "name": "tail",
-            "side": "C", "settings": {}, "inputs": {},
-        }),
+        SceneModule(
+            "id1",
+            "toy_chain",
+            "C",
+            {
+                "instance_id": "id1",
+                "module_type": "toy_chain",
+                "name": "tail",
+                "side": "C",
+                "settings": {},
+                "inputs": {},
+            },
+        ),
         SceneModule("id2", "nosuchmodule", "C", None),
     ]
     document, report = document_from_scene(
@@ -126,10 +174,13 @@ def test_an_empty_scene_is_not_lossless():
 
 def test_guide_parents_within_the_module_survive():
     scene = [SceneModule("id1", "toy_chain", "C", None)]
-    document, _report = document_from_scene(scene, [
-        rendered("id1", "root"),
-        rendered("id1", "segment", 0, parent=("id1", "root", 0)),
-    ])
+    document, _report = document_from_scene(
+        scene,
+        [
+            rendered("id1", "root"),
+            rendered("id1", "segment", 0, parent=("id1", "root", 0)),
+        ],
+    )
     assert document.module("id1").guide("segment", 0).parent == ("root", 0)
 
 

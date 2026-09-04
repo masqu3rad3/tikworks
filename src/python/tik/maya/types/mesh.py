@@ -1,5 +1,7 @@
 """Mesh node type wrapper."""
 
+from __future__ import annotations
+
 from maya import cmds
 from maya.api import OpenMaya
 
@@ -120,7 +122,7 @@ class Mesh(ShapeNode):
         """Get vertex colors.
 
         Args:
-            indices (list[int], optional): List of vertex indices to retrieve colors for.
+            indices (list[int], optional): Vertex indices to retrieve colors for.
 
         Returns:
             OpenMaya.MColorArray or None: Vertex colors if they exist, else None.
@@ -139,9 +141,9 @@ class Mesh(ShapeNode):
 
         if indices is not None:
             filtered_colors = OpenMaya.MColorArray()
-            for i in indices:
-                if 0 <= i < len(colors):
-                    filtered_colors.append(colors[i])
+            for index in indices:
+                if 0 <= index < len(colors):
+                    filtered_colors.append(colors[index])
             return filtered_colors
 
         return colors
@@ -150,7 +152,7 @@ class Mesh(ShapeNode):
         """Set vertex color for vertices.
 
         Args:
-            color (tuple or color.Color): RGB color values as a tuple of three floats (0.0 to 1.0)
+            color (tuple or color.Color): RGB as three floats (0.0 to 1.0).
                 or color.Color object.
             indices (list[int], optional): List of vertex indices to set color for.
         """

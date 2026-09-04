@@ -3,17 +3,10 @@
 import pytest
 from maya import cmds
 
-import tik.trigger as trigger
 from tik.trigger.core.exceptions import SessionError
 from tik.trigger.session import Session
 
-
-@pytest.fixture(autouse=True)
-def fresh_scene():
-    trigger.load_plugins()
-    cmds.file(new=True, force=True)
-    yield
-    cmds.file(new=True, force=True)
+pytestmark = pytest.mark.usefixtures("trigger_plugins")
 
 
 def drawn_names():
@@ -49,7 +42,9 @@ def test_a_checkout_round_trips_poses_between_two_sessions():
     first.checkout_guides(force=True)  # and we take it back
 
     restored = first.guides.guide_nodes(handle.instance_id)[("segment", 0)]
-    placed = cmds.xform(restored.long_name, query=True, worldSpace=True, translation=True)
+    placed = cmds.xform(
+        restored.long_name, query=True, worldSpace=True, translation=True
+    )
     assert placed == pytest.approx([8.0, 1.0, 2.0])
 
 
@@ -65,7 +60,9 @@ def test_work_done_while_checked_out_belongs_to_that_session():
     second.guides.add("base", side="C", name="only_in_second")
 
     assert [entry.name for entry in first.document.guides.modules] == ["only_in_first"]
-    assert [entry.name for entry in second.document.guides.modules] == ["only_in_second"]
+    assert [entry.name for entry in second.document.guides.modules] == [
+        "only_in_second"
+    ]
 
 
 def test_handing_over_captures_then_checks_out():
@@ -88,7 +85,7 @@ def test_handing_back_restores_the_first_sessions_guides():
     second = Session()
 
     Session.hand_over(first, second)
-    body = second.guides.add("base", side="C", name="body")
+    second.guides.add("base", side="C", name="body")
     Session.hand_over(second, first)
 
     assert drawn_names() == {tail.instance_id}

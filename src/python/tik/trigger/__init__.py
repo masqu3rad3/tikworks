@@ -13,7 +13,7 @@ Importing this package does not import Maya; constructing a ``GuideScene``
 or a ``Builder`` does.
 """
 
-from tik.trigger.core import (  # noqa: F401 - public API
+from tik.trigger.core import (
     Action,
     ActionContext,
     BuildError,

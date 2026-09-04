@@ -37,9 +37,10 @@ The plug-in is loaded by name out of ``MAYA_PLUG_IN_PATH``, which the generated
 user to approve a load from an untrusted location.
 """
 
+from __future__ import annotations
+
 import sys
 import types
-from pathlib import Path
 
 from maya import cmds
 
@@ -47,7 +48,10 @@ PLUGIN_NAME = "tik_undo.py"
 
 SHARED_NAME = "_tik_undo_shared"
 
-_warned = False
+_NOT_ON_PATH = (
+    f"{PLUGIN_NAME} is not on MAYA_PLUG_IN_PATH. Install the tikworks module "
+    "(its .mod declares the plug-in area) to make undo available."
+)
 
 
 def _shared():
@@ -72,63 +76,23 @@ def _command():
     return None
 
 
-def _plugin_directory():
-    """Find the plug-in area on disk, for the fallback load.
-
-    Walks up from the ``tik`` package, which sits beside the plug-in area in
-    both layouts::
-
-        dev      <repo>/src/python/tik   ->  <repo>/src/plugins/python
-        release  <module>/tik            ->  <module>/plugins/python
-    """
-    package_root = Path(__file__).resolve().parents[2]
-    for ancestor in (package_root,) + tuple(package_root.parents)[:3]:
-        candidate = ancestor / "plugins" / "python"
-        if (candidate / PLUGIN_NAME).is_file():
-            return candidate
-    return None
-
-
-def _install_from_disk():
-    """Load the plug-in by absolute path, which Maya may ask to approve.
-
-    Only reached when the tikworks module is not installed -- a raw checkout
-    put on ``sys.path`` by hand, say. It warns rather than loading quietly,
-    because an unnoticed fallback here is exactly the approval prompt this
-    layout exists to avoid.
-    """
-    global _warned
-
-    directory = _plugin_directory()
-    if directory is None:
-        raise RuntimeError(
-            "%s is not on MAYA_PLUG_IN_PATH and could not be found on disk. "
-            "Install the tikworks module to make undo available." % PLUGIN_NAME
-        )
-
-    if not _warned:
-        _warned = True
-        cmds.warning(
-            "Loading %s from an untrusted location (%s) because it is not on "
-            "MAYA_PLUG_IN_PATH. Install the tikworks module to avoid this."
-            % (PLUGIN_NAME, directory)
-        )
-
-    cmds.loadPlugin(str(directory / PLUGIN_NAME), quiet=True)
-
-
 def install():
-    """Load the undo plug-in, preferring the deployed (trusted) location."""
+    """Load the undo plug-in by name from ``MAYA_PLUG_IN_PATH``.
+
+    Raises:
+        RuntimeError: When the plug-in is not on the path. There is no
+            fallback: loading by absolute path is what triggers Maya's
+            untrusted-location prompt, the very thing the ``.mod`` avoids.
+    """
     if _command():
         return
 
     try:
         cmds.loadPlugin(PLUGIN_NAME, quiet=True)
-    except RuntimeError:
-        pass
-
+    except RuntimeError as error:
+        raise RuntimeError(_NOT_ON_PATH) from error
     if not _command():
-        _install_from_disk()
+        raise RuntimeError(_NOT_ON_PATH)
 
 
 def uninstall():

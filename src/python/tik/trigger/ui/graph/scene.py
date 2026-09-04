@@ -7,27 +7,13 @@ from typing import Optional
 from tik.shared.ui import theme
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 
-from .constants import (
-    COLUMN_GAP,
-    GLYPH_WIDTH,
-    GRID,
-    HEADER,
-    MODE_CONNECTED,
-    MODE_FULL,
-    MODE_MINIMAL,
-    NODE_WIDTH,
-    PORT_RADIUS,
-    PORT_SPACE,
-    ROW,
-    ROW_GAP,
-    WIRE_PRIMARY,
-    WIRE_SECONDARY,
-    WORLD,
-)
-from .items import NodeItem, Port, WireItem
+from .constants import GRID
+from .items import NodeItem, NodeSpec, Port, WireItem
 
 
 class GraphScene(QtWidgets.QGraphicsScene):
+    """The graph canvas: nodes, wires, wire dragging, slicing and selection."""
+
     connect_requested = QtCore.Signal(str, str)  # input key, source key (node.port)
     disconnect_requested = QtCore.Signal(str)  # input key
     remove_group_requested = QtCore.Signal(str)  # scene-nodes group name
@@ -52,6 +38,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
     # ------------------------------------------------------------ building
     def clear_graph(self) -> None:
         # clearing selected items emits selectionChanged; nobody must react mid-rebuild
+        """Remove every item without emitting selection changes."""
         self.blockSignals(True)
         try:
             self.clear()
@@ -64,19 +51,25 @@ class GraphScene(QtWidgets.QGraphicsScene):
         self._drag_line = None
         self._detached = None
 
-    def add_node(self, key, title, subtitle, inputs, outputs, color, external=False, primary_input=None, pos=None, mode=MODE_FULL, spaces=None) -> NodeItem:
-        node = NodeItem(key, title, subtitle, inputs, outputs, color, external, primary_input, mode, spaces)
+    def add_node(self, spec: NodeSpec, pos=None) -> NodeItem:
+        """Add a node for ``spec``, at ``pos`` when given."""
+        node = NodeItem(spec)
         if pos is not None:
             node.setPos(*pos)
         self.addItem(node)
-        self.nodes[key] = node
-        self.moved.discard(key)
+        self.nodes[spec.key] = node
+        self.moved.discard(spec.key)
         return node
 
-    def add_wire(self, source_key: str, target_key: str, primary: bool) -> Optional[WireItem]:
+    def add_wire(
+        self, source_key: str, target_key: str, primary: bool
+    ) -> Optional[WireItem]:
+        """Draw a wire between two port keys; None when either port is missing."""
         s_node, _dot, s_port = source_key.rpartition(".")
         t_node, _dot, t_port = target_key.rpartition(".")
-        source = self.nodes[s_node].outputs.get(s_port) if s_node in self.nodes else None
+        source = (
+            self.nodes[s_node].outputs.get(s_port) if s_node in self.nodes else None
+        )
         target = self.nodes[t_node].inputs.get(t_port) if t_node in self.nodes else None
         if source is None or target is None:
             return None
@@ -99,6 +92,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         return [wire for wire in self.wires if wire.target is port]
 
     def update_wires(self) -> None:
+        """Redraw every wire after nodes moved."""
         for wire in self.wires:
             wire.refresh()
 
@@ -111,23 +105,31 @@ class GraphScene(QtWidgets.QGraphicsScene):
         left = int(rect.left()) - int(rect.left()) % GRID
         top = int(rect.top()) - int(rect.top()) % GRID
         lines = []
-        x = left
-        while x < rect.right():
-            lines.append(QtCore.QLineF(x, rect.top(), x, rect.bottom()))
-            x += GRID
-        y = top
-        while y < rect.bottom():
-            lines.append(QtCore.QLineF(rect.left(), y, rect.right(), y))
-            y += GRID
+        column = left
+        while column < rect.right():
+            lines.append(QtCore.QLineF(column, rect.top(), column, rect.bottom()))
+            column += GRID
+        row = top
+        while row < rect.bottom():
+            lines.append(QtCore.QLineF(rect.left(), row, rect.right(), row))
+            row += GRID
         painter.drawLines(lines)
         painter.setPen(QtGui.QPen(QtGui.QColor("#2a2a2a"), 0))
-        painter.drawLines([QtCore.QLineF(0, rect.top(), 0, rect.bottom()), QtCore.QLineF(rect.left(), 0, rect.right(), 0)])
+        painter.drawLines(
+            [
+                QtCore.QLineF(0, rect.top(), 0, rect.bottom()),
+                QtCore.QLineF(rect.left(), 0, rect.right(), 0),
+            ]
+        )
 
     # ------------------------------------------------------ interactions
     def start_wire(self, port: Port, pos) -> None:
+        """Begin dragging a new wire out of ``port``."""
         self._drag_from = port
         self._drag_line = QtWidgets.QGraphicsPathItem()
-        self._drag_line.setPen(QtGui.QPen(QtGui.QColor(theme.ACCENT), 1.5, QtCore.Qt.DashLine))
+        self._drag_line.setPen(
+            QtGui.QPen(QtGui.QColor(theme.ACCENT), 1.5, QtCore.Qt.DashLine)
+        )
         self._drag_line.setZValue(4)
         self.addItem(self._drag_line)
         self._update_drag(pos)
@@ -172,6 +174,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         return None
 
     def finish_wire(self, port: Optional[Port]) -> None:
+        """Drop the dragged wire on ``port`` (None cancels or disconnects)."""
         origin, self._drag_from = self._drag_from, None
         detached, self._detached = self._detached, None
         if self._drag_line is not None:
@@ -216,9 +219,16 @@ class GraphScene(QtWidgets.QGraphicsScene):
         super().keyPressEvent(event)
 
     def delete_selected(self) -> bool:
-        """Disconnect selected wires and remove selected scene-node groups. True when anything was selected."""
+        """Disconnect selected wires and remove selected scene-node groups.
+
+        Returns True when anything was selected.
+        """
         wires = [item for item in self.selectedItems() if isinstance(item, WireItem)]
-        externals = [item for item in self.selectedItems() if isinstance(item, NodeItem) and item.external]
+        externals = [
+            item
+            for item in self.selectedItems()
+            if isinstance(item, NodeItem) and item.external
+        ]
         for wire in wires:
             self.disconnect_requested.emit(wire.target_key)
         for node in externals:
@@ -226,18 +236,23 @@ class GraphScene(QtWidgets.QGraphicsScene):
         return bool(wires or externals)
 
     def selected_nodes(self) -> list[NodeItem]:
+        """The selected node items."""
         return [item for item in self.selectedItems() if isinstance(item, NodeItem)]
 
     def _on_selection(self) -> None:
         for item in self.selectedItems():
             if isinstance(item, NodeItem):
-                (self.external_selected if item.external else self.node_selected).emit(item.key)
+                (self.external_selected if item.external else self.node_selected).emit(
+                    item.key
+                )
                 return
 
     def select_key(self, key: Optional[str]) -> None:
+        """Select only the node with ``key`` (None clears)."""
         self.select_keys([key] if key else [])
 
     def select_keys(self, keys) -> None:
+        """Select exactly the nodes with ``keys``."""
         wanted = set(keys)
         self.blockSignals(True)
         try:

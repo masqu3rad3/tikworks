@@ -49,6 +49,7 @@ class RenderedGuide:
 
     @property
     def pair(self) -> tuple:
+        """``(role, index)``, the identity of a guide within its module."""
         return (self.role, self.index)
 
 
@@ -70,10 +71,12 @@ class ModuleDiff:
 
     @property
     def needs_capture(self) -> bool:
+        """True when a guide moved in the scene (the scene wins)."""
         return bool(self.drifted)
 
     @property
     def is_clean(self) -> bool:
+        """True when neither a capture nor a redraw is needed."""
         return not self.needs_regenerate and not self.needs_capture
 
 
@@ -97,13 +100,17 @@ class GuideDiff:
 
     @property
     def is_clean(self) -> bool:
+        """True when the scene and the document agree."""
         return not (self.structural or self.drifted or self.orphans or self.duplicates)
 
 
 def _same(left, right, tolerance: float) -> bool:
     if left is None or right is None:
         return left is right
-    return all(abs(float(a) - float(b)) <= tolerance for a, b in zip(left, right))
+    return all(
+        abs(float(left_value) - float(right_value)) <= tolerance
+        for left_value, right_value in zip(left, right)
+    )
 
 
 def reconcile(

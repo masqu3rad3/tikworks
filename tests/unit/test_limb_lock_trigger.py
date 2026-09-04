@@ -40,12 +40,18 @@ def _setup(distance=10.0):
 def test_attribute_order_and_defaults():
     rig, socket, chain_root, driver, control, target = _setup(distance=10.0)
     build_limb_lock(
-        rig, socket=socket, chain_root=chain_root, driver=driver,
-        control=control, target=target, follows=socket,
+        rig,
+        socket=socket,
+        chain_root=chain_root,
+        driver=driver,
+        control=control,
+        target=target,
+        follows=socket,
     )
     added = cmds.listAttr(control.long_name, userDefined=True)
-    ordered = [name for name in added
-               if name in ("limbLock", "currentLength", "lockLength")]
+    ordered = [
+        name for name in added if name in ("limbLock", "currentLength", "lockLength")
+    ]
     assert ordered == ["limbLock", "currentLength", "lockLength"]
     assert abs(control["lockLength"].value - 10.0) < 1e-4
     assert abs(control["currentLength"].value - 10.0) < 1e-4
@@ -54,8 +60,13 @@ def test_attribute_order_and_defaults():
 def test_current_length_is_locked_visible_and_live():
     rig, socket, chain_root, driver, control, target = _setup(distance=10.0)
     build_limb_lock(
-        rig, socket=socket, chain_root=chain_root, driver=driver,
-        control=control, target=target, follows=socket,
+        rig,
+        socket=socket,
+        chain_root=chain_root,
+        driver=driver,
+        control=control,
+        target=target,
+        follows=socket,
     )
     path = control["currentLength"].path
     assert cmds.getAttr(path, lock=True)
@@ -69,8 +80,13 @@ def test_locking_at_the_current_pose_moves_nothing():
     """The workflow the attributes exist for: copy currentLength, then lock."""
     rig, socket, chain_root, driver, control, target = _setup(distance=10.0)
     build_limb_lock(
-        rig, socket=socket, chain_root=chain_root, driver=driver,
-        control=control, target=target, follows=socket,
+        rig,
+        socket=socket,
+        chain_root=chain_root,
+        driver=driver,
+        control=control,
+        target=target,
+        follows=socket,
     )
     driver.translate = (2 + 13.0, 3.0, 0)
     before = target.world_position
@@ -83,8 +99,13 @@ def test_locking_at_the_current_pose_moves_nothing():
 def test_lock_holds_the_length():
     rig, socket, chain_root, driver, control, target = _setup(distance=10.0)
     lock = build_limb_lock(
-        rig, socket=socket, chain_root=chain_root, driver=driver,
-        control=control, target=target, follows=socket,
+        rig,
+        socket=socket,
+        chain_root=chain_root,
+        driver=driver,
+        control=control,
+        target=target,
+        follows=socket,
     )
     control["lockLength"].value = 10.0
     control["limbLock"].value = 1.0
@@ -96,8 +117,13 @@ def test_no_cycle():
     """The regression guard: the measurement must never see its own push."""
     rig, socket, chain_root, driver, control, target = _setup()
     build_limb_lock(
-        rig, socket=socket, chain_root=chain_root, driver=driver,
-        control=control, target=target, follows=socket,
+        rig,
+        socket=socket,
+        chain_root=chain_root,
+        driver=driver,
+        control=control,
+        target=target,
+        follows=socket,
     )
     control["limbLock"].value = 1.0
     target.world_position  # force an evaluation
@@ -126,7 +152,9 @@ def _armed(**settings):
     guides.clear()
     body = guides.add("base", name="body")
     arm = guides.add("arm", side="L", name="arm", parent=body, **settings)
-    report = Builder().build(document=guides.document, rig_name="hero", afterlife="keep")
+    report = Builder().build(
+        document=guides.document, rig_name="hero", afterlife="keep"
+    )
     return report.rigs[arm.instance_id]
 
 
@@ -189,9 +217,9 @@ def test_arm_lock_is_inert_when_off():
     rest = shoulder.world_position
     for target in ((30, 15, 0), (25, -8, 6), (-4, 2, 9)):
         control.world_position = target
-        assert (shoulder.world_position - rest).length() < 1e-3, (
-            f"the shoulder drifted at {target} with the lock off"
-        )
+        assert (
+            shoulder.world_position - rest
+        ).length() < 1e-3, f"the shoulder drifted at {target} with the lock off"
 
 
 def test_shoulder_mode_moves_the_shoulder_but_not_the_collar():
@@ -206,9 +234,9 @@ def test_shoulder_mode_moves_the_shoulder_but_not_the_collar():
     control["limbLock"].value = 1.0
 
     assert (shoulder.world_position - shoulder_before).length() > 1.0
-    assert (collar.world_position - collar_before).length() < 1e-3, (
-        "the collar should not move in shoulder mode"
-    )
+    assert (
+        collar.world_position - collar_before
+    ).length() < 1e-3, "the collar should not move in shoulder mode"
 
 
 def test_collar_mode_carries_the_collar_along():
@@ -222,9 +250,9 @@ def test_collar_mode_carries_the_collar_along():
     control["limbLock"].value = 1.0
 
     assert (shoulder.world_position - shoulder_before).length() > 1.0
-    assert (collar.world_position - collar_before).length() > 1.0, (
-        "the collar should travel with the push in collar mode"
-    )
+    assert (
+        collar.world_position - collar_before
+    ).length() > 1.0, "the collar should travel with the push in collar mode"
 
 
 def test_both_modes_hold_the_shoulder_to_hand_length():

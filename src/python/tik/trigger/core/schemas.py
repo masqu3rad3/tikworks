@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
+from tik.trigger.core.ordering import dependency_order
+
 SCHEMA_VERSION = 3
 
 # What a build does with the guides once it is done.
@@ -26,6 +28,7 @@ class GuidePose:
 
     @classmethod
     def from_dict(cls, data: dict) -> "GuidePose":
+        """Rebuild a pose from its JSON form."""
         return cls(
             role=data["role"],
             index=int(data.get("index", 0)),
@@ -45,6 +48,7 @@ class ParentRef:
 
     @classmethod
     def from_dict(cls, data: Optional[dict]) -> Optional["ParentRef"]:
+        """Rebuild a parent reference from its JSON form; None stays None."""
         if not data:
             return None
         return cls(
@@ -65,23 +69,29 @@ class ModuleInstance:
     settings: dict = field(default_factory=dict)
     guides: list[GuidePose] = field(default_factory=list)
     parent: Optional[ParentRef] = None
-    inputs: dict = field(default_factory=dict)  # input name -> "<key>.<output>" | scene node
+    inputs: dict = field(
+        default_factory=dict
+    )  # input name -> "<key>.<output>" | scene node
 
     @property
     def key(self) -> str:
+        """Display key: ``name`` for center modules, ``<side>_<name>`` otherwise."""
         return self.name if self.side in ("C", "") else f"{self.side}_{self.name}"
 
     @property
     def guide_pairs(self) -> list[tuple[str, int]]:
+        """``(role, index)`` of every guide pose."""
         return [(pose.role, pose.index) for pose in self.guides]
 
     def to_dict(self) -> dict:
+        """The JSON form used by ``.trg`` files."""
         data = asdict(self)
         data["parent"] = asdict(self.parent) if self.parent else None
         return data
 
     @classmethod
     def from_dict(cls, data: dict) -> "ModuleInstance":
+        """Rebuild an instance from its JSON form."""
         return cls(
             module_type=data["module_type"],
             instance_id=data["instance_id"],
@@ -104,10 +114,12 @@ class ActionInstance:
     settings: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
+        """The JSON form used by ``.trg`` files."""
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: dict) -> "ActionInstance":
+        """Rebuild an action instance from its JSON form."""
         return cls(
             action_type=data["action_type"],
             name=data["name"],
@@ -126,6 +138,7 @@ class RigDocument:
     actions: list[ActionInstance] = field(default_factory=list)
 
     def to_dict(self) -> dict:
+        """The JSON form of the whole rig document."""
         return {
             "schema": self.schema,
             "meta": dict(self.meta),
@@ -135,6 +148,7 @@ class RigDocument:
 
     @classmethod
     def from_dict(cls, data: dict) -> "RigDocument":
+        """Rebuild a rig document from its JSON form."""
         schema = int(data.get("schema", SCHEMA_VERSION))
         if schema > SCHEMA_VERSION:
             raise ValueError(
@@ -144,7 +158,9 @@ class RigDocument:
             schema=SCHEMA_VERSION,
             meta=dict(data.get("meta", {})),
             guides=[ModuleInstance.from_dict(item) for item in data.get("guides", [])],
-            actions=[ActionInstance.from_dict(item) for item in data.get("actions", [])],
+            actions=[
+                ActionInstance.from_dict(item) for item in data.get("actions", [])
+            ],
         )
 
 
@@ -159,29 +175,22 @@ def split_source(source: str) -> tuple[Optional[str], str]:
 def order_instances(instances: list[ModuleInstance]) -> list[ModuleInstance]:
     """Return instances parents-first, keeping the input order otherwise."""
     by_id = {instance.instance_id: instance for instance in instances}
-    ordered: list[ModuleInstance] = []
-    visiting: set[str] = set()
-    done: set[str] = set()
 
-    def visit(instance: ModuleInstance) -> None:
-        if instance.instance_id in done:
-            return
-        if instance.instance_id in visiting:
-            raise ValueError(f"Cyclic parenting at '{instance.name}'.")
-        visiting.add(instance.instance_id)
+    def parents(instance: ModuleInstance) -> list[ModuleInstance]:
         parent = by_id.get(instance.parent.instance_id) if instance.parent else None
-        if parent is not None:
-            visit(parent)
-        visiting.discard(instance.instance_id)
-        done.add(instance.instance_id)
-        ordered.append(instance)
+        return [parent] if parent is not None else []
 
-    for instance in instances:
-        visit(instance)
-    return ordered
+    return dependency_order(
+        instances,
+        parents,
+        lambda instance: instance.instance_id,
+        cycle_error=lambda instance: f"Cyclic parenting at '{instance.name}'.",
+    )
 
 
-def order_by_connections(instances: list[ModuleInstance], inputs_for) -> list[ModuleInstance]:
+def order_by_connections(
+    instances: list[ModuleInstance], inputs_for
+) -> list[ModuleInstance]:
     """Return instances with producers before consumers.
 
     Bind joints must be created in their final hierarchy position, so a
@@ -200,30 +209,24 @@ def order_by_connections(instances: list[ModuleInstance], inputs_for) -> list[Mo
         ValueError: On a cyclic connection, naming the instance.
     """
     by_key = {instance.key: instance for instance in instances}
-    ordered: list[ModuleInstance] = []
-    visiting: set[str] = set()
-    done: set[str] = set()
 
-    def visit(instance: ModuleInstance) -> None:
-        if instance.instance_id in done:
-            return
-        if instance.instance_id in visiting:
-            raise ValueError(f"Cyclic module connection at '{instance.name}'.")
-        visiting.add(instance.instance_id)
+    def producers(instance: ModuleInstance) -> list[ModuleInstance]:
+        found = []
         for source in (inputs_for(instance) or {}).values():
             if not source or "." not in source:
                 continue
             key, _dot, _output = source.rpartition(".")
             producer = by_key.get(key)
             if producer is not None and producer is not instance:
-                visit(producer)
-        visiting.discard(instance.instance_id)
-        done.add(instance.instance_id)
-        ordered.append(instance)
+                found.append(producer)
+        return found
 
-    for instance in instances:
-        visit(instance)
-    return ordered
+    return dependency_order(
+        instances,
+        producers,
+        lambda instance: instance.instance_id,
+        cycle_error=lambda instance: f"Cyclic module connection at '{instance.name}'.",
+    )
 
 
 __all__: list[Any] = [

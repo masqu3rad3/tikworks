@@ -1,11 +1,10 @@
 """A session holds two views of one document: Session and Guide Designer."""
 
 import pytest
+from test_pipeline_ui import _stub_designer
 
 from tik.trigger.session import Session
 from tik.trigger.ui.session_view import DESIGNER_TAB, SESSION_TAB, SessionView
-
-from test_pipeline_ui import _stub_designer
 
 
 @pytest.fixture
@@ -18,7 +17,7 @@ def view(qapp):
 
 
 def test_a_session_has_two_sub_tabs(view):
-    titles = [view.sub_tabs.tabText(i) for i in range(view.sub_tabs.count())]
+    titles = [view.sub_tabs.tabText(index) for index in range(view.sub_tabs.count())]
     assert titles == ["Session", "Guide Designer"]
     assert view.sub_tabs.currentIndex() == SESSION_TAB
 

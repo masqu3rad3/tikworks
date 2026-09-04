@@ -1,15 +1,19 @@
 """Runner: order, nesting, until/only, references, overrides, cycles."""
 
-import json
-
 import pytest
 
-from tik.trigger.core import Action, EventBus, IntField, StringField, clear_registries, register_action
-from tik.trigger.core.document import ActionNode, Document
+from tik.core.fields import FileField
+from tik.trigger.core import (
+    Action,
+    EventBus,
+    IntField,
+    StringField,
+    clear_registries,
+    register_action,
+)
+from tik.trigger.core.document import BUILD, PUBLISH, ActionNode, Document
 from tik.trigger.core.exceptions import ActionExecutionError, SessionError
 from tik.trigger.maya.runner import STEP_FAILED, STEP_FINISHED, Runner
-from tik.core.fields import FileField
-
 
 CALLS: list = []
 
@@ -113,7 +117,9 @@ def _write_base(tmp_path, name="baseRig_v001.tr"):
     base = Document()
     base.add(ActionNode("kinematics", "mark", settings={"tag": "KIN"}))
     base.add(ActionNode("scripts", "mark", settings={"tag": "S"}))
-    base.add(ActionNode("head_rotation", "mark", settings={"tag": "HEAD"}), parent="scripts")
+    base.add(
+        ActionNode("head_rotation", "mark", settings={"tag": "HEAD"}), parent="scripts"
+    )
     base.add(ActionNode("fingers", "mark", settings={"tag": "FING"}), parent="scripts")
     rigs = tmp_path / "rigs"
     rigs.mkdir(exist_ok=True)
@@ -125,17 +131,29 @@ def test_reference_expands_with_overrides_and_relative_paths(tmp_path):
     _write_base(tmp_path, "baseRig_v002.tr")
     doc = Document()
     doc.add(ActionNode("import", "mark", settings={"tag": "IMP"}))
-    ref = ActionNode("base", "reference", settings={
-        "file": "rigs/baseRig_v001.tr", "version": "latest",
-        "overrides": {"scripts/head_rotation": {"enabled": False},
-                      "kinematics": {"settings": {"tag": "KIN-OVERRIDE"}}},
-    })
+    ref = ActionNode(
+        "base",
+        "reference",
+        settings={
+            "file": "rigs/baseRig_v001.tr",
+            "version": "latest",
+            "overrides": {
+                "scripts/head_rotation": {"enabled": False},
+                "kinematics": {"settings": {"tag": "KIN-OVERRIDE"}},
+            },
+        },
+    )
     doc.add(ref)
     doc.add(ActionNode("local_child", "mark", settings={"tag": "LOCAL"}), parent="base")
     doc.add(ActionNode("weights", "mark", settings={"tag": "W"}))
     plan = Runner().plan(doc, str(tmp_path))
     assert [step.path for step in plan.steps] == [
-        "import", "base/kinematics", "base/scripts", "base/scripts/fingers", "base/local_child", "weights",
+        "import",
+        "base/kinematics",
+        "base/scripts",
+        "base/scripts/fingers",
+        "base/local_child",
+        "weights",
     ]
     kin = next(step for step in plan.steps if step.path == "base/kinematics")
     assert kin.linked and kin.base_dir == str(tmp_path / "rigs")
@@ -150,9 +168,22 @@ def test_reference_expands_with_overrides_and_relative_paths(tmp_path):
 def test_reference_include_and_missing_and_cycle(tmp_path):
     base_path = _write_base(tmp_path)
     doc = Document()
-    doc.add(ActionNode("base", "reference", settings={"file": str(base_path), "version": "pinned", "include": ["scripts/fingers"]}))
+    doc.add(
+        ActionNode(
+            "base",
+            "reference",
+            settings={
+                "file": str(base_path),
+                "version": "pinned",
+                "include": ["scripts/fingers"],
+            },
+        )
+    )
     plan = Runner().plan(doc, str(tmp_path))
-    assert [step.path for step in plan.steps] == ["base/scripts", "base/scripts/fingers"]
+    assert [step.path for step in plan.steps] == [
+        "base/scripts",
+        "base/scripts/fingers",
+    ]
 
     doc = Document()
     doc.add(ActionNode("base", "reference", settings={"file": "rigs/nope.tr"}))
@@ -161,19 +192,24 @@ def test_reference_include_and_missing_and_cycle(tmp_path):
 
     # cycle: a.tr references b.tr which references a.tr
     a_doc, b_doc = Document(), Document()
-    a_doc.add(ActionNode("to_b", "reference", settings={"file": "b.tr", "version": "pinned"}))
-    b_doc.add(ActionNode("to_a", "reference", settings={"file": "a.tr", "version": "pinned"}))
+    a_doc.add(
+        ActionNode("to_b", "reference", settings={"file": "b.tr", "version": "pinned"})
+    )
+    b_doc.add(
+        ActionNode("to_a", "reference", settings={"file": "a.tr", "version": "pinned"})
+    )
     a_doc.save(tmp_path / "a.tr")
     b_doc.save(tmp_path / "b.tr")
     doc = Document()
-    doc.add(ActionNode("root", "reference", settings={"file": "a.tr", "version": "pinned"}))
+    doc.add(
+        ActionNode("root", "reference", settings={"file": "a.tr", "version": "pinned"})
+    )
     with pytest.raises(SessionError) as info:
         Runner().plan(doc, str(tmp_path))
     assert "cycle" in str(info.value)
 
 
 # ---------------------------------------------------------------- phases
-from tik.trigger.core.document import BUILD, PUBLISH
 
 
 def _both_phases():
@@ -189,8 +225,13 @@ def test_plan_is_per_phase():
     doc = _both_phases()
     runner = Runner()
     assert [step.path for step in runner.plan(doc, "D:/x").steps] == ["a", "b"]
-    assert [step.path for step in runner.plan(doc, "D:/x", phase=PUBLISH).steps] == ["fbx", "ma"]
-    assert {step.phase for step in runner.plan(doc, "D:/x", phase=PUBLISH).steps} == {PUBLISH}
+    assert [step.path for step in runner.plan(doc, "D:/x", phase=PUBLISH).steps] == [
+        "fbx",
+        "ma",
+    ]
+    assert {step.phase for step in runner.plan(doc, "D:/x", phase=PUBLISH).steps} == {
+        PUBLISH
+    }
 
 
 def test_build_alone_never_runs_publish():
@@ -215,7 +256,10 @@ def test_build_and_publish_resets_the_scene_exactly_once(monkeypatch):
 def test_progress_spans_both_phases():
     seen = []
     events = EventBus()
-    events.subscribe("progress", lambda current=0, total=0, label="", **_kw: seen.append((current, total)))
+    events.subscribe(
+        "progress",
+        lambda current=0, total=0, label="", **_kw: seen.append((current, total)),
+    )
     Runner(events).run(_both_phases(), "D:/x", publish=True)
     assert seen == [(1, 4), (2, 4), (3, 4), (4, 4)]
 
@@ -238,7 +282,9 @@ def test_a_failing_publish_step_aborts_and_names_its_phase():
 def test_step_events_carry_their_phase():
     seen = []
     events = EventBus()
-    events.subscribe(STEP_FINISHED, lambda path="", phase="", **_kw: seen.append((phase, path)))
+    events.subscribe(
+        STEP_FINISHED, lambda path="", phase="", **_kw: seen.append((phase, path))
+    )
     Runner(events).run(_both_phases(), "D:/x", publish=True)
     assert seen == [(BUILD, "a"), (BUILD, "b"), (PUBLISH, "fbx"), (PUBLISH, "ma")]
 
@@ -246,7 +292,9 @@ def test_step_events_carry_their_phase():
 def test_a_reference_contributes_build_actions_only(tmp_path):
     inner = Document()
     inner.add(ActionNode("inner_build", "mark", settings={"tag": "IB"}))
-    inner.add(ActionNode("inner_publish", "mark", settings={"tag": "IP"}), phase=PUBLISH)
+    inner.add(
+        ActionNode("inner_publish", "mark", settings={"tag": "IP"}), phase=PUBLISH
+    )
     inner.save(tmp_path / "base.tr")
 
     outer = Document()

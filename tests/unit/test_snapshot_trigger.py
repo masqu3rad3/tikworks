@@ -4,17 +4,10 @@ import pytest
 from maya import cmds
 
 import tik.maya as tm
-import tik.trigger as trigger
 from tik.trigger.guides import snapshot
 from tik.trigger.maya import tags
 
-
-@pytest.fixture(autouse=True)
-def fresh_scene():
-    trigger.load_plugins()
-    cmds.file(new=True, force=True)
-    yield
-    cmds.file(new=True, force=True)
+pytestmark = pytest.mark.usefixtures("trigger_plugins")
 
 
 def tagged_joint(name, instance, role, index=0, parent=None, position=(0, 0, 0)):
@@ -23,10 +16,16 @@ def tagged_joint(name, instance, role, index=0, parent=None, position=(0, 0, 0))
         cmds.select(parent)
     joint = cmds.joint(name=name)
     cmds.xform(joint, worldSpace=True, translation=position)
-    tm.Joint(joint).meta.update({
-        tags.KIND: tags.GUIDE, tags.MODULE: "fkchain", tags.INSTANCE: instance,
-        tags.ROLE: role, tags.INDEX: index, tags.SIDE: "C",
-    })
+    tm.Joint(joint).meta.update(
+        {
+            tags.KIND: tags.GUIDE,
+            tags.MODULE: "fkchain",
+            tags.INSTANCE: instance,
+            tags.ROLE: role,
+            tags.INDEX: index,
+            tags.SIDE: "C",
+        }
+    )
     return joint
 
 
@@ -47,7 +46,9 @@ def test_snapshot_reports_identity_and_pose():
 
 def test_snapshot_reports_the_dag_parent_as_a_guide_triple():
     root = tagged_joint("root_guide", "id1", "root")
-    tagged_joint("seg_guide", "id1", "segment", 0, parent=root, position=(5.0, 0.0, 0.0))
+    tagged_joint(
+        "seg_guide", "id1", "segment", 0, parent=root, position=(5.0, 0.0, 0.0)
+    )
     by_pair = {guide.pair: guide for guide in snapshot.snapshot()}
     assert by_pair[("segment", 0)].parent == ("id1", "root", 0)
 
@@ -66,7 +67,9 @@ def test_untagged_joints_are_ignored():
 
 def test_guide_attrs_are_reported():
     joint = tagged_joint("root_guide", "id1", "root")
-    cmds.addAttr(joint, longName="twistWeight", attributeType="double", defaultValue=0.0)
+    cmds.addAttr(
+        joint, longName="twistWeight", attributeType="double", defaultValue=0.0
+    )
     cmds.setAttr(f"{joint}.twistWeight", 0.75)
     guide = snapshot.snapshot()[0]
     assert guide.attrs["twistWeight"] == pytest.approx(0.75)

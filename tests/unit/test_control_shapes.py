@@ -1,26 +1,24 @@
-import os
 import json
+import os
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from pathlib import Path
 from maya import cmds
-import maya.api.OpenMaya as om
 
 from tik.maya.utils import control_shapes
 from tik.maya.utils.control_shapes import (
     ControlShapeLibrary,
-    get_home_dir,
-    capture,
-    capture_to_disk,
-    save_to_disk,
-    _normalize_ratio,
-    _scale_data,
     _guess_camera_view,
+    _normalize_ratio,
+    _resolve_folder_path,
+    _scale_data,
+    capture,
     capture_thumbnail,
-    _resolve_folder_path
+    capture_to_disk,
+    get_home_dir,
+    save_to_disk,
 )
-from tik.maya.types.transform import Transform
-from tik.maya.types.nurbs import Nurbs
+
 
 @pytest.fixture
 def clean_library():
@@ -28,6 +26,7 @@ def clean_library():
     ControlShapeLibrary._INSTANCE = None
     yield
     ControlShapeLibrary._INSTANCE = None
+
 
 def test_get_home_dir(monkeypatch):
     # Test Windows
@@ -38,7 +37,8 @@ def test_get_home_dir(monkeypatch):
     # Test Linux/Other
     monkeypatch.setattr(control_shapes, "CURRENT_PLATFORM", "Linux")
     monkeypatch.setenv("HOME", "/home/test")
-    # os.path.normpath might convert slashes depending on the OS running the test (Windows)
+    # os.path.normpath might convert slashes depending on the OS running the test
+    # (Windows)
     expected = os.path.normpath("/home/test")
     assert get_home_dir() == expected
 
@@ -49,6 +49,7 @@ def test_get_home_dir(monkeypatch):
     monkeypatch.delenv("USERPROFILE", raising=False)
     assert get_home_dir()
 
+
 def test_get_home_dir_fallback(monkeypatch):
     # Ensure both env vars are missing
     monkeypatch.delenv("USERPROFILE", raising=False)
@@ -58,6 +59,7 @@ def test_get_home_dir_fallback(monkeypatch):
     with patch("os.path.expanduser", return_value="/mock/home") as mock_expand:
         assert get_home_dir() == os.path.normpath("/mock/home")
         mock_expand.assert_called_with("~")
+
 
 class TestControlShapeLibrary:
     def test_singleton(self, clean_library):
@@ -99,10 +101,10 @@ class TestControlShapeLibrary:
         assert custom_dir not in lib.search_paths
 
         # Test add_path with None
-        lib.add_path(None) # Should not crash
+        lib.add_path(None)  # Should not crash
 
         # Test remove_path with None
-        lib.remove_path(None) # Should not crash
+        lib.remove_path(None)  # Should not crash
 
     def test_search_paths_empty_env_segment(clean_library, tmp_path, monkeypatch):
         lib = ControlShapeLibrary.get_instance()
@@ -117,7 +119,8 @@ class TestControlShapeLibrary:
 
         paths = lib.search_paths
         assert env_dir in paths
-        # The empty segment should be skipped, and invalid_path (if it doesn't exist) might be in the list
+        # The empty segment should be skipped, and invalid_path (if it doesn't exist)
+        # might be in the list
         # but filtered out later or just added as Path object.
         # The code splits by pathsep and checks `if not env_path_str: continue`.
         # So we just verify it doesn't crash and handles the valid one.
@@ -143,7 +146,8 @@ class TestControlShapeLibrary:
         # Should not crash
         lib.refresh()
 
-        # Verify they are not scanned (cache should be empty if no other paths have shapes)
+        # Verify they are not scanned (cache should be empty if no other paths have
+        # shapes)
         assert not lib._cache
 
     def test_refresh_handles_root_json(clean_library, tmp_path):
@@ -154,8 +158,8 @@ class TestControlShapeLibrary:
 
         # Create a json at root
         shape_file = user_path / "root_shape.json"
-        with open(shape_file, "w") as f:
-            json.dump({"name": "root_shape"}, f)
+        with open(shape_file, "w") as handle:
+            json.dump({"name": "root_shape"}, handle)
 
         lib.refresh()
 
@@ -171,8 +175,8 @@ class TestControlShapeLibrary:
 
         # Create shape
         shape_file = user_path / "auto_shape.json"
-        with open(shape_file, "w") as f:
-            json.dump({"name": "auto_shape"}, f)
+        with open(shape_file, "w") as handle:
+            json.dump({"name": "auto_shape"}, handle)
 
         # Manually clear cache to simulate uninitialized state
         lib._cache = {}
@@ -189,8 +193,8 @@ class TestControlShapeLibrary:
         # Create a dummy shape file
         shape_data = {"name": "test_shape", "curves": []}
         shape_file = lib._user_path / "test_shape.json"
-        with open(shape_file, "w") as f:
-            json.dump(shape_data, f)
+        with open(shape_file, "w") as handle:
+            json.dump(shape_data, handle)
 
         # Refresh and list
         lib.refresh()
@@ -218,8 +222,8 @@ class TestControlShapeLibrary:
         lib._user_path.mkdir()
 
         bad_file = lib._user_path / "bad.json"
-        with open(bad_file, "w") as f:
-            f.write("{invalid_json")
+        with open(bad_file, "w") as handle:
+            handle.write("{invalid_json")
 
         lib.refresh()
         assert lib.load("bad") is None
@@ -231,6 +235,7 @@ class TestControlShapeLibrary:
             result = lib.load("missing_shape")
             assert result is None
             mock_log.warning.assert_called()
+
 
 def test_capture_and_normalize():
     cmds.file(new=True, force=True)
@@ -244,31 +249,36 @@ def test_capture_and_normalize():
     # Check normalization (radius 10 -> diameter 20. Scale should be 1/20 = 0.05)
     points = data["curves"][0]["point"]
     # Max coordinate value should be scaled down
-    max_val = max(max(abs(c) for c in p) for p in points)
+    max_val = max(max(abs(component) for component in point) for point in points)
     assert max_val <= 0.5 + 0.0001
 
     # Test capture without normalization
     data_raw = capture(circle, normalize=False)
     points_raw = data_raw["curves"][0]["point"]
-    max_val_raw = max(max(abs(c) for c in p) for p in points_raw)
-    assert max_val_raw > 5.0 # Radius is 10
+    max_val_raw = max(
+        max(abs(component) for component in point) for point in points_raw
+    )
+    assert max_val_raw > 5.0  # Radius is 10
+
 
 def test_capture_no_shapes():
     cmds.file(new=True, force=True)
     empty = cmds.createNode("transform", name="empty")
     assert capture(empty) is None
 
+
 def test_save_to_disk(tmp_path):
     data = {"test": "data"}
     path = save_to_disk(data, "test_save", tmp_path)
     assert os.path.exists(path)
-    with open(path, "r") as f:
-        loaded = json.load(f)
+    with open(path, "r") as handle:
+        loaded = json.load(handle)
     assert loaded == data
+
 
 def test_capture_to_disk(tmp_path, clean_library):
     cmds.file(new=True, force=True)
-    circle = cmds.circle(name="diskCircle")[0]
+    cmds.circle(name="diskCircle")[0]
 
     # Mock capture_thumbnail to avoid playblast issues
     with patch("tik.maya.utils.control_shapes.capture_thumbnail") as mock_thumb:
@@ -284,6 +294,7 @@ def test_capture_to_disk(tmp_path, clean_library):
             result = capture_to_disk("some_node", folder_path=tmp_path)
             assert result is None
             mock_log.error.assert_called()
+
 
 def test_guess_camera_view():
     cmds.file(new=True, force=True)
@@ -303,17 +314,19 @@ def test_guess_camera_view():
     view = _guess_camera_view(cube2)
     assert view == "iso"
 
+
 def test_resolve_folder_path(tmp_path):
-    p = _resolve_folder_path(tmp_path, "category")
-    assert p == tmp_path / "category"
-    assert p.exists()
+    folder = _resolve_folder_path(tmp_path, "category")
+    assert folder == tmp_path / "category"
+    assert folder.exists()
 
     p2 = _resolve_folder_path(str(tmp_path), None)
     assert p2 == tmp_path
 
+
 def test_capture_thumbnail(tmp_path):
     cmds.file(new=True, force=True)
-    cube = cmds.polyCube(name="thumbCube")[0]
+    cmds.polyCube(name="thumbCube")[0]
 
     # Mock playblast to avoid headless issues and verify it's called
     with patch("maya.cmds.playblast") as mock_playblast:
@@ -331,9 +344,10 @@ def test_capture_thumbnail(tmp_path):
                 # Side effect for playblast to create the file
                 def side_effect(*args, **kwargs):
                     filename = kwargs.get("completeFilename")
-                    with open(filename, "w") as f:
-                        f.write("dummy image")
+                    with open(filename, "w") as handle:
+                        handle.write("dummy image")
                     return filename
+
                 mock_playblast.side_effect = side_effect
 
                 path = capture_thumbnail("thumbCube", "thumb_test", tmp_path)
@@ -345,13 +359,13 @@ def test_capture_thumbnail(tmp_path):
                 MockCamera.create.assert_called()
                 mock_cam_instance.set_controls.assert_called_with("cameraAndAim")
 
+
 def test_normalize_data_small_dim():
     # Test that small dimensions are not scaled
-    data = {"curves": [{"point": [(0,0,0), (0.00001, 0, 0)]}]}
-    all_points = [(0,0,0), (0.00001, 0, 0)]
+    data = {"curves": [{"point": [(0, 0, 0), (0.00001, 0, 0)]}]}
+    all_points = [(0, 0, 0), (0.00001, 0, 0)]
 
     n_ratio = _normalize_ratio(all_points)
     normalized = _scale_data(data, n_ratio)
     # Should be unchanged because max_dim < 0.0001
     assert normalized == data
-

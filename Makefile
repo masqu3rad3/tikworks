@@ -78,6 +78,25 @@ tests-ui: ## Run Qt UI tests (no Maya standalone)
 	$(SET_PYTHONPATH) set TIK_TESTS_NO_MAYA=1 && set QT_QPA_PLATFORM=offscreen && $(MAYAPY) -m pytest tests/ui -q
 
 # --------------------------------------------------
+# Lint
+# --------------------------------------------------
+
+# The style rules in AI/coding_rules.md: black, isort (profile black), flake8.
+LINT_PATHS := $(SRC_DIR)/tik $(TESTS_DIR)
+PYTHON ?= python
+
+.PHONY: lint
+lint: ## Check formatting and lint (black, isort, flake8)
+	$(PYTHON) -m black --check $(LINT_PATHS)
+	$(PYTHON) -m isort --check-only $(LINT_PATHS)
+	$(PYTHON) -m flake8 $(LINT_PATHS)
+
+.PHONY: format
+format: ## Reformat with black and isort
+	$(PYTHON) -m black $(LINT_PATHS)
+	$(PYTHON) -m isort $(LINT_PATHS)
+
+# --------------------------------------------------
 # Coverage
 # --------------------------------------------------
 

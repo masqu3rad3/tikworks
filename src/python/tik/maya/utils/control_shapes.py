@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -39,7 +41,7 @@ def get_home_dir():
         home = os.getenv("HOME")
 
     if not home:
-        home = os.path.expanduser("~")
+        home = str(Path.home())
 
     return os.path.normpath(home)
 
@@ -193,7 +195,7 @@ class ControlShapeLibrary:
         """Get cached shape metadata for all shapes.
 
         Returns:
-            dict: Dictionary mapping shape names to metadata dicts with 'path' and 'category' keys.
+            dict: Shape name -> metadata dict with 'path' and 'category' keys.
         """
         if not self._cache:
             self.refresh()
@@ -220,7 +222,7 @@ class ControlShapeLibrary:
             name: Name of the shape to load.
 
         Returns:
-            dict or None: The shape data dictionary, or None if not found or error occurs.
+            dict or None: The shape data, or None when missing or unreadable.
         """
         path = self.get_path(name)
         if not path:

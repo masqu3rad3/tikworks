@@ -74,7 +74,9 @@ def test_deformer_save_load_and_weights_object(tmp_path: Path) -> None:
     blendshape_node = _create_blendshape_with_target("deformer_save")
 
     export_path = tmp_path / "blendshape_weights.json"
-    blendshape_node._save_deformer_weights(export_path, format="JSON", defaultValue=-1.0)
+    blendshape_node._save_deformer_weights(
+        export_path, format="JSON", defaultValue=-1.0
+    )
     assert export_path.exists()
 
     blendshape_node._load_deformer_weights(export_path, method="index", ignoreName=True)
@@ -128,10 +130,14 @@ def test_weights_io_roundtrip_and_dense(tmp_path: Path) -> None:
         base_layer_names=["baseLayer"],
     )
 
-    dense_influence = weights_io.dense_influence_weights("mesh_shape", "joint1", total_count=4)
+    dense_influence = weights_io.dense_influence_weights(
+        "mesh_shape", "joint1", total_count=4
+    )
     assert list(dense_influence) == pytest.approx([0.5, 0.5, 0.25, 0.5], abs=1e-6)
 
-    dense_base = weights_io.dense_base_weights("mesh_shape", total_count=4, layer_index=1)
+    dense_base = weights_io.dense_base_weights(
+        "mesh_shape", total_count=4, layer_index=1
+    )
     assert list(dense_base) == pytest.approx([1.0, 1.0, 1.0, 0.0], abs=1e-6)
 
     dict_payload = weights_io.to_dict()
@@ -182,7 +188,7 @@ def test_weightlayer_full_serialization() -> None:
         max_index=9,
         influence="joint1",
         deformer="skinCluster1",
-        is_base=False
+        is_base=False,
     )
     data = layer.to_dict()
     assert data["size"] == 10
@@ -291,11 +297,7 @@ def test_weights_io_get_layer_multiple_shapes() -> None:
 
 def test_weights_io_from_dict_flat() -> None:
     # Test loading from dict without "deformerWeight" wrapper key
-    data = {
-        "headerInfo": {},
-        "shapes": [],
-        "weights": []
-    }
+    data = {"headerInfo": {}, "shapes": [], "weights": []}
     io = WeightsIO.from_dict(data)
     assert isinstance(io, WeightsIO)
 
@@ -348,8 +350,11 @@ def test_weights_io_dense_influence_weights_with_shape_size() -> None:
     """Test dense_influence_weights uses shape.size when total_count is None."""
     shape = ShapeInfo(name="mesh", group=0, stride=1, size=5, max_index=4)
     layer = WeightLayer(
-        shape="mesh", layer=0, default_value=0.5, influence="joint1",
-        points={0: 1.0, 2: 0.75}
+        shape="mesh",
+        layer=0,
+        default_value=0.5,
+        influence="joint1",
+        points={0: 1.0, 2: 0.75},
     )
     io = WeightsIO(shapes=[shape], layers=[layer])
 

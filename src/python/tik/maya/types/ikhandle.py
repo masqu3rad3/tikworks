@@ -59,7 +59,7 @@ class IkHandle(Transform):
 
     def pole_vector(self, node):
         """Create a poleVectorConstraint from ``node`` to this handle."""
-        constraint = cmds.poleVectorConstraint(
-            resolve(node).long_name, self.long_name
-        )[0]
+        constraint = cmds.poleVectorConstraint(resolve(node).long_name, self.long_name)[
+            0
+        ]
         return resolve(constraint)

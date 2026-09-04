@@ -46,7 +46,10 @@ def _ensure_registered(module) -> None:
     from . import registry
 
     for attr in vars(module).values():
-        if isinstance(attr, type) and getattr(attr, "__module__", "") == module.__name__:
+        if (
+            isinstance(attr, type)
+            and getattr(attr, "__module__", "") == module.__name__
+        ):
             registry.ensure_registered(attr)
 
 

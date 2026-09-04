@@ -2,7 +2,7 @@
 
 import pytest
 
-from tik.core.jsonio import load, save, JsonIOError, JsonDecodeError
+from tik.core.jsonio import JsonDecodeError, JsonIOError, load, save
 
 
 class TestJsonIOExceptions:

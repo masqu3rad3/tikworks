@@ -18,7 +18,14 @@ from tik.shared.ui.Qt import QtCore
 
 LOG = logging.getLogger(__name__)
 
-DEFAULT_EVENTS = ("SelectionChanged", "DagObjectCreated", "SceneOpened", "NewSceneOpened", "Undo", "Redo")
+DEFAULT_EVENTS = (
+    "SelectionChanged",
+    "DagObjectCreated",
+    "SceneOpened",
+    "NewSceneOpened",
+    "Undo",
+    "Redo",
+)
 
 
 class SceneWatcher(QtCore.QObject):
@@ -69,6 +76,7 @@ class SceneWatcher(QtCore.QObject):
 
     # ------------------------------------------------------------ lifecycle
     def install(self) -> list[int]:
+        """Start watching the scene events; returns the scriptJob ids."""
         self.uninstall()
         SceneWatcher._live.add(self)
         install = self._install_job or self._maya_install
@@ -89,6 +97,7 @@ class SceneWatcher(QtCore.QObject):
         return list(self._jobs)
 
     def uninstall(self) -> None:
+        """Stop watching and kill the scriptJobs."""
         if self._api is not None:
             self._api.stop()
             self._api = None
@@ -97,7 +106,7 @@ class SceneWatcher(QtCore.QObject):
             job = self._jobs.pop()
             try:
                 kill(job)
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - the job may already be gone
                 pass
 
     @staticmethod
@@ -115,10 +124,12 @@ class SceneWatcher(QtCore.QObject):
 
     @property
     def jobs(self) -> list[int]:
+        """The installed scriptJob ids."""
         return list(self._jobs)
 
     @property
     def is_refreshing(self) -> bool:
+        """True while a refresh callback is running."""
         return self._refreshing
 
     # ------------------------------------------------------------- events

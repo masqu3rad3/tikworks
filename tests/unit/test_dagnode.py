@@ -2,8 +2,8 @@
 import pytest
 from maya import cmds
 
-from tik.maya.core.registry import resolve
 from tik.maya.core.dagnode import DagNode
+from tik.maya.core.registry import resolve
 
 
 def test_parent_none_for_world_transform():
@@ -39,16 +39,16 @@ def test_parent_set_to_new_parent_node_and_updates_children():
     ch_node.parent = p2_node
 
     assert ch_node.parent.name == "p2"
-    assert all(c.name != "ch" for c in p1_node.children)
-    assert any(c.name == "ch" for c in p2_node.children)
+    assert all(child.name != "ch" for child in p1_node.children)
+    assert any(child.name == "ch" for child in p2_node.children)
 
 
 def test_parent_set_to_new_parent_by_name_and_cache_refresh():
     pA = cmds.createNode("transform", name="pA")
-    pB = cmds.createNode("transform", name="pB")
-    n = cmds.createNode("transform", name="n", parent=pA)
+    cmds.createNode("transform", name="pB")
+    node = cmds.createNode("transform", name="n", parent=pA)
 
-    n_node = resolve(cmds.ls(n, long=True)[0])
+    n_node = resolve(cmds.ls(node, long=True)[0])
 
     _ = n_node.parent  # populate the cached dag path
     n_node.parent = "pB"
@@ -78,9 +78,9 @@ def test_children_return_wrapped_nodes_and_order():
     parent_node = resolve(cmds.ls(parent, long=True)[0])
     children = parent_node.children
 
-    assert all(isinstance(c, DagNode) for c in children)
-    assert [c.name for c in children] == ["c1", "c2"]
-    assert {c.long_name for c in children} == set(cmds.ls([c1, c2], long=True))
+    assert all(isinstance(child, DagNode) for child in children)
+    assert [child.name for child in children] == ["c1", "c2"]
+    assert {child.long_name for child in children} == set(cmds.ls([c1, c2], long=True))
 
 
 def test_children_empty_on_leaf():
@@ -236,7 +236,9 @@ def test_color_methods_handle_missing_attributes():
     # We do this because overrideEnabled is a built-in attribute on DAG nodes
     # and cannot be deleted, but we want to test the safety check.
     original_has_attr = node_wrapper.has_attr
-    node_wrapper.has_attr = lambda attr: False if attr == "overrideEnabled" else original_has_attr(attr)
+    node_wrapper.has_attr = lambda attr: (
+        False if attr == "overrideEnabled" else original_has_attr(attr)
+    )
 
     try:
         # Test get_color
@@ -310,10 +312,11 @@ def test_get_color_returns_raw_tuple_when_as_color_is_false():
     # Check default (Color object)
     # node.color returns a Color object which might behave like a tuple or have .rgb,
     # but exact equality fails due to float precision.
-    # Assuming Color object is iterable or comparable to tuple, we use approx on elements.
+    # Assuming Color object is iterable or comparable to tuple, we use approx on
+    # elements.
     retrieved_color = node.color
     # If it's a Color object, get its rgb component or cast to tuple if logical
-    if hasattr(retrieved_color, 'rgb'):
+    if hasattr(retrieved_color, "rgb"):
         vals = retrieved_color.rgb
     else:
         vals = retrieved_color
@@ -378,6 +381,7 @@ def test_set_color_with_color_object():
     assert cmds.getAttr(f"{node.name}.overrideRGBColors") is True
     stored_rgb = cmds.getAttr(f"{node.name}.overrideColorRGB")[0]
     assert pytest.approx(stored_rgb, rel=1e-5) == color_obj.rgb
+
 
 def test_dagnode_get_color_returns_none_when_override_disabled() -> None:
     cmds.file(new=True, force=True)
