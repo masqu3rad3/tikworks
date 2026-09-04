@@ -17,6 +17,7 @@ class LogWidget(QtWidgets.QPlainTextEdit):
         self.setMaximumBlockCount(2000)
 
     def append_message(self, message: str, level: str = "info") -> None:
+        """Append a line, coloured by ``level``."""
         color = self.LEVEL_COLORS.get(level)
         text = message if not color else f'<span style="color:{color}">{message}</span>'
         self.appendHtml(text)
@@ -33,6 +34,7 @@ class NameEdit(QtWidgets.QLineEdit):
         self.editingFinished.connect(self._commit)
 
     def set_name(self, name: str) -> None:
+        """Show ``name`` and remember it as the value to revert to."""
         self._original = name
         self.setText(name)
 

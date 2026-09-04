@@ -22,8 +22,8 @@ from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.scene_watcher import SceneWatcher
 from tik.shared.ui.status import StatusFields
 from tik.trigger.core import ERROR, LOG, EventBus, versioning
-from tik.trigger.core.exceptions import SessionError
 from tik.trigger.core.document import EXTENSION
+from tik.trigger.core.exceptions import SessionError
 from tik.trigger.session import Session
 
 from .designer.widgets import SCENE_NODE
@@ -45,6 +45,8 @@ def _holder() -> QtWidgets.QWidget:
 
 
 class TriggerWindow(MayaToolWindow):
+    """The Trigger main window: session tabs, menus, log dock and status bar."""
+
     WINDOW_NAME = "TriggerWindow"
 
     def __init__(self, parent=None, file_browser=None, designer_factory=None) -> None:
@@ -101,7 +103,9 @@ class TriggerWindow(MayaToolWindow):
         self.tabs.currentChanged.connect(self._on_tab_changed)
         self.setCentralWidget(self.tabs)
 
-    def _action(self, menu, text, slot, shortcut: Optional[str] = None, checkable: bool = False):
+    def _action(
+        self, menu, text, slot, shortcut: Optional[str] = None, checkable: bool = False
+    ):
         action = menu.addAction(text)
         action.triggered.connect(slot)
         if shortcut:
@@ -111,122 +115,274 @@ class TriggerWindow(MayaToolWindow):
         return action
 
     def _build_menus(self, bar) -> None:
+        self._menus: dict = {}
+        self._build_file_menu(self._add_menu(bar, "&File"))
+        self._build_edit_menu(self._add_menu(bar, "&Edit"))
+        self._build_session_menu(self._add_menu(bar, "&Session"))
+        guides_menu = self._add_menu(bar, "&Guides")
+        self._build_guides_menu(guides_menu)
+        self._build_layout_menu(guides_menu)
+        self._build_tools_menu(self._add_menu(bar, "&Tools"))
+        self._build_help_menu(self._add_menu(bar, "&Help"))
+        self._update_recent_menu()
+
+    def _add_menu(self, bar, title: str) -> QtWidgets.QMenu:
         # Built with the bar as their C++ parent, not via ``bar.addMenu(str)``:
         # that hands ownership to Python, and the menu dies with the local that
         # held it -- leaving the bar showing titles backed by dead objects.
-        self._menus: dict = {}
+        menu = QtWidgets.QMenu(title, bar)
+        bar.addMenu(menu)
+        self._menus[title] = menu
+        return menu
 
-        def add_menu(title: str):
-            found = QtWidgets.QMenu(title, bar)
-            bar.addMenu(found)
-            self._menus[title] = found
-            return found
-
-        file_menu = add_menu("&File")
+    def _build_file_menu(self, file_menu) -> None:
         self._action(file_menu, "New Session", self.new_session, "Ctrl+N")
         self._action(file_menu, "Open…", self.open_session, "Ctrl+O")
         self.recent_menu = file_menu.addMenu("Open Recent")
         file_menu.addSeparator()
         self._action(file_menu, "Save", self.save_session, "Ctrl+S")
         self._action(file_menu, "Save As…", self.save_session_as, "Ctrl+Shift+S")
-        self._action(file_menu, "Increment Version", self.increment_session, "Ctrl+Alt+S")
+        self._action(
+            file_menu, "Increment Version", self.increment_session, "Ctrl+Alt+S"
+        )
         file_menu.addSeparator()
         self._action(file_menu, "Import Actions…", self.import_actions)
         self._action(file_menu, "Export Actions…", self.export_actions)
         file_menu.addSeparator()
         # a .trg is a guide *library* now, not this session's document, so it
         # gets no save shortcut -- Ctrl+S saves the session, guides included
-        self._action(file_menu, "Import Guides…", lambda: self._designer_call("import_file"))
-        self._action(file_menu, "Export Guides…", lambda: self._designer_call("export_file", ask=True))
+        self._action(
+            file_menu, "Import Guides…", lambda: self._designer_call("import_file")
+        )
+        self._action(
+            file_menu,
+            "Export Guides…",
+            lambda: self._designer_call("export_file", ask=True),
+        )
         file_menu.addSeparator()
-        self._action(file_menu, "Close Tab", lambda: self.close_tab(self.tabs.currentIndex()), "Ctrl+W")
+        self._action(
+            file_menu,
+            "Close Tab",
+            lambda: self.close_tab(self.tabs.currentIndex()),
+            "Ctrl+W",
+        )
         self._action(file_menu, "Quit", self.close, "Ctrl+Q")
 
+    def _build_edit_menu(self, edit_menu) -> None:
         # One Edit menu for both views: the verbs mean the same thing, so they
         # act on whichever of the two is in front rather than fighting over
         # Ctrl+D / F2 / Del.
-        edit_menu = add_menu("&Edit")
         self._action(edit_menu, "Undo", self.undo, "Ctrl+Z")
         self._action(edit_menu, "Redo", self.redo, "Ctrl+Y")
         edit_menu.addSeparator()
-        self._action(edit_menu, "Add…", lambda: self._either("show_palette", "show_palette"), "Tab")
-        self._action(edit_menu, "Add Child Action…", lambda: self._view_call("add_child_via_palette"))
-        self._action(edit_menu, "Duplicate", lambda: self._either("duplicate_current", "duplicate_current"), "Ctrl+D")
-        self._action(edit_menu, "Rename", lambda: self._either("rename_current", "rename_current"), "F2")
-        self._action(edit_menu, "Delete", lambda: self._either("remove_current", "delete_current"), "Del")
-        self._action(edit_menu, "Enable / Disable", lambda: self._view_call("toggle_current"), "Ctrl+E")
+        self._action(
+            edit_menu,
+            "Add…",
+            lambda: self._either("show_palette", "show_palette"),
+            "Tab",
+        )
+        self._action(
+            edit_menu,
+            "Add Child Action…",
+            lambda: self._view_call("add_child_via_palette"),
+        )
+        self._action(
+            edit_menu,
+            "Duplicate",
+            lambda: self._either("duplicate_current", "duplicate_current"),
+            "Ctrl+D",
+        )
+        self._action(
+            edit_menu,
+            "Rename",
+            lambda: self._either("rename_current", "rename_current"),
+            "F2",
+        )
+        self._action(
+            edit_menu,
+            "Delete",
+            lambda: self._either("remove_current", "delete_current"),
+            "Del",
+        )
+        self._action(
+            edit_menu,
+            "Enable / Disable",
+            lambda: self._view_call("toggle_current"),
+            "Ctrl+E",
+        )
 
-        session_menu = add_menu("&Session")
+    def _build_session_menu(self, session_menu) -> None:
         self.session_menu_action = session_menu.menuAction()
-        self._action(session_menu, "Build Rig", lambda: self._view_call("build"), "Ctrl+B")
-        self._action(session_menu, "Build & Publish", lambda: self._view_call("build_and_publish"), "Ctrl+Shift+P")
-        self._action(session_menu, "Build Until Here", lambda: self._view_call("build_until", self._current_path()), "Ctrl+Shift+B")
-        self._action(session_menu, "Run Step", lambda: self._view_call("run_step", self._current_path()), "Ctrl+R")
+        self._action(
+            session_menu, "Build Rig", lambda: self._view_call("build"), "Ctrl+B"
+        )
+        self._action(
+            session_menu,
+            "Build & Publish",
+            lambda: self._view_call("build_and_publish"),
+            "Ctrl+Shift+P",
+        )
+        self._action(
+            session_menu,
+            "Build Until Here",
+            lambda: self._view_call("build_until", self._current_path()),
+            "Ctrl+Shift+B",
+        )
+        self._action(
+            session_menu,
+            "Run Step",
+            lambda: self._view_call("run_step", self._current_path()),
+            "Ctrl+R",
+        )
         session_menu.addSeparator()
         self._action(session_menu, "Validate", self.validate_session)
-        self._action(session_menu, "Clear Statuses", lambda: self._view_call("clear_statuses"))
+        self._action(
+            session_menu, "Clear Statuses", lambda: self._view_call("clear_statuses")
+        )
 
-        guides_menu = add_menu("&Guides")
+    def _build_guides_menu(self, guides_menu) -> None:
         self.guides_menu_action = guides_menu.menuAction()
-        self._action(guides_menu, "Add Module…", lambda: self._designer_call("show_palette"))
-        self._action(guides_menu, "Add Scene Nodes", lambda: self._designer_call("create_guides", SCENE_NODE))
+        self._action(
+            guides_menu, "Add Module…", lambda: self._designer_call("show_palette")
+        )
+        self._action(
+            guides_menu,
+            "Add Scene Nodes",
+            lambda: self._designer_call("create_guides", SCENE_NODE),
+        )
         guides_menu.addSeparator()
-        self._action(guides_menu, "Select Root", lambda: self._designer_call("select_root"))
-        self._action(guides_menu, "Select All Guides", lambda: self._designer_call("select_current"))
-        self._action(guides_menu, "Mirror", lambda: self._designer_call("mirror_current"), "Ctrl+M")
+        self._action(
+            guides_menu, "Select Root", lambda: self._designer_call("select_root")
+        )
+        self._action(
+            guides_menu,
+            "Select All Guides",
+            lambda: self._designer_call("select_current"),
+        )
+        self._action(
+            guides_menu,
+            "Mirror",
+            lambda: self._designer_call("mirror_current"),
+            "Ctrl+M",
+        )
         guides_menu.addSeparator()
-        self._action(guides_menu, "Connect Input…", lambda: self._designer_call("connect_dialog"))
-        self._action(guides_menu, "Disconnect Primary Input", lambda: self._designer_call("disconnect_primary"))
-        self._action(guides_menu, "Sever Connections", lambda: self._designer_call("sever_current"), "Ctrl+Shift+D")
+        self._action(
+            guides_menu, "Connect Input…", lambda: self._designer_call("connect_dialog")
+        )
+        self._action(
+            guides_menu,
+            "Disconnect Primary Input",
+            lambda: self._designer_call("disconnect_primary"),
+        )
+        self._action(
+            guides_menu,
+            "Sever Connections",
+            lambda: self._designer_call("sever_current"),
+            "Ctrl+Shift+D",
+        )
         guides_menu.addSeparator()
-        self._action(guides_menu, "Build Selected Guides", lambda: self._designer_call("test_build"))
-        self._action(guides_menu, "Build All Guides", lambda: self._designer_call("test_build", True))
+        self._action(
+            guides_menu,
+            "Build Selected Guides",
+            lambda: self._designer_call("test_build"),
+        )
+        self._action(
+            guides_menu,
+            "Build All Guides",
+            lambda: self._designer_call("test_build", True),
+        )
         guides_menu.addSeparator()
         # The four verbs that cross the session/scene line, together: pull from
         # the scene, rebuild from the scene, wipe the scene.
-        self._action(guides_menu, "Sync From Scene", lambda: self._designer_call("sync_now"), "F6")
+        self._action(
+            guides_menu,
+            "Sync From Scene",
+            lambda: self._designer_call("sync_now"),
+            "F6",
+        )
         self.auto_sync_action = self._action(
-            guides_menu, "Auto Sync",
-            lambda: self._designer_call("set_auto_sync", self.auto_sync_action.isChecked()),
+            guides_menu,
+            "Auto Sync",
+            lambda: self._designer_call(
+                "set_auto_sync", self.auto_sync_action.isChecked()
+            ),
             checkable=True,
         )
         self.auto_sync_action.setChecked(True)
         self._action(
-            guides_menu, "Snapshot Guides From Scene…",
+            guides_menu,
+            "Snapshot Guides From Scene…",
             lambda: self._designer_call("snapshot_guides"),
         )
         guides_menu.addSeparator()
-        self._action(guides_menu, "Clear Scene Guides", lambda: self._designer_call("clear_guides"))
+        self._action(
+            guides_menu,
+            "Clear Scene Guides",
+            lambda: self._designer_call("clear_guides"),
+        )
+
+    def _build_layout_menu(self, guides_menu) -> None:
         layout_menu = QtWidgets.QMenu("Layout", guides_menu)
         guides_menu.addMenu(layout_menu)
         self._menus["Layout"] = layout_menu
-        self._action(layout_menu, "Auto Layout", lambda: self._graph_call("auto_layout"), "Ctrl+L")
+        self._action(
+            layout_menu,
+            "Auto Layout",
+            lambda: self._graph_call("auto_layout"),
+            "Ctrl+L",
+        )
         self._action(layout_menu, "Fit Graph", lambda: self._graph_call("fit"), "F")
         layout_menu.addSeparator()
-        self._action(layout_menu, "Collapse: Header Only", lambda: self._graph_call("set_selected_mode", 0), "1")
-        self._action(layout_menu, "Collapse: Connected Plugs", lambda: self._graph_call("set_selected_mode", 1), "2")
-        self._action(layout_menu, "Collapse: Everything", lambda: self._graph_call("set_selected_mode", 2), "3")
+        self._action(
+            layout_menu,
+            "Collapse: Header Only",
+            lambda: self._graph_call("set_selected_mode", 0),
+            "1",
+        )
+        self._action(
+            layout_menu,
+            "Collapse: Connected Plugs",
+            lambda: self._graph_call("set_selected_mode", 1),
+            "2",
+        )
+        self._action(
+            layout_menu,
+            "Collapse: Everything",
+            lambda: self._graph_call("set_selected_mode", 2),
+            "3",
+        )
         layout_menu.addSeparator()
         # Was "Refresh". It redraws the UI from the document; "Sync From Scene"
         # (above, in &Guides) runs the other way -- scene into the document.
         # Two neighbouring commands that both read as "update" is exactly the
         # ambiguity this whole piece of work exists to remove. The underlying
         # method stays `refresh`; only the label and shortcut assignment move.
-        self._action(layout_menu, "Redraw Views", lambda: self._designer_call("refresh"), "F5")
+        self._action(
+            layout_menu, "Redraw Views", lambda: self._designer_call("refresh"), "F5"
+        )
 
-        tools_menu = add_menu("&Tools")
-        self._action(tools_menu, "Guide Designer", lambda: self.open_guide_designer(), "Ctrl+G")
+    def _build_tools_menu(self, tools_menu) -> None:
+        self._action(
+            tools_menu, "Guide Designer", lambda: self.open_guide_designer(), "Ctrl+G"
+        )
         tools_menu.addSeparator()
-        self.shelf_action = self._action(tools_menu, "Show Action Shelf", self.toggle_shelf, "Ctrl+Shift+A", checkable=True)
+        self.shelf_action = self._action(
+            tools_menu,
+            "Show Action Shelf",
+            self.toggle_shelf,
+            "Ctrl+Shift+A",
+            checkable=True,
+        )
         self.shelf_action.setChecked(True)
-        self.log_action = self._action(tools_menu, "Show Log", self.toggle_log, "Ctrl+L", checkable=True)
+        self.log_action = self._action(
+            tools_menu, "Show Log", self.toggle_log, "Ctrl+L", checkable=True
+        )
         tools_menu.addSeparator()
         self._action(tools_menu, "Settings…", self.open_settings)
 
-        help_menu = add_menu("&Help")
+    def _build_help_menu(self, help_menu) -> None:
         self._action(help_menu, "Documentation", self.open_docs)
         self._action(help_menu, "About Trigger", self.about)
-        self._update_recent_menu()
 
     def _build_status(self, strip) -> None:
         self.status = StatusFields(strip, ("references", "maya", "version"))
@@ -236,7 +392,7 @@ class TriggerWindow(MayaToolWindow):
                 from maya import cmds
 
                 maya_text = f"Maya {cmds.about(version=True)}"
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001 - a mocked maya has no about()
                 pass
         self.status.set("maya", maya_text)
         self.status.set("version", f"tik.trigger {VERSION}")
@@ -245,15 +401,18 @@ class TriggerWindow(MayaToolWindow):
     # ---------------------------------------------------------------- tabs
     @property
     def views(self) -> list[SessionView]:
+        """One ``SessionView`` per open tab."""
         return [self.tabs.widget(index) for index in range(self.tabs.count())]
 
     @property
     def current_view(self) -> Optional[SessionView]:
+        """The view on the active tab, or None."""
         widget = self.tabs.currentWidget()
         return widget if isinstance(widget, SessionView) else None
 
     @property
     def session(self) -> Optional[Session]:
+        """The session on the active tab, or None."""
         view = self.current_view
         return view.session if view else None
 
@@ -355,11 +514,18 @@ class TriggerWindow(MayaToolWindow):
         return view.current_path() if view else None
 
     def add_session(self, session: Session) -> SessionView:
+        """Open ``session`` in a new tab and make it current."""
         view = SessionView(
-            session, file_browser=self.file_browser,
-            designer_factory=self.designer_factory, events=self.events,
+            session,
+            file_browser=self.file_browser,
+            designer_factory=self.designer_factory,
+            events=self.events,
         )
-        view.sub_tab_changed.connect(lambda index, v=view: self._on_sub_tab_changed(v, index))
+        view.sub_tab_changed.connect(
+            lambda index, session_view=view: self._on_sub_tab_changed(
+                session_view, index
+            )
+        )
         view.title_changed.connect(self._update_title)
         view.open_guides_requested.connect(self.open_guide_designer)
         view.activity.connect(self.status.set_activity)
@@ -369,11 +535,15 @@ class TriggerWindow(MayaToolWindow):
         return view
 
     def new_session(self) -> SessionView:
+        """Open an empty session in a new tab."""
         return self.add_session(Session(events=self.events))
 
     def open_session(self, path: Optional[str] = None) -> Optional[SessionView]:
+        """Open a ``.tr`` file (asking for one when ``path`` is empty)."""
         if not path:
-            path, _f = QtWidgets.QFileDialog.getOpenFileName(self, "Open session", "", FILE_FILTER)
+            path, _f = QtWidgets.QFileDialog.getOpenFileName(
+                self, "Open session", "", FILE_FILTER
+            )
         if not path:
             return None
         for view in self.views:
@@ -382,12 +552,20 @@ class TriggerWindow(MayaToolWindow):
                 return view
         session = Session.open(path, events=self.events)
         view = self.add_session(session)
-        for item in [v for v in self.views if v is not view and not v.session.actions and not v.session.file_path]:
+        untouched = [
+            other
+            for other in self.views
+            if other is not view
+            and not other.session.actions
+            and not other.session.file_path
+        ]
+        for item in untouched:
             self.tabs.removeTab(self.tabs.indexOf(item))
         self._remember(path)
         return view
 
     def save_session(self) -> None:
+        """Save the current session, asking for a path if it has none."""
         session = self.session
         if session is None:
             return
@@ -399,11 +577,14 @@ class TriggerWindow(MayaToolWindow):
         self._update_title()
 
     def save_session_as(self, path: Optional[str] = None) -> None:
+        """Save the current session to ``path`` (asking when empty)."""
         session = self.session
         if session is None:
             return
         if not path:
-            path, _f = QtWidgets.QFileDialog.getSaveFileName(self, "Save session", "", FILE_FILTER)
+            path, _f = QtWidgets.QFileDialog.getSaveFileName(
+                self, "Save session", "", FILE_FILTER
+            )
         if not path:
             return
         session.save(path)
@@ -411,6 +592,7 @@ class TriggerWindow(MayaToolWindow):
         self._update_title()
 
     def increment_session(self) -> None:
+        """Save the current session to its next version number."""
         session = self.session
         if session is None:
             return
@@ -422,11 +604,14 @@ class TriggerWindow(MayaToolWindow):
         self._update_title()
 
     def import_actions(self, path: Optional[str] = None) -> None:
+        """Append the actions of another ``.tr`` file to the current session."""
         session = self.session
         if session is None:
             return
         if not path:
-            path, _f = QtWidgets.QFileDialog.getOpenFileName(self, "Import actions", "", FILE_FILTER)
+            path, _f = QtWidgets.QFileDialog.getOpenFileName(
+                self, "Import actions", "", FILE_FILTER
+            )
         if not path:
             return
         from tik.trigger.core.document import Document
@@ -437,25 +622,36 @@ class TriggerWindow(MayaToolWindow):
         self._view_call("refresh")
 
     def export_actions(self, path: Optional[str] = None) -> None:
+        """Write the current session's actions to a ``.tr`` file."""
         session = self.session
         if session is None:
             return
         if not path:
-            path, _f = QtWidgets.QFileDialog.getSaveFileName(self, "Export actions", "", FILE_FILTER)
+            path, _f = QtWidgets.QFileDialog.getSaveFileName(
+                self, "Export actions", "", FILE_FILTER
+            )
         if not path:
             return
         session.document.save(path if path.endswith(EXTENSION) else path + EXTENSION)
 
     def ask_discard(self, session: Session) -> bool:
+        """Ask whether unsaved changes in ``session`` may be dropped."""
         answer = QtWidgets.QMessageBox.question(
-            self, "Unsaved changes", f"Discard unsaved changes in {session.name}?",
+            self,
+            "Unsaved changes",
+            f"Discard unsaved changes in {session.name}?",
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         return answer == QtWidgets.QMessageBox.Yes
 
     def close_tab(self, index: int) -> bool:
+        """Close the tab at ``index`` unless the user keeps unsaved changes."""
         view = self.tabs.widget(index)
-        if isinstance(view, SessionView) and view.session.is_modified and not self.ask_discard(view.session):
+        if (
+            isinstance(view, SessionView)
+            and view.session.is_modified
+            and not self.ask_discard(view.session)
+        ):
             return False
         self._drop_designer(view)
         self.tabs.removeTab(index)
@@ -468,11 +664,13 @@ class TriggerWindow(MayaToolWindow):
         # The session's stack on both tabs: guide *structure* is a document
         # edit. Moving a guide is a scene edit and stays on Maya's stack,
         # undone with focus in the viewport.
+        """Undo the last document edit of the current session."""
         session = self.session
         if session is not None and session.undo():
             self._after_document_change()
 
     def redo(self) -> None:
+        """Redo the last undone document edit of the current session."""
         session = self.session
         if session is not None and session.redo():
             self._after_document_change()
@@ -494,6 +692,7 @@ class TriggerWindow(MayaToolWindow):
         designer.refresh()
 
     def validate_session(self) -> None:
+        """Report the current session's problems, or that there are none."""
         session = self.session
         if session is None:
             return
@@ -508,23 +707,34 @@ class TriggerWindow(MayaToolWindow):
             self.status.set_activity("Session valid")
 
     def toggle_shelf(self) -> None:
+        """Show or hide the action shelf of the current tab."""
         view = self.current_view
         if view is not None:
             view.set_shelf_visible(not view.shelf_visible)
             self.shelf_action.setChecked(view.shelf_visible)
 
     def toggle_log(self) -> None:
+        """Show or hide the log dock."""
         self.log_dock.setVisible(not self.log_dock.isVisible())
         self.log_action.setChecked(self.log_dock.isVisible())
 
     def open_settings(self) -> None:
-        QtWidgets.QMessageBox.information(self, "Settings", "Settings are not available yet.")
+        """Placeholder until the settings dialog exists."""
+        QtWidgets.QMessageBox.information(
+            self, "Settings", "Settings are not available yet."
+        )
 
     def open_docs(self) -> None:
-        QtGui.QDesktopServices.openUrl(QtCore.QUrl("https://github.com/masqu3rad3/tikworks"))
+        """Open the project page in the browser."""
+        QtGui.QDesktopServices.openUrl(
+            QtCore.QUrl("https://github.com/masqu3rad3/tikworks")
+        )
 
     def about(self) -> None:
-        QtWidgets.QMessageBox.about(self, "About Trigger", f"Trigger {VERSION}\nModular rigging on tik.maya.")
+        """Show the version box."""
+        QtWidgets.QMessageBox.about(
+            self, "About Trigger", f"Trigger {VERSION}\nModular rigging on tik.maya."
+        )
 
     # -------------------------------------------------------------- recent
     def _remember(self, path: str) -> None:
@@ -540,12 +750,16 @@ class TriggerWindow(MayaToolWindow):
         if not self.recent_files:
             self.recent_menu.addAction("(none)").setEnabled(False)
         for path in self.recent_files:
-            self.recent_menu.addAction(path, lambda checked=False, p=path: self.open_session(p))
+            self.recent_menu.addAction(
+                path, lambda checked=False, file_path=path: self.open_session(file_path)
+            )
 
     # -------------------------------------------------------------- title
     def _update_title(self) -> None:
         for index, view in enumerate(self.views):
-            self.tabs.setTabText(index, view.session.name + ("*" if view.session.is_modified else ""))
+            self.tabs.setTabText(
+                index, view.session.name + ("*" if view.session.is_modified else "")
+            )
         view = self.current_view
         if view is not None and view.on_designer_tab:
             self.setWindowTitle(f"Trigger {VERSION} — {view.session.name} — Guides")
@@ -561,9 +775,16 @@ class TriggerWindow(MayaToolWindow):
             _stem, version, _suffix = versioning.parse(session.file_path)
             if version is not None:
                 latest = versioning.latest_version(session.file_path)
-                state = "latest" if latest is None or versioning.parse(latest)[1] <= version else f"older · latest v{versioning.parse(latest)[1]:03d}"
+                state = (
+                    "latest"
+                    if latest is None or versioning.parse(latest)[1] <= version
+                    else f"older · latest v{versioning.parse(latest)[1]:03d}"
+                )
         references = sum(1 for handle in session.walk() if handle.type == "reference")
-        self.status.set("references", f"{references} reference(s)" + (f" · {state}" if state else ""))
+        self.status.set(
+            "references",
+            f"{references} reference(s)" + (f" · {state}" if state else ""),
+        )
 
     # ------------------------------------------------------------ guides
     # --------------------------------------------------------------- guides
@@ -621,7 +842,9 @@ class TriggerWindow(MayaToolWindow):
             # Designer is the ask to see them again
             designer = view.designer
             try:
-                if designer is not None and getattr(designer.guides, "dismissed", False):
+                if designer is not None and getattr(
+                    designer.guides, "dismissed", False
+                ):
                     designer.guides.restore()
                     designer.refresh()
             except Exception as error:  # noqa: BLE001 - keep the tool alive

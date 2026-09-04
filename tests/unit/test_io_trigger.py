@@ -1,4 +1,4 @@
-"""Tests for tik.trigger.io module - ConfigIO and related functions are now in tik.shared.io and tik.core.jsonio."""
+"""tik.shared.io and tik.core.jsonio (formerly tik.trigger.io)."""
 
 import json
 import tempfile
@@ -21,9 +21,9 @@ class TestSharedIOInit:
         """Test IO initialization with a path."""
         from tik.shared.io import IO
 
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-            io = IO(f.name)
-            assert io.file_path == Path(f.name)
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as handle:
+            io = IO(handle.name)
+            assert io.file_path == Path(handle.name)
 
     def test_init_without_extension_raises(self):
         """Test IO raises Exception without extension."""
@@ -69,9 +69,9 @@ class TestSharedIORead:
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
-        ) as f:
-            json.dump({"key": "value", "number": 42}, f)
-            temp_path = f.name
+        ) as handle:
+            json.dump({"key": "value", "number": 42}, handle)
+            temp_path = handle.name
 
         io = IO(temp_path)
         data = io.read()
@@ -91,9 +91,9 @@ class TestSharedIORead:
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
-        ) as f:
-            json.dump({"custom": "data"}, f)
-            temp_path = f.name
+        ) as handle:
+            json.dump({"custom": "data"}, handle)
+            temp_path = handle.name
 
         io = IO("other_file.json")
         data = io.read(temp_path)
@@ -113,8 +113,8 @@ class TestSharedIOWrite:
             io.write({"test": "value", "list": [1, 2, 3]})
 
             assert file_path.exists()
-            with open(file_path, "r") as f:
-                data = json.load(f)
+            with open(file_path, "r") as handle:
+                data = json.load(handle)
             assert data == {"test": "value", "list": [1, 2, 3]}
 
     def test_write_with_custom_path(self):
@@ -129,8 +129,8 @@ class TestSharedIOWrite:
             io.write({"key": "value"}, custom_path)
 
             assert custom_path.exists()
-            with open(custom_path, "r") as f:
-                data = json.load(f)
+            with open(custom_path, "r") as handle:
+                data = json.load(handle)
             assert data == {"key": "value"}
 
     def test_write_creates_parent_folders(self):
@@ -152,8 +152,8 @@ class TestSharedIOStaticMethods:
         """Test file_exists returns True for existing file."""
         from tik.shared.io import IO
 
-        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
-            temp_path = f.name
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as handle:
+            temp_path = handle.name
 
         assert IO.file_exists(temp_path) is True
 
@@ -169,9 +169,9 @@ class TestSharedIOStaticMethods:
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
-        ) as f:
-            json.dump({"valid": True}, f)
-            temp_path = f.name
+        ) as handle:
+            json.dump({"valid": True}, handle)
+            temp_path = handle.name
 
         data = IO._load_json(temp_path)
         assert data == {"valid": True}
@@ -182,9 +182,9 @@ class TestSharedIOStaticMethods:
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
-        ) as f:
-            f.write("not valid json {")
-            temp_path = f.name
+        ) as handle:
+            handle.write("not valid json {")
+            temp_path = handle.name
 
         with pytest.raises(Exception):
             IO._load_json(temp_path)
@@ -199,9 +199,9 @@ class TestJsonIOFunctions:
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
-        ) as f:
-            json.dump({"function": "test"}, f)
-            temp_path = f.name
+        ) as handle:
+            json.dump({"function": "test"}, handle)
+            temp_path = handle.name
 
         data = load(temp_path)
         assert data == {"function": "test"}
@@ -215,6 +215,6 @@ class TestJsonIOFunctions:
             save(file_path, {"written": True})
 
             assert file_path.exists()
-            with open(file_path, "r") as f:
-                data = json.load(f)
+            with open(file_path, "r") as handle:
+                data = json.load(handle)
             assert data == {"written": True}

@@ -2,7 +2,7 @@
 
 import pytest
 
-from tik.core.benchmark import BenchmarkResult, Benchmark, _BenchmarkContext
+from tik.core.benchmark import Benchmark, BenchmarkResult, _BenchmarkContext
 from tik.maya.core.benchmark import MayaBenchmark
 
 
@@ -180,7 +180,6 @@ class TestMayaBenchmark:
 
     def test_maya_benchmark_initialization(self):
         """Test MayaBenchmark initializes correctly."""
-        from maya import cmds
 
         benchmark = MayaBenchmark()
         assert benchmark.results == {}
@@ -274,4 +273,3 @@ class TestMayaBenchmark:
         assert benchmark.results["result_test"] is result
         assert result.iterations == 2
         assert len(result.times) == 2
-

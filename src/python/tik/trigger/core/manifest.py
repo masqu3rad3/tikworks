@@ -114,12 +114,18 @@ class GuideLayout:
         for role in self.roles:
             if (role, 0) not in present:
                 problems.append(f"missing guide '{role}'")
-        multi_count = sum(1 for role, _index in pairs if role == self.multi) if self.multi else 0
+        multi_count = (
+            sum(1 for role, _index in pairs if role == self.multi) if self.multi else 0
+        )
         if self.multi:
             if multi_count < self.min_count:
-                problems.append(f"needs at least {self.min_count} '{self.multi}' guides")
+                problems.append(
+                    f"needs at least {self.min_count} '{self.multi}' guides"
+                )
             if self.max_count and multi_count > self.max_count:
-                problems.append(f"allows at most {self.max_count} '{self.multi}' guides")
+                problems.append(
+                    f"allows at most {self.max_count} '{self.multi}' guides"
+                )
         for role, _index in pairs:
             if role not in self.all_roles:
                 problems.append(f"unknown guide role '{role}'")

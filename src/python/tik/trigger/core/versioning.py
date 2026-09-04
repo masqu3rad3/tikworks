@@ -20,6 +20,7 @@ def parse(file_path) -> tuple[str, Optional[int], str]:
 
 
 def with_version(file_path, version: int) -> Path:
+    """``path`` renamed to version ``version`` (``name_v003.tr``)."""
     path = Path(file_path)
     stem, _current, suffix = parse(path)
     return path.with_name(f"{stem}_v{version:0{PADDING}d}{suffix}")
@@ -55,7 +56,11 @@ def next_version(file_path) -> Path:
 
 
 def resolve(file_path, version: str = "") -> Path:
-    """Resolve ``version`` (``""``/``"pinned"`` = as given, ``"latest"``, or ``"v007"``/``7``)."""
+    """Resolve ``version``.
+
+    ``""`` or ``"pinned"`` keep the file as given; ``"latest"`` picks the
+    newest; ``"v007"`` or ``7`` pick that version.
+    """
     path = Path(file_path)
     if not version or version == "pinned":
         return path

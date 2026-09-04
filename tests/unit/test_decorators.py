@@ -1,12 +1,16 @@
 import sys
+
 import pytest
 from maya import cmds
-from tik.maya.core.decorators import add_aliases, alias, undo, keepselection, protected
+
+from tik.maya.core.decorators import add_aliases, alias, keepselection, protected, undo
+
 
 # Helper for alias test at module level
 @alias("module_level_alias")
 def module_level_func():
     return "module_level"
+
 
 class TestAddAliases:
     def test_add_aliases_proxies_property(self):
@@ -30,6 +34,7 @@ class TestAddAliases:
         assert obj.original() == "called"
         assert obj.aliased() == "called"
 
+
 class TestAlias:
     def test_alias_injects_into_module(self):
         # The decorator runs at definition time.
@@ -50,6 +55,7 @@ class TestAlias:
         assert hasattr(current_module, "dynamic_alias")
         assert current_module.dynamic_alias is local_func
         assert current_module.dynamic_alias() == "dynamic"
+
 
 class TestUndo:
     def test_undo_groups_operations(self):
@@ -88,6 +94,7 @@ class TestUndo:
         cmds.undo()
         assert not cmds.objExists("cube1")
 
+
 class TestKeepSelection:
     def test_keepselection_restores_selection(self):
         cmds.file(new=True, force=True)
@@ -121,6 +128,7 @@ class TestKeepSelection:
             fail_select()
 
         assert cmds.ls(selection=True)[0] == "c1"
+
 
 class TestProtected:
     def test_protected_method_raises_when_node_missing(self):

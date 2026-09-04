@@ -1,15 +1,20 @@
-"""Pipeline UI: model tree, DnD nesting, palette, settings, statuses, main window (no Maya)."""
+"""Pipeline UI: tree model, nesting, palette, settings, statuses, main window."""
 
 import pytest
 
 from tik.core.fields import FileField
 from tik.shared.ui.Qt import QtCore
-from tik.trigger.core import Action, IntField, StringField, clear_registries, register_action
+from tik.trigger.core import (
+    Action,
+    IntField,
+    StringField,
+    clear_registries,
+    register_action,
+)
 from tik.trigger.session import Session
 from tik.trigger.ui.main import TriggerWindow
-from tik.trigger.ui.model import MIME_PATH, MIME_TYPE, EnabledRole, LinkedRole, StatusRole
+from tik.trigger.ui.model import MIME_TYPE, EnabledRole, LinkedRole, StatusRole
 from tik.trigger.ui.session_view import SessionView
-
 
 CALLS: list = []
 
@@ -102,14 +107,14 @@ def test_add_via_palette_and_shelf(view):
 
 
 def test_settings_panel_edits_session(view):
-    handle = view.add_action("mark")
+    view.add_action("mark")
     view.settings.form.widget("amount").setValue(5)
     assert view.session["mark"].amount == 5
     view.settings.form.widget("tag").setText("hello")
     view.settings.form.widget("tag").editingFinished.emit()
     assert view.session["mark"].tag == "hello"
     assert view.session.is_modified
-    weights = view.add_action("weights")
+    view.add_action("weights")
     assert view.settings.save_button.isVisible()
     view.settings.save_button.click()
     assert ("saved", "weights") in CALLS
@@ -122,7 +127,9 @@ def test_drag_drop_nesting_and_reorder(view):
     model = view.model
     assert _paths(model) == ["mark", "mark1", "mark2"]
     data = model.mimeData([model.index_for_path("mark2")])
-    assert model.dropMimeData(data, QtCore.Qt.MoveAction, -1, 0, model.index_for_path("mark"))
+    assert model.dropMimeData(
+        data, QtCore.Qt.MoveAction, -1, 0, model.index_for_path("mark")
+    )
     assert _paths(model) == ["mark", "mark/mark2", "mark1"]
     data = model.mimeData([model.index_for_path("mark1")])
     assert model.dropMimeData(data, QtCore.Qt.MoveAction, 0, 0, QtCore.QModelIndex())
@@ -144,12 +151,19 @@ def test_reference_rows_are_linked_and_checkable(view, tmp_path):
     view.add_action("reference")
     view.session["reference"].file = "rigs/base_v001.tr"
     view.refresh()
-    assert _paths(view.model) == ["reference", "reference/kin", "reference/scripts", "reference/scripts/head"]
+    assert _paths(view.model) == [
+        "reference",
+        "reference/kin",
+        "reference/scripts",
+        "reference/scripts/head",
+    ]
     head = view.model.index_for_path("reference/scripts/head")
     assert view.model.data(head, LinkedRole) is True
     assert view.model.data(head, QtCore.Qt.CheckStateRole) == QtCore.Qt.Checked
     assert view.model.setData(head, QtCore.Qt.Unchecked, QtCore.Qt.CheckStateRole)
-    assert view.session["reference"].node.settings["overrides"]["scripts/head"] == {"enabled": False}
+    assert view.session["reference"].node.settings["overrides"]["scripts/head"] == {
+        "enabled": False
+    }
     assert view.model.data(head, EnabledRole) is False
     # editing a linked row's setting creates an override, shown in the panel
     view.select_path("reference/kin")
@@ -195,6 +209,7 @@ def test_build_updates_statuses_and_log(view):
 
 def _stub_designer(scene=None):
     from stub import StubScene
+
     from tik.trigger.ui.designer import GuideDesigner
 
     return GuideDesigner(scene=scene if scene is not None else StubScene())
@@ -215,7 +230,7 @@ def test_a_session_tab_holds_both_views(qapp):
     window = TriggerWindow(designer_factory=_stub_designer)
     window.show()
     view = window.views[0]
-    titles = [view.sub_tabs.tabText(i) for i in range(view.sub_tabs.count())]
+    titles = [view.sub_tabs.tabText(index) for index in range(view.sub_tabs.count())]
     assert titles == ["Session", "Guide Designer"]
     window.close()
 
@@ -237,7 +252,6 @@ def test_open_guide_designer_shows_the_guides_view(qapp):
     assert window.views[0].on_designer_tab
     assert window.windowTitle().endswith("Guides")
     window.close()
-
 
 
 def test_main_window_tabs_and_files(qapp, tmp_path):
@@ -298,12 +312,15 @@ def test_reference_children_appear_after_file_edit(view, tmp_path):
 # ------------------------------------------------- graph view: space ports
 def _graph_scene():
     from tik.trigger.ui.graph import GraphScene
+    from tik.trigger.ui.graph.items import NodeSpec
 
     scene = GraphScene()
-    scene.add_node("body", "body", "Base", [], ["root"], "#888888")
-    scene.add_node("head", "head", "Base", [], ["root"], "#888888")
+    scene.add_node(NodeSpec("body", "body", "Base", [], ["root"], "#888888"))
+    scene.add_node(NodeSpec("head", "head", "Base", [], ["root"], "#888888"))
     scene.add_node(
-        "L_arm", "L_arm", "Arm", ["root"], ["hand"], "#888888", spaces=["ik_hand"]
+        NodeSpec(
+            "L_arm", "L_arm", "Arm", ["root"], ["hand"], "#888888", spaces=["ik_hand"]
+        )
     )
     return scene
 
@@ -324,11 +341,13 @@ def test_single_input_port_keeps_one_wire():
 
 def test_a_node_without_spaces_still_builds():
     from tik.trigger.ui.graph import GraphScene
+    from tik.trigger.ui.graph.items import NodeSpec
 
     scene = GraphScene()
-    node = scene.add_node("body", "body", "Base", ["root"], ["root"], "#888888")
+    node = scene.add_node(
+        NodeSpec("body", "body", "Base", ["root"], ["root"], "#888888")
+    )
     assert set(node.inputs) == {"root"}
-
 
 
 def test_space_rows_become_ports():
@@ -369,8 +388,12 @@ def test_shelf_drop_of_a_build_only_action_is_refused_by_the_publish_model(qapp)
     model = PipelineModel(session, phase=PUBLISH)
     data = QtCore.QMimeData()
     data.setData(MIME_TYPE, b"mark")  # build-only
-    assert not model.canDropMimeData(data, QtCore.Qt.CopyAction, -1, -1, QtCore.QModelIndex())
-    assert not model.dropMimeData(data, QtCore.Qt.CopyAction, -1, -1, QtCore.QModelIndex())
+    assert not model.canDropMimeData(
+        data, QtCore.Qt.CopyAction, -1, -1, QtCore.QModelIndex()
+    )
+    assert not model.dropMimeData(
+        data, QtCore.Qt.CopyAction, -1, -1, QtCore.QModelIndex()
+    )
     assert session.publish.paths() == []
 
     ok = QtCore.QMimeData()
@@ -400,7 +423,9 @@ def test_dragging_a_both_scoped_action_between_the_two_trees(qapp):
     publish_model = PipelineModel(session, phase=PUBLISH)
 
     data = build_model.mimeData([build_model.index(0, 0)])
-    assert publish_model.dropMimeData(data, QtCore.Qt.MoveAction, -1, -1, QtCore.QModelIndex())
+    assert publish_model.dropMimeData(
+        data, QtCore.Qt.MoveAction, -1, -1, QtCore.QModelIndex()
+    )
     assert session.paths() == []
     assert session.publish.paths() == ["hook"]
 
@@ -415,7 +440,9 @@ def test_dragging_a_build_only_action_into_publish_is_refused_and_changes_nothin
     publish_model = PipelineModel(session, phase=PUBLISH)
 
     data = build_model.mimeData([build_model.index(0, 0)])
-    assert not publish_model.dropMimeData(data, QtCore.Qt.MoveAction, -1, -1, QtCore.QModelIndex())
+    assert not publish_model.dropMimeData(
+        data, QtCore.Qt.MoveAction, -1, -1, QtCore.QModelIndex()
+    )
     assert session.paths() == ["kine"]
     assert session.publish.paths() == []
 
@@ -504,7 +531,9 @@ def test_publish_rows_offer_no_run_affordance(qapp):
     build_handle = view.models[BUILD].handle(view.model.index(0, 0))
     view.settings.set_handle(build_handle)
     assert view.settings.run_button.isVisibleTo(view.settings)
-    build_labels = [item.text() for item in view.context_menu_actions(BUILD, build_handle)]
+    build_labels = [
+        item.text() for item in view.context_menu_actions(BUILD, build_handle)
+    ]
     assert "Run step" in build_labels
 
 
@@ -541,6 +570,8 @@ def test_statuses_are_routed_to_the_right_tree(qapp):
     assert view.build_and_publish()
 
     assert view.models[BUILD].data(view.model.index(0, 0), StatusRole) == "done"
-    assert view.models[PUBLISH].data(view.publish_model.index(0, 0), StatusRole) == "done"
+    assert (
+        view.models[PUBLISH].data(view.publish_model.index(0, 0), StatusRole) == "done"
+    )
     view.clear_statuses()
     assert view.models[PUBLISH].data(view.publish_model.index(0, 0), StatusRole) == ""

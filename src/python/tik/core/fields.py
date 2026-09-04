@@ -105,6 +105,7 @@ class Field:
         return value
 
     def validate(self, value: Any) -> Any:
+        """Coerce ``value`` and check ``choices``; raises ``FieldValidationError``."""
         value = self.coerce(value)
         if self.choices is not None and value not in self.choices:
             raise FieldValidationError(
@@ -137,9 +138,12 @@ class Field:
 
 
 class IntField(Field):
+    """A whole number."""
+
     type_name = "int"
 
     def coerce(self, value):
+        """Accept ints and integral floats; never bools."""
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise FieldValidationError(self.name, value, "must be a number")
         if isinstance(value, float) and not value.is_integer():
@@ -148,18 +152,24 @@ class IntField(Field):
 
 
 class FloatField(Field):
+    """A real number."""
+
     type_name = "float"
 
     def coerce(self, value):
+        """Accept ints and floats; never bools."""
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise FieldValidationError(self.name, value, "must be a number")
         return float(value)
 
 
 class BoolField(Field):
+    """A flag."""
+
     type_name = "bool"
 
     def coerce(self, value):
+        """Accept bools and the ints 0 and 1."""
         if isinstance(value, bool):
             return value
         if isinstance(value, int) and value in (0, 1):
@@ -168,9 +178,12 @@ class BoolField(Field):
 
 
 class StringField(Field):
+    """Free text."""
+
     type_name = "string"
 
     def coerce(self, value):
+        """Accept strings only."""
         if not isinstance(value, str):
             raise FieldValidationError(self.name, value, "must be a string")
         return value
@@ -205,25 +218,34 @@ class VectorField(Field):
         super().__init__(tuple(float(item) for item in default), **kwargs)
 
     def coerce(self, value):
+        """Accept any sequence of ``size`` numbers, as a tuple of floats."""
         try:
             items = tuple(float(item) for item in value)
         except (TypeError, ValueError):
-            raise FieldValidationError(self.name, value, "must be a sequence of numbers")
+            raise FieldValidationError(
+                self.name, value, "must be a sequence of numbers"
+            )
         if len(items) != self.size:
             raise FieldValidationError(self.name, value, f"must have {self.size} items")
         return items
 
     def validate(self, value):
         # min/max apply per component
+        """Coerce, then check ``min`` and ``max`` per component."""
         items = self.coerce(value)
         for item in items:
             if self.min is not None and item < self.min:
-                raise FieldValidationError(self.name, value, f"components must be >= {self.min}")
+                raise FieldValidationError(
+                    self.name, value, f"components must be >= {self.min}"
+                )
             if self.max is not None and item > self.max:
-                raise FieldValidationError(self.name, value, f"components must be <= {self.max}")
+                raise FieldValidationError(
+                    self.name, value, f"components must be <= {self.max}"
+                )
         return items
 
     def to_schema(self) -> dict:
+        """The base schema plus ``size`` and ``labels``."""
         data = super().to_schema()
         data["default"] = list(self.default)
         data["size"] = self.size
@@ -254,11 +276,14 @@ class ListField(Field):
 
     type_name = "list"
 
-    def __init__(self, default=None, *, item_type: Optional[type] = None, **kwargs) -> None:
+    def __init__(
+        self, default=None, *, item_type: Optional[type] = None, **kwargs
+    ) -> None:
         self.item_type = item_type
         super().__init__(list(default) if default else [], **kwargs)
 
     def coerce(self, value):
+        """Accept any non-string iterable; items are coerced to ``item_type``."""
         if isinstance(value, (str, bytes)) or not isinstance(value, Iterable):
             raise FieldValidationError(self.name, value, "must be a list")
         items = list(value)
@@ -271,9 +296,11 @@ class ListField(Field):
         return items
 
     def validate(self, value):
+        """Same as ``coerce``; lists have no further constraints."""
         return self.coerce(value)
 
     def to_schema(self) -> dict:
+        """The base schema plus ``item_type``."""
         data = super().to_schema()
         data["item_type"] = self.item_type.__name__ if self.item_type else None
         return data
@@ -284,11 +311,14 @@ class NodeRefField(Field):
 
     type_name = "node"
 
-    def __init__(self, default: str = "", *, node_types: Sequence[str] = (), **kwargs) -> None:
+    def __init__(
+        self, default: str = "", *, node_types: Sequence[str] = (), **kwargs
+    ) -> None:
         self.node_types = list(node_types)
         super().__init__(default, **kwargs)
 
     def coerce(self, value):
+        """A node name as a string; None becomes ``""``."""
         if value is None:
             return ""
         if not isinstance(value, str):
@@ -296,6 +326,7 @@ class NodeRefField(Field):
         return value
 
     def to_schema(self) -> dict:
+        """The base schema plus ``node_types``."""
         data = super().to_schema()
         data["node_types"] = list(self.node_types)
         return data
@@ -316,11 +347,14 @@ class FileField(Field):
     ) -> None:
         if mode not in ("open", "save", "dir"):
             raise ValueError("mode must be 'open', 'save' or 'dir'")
-        self.extensions = [ext if ext.startswith(".") else f".{ext}" for ext in extensions]
+        self.extensions = [
+            ext if ext.startswith(".") else f".{ext}" for ext in extensions
+        ]
         self.mode = mode
         super().__init__(default, **kwargs)
 
     def coerce(self, value):
+        """A path string with forward slashes; None becomes ``""``."""
         if value is None:
             return ""
         if not isinstance(value, str):
@@ -328,6 +362,7 @@ class FileField(Field):
         return value.replace("\\", "/")
 
     def to_schema(self) -> dict:
+        """The base schema plus ``extensions`` and ``mode``."""
         data = super().to_schema()
         data["extensions"] = list(self.extensions)
         data["mode"] = self.mode
@@ -351,6 +386,7 @@ class Column:
     label: str = ""
 
     def display(self) -> str:
+        """The column header: ``label`` or the name title-cased."""
         return self.label or self.name.replace("_", " ").title()
 
 
@@ -363,11 +399,14 @@ class TableField(Field):
 
     type_name = "table"
 
-    def __init__(self, default=None, *, columns: Sequence[Column] = (), **kwargs) -> None:
+    def __init__(
+        self, default=None, *, columns: Sequence[Column] = (), **kwargs
+    ) -> None:
         self.columns = tuple(columns)
         super().__init__([dict(row) for row in default] if default else [], **kwargs)
 
     def coerce(self, value):
+        """Accept a list of row dicts; unknown columns dropped, missing defaulted."""
         if value is None:
             return []
         if isinstance(value, (str, bytes)) or not isinstance(value, Iterable):
@@ -376,7 +415,9 @@ class TableField(Field):
         rows = []
         for row in value:
             if not isinstance(row, dict):
-                raise FieldValidationError(self.name, value, "each row must be a mapping")
+                raise FieldValidationError(
+                    self.name, value, "each row must be a mapping"
+                )
             unknown = set(row) - known
             if unknown:
                 raise FieldValidationError(
@@ -388,7 +429,8 @@ class TableField(Field):
                 if column.kind == "choice" and column.choices and entry:
                     if entry not in column.choices:
                         raise FieldValidationError(
-                            self.name, value,
+                            self.name,
+                            value,
                             f"'{column.name}' must be one of {list(column.choices)}",
                         )
                 filled[column.name] = entry
@@ -396,9 +438,11 @@ class TableField(Field):
         return rows
 
     def validate(self, value):
+        """Same as ``coerce``; rows are validated per column there."""
         return self.coerce(value)
 
     def to_schema(self) -> dict:
+        """The base schema plus the column definitions."""
         schema = super().to_schema()
         schema["columns"] = [
             {
@@ -422,6 +466,7 @@ class DictField(Field):
         super().__init__(dict(default) if default else {}, **kwargs)
 
     def coerce(self, value):
+        """A deep copy of the mapping; None becomes ``{}``."""
         if value is None:
             return {}
         if not isinstance(value, dict):
@@ -429,6 +474,7 @@ class DictField(Field):
         return copy.deepcopy(value)
 
     def validate(self, value):
+        """Same as ``coerce``; mappings have no further constraints."""
         return self.coerce(value)
 
 

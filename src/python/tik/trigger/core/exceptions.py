@@ -59,7 +59,9 @@ class BuildError(ModuleError):
         module_type: The failing module type, when known.
     """
 
-    def __init__(self, message: str, instance_id: str = "", module_type: str = "") -> None:
+    def __init__(
+        self, message: str, instance_id: str = "", module_type: str = ""
+    ) -> None:
         self.instance_id = instance_id
         self.module_type = module_type
         super().__init__(message)

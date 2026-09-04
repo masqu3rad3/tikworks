@@ -1,4 +1,4 @@
-"""Maya scene: reparenting guides from the GuideLayout handler (drag-parenting in the Designer)."""
+"""Reparenting guides through the scene handler (drag-parenting in the Designer)."""
 
 import pytest
 from maya import cmds
@@ -19,7 +19,9 @@ def test_reparent_moves_root_guide_and_updates_parent_ref():
     assert cmds.listRelatives(tail.root.long_name, parent=True)[0] == body.root.name
     guides.reparent(tail, None)
     assert tail.parent is None
-    assert cmds.listRelatives(tail.root.long_name, parent=True)[0] == "trigger_guides_grp"
+    assert (
+        cmds.listRelatives(tail.root.long_name, parent=True)[0] == "trigger_guides_grp"
+    )
     with pytest.raises(GuideError):
         guides.reparent(tail, tail)
     guides.reparent(tail, body)

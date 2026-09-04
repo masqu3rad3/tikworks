@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-KIND = "trg_kind"  # "guide" | "rig" | "deform" | "controller" | "output" | "input" | "rig_root"
+# "guide" | "rig" | "deform" | "controller" | "output" | "input" | "rig_root"
+KIND = "trg_kind"
 MODULE = "trg_module"  # module type name
 INSTANCE = "trg_instance"  # instance uuid
 ROLE = "trg_role"  # guide role / output name / input name

@@ -10,9 +10,13 @@ from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 
 
 class TileEntry:
+    """What one tile shows and drags: key, label, category and tooltip."""
+
     __slots__ = ("key", "label", "category", "tooltip")
 
-    def __init__(self, key: str, label: str, category: str = "", tooltip: str = "") -> None:
+    def __init__(
+        self, key: str, label: str, category: str = "", tooltip: str = ""
+    ) -> None:
         self.key = key
         self.label = label
         self.category = category
@@ -20,10 +24,14 @@ class TileEntry:
 
 
 class Tile(QtWidgets.QToolButton):
+    """A draggable button in a ``TileGrid``."""
+
     WIDTH = 66
     HEIGHT = 58
 
-    def __init__(self, entry: TileEntry, color: str, mime_type: str, parent=None) -> None:
+    def __init__(
+        self, entry: TileEntry, color: str, mime_type: str, parent=None
+    ) -> None:
         super().__init__(parent)
         self.entry = entry
         self.mime_type = mime_type
@@ -42,7 +50,11 @@ class Tile(QtWidgets.QToolButton):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
-        if self._press is not None and (event.pos() - self._press).manhattanLength() > QtWidgets.QApplication.startDragDistance():
+        if (
+            self._press is not None
+            and (event.pos() - self._press).manhattanLength()
+            > QtWidgets.QApplication.startDragDistance()
+        ):
             drag = QtGui.QDrag(self)
             mime = QtCore.QMimeData()
             mime.setData(self.mime_type, self.entry.key.encode("utf-8"))
@@ -63,7 +75,14 @@ class TileGrid(QtWidgets.QScrollArea):
 
     activated = QtCore.Signal(str)
 
-    def __init__(self, entries: Sequence[TileEntry], mime_type: str, parent=None, colors: Optional[dict] = None, columns_hint: int = 2) -> None:
+    def __init__(
+        self,
+        entries: Sequence[TileEntry],
+        mime_type: str,
+        parent=None,
+        colors: Optional[dict] = None,
+        columns_hint: int = 2,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("TileGrid")
         self.setWidgetResizable(True)
@@ -73,7 +92,9 @@ class TileGrid(QtWidgets.QScrollArea):
         self.mime_type = mime_type
         self.colors = colors or theme.CATEGORY
         self.tiles: dict[str, Tile] = {}
-        self._sections: list[tuple[QtWidgets.QLabel, list[Tile], QtWidgets.QGridLayout]] = []
+        self._sections: list[
+            tuple[QtWidgets.QLabel, list[Tile], QtWidgets.QGridLayout]
+        ] = []
         self._columns = 0
         body = QtWidgets.QWidget()
         self._layout = QtWidgets.QVBoxLayout(body)
@@ -101,13 +122,20 @@ class TileGrid(QtWidgets.QScrollArea):
                 self._layout.addWidget(holder)
                 tiles = []
                 self._sections.append((header, tiles, grid))
-            tile = Tile(entry, self.colors.get(entry.category, theme.CATEGORY["utility"]), self.mime_type)
-            tile.clicked.connect(lambda _c=False, key=entry.key: self.activated.emit(key))
+            tile = Tile(
+                entry,
+                self.colors.get(entry.category, theme.CATEGORY["utility"]),
+                self.mime_type,
+            )
+            tile.clicked.connect(
+                lambda _c=False, key=entry.key: self.activated.emit(key)
+            )
             tiles.append(tile)
             self.tiles[entry.key] = tile
 
     @property
     def columns(self) -> int:
+        """How many tiles fit per row at the current width."""
         return self._columns
 
     def _reflow(self, columns: int) -> None:
@@ -119,7 +147,12 @@ class TileGrid(QtWidgets.QScrollArea):
             for tile in tiles:
                 grid.removeWidget(tile)
             for index, tile in enumerate(tiles):
-                grid.addWidget(tile, index // columns, index % columns, QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
+                grid.addWidget(
+                    tile,
+                    index // columns,
+                    index % columns,
+                    QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop,
+                )
             for column in range(columns, grid.columnCount()):
                 grid.setColumnStretch(column, 0)
 

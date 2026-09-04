@@ -10,9 +10,8 @@ from maya import cmds
 from maya.api import OpenMaya
 
 import tik.maya.types.skincluster as skincluster_module
+from tik.maya.core.deformer import DeformerWeights, ShapeInfo, WeightLayer, WeightsIO
 from tik.maya.types.skincluster import SkinCluster
-from tik.maya.core.deformer import DeformerWeights
-from tik.maya.core.deformer import ShapeInfo, WeightLayer, WeightsIO
 
 
 def _create_joint_chain(prefix: str) -> List[str]:
@@ -47,7 +46,9 @@ def skincluster_setup() -> Dict[str, object]:
     }
 
 
-def _build_weights(influence_count: int, vertex_count: int, primary: float) -> List[float]:
+def _build_weights(
+    influence_count: int, vertex_count: int, primary: float
+) -> List[float]:
     weights = []
     for _vertex_index in range(vertex_count):
         weights.append(primary)
@@ -57,7 +58,9 @@ def _build_weights(influence_count: int, vertex_count: int, primary: float) -> L
     return weights
 
 
-def _build_weights_io_for_mesh(mesh_transform: str, influence_names: List[str]) -> WeightsIO:
+def _build_weights_io_for_mesh(
+    mesh_transform: str, influence_names: List[str]
+) -> WeightsIO:
     vertex_count = cmds.polyEvaluate(mesh_transform, vertex=True)
     shape_info = ShapeInfo(
         name=mesh_transform,
@@ -109,7 +112,9 @@ def test_deformerweights_access_and_normalize():
     assert list(iter(deformer_weights)) == [0.4, 0.8, 0.5, 0.5]
 
     normalized = deformer_weights.copy().normalize()
-    assert normalized.get_element_weights(0) == pytest.approx([0.333333, 0.666666], rel=1e-3)
+    assert normalized.get_element_weights(0) == pytest.approx(
+        [0.333333, 0.666666], rel=1e-3
+    )
 
     zero_weights = DeformerWeights([0.0, 0.0], channel_count=2, element_count=1)
     zero_weights.normalize()
@@ -137,7 +142,10 @@ def test_deformerweights_arithmetic_and_comparisons():
     weights_one = DeformerWeights([0.2, 0.8], channel_count=2, element_count=1)
     weights_two = DeformerWeights([0.1, 0.9], channel_count=2, element_count=1)
 
-    assert list((weights_one + weights_two).weights) == [0.30000000000000004, 1.7000000000000002]
+    assert list((weights_one + weights_two).weights) == [
+        0.30000000000000004,
+        1.7000000000000002,
+    ]
     assert list((weights_one + 0.5).weights) == [0.7, 1.3]
     assert list((0.5 + weights_one).weights) == [0.7, 1.3]
 
@@ -145,7 +153,10 @@ def test_deformerweights_arithmetic_and_comparisons():
     assert list((weights_one - 0.1).weights) == [0.1, 0.7000000000000001]
     assert list((1.0 - weights_one).weights) == [0.8, 0.19999999999999996]
 
-    assert list((weights_one * weights_two).weights) == [0.020000000000000004, 0.7200000000000001]
+    assert list((weights_one * weights_two).weights) == [
+        0.020000000000000004,
+        0.7200000000000001,
+    ]
     assert list((weights_one * 2.0).weights) == [0.4, 1.6]
     assert list((2.0 * weights_one).weights) == [0.4, 1.6]
 
@@ -188,7 +199,7 @@ def test_create_and_properties(skincluster_setup: Dict[str, object]):
     assert skincluster.influence_count == 2
 
     assert skincluster.geometry.name == mesh_shape
-    assert mesh_shape in [x.name for x in skincluster.geometries]
+    assert mesh_shape in [geometry.name for geometry in skincluster.geometries]
 
     skincluster.skinning_method = 1
     assert skincluster.skinning_method == 1
@@ -207,7 +218,9 @@ def test_create_and_properties(skincluster_setup: Dict[str, object]):
 
 def test_geometry_helpers_and_influence_indices(skincluster_setup: Dict[str, object]):
     skincluster = skincluster_setup["skincluster"]
-    dag_path, vertex_component, skin_function = skincluster._get_geometry_dag_and_components()
+    dag_path, vertex_component, skin_function = (
+        skincluster._get_geometry_dag_and_components()
+    )
 
     assert dag_path.isValid()
     assert vertex_component.apiType() == OpenMaya.MFn.kMeshVertComponent
@@ -228,7 +241,9 @@ def test_influence_index_add_remove_and_locking(
     with pytest.raises(ValueError):
         skincluster.influence_index(extra_transform)
 
-    new_index = skincluster.add_influence(extra_transform, weight=0.0, lock_weights=False)
+    new_index = skincluster.add_influence(
+        extra_transform, weight=0.0, lock_weights=False
+    )
     assert extra_transform in skincluster
     assert new_index >= 0
 
@@ -238,9 +253,12 @@ def test_influence_index_add_remove_and_locking(
     assert skincluster.is_influence_locked(joint_name) is False
 
     lock_weights_plug = f"{skincluster.name}.lockWeights[{new_index}]"
-    connected_plugs = cmds.listConnections(
-        lock_weights_plug, plugs=True, source=True, destination=False
-    ) or []
+    connected_plugs = (
+        cmds.listConnections(
+            lock_weights_plug, plugs=True, source=True, destination=False
+        )
+        or []
+    )
     for source_plug in connected_plugs:
         cmds.disconnectAttr(source_plug, lock_weights_plug)
     cmds.setAttr(lock_weights_plug, lock=False)
@@ -252,7 +270,9 @@ def test_influence_index_add_remove_and_locking(
 
     # Maya often adds a liw attribute to influences, so we force the fallback branch.
     original_attribute_query = skincluster_module.cmds.attributeQuery
-    monkeypatch.setattr(skincluster_module.cmds, "attributeQuery", attribute_query_override)
+    monkeypatch.setattr(
+        skincluster_module.cmds, "attributeQuery", attribute_query_override
+    )
 
     skincluster.lock_influence(extra_transform, lock=True)
     assert skincluster.is_influence_locked(extra_transform) is True
@@ -292,7 +312,9 @@ def test_get_set_weights_and_vertices(skincluster_setup: Dict[str, object]):
         channel_count=channel_count,
         element_count=len(vertex_subset),
     )
-    skincluster.set_vertex_weights(vertex_subset, subset_deformer_weights, normalize=False)
+    skincluster.set_vertex_weights(
+        vertex_subset, subset_deformer_weights, normalize=False
+    )
 
     retrieved_subset = skincluster.get_vertex_weights(vertex_subset)
     assert retrieved_subset.element_count == len(vertex_subset)
@@ -410,9 +432,11 @@ def test_empty_skincluster_errors():
         skincluster.set_vertex_weights([0], [1.0])
 
 
-def test_get_set_influence_weights_single_by_index(skincluster_setup: Dict[str, object]):
+def test_get_set_influence_weights_single_by_index(
+    skincluster_setup: Dict[str, object],
+):
     skincluster = skincluster_setup["skincluster"]
-    mesh_transform = skincluster_setup["mesh_transform"]
+    skincluster_setup["mesh_transform"]
 
     # Get weights for first influence by index
     dw = skincluster.get_influence_weights(0)
@@ -420,14 +444,16 @@ def test_get_set_influence_weights_single_by_index(skincluster_setup: Dict[str, 
     assert dw.channel_count == 1
     assert dw.element_count == skincluster.vertex_count
     # All default weights should be > 0
-    assert all(isinstance(v, float) for v in dw.weights)
+    assert all(isinstance(weight, float) for weight in dw.weights)
 
     # Set new weights for that influence
     new_vals = [0.3] * dw.element_count
-    skincluster.set_influence_weights(0, DeformerWeights(new_vals, channel_count=1, element_count=dw.element_count))
+    skincluster.set_influence_weights(
+        0, DeformerWeights(new_vals, channel_count=1, element_count=dw.element_count)
+    )
 
     retrieved = skincluster.get_influence_weights(0)
-    assert all(v == pytest.approx(0.3, abs=1e-4) for v in retrieved.weights)
+    assert all(weight == pytest.approx(0.3, abs=1e-4) for weight in retrieved.weights)
 
 
 def test_get_set_influence_weights_single_by_name(skincluster_setup: Dict[str, object]):
@@ -439,9 +465,12 @@ def test_get_set_influence_weights_single_by_name(skincluster_setup: Dict[str, o
     assert dw.channel_count == 1
 
     new_vals = [0.6] * dw.element_count
-    skincluster.set_influence_weights(first_influence, DeformerWeights(new_vals, channel_count=1, element_count=dw.element_count))
+    skincluster.set_influence_weights(
+        first_influence,
+        DeformerWeights(new_vals, channel_count=1, element_count=dw.element_count),
+    )
     retrieved = skincluster.get_influence_weights(first_influence)
-    assert all(v == pytest.approx(0.6, abs=1e-4) for v in retrieved.weights)
+    assert all(weight == pytest.approx(0.6, abs=1e-4) for weight in retrieved.weights)
 
 
 def test_get_set_influence_weights_multiple(skincluster_setup: Dict[str, object]):
@@ -458,11 +487,13 @@ def test_get_set_influence_weights_multiple(skincluster_setup: Dict[str, object]
     # Create new weights: alternate values per channel
     vcount = dw.element_count
     flat = []
-    for i in range(vcount):
+    for index in range(vcount):
         flat.append(0.2)  # first influence
         flat.append(0.8)  # second influence
 
-    skincluster.set_influence_weights(influences, DeformerWeights(flat, channel_count=2, element_count=vcount))
+    skincluster.set_influence_weights(
+        influences, DeformerWeights(flat, channel_count=2, element_count=vcount)
+    )
 
     retrieved = skincluster.get_influence_weights(influences)
     assert retrieved.channel_count == 2
@@ -484,7 +515,9 @@ def test_create_from_weights_object_and_file(tmp_path: Path):
     mesh_data = _create_mesh("weights")
 
     weights_object = _build_weights_io_for_mesh(mesh_data["transform"], joint_names)
-    created_skin = SkinCluster.create_from_weights_object(weights_object, name="weights_skin")
+    created_skin = SkinCluster.create_from_weights_object(
+        weights_object, name="weights_skin"
+    )
     assert created_skin.exists()
     assert set(created_skin.influences) == set(joint_names)
 
@@ -493,7 +526,9 @@ def test_create_from_weights_object_and_file(tmp_path: Path):
     json_path = tmp_path / "skin_weights.json"
     file_weights.save_json(json_path)
 
-    created_from_file = SkinCluster.create_from_file(json_path, name="weights_file_skin")
+    created_from_file = SkinCluster.create_from_file(
+        json_path, name="weights_file_skin"
+    )
     assert created_from_file.exists()
     assert set(created_from_file.influences) == set(joint_names)
 
@@ -522,7 +557,9 @@ def test_influence_weight_errors_type_in_list(skincluster_setup: Dict[str, objec
         skincluster.get_influence_weights([joints[0], {"invalid": "type"}, 2])
 
 
-def test_set_influence_weights_invalid_type_in_list(skincluster_setup: Dict[str, object]):
+def test_set_influence_weights_invalid_type_in_list(
+    skincluster_setup: Dict[str, object],
+):
     """Test that invalid type inside list raises TypeError at line 426."""
     skincluster = skincluster_setup["skincluster"]
     joints = skincluster_setup["joints"]
@@ -530,11 +567,15 @@ def test_set_influence_weights_invalid_type_in_list(skincluster_setup: Dict[str,
 
     # Invalid type (dict) inside list should raise TypeError at line 426
     with pytest.raises(TypeError, match="Influence entries must be int or str"):
-        skincluster.set_influence_weights([joints[0], {"invalid": "type"}, 2], [0.5] * vertex_count)
+        skincluster.set_influence_weights(
+            [joints[0], {"invalid": "type"}, 2], [0.5] * vertex_count
+        )
 
 
-def test_set_influence_weights_multiple_correct_length(skincluster_setup: Dict[str, object]):
-    """Test set_influence_weights with correct length for multiple influences (covers line 457)."""
+def test_set_influence_weights_multiple_correct_length(
+    skincluster_setup: Dict[str, object],
+):
+    """set_influence_weights accepts the right length for multiple influences."""
     skincluster = skincluster_setup["skincluster"]
     joints = skincluster_setup["joints"]
     vertex_count = skincluster.vertex_count
@@ -550,8 +591,10 @@ def test_set_influence_weights_multiple_correct_length(skincluster_setup: Dict[s
         pass  # Some other error is fine, we just needed to pass the length check
 
 
-def test_get_influence_weights_invalid_index_raises(skincluster_setup: Dict[str, object]):
-    """Test get_influence_weights raises when influence index not found in skinCluster."""
+def test_get_influence_weights_invalid_index_raises(
+    skincluster_setup: Dict[str, object],
+):
+    """get_influence_weights raises for an influence index the skinCluster lacks."""
     skincluster = skincluster_setup["skincluster"]
 
     # Use a high index that doesn't exist in the skinCluster
@@ -559,50 +602,52 @@ def test_get_influence_weights_invalid_index_raises(skincluster_setup: Dict[str,
         skincluster.get_influence_weights(9999)
 
 
-def test_set_influence_weights_deformerweights_channel_mismatch(skincluster_setup: Dict[str, object]):
-    """Test set_influence_weights raises when DeformerWeights channel_count doesn't match."""
+def test_set_influence_weights_deformerweights_channel_mismatch(
+    skincluster_setup: Dict[str, object],
+):
+    """set_influence_weights rejects a DeformerWeights with the wrong channel_count."""
     skincluster = skincluster_setup["skincluster"]
     vertex_count = skincluster.vertex_count
     joint_name = skincluster_setup["joints"][0]  # Use actual joint name from fixture
 
     # Create DeformerWeights with wrong channel_count (2 instead of 1)
     dw = DeformerWeights(
-        [0.5] * (vertex_count * 2),
-        channel_count=2,
-        element_count=vertex_count
+        [0.5] * (vertex_count * 2), channel_count=2, element_count=vertex_count
     )
     with pytest.raises(ValueError, match="channel_count"):
         skincluster.set_influence_weights(joint_name, dw)
 
 
-def test_set_influence_weights_deformerweights_element_mismatch(skincluster_setup: Dict[str, object]):
-    """Test set_influence_weights raises when DeformerWeights element_count doesn't match."""
+def test_set_influence_weights_deformerweights_element_mismatch(
+    skincluster_setup: Dict[str, object],
+):
+    """set_influence_weights rejects a DeformerWeights with the wrong element_count."""
     skincluster = skincluster_setup["skincluster"]
     joint_name = skincluster_setup["joints"][0]  # Use actual joint name from fixture
 
     # Create DeformerWeights with wrong element_count
-    dw = DeformerWeights(
-        [0.5] * 100,
-        channel_count=1,
-        element_count=100
-    )
+    dw = DeformerWeights([0.5] * 100, channel_count=1, element_count=100)
     with pytest.raises(ValueError, match="element_count"):
         skincluster.set_influence_weights(joint_name, dw)
 
 
-def test_set_influence_weights_single_influence_wrong_length(skincluster_setup: Dict[str, object]):
-    """Test set_influence_weights raises when list length is wrong for single influence."""
+def test_set_influence_weights_single_influence_wrong_length(
+    skincluster_setup: Dict[str, object],
+):
+    """set_influence_weights rejects a wrong-length list for a single influence."""
     skincluster = skincluster_setup["skincluster"]
     joint_name = skincluster_setup["joints"][0]  # Use actual joint name from fixture
-    vertex_count = skincluster.vertex_count
+    skincluster.vertex_count
 
     # Single influence, wrong length - should raise before reaching line 449
     with pytest.raises(ValueError, match="Weight length"):
         skincluster.set_influence_weights(joint_name, [0.1, 0.2])  # Wrong length
 
 
-def test_set_influence_weights_single_influence_correct_length(skincluster_setup: Dict[str, object]):
-    """Test set_influence_weights with correct length for single influence (covers line 449)."""
+def test_set_influence_weights_single_influence_correct_length(
+    skincluster_setup: Dict[str, object],
+):
+    """set_influence_weights accepts the right length for a single influence."""
     skincluster = skincluster_setup["skincluster"]
     joint_name = skincluster_setup["joints"][0]  # Use actual joint name from fixture
     vertex_count = skincluster.vertex_count
@@ -650,4 +695,3 @@ def test_get_geometry_dag_no_geometry_raises(skincluster_setup: Dict[str, object
 
     with pytest.raises(RuntimeError, match="No geometry connected"):
         skincluster._get_geometry_dag_and_components()
-

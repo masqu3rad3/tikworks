@@ -2,9 +2,10 @@
 
 import pytest
 from maya import cmds
-from maya import OpenMaya
-from tik.maya.core.node import Node, Plug
+
 from tik.maya.core.constants import NodeNames
+from tik.maya.core.node import Node, Plug
+
 
 def test_getitem_returns_plug_and_path_ends_with_attr():
     """Test __getitem__ returns a Plug with correct path."""
@@ -16,11 +17,13 @@ def test_getitem_returns_plug_and_path_ends_with_attr():
     assert plug.attr == "foo"
     assert plug.path.split(".")[-1] == "foo"
 
+
 def test_plug_getitem_returns_nested_plug():
     """Test __getitem__ on a Plug returns a nested Plug."""
     node = Node.create("blendShape", name="bs")
     # ensure the nested plug exists
     assert node["input[0]"]["inputGeometry"]
+
 
 def test_plug_set_and_get_numeric_float_on_builtin_attr():
     """Test setting and getting a float value on a built-in attribute."""
@@ -32,12 +35,14 @@ def test_plug_set_and_get_numeric_float_on_builtin_attr():
     plug.value = 14.5
     assert pytest.approx(plug.value, rel=1e-6) == 14.5
 
+
 def test_rshift_operator_returns_connected_plug():
     """Test >> operator connects plugs and returns the destination plug."""
     src_node = Node.create("transform", name="A_shift")
     dst_node = Node.create("transform", name="B_shift")
     src_node["tx"] >> dst_node["tx"]
     assert cmds.listConnections(dst_node.name) == [src_node.name]
+
 
 def test_chain_rshift_operator_returns_final_connected_plug():
     """Test chaining >> operator connects multiple plugs."""
@@ -48,6 +53,7 @@ def test_chain_rshift_operator_returns_final_connected_plug():
     assert cmds.listConnections(node_c.name) == [node_b.name]
     assert cmds.listConnections(node_b.name) == [node_c.name, node_a.name]
 
+
 def test_plug_set_with_list_single_value_on_builtin_attr():
     """Test setting a single value list on a built-in attribute."""
     transform = cmds.createNode("transform", name="item2")
@@ -55,6 +61,7 @@ def test_plug_set_with_list_single_value_on_builtin_attr():
     plug = node["rotateY"]
     plug.set([42.0])
     assert pytest.approx(plug.get(), rel=1e-6) == 42.0
+
 
 def test_plug_set_and_get_string_attribute():
     """Test setting and getting a string attribute."""
@@ -65,19 +72,38 @@ def test_plug_set_and_get_string_attribute():
     plug.set("hello world")
     assert plug.get() == "hello world"
 
+
 def test_plug_set_and_get_matrix_attribute():
-    """Test setting and getting a matrix attribute."""
+    """Test setting and getting actual matrix attribute."""
     transform = cmds.createNode("transform", name="matrixHolder")
     node = Node(cmds.ls(transform, long=True)[0])
     cmds.addAttr(node.name, longName="myMatrix", attributeType="matrix")
     plug = node["myMatrix"]
-    matrix_value = [1.0, 0.0, 0.0, 0.0,
-                    0.0, 1.0, 0.0, 0.0,
-                    0.0, 0.0, 1.0, 0.0,
-                    5.0, 10.0, 15.0, 1.0]
+    matrix_value = [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        5.0,
+        10.0,
+        15.0,
+        1.0,
+    ]
     plug.set(matrix_value)
     retrieved_value = plug.get()
-    assert all(pytest.approx(a, rel=1e-6) == b for a, b in zip(retrieved_value, matrix_value))
+    assert all(
+        pytest.approx(actual, rel=1e-6) == expected
+        for actual, expected in zip(retrieved_value, matrix_value)
+    )
+
 
 def test_plug_set_unsupported_type_raises_typeerror():
     """Test setting an unsupported type raises TypeError."""
@@ -85,6 +111,7 @@ def test_plug_set_unsupported_type_raises_typeerror():
     node = Node(cmds.ls(transform, long=True)[0])
     with pytest.raises(TypeError):
         node["rotateZ"].set({"x": 1})
+
 
 def test_connect_and_disconnect_specific_plugs():
     """Test connecting and disconnecting specific plugs."""
@@ -102,12 +129,13 @@ def test_connect_and_disconnect_specific_plugs():
     src.connect(dst, force=True)
 
     conns = cmds.listConnections(dst.path, plugs=True, source=True) or []
-    assert any(c.endswith(".outA") for c in conns)
+    assert any(connection.endswith(".outA") for connection in conns)
 
     src.disconnect(dst)
 
     conns = cmds.listConnections(dst.path, plugs=True, source=True) or []
     assert conns == []
+
 
 def test_disconnect_without_target_unplugs_source_connection():
     """Test disconnecting without target unplugs source connection."""
@@ -127,6 +155,7 @@ def test_disconnect_without_target_unplugs_source_connection():
     conns = cmds.listConnections(dst.path, plugs=True, source=True) or []
     assert conns == []
 
+
 def test_adding_and_deleting_attributes_from_plug_level():
     """Test adding and deleting attributes from Plug methods."""
     transform = cmds.createNode("transform", name="attrDelTest")
@@ -137,6 +166,7 @@ def test_adding_and_deleting_attributes_from_plug_level():
     plug.delete()
     with pytest.raises(ValueError):
         plug.get()
+
 
 def test_attribute_exists():
     """Test checking if an attribute exists via Plug."""
@@ -240,6 +270,7 @@ class TestPlugCreate:
         assert not node["sx"].locked
         assert node["sx"].visible
 
+
 def test_rename_attribute_updates_plug_attr_name():
     """Test renaming an attribute updates the Plug's attribute name."""
     transform = cmds.createNode("transform", name="attrRenameTest")
@@ -250,6 +281,7 @@ def test_rename_attribute_updates_plug_attr_name():
     assert plug.attr == "newAttr"
     assert cmds.objExists(f"{node.name}.newAttr")
     assert not cmds.objExists(f"{node.name}.oldAttr")
+
 
 def test_lock_and_unlock_attribute():
     """Test locking and unlocking an attribute."""
@@ -266,6 +298,7 @@ def test_lock_and_unlock_attribute():
     assert plug.locked is True
     plug.locked = False
     assert plug.locked is False
+
 
 def test_visible_property_and_setter():
     """Test visible property and setter."""
@@ -286,6 +319,7 @@ def test_visible_property_and_setter():
     assert cmds.getAttr(plug.path, channelBox=True) is True
     assert plug.visible is True
 
+
 def test_keyable_property_and_setter():
     """Test keyable property and setter."""
     transform = cmds.createNode("transform", name="attrKeyableTest")
@@ -298,11 +332,13 @@ def test_keyable_property_and_setter():
     assert cmds.getAttr(plug.path, keyable=True) is True
     assert plug.keyable is True
 
+
 def test_rshift_operator_raises_typeerror_for_nonplug_rhs():
     """Test >> operator raises TypeError for non-Plug RHS."""
     node = Node.create("transform", name="A_invalid")
     with pytest.raises(TypeError):
         node["tx"] >> "notAPlug"
+
 
 def test_plug_children_compound_attribute():
     """Test getting children of a compound attribute."""
@@ -312,9 +348,10 @@ def test_plug_children_compound_attribute():
     plug = node["translate"]
     children = plug.children
     assert len(children) == 3
-    assert any(c.attr == "translateX" for c in children)
-    assert any(c.attr == "translateY" for c in children)
-    assert any(c.attr == "translateZ" for c in children)
+    assert any(child.attr == "translateX" for child in children)
+    assert any(child.attr == "translateY" for child in children)
+    assert any(child.attr == "translateZ" for child in children)
+
 
 def test_plug_children_empty_for_simple_attribute():
     """Test children property returns empty list for simple attribute."""
@@ -322,6 +359,7 @@ def test_plug_children_empty_for_simple_attribute():
     node = Node(cmds.ls(transform, long=True)[0])
     plug = node["translateX"]
     assert plug.children == []
+
 
 def test_plug_get_input_returns_node():
     """Test get_input returns the source node."""
@@ -333,6 +371,7 @@ def test_plug_get_input_returns_node():
     assert isinstance(input_node, Node)
     assert input_node.name == src_node.name
 
+
 def test_plug_get_input_returns_plug():
     """Test get_input returns the source plug."""
     src_node = Node.create("transform", name="srcNode2")
@@ -342,6 +381,7 @@ def test_plug_get_input_returns_plug():
     input_plug = dst_node["translateX"].get_input(plug=True)
     assert isinstance(input_plug, Plug)
     assert input_plug.path == src_node["translateX"].path
+
 
 def test_plug_list_outputs_returns_nodes():
     """Test list_outputs returns destination nodes."""
@@ -354,8 +394,9 @@ def test_plug_list_outputs_returns_nodes():
 
     outputs = src_node["tx"].list_outputs()
     assert len(outputs) == 2
-    names = sorted([n.name for n in outputs])
+    names = sorted([node.name for node in outputs])
     assert names == ["outDst1", "outDst2"]
+
 
 def test_plug_list_outputs_returns_plugs():
     """Test list_outputs returns destination plugs."""
@@ -369,15 +410,18 @@ def test_plug_list_outputs_returns_plugs():
     assert isinstance(outputs[0], Plug)
     assert outputs[0].path == dst_node["translateX"].path
 
+
 def test_plug_get_input_no_connection_returns_none():
     """Test get_input returns None when no connection exists."""
     node = Node.create("transform", name="noInput")
     assert node["tx"].get_input() is None
 
+
 def test_plug_list_outputs_no_connection_returns_empty_list():
     """Test list_outputs returns empty list when no connection exists."""
     node = Node.create("transform", name="noOutput")
     assert node["tx"].list_outputs() == []
+
 
 def test_plug_children_empty_multi_attr():
     """Test children property returns empty list for empty multi attribute."""
@@ -387,6 +431,7 @@ def test_plug_children_empty_multi_attr():
     plug = node["myArray"]
     assert plug.children == []
 
+
 def test_node_and_plug_repr_contain_identifiers_plug_part():
     """Test Plug __repr__."""
     transform = cmds.createNode("transform", name="reprPlugTest")
@@ -395,6 +440,7 @@ def test_node_and_plug_repr_contain_identifiers_plug_part():
     plug = node["attrA"]
     assert "Plug" in repr(plug)
     assert ".attrA" in repr(plug)
+
 
 def test_plug_access_non_existent_raises_runtime_error():
     """Test accessing a non-existent plug raises RuntimeError."""
@@ -406,6 +452,7 @@ def test_plug_access_non_existent_raises_runtime_error():
     with pytest.raises(RuntimeError) as excinfo:
         _ = plug.type
     assert "not found" in str(excinfo.value)
+
 
 def test_plug_access_deleted_attr_raises_runtime_error_with_refresh_attempt():
     """Test accessing a plug after attribute deletion raises RuntimeError."""
@@ -421,7 +468,8 @@ def test_plug_access_deleted_attr_raises_runtime_error_with_refresh_attempt():
     node.delete_attr("tempDel")
 
     # Now access it again.
-    # plug.get() calls cmds.getAttr directly, which raises ValueError immediately if attr is gone.
+    # plug.get() calls cmds.getAttr directly, which raises ValueError immediately if
+    # attr is gone.
     with pytest.raises(ValueError):
         _ = plug.get()
 
@@ -431,7 +479,10 @@ def test_plug_access_deleted_attr_raises_runtime_error_with_refresh_attempt():
         _ = plug.type
     # The message in our code is "... acts invalid/deleted."
     # depending on where it fails. If _find_plug returns None, it raises "not found".
-    assert "not found" in str(excinfo.value) or "acts invalid/deleted" in str(excinfo.value)
+    assert "not found" in str(excinfo.value) or "acts invalid/deleted" in str(
+        excinfo.value
+    )
+
 
 def test_lshift_operator_connects_plugs():
     """Test << operator connects plugs."""
@@ -442,6 +493,7 @@ def test_lshift_operator_connects_plugs():
     dst_node["tx"] << src_node["tx"]
 
     assert cmds.listConnections(dst_node.name) == [src_node.name]
+
 
 def test_floordiv_operator_disconnects_plugs():
     """Test // operator disconnects plugs."""
@@ -455,17 +507,20 @@ def test_floordiv_operator_disconnects_plugs():
     src_node["tx"] // dst_node["tx"]
     assert cmds.listConnections(dst_node.name) is None
 
+
 def test_lshift_operator_raises_typeerror_for_nonplug():
     """Test << operator raises TypeError for non-Plug RHS."""
     node = Node.create("transform", name="LShiftError")
     with pytest.raises(TypeError):
         node["tx"] << "notAPlug"
 
+
 def test_floordiv_operator_raises_typeerror_for_nonplug():
     """Test // operator raises TypeError for non-Plug RHS."""
     node = Node.create("transform", name="DivError")
     with pytest.raises(TypeError):
         node["tx"] // "notAPlug"
+
 
 def test_list_inputs_returns_nodes_and_plugs():
     """Test list_inputs returns nodes and plugs correctly."""
@@ -486,14 +541,17 @@ def test_list_inputs_returns_nodes_and_plugs():
     inputs_plugs = dst_plug.list_inputs(plugs=True)
     assert len(inputs_plugs) == 1
     assert isinstance(inputs_plugs[0], Plug)
-    # Maya listConnections usually returns the long name 'translateX' even if we connected 'tx'
+    # Maya listConnections usually returns the long name 'translateX' even if we
+    # connected 'tx'
     assert inputs_plugs[0].path == f"{src_node.name}.translateX"
 
     # Test empty
     unconnected = Node.create("transform", name="unconnected")
     assert unconnected["tx"].list_inputs() == []
 
+
 # === Math Operator Tests ===
+
 
 def test_math_add_single_value():
     """Test + operator for single value attributes."""
@@ -517,6 +575,7 @@ def test_math_add_single_value():
     res3 = 5.0 + node["val1"]
     assert res3.get() == 15.0
 
+
 def test_math_sub_single_value():
     """Test - operator for single value attributes."""
     node = Node.create("transform", name="mathSubSingle")
@@ -526,7 +585,9 @@ def test_math_sub_single_value():
     # Plug - number
     res1 = node["val1"] - 4.0
     assert res1.get() == 6.0
-    assert "subtract" in res1.node.name # check if we can guess node type from name logic
+    assert (
+        "subtract" in res1.node.name
+    )  # check if we can guess node type from name logic
 
     # Plug - Plug
     res2 = node["val1"] - node["val2"]
@@ -535,6 +596,7 @@ def test_math_sub_single_value():
     # Reverse: number - Plug
     res3 = 20.0 - node["val1"]
     assert res3.get() == 10.0
+
 
 def test_math_mul_single_value():
     """Test * operator for single value attributes."""
@@ -555,6 +617,7 @@ def test_math_mul_single_value():
     res3 = 2.0 * node["val1"]
     assert res3.get() == 6.0
 
+
 def test_math_div_single_value():
     """Test / operator for single value attributes."""
     node = Node.create("transform", name="mathDivSingle")
@@ -574,6 +637,7 @@ def test_math_div_single_value():
     res3 = 20.0 / node["val1"]
     assert res3.get() == 2.0
 
+
 def test_math_pow_single_value():
     """Test ** operator for single value attributes."""
     node = Node.create("transform", name="mathPowSingle")
@@ -589,8 +653,9 @@ def test_math_pow_single_value():
     assert res2.get() == 8.0
 
     # Reverse: number ** Plug
-    res3 = 3.0 ** node["val1"] # 3^2
+    res3 = 3.0 ** node["val1"]  # 3^2
     assert res3.get() == 9.0
+
 
 def test_math_mod_single_value():
     """Test % operator for single value attributes."""
@@ -600,15 +665,16 @@ def test_math_mod_single_value():
 
     # Plug % number
     res1 = node["val1"] % 3.0
-    assert res1.get() == 1.0 # 10 % 3 = 1
+    assert res1.get() == 1.0  # 10 % 3 = 1
 
     # Plug % Plug
     res2 = node["val1"] % node["val2"]
     assert res2.get() == 1.0
 
     # Reverse: number % Plug
-    res3 = 10.0 % node["val2"] # 10 % 3 = 1
+    res3 = 10.0 % node["val2"]  # 10 % 3 = 1
     assert res3.get() == 1.0
+
 
 def test_math_add_compound_value():
     """Test + operator for compound attributes (double3)."""
@@ -634,6 +700,7 @@ def test_math_add_compound_value():
     res4 = 1.0 + node["t"]
     assert res4.get() == [(2.0, 3.0, 4.0)]
 
+
 def test_math_sub_compound_value():
     """Test - operator for compound attributes."""
     node = Node.create("transform", name="mathSubCompound")
@@ -653,12 +720,13 @@ def test_math_sub_compound_value():
     assert res3.get() == [(9.0, 19.0, 29.0)]
 
     # Reverse: number - Plug
-    res4 = 20.0 - node["t"] # (20,20,20) - (10,20,30) = (10, 0, -10)
+    res4 = 20.0 - node["t"]  # (20,20,20) - (10,20,30) = (10, 0, -10)
     assert res4.get() == [(10.0, 0.0, -10.0)]
 
     # Reverse: list - Plug
     res5 = [10.0, 20.0, 30.0] - node["r"]
     assert res5.get() == [(9.0, 19.0, 29.0)]
+
 
 def test_math_mul_compound_value():
     """Test * operator for compound attributes."""
@@ -683,6 +751,7 @@ def test_math_mul_compound_value():
     res4 = 2.0 * node["t"]
     assert res4.get() == [(4.0, 6.0, 8.0)]
 
+
 def test_math_div_compound_value():
     """Test / operator for compound attributes."""
     node = Node.create("transform", name="mathDivCompound")
@@ -705,7 +774,7 @@ def test_math_div_compound_value():
     assert res3.get() == [(5.0, 5.0, 6.0)]
 
     # Reverse: number / Plug
-    res4 = 100.0 / node["t"] # (100/10, 100/20, 100/30)
+    res4 = 100.0 / node["t"]  # (100/10, 100/20, 100/30)
     val4 = res4.get()[0]
     assert pytest.approx(val4[0]) == 10.0
     assert pytest.approx(val4[1]) == 5.0
@@ -716,6 +785,7 @@ def test_math_div_compound_value():
     val5 = res5.get()[0]
     assert pytest.approx(val5[0]) == 10.0
 
+
 def test_math_pow_compound_value():
     """Test ** operator for compound attributes."""
     node = Node.create("transform", name="mathPowCompound")
@@ -725,14 +795,15 @@ def test_math_pow_compound_value():
     res1 = node["t"] ** 2.0
     assert res1.get() == [(4.0, 9.0, 16.0)]
 
-    # Plug ** list (unsupported by multiplyDivide usually? Wait, multiplyDivide has power operation)
+    # Plug ** list (unsupported by multiplyDivide usually? Wait, multiplyDivide has
+    # power operation)
     # Power operation in multiplyDivide: input1 ^ input2 (component wise)
 
     res2 = node["t"] ** [2.0, 1.0, 0.5]
     val2 = res2.get()[0]
     assert pytest.approx(val2[0]) == 4.0
     assert pytest.approx(val2[1]) == 3.0
-    assert pytest.approx(val2[2]) == 2.0 # sqrt(4)
+    assert pytest.approx(val2[2]) == 2.0  # sqrt(4)
 
     # Plug ** Plug
     node["r"].set([2.0, 2.0, 2.0])
@@ -757,10 +828,11 @@ def test_math_pow_compound_value():
     assert pytest.approx(val5[1]) == 8.0
     assert pytest.approx(val5[2]) == 16.0
 
+
 def test_math_compound_invalid_operands():
     """Test compound math operations with invalid operands."""
     node = Node.create("transform", name="mathCompoundError")
-    plug = node["translate"] # compound
+    plug = node["translate"]  # compound
 
     with pytest.raises(TypeError):
         plug + "string"
@@ -777,8 +849,9 @@ def test_math_compound_invalid_operands():
     with pytest.raises(TypeError):
         plug ** "string"
 
+
 def test_math_scalar_invalid_operands():
-    """Test scalar math operations with invalid operands (lines 755-760, 861-866, 932-937)."""
+    """Test scalar math operations with invalid operands."""
     node = Node.create("transform", name="mathScalarError")
     node.add_attr("val", attributeType="double")
     plug = node["val"]  # scalar
@@ -848,7 +921,7 @@ def test_reverse_math_compound_with_tuple():
 
 
 def test_reverse_math_compound_invalid_operand():
-    """Test reverse math ops on compound plugs with invalid operands (lines 738-741, 844-847, 914-917)."""
+    """Test reverse math ops on compound plugs with invalid operands."""
     node = Node.create("transform", name="compoundReverseInvalid")
     plug = node["translate"]  # compound double3
 
@@ -866,7 +939,7 @@ def test_reverse_math_compound_invalid_operand():
 
 
 def test_reverse_math_on_non_numeric_attribute():
-    """Test reverse math ops on non-numeric attributes (lines 755-760, 861-866, 932-937)."""
+    """Test reverse math ops on non-numeric attributes."""
     node = Node.create("transform", name="nonNumericReverseMath")
     node.add_attr("strAttr", dataType="string")
     plug = node["strAttr"]  # string attribute, non-numeric
@@ -883,6 +956,7 @@ def test_reverse_math_on_non_numeric_attribute():
     with pytest.raises(TypeError):
         plug.__rpow__(5.0)
 
+
 def test_mplug_refetch_logic():
     """Test explicit mplug refetching logic."""
     transform = cmds.createNode("transform", name="refetchTest")
@@ -891,7 +965,7 @@ def test_mplug_refetch_logic():
     plug = node["temp"]
 
     # 1. Force cache population
-    assert plug.keyable is True # accesses mplug
+    assert plug.keyable is True  # accesses mplug
     assert plug._mplug is not None
 
     # 2. Simulate stale plug by assigning a Null MPlug or forcing it
@@ -932,7 +1006,10 @@ def test_mplug_refetch_logic():
     with pytest.raises(RuntimeError) as excinfo:
         _ = plug.keyable
 
-    assert "acts invalid/deleted" in str(excinfo.value) or "not found" in str(excinfo.value)
+    assert "acts invalid/deleted" in str(excinfo.value) or "not found" in str(
+        excinfo.value
+    )
+
 
 def test_explicit_reverse_math_ops():
     """Test explicit calls to reverse math operators to ensure coverage."""
@@ -951,6 +1028,7 @@ def test_explicit_reverse_math_ops():
     # __rtruediv__ is already covered by 20.0 / plug, but why not
     res = plug.__rtruediv__(10.0)
     assert res.get() == 5.0
+
 
 def test_math_raises_typeerror_for_invalid_operands():
     """Test math operators raise TypeError when given invalid inputs."""
@@ -986,7 +1064,7 @@ def test_math_raises_typeerror_for_invalid_operands():
         node["tx"].__radd__("string")
 
     with pytest.raises(TypeError):
-         node["tx"].__rsub__("string")
+        node["tx"].__rsub__("string")
 
     with pytest.raises(TypeError):
         node["tx"].__rmul__("string")
@@ -999,6 +1077,7 @@ def test_math_raises_typeerror_for_invalid_operands():
 
     with pytest.raises(TypeError):
         node["tx"].__rmod__("string")
+
 
 def test_math_unsupported_ops_on_unsupported_attribute_types():
     """Test that math operations raise TypeError on non-numeric attributes."""
@@ -1020,7 +1099,7 @@ def test_math_unsupported_ops_on_unsupported_attribute_types():
         plug / 1
 
     with pytest.raises(TypeError):
-        plug ** 1
+        plug**1
 
 
 # === Tests for floatMath fallback paths (Maya < 2025 compatibility) ===
@@ -1035,7 +1114,7 @@ class TestFloatMathFallbackPaths:
 
     def test_subtract_uses_floatmath_when_native_unavailable(self):
         """Test __sub__ uses floatMath node when native subtract unavailable."""
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import PropertyMock, patch
 
         node = Node.create("transform", name="subFloatMath")
         node["tx"].value = 10.0
@@ -1056,7 +1135,7 @@ class TestFloatMathFallbackPaths:
 
     def test_subtract_plug_uses_floatmath_when_native_unavailable(self):
         """Test __sub__ with Plug operand uses floatMath when native unavailable."""
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import PropertyMock, patch
 
         node_a = Node.create("transform", name="subFloatMathA")
         node_b = Node.create("transform", name="subFloatMathB")
@@ -1074,7 +1153,7 @@ class TestFloatMathFallbackPaths:
 
     def test_divide_uses_floatmath_when_native_unavailable(self):
         """Test __truediv__ uses floatMath node when native divide unavailable."""
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import PropertyMock, patch
 
         node = Node.create("transform", name="divFloatMath")
         node["tx"].value = 20.0
@@ -1093,7 +1172,7 @@ class TestFloatMathFallbackPaths:
 
     def test_divide_plug_uses_floatmath_when_native_unavailable(self):
         """Test __truediv__ with Plug operand uses floatMath when native unavailable."""
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import PropertyMock, patch
 
         node_a = Node.create("transform", name="divFloatMathA")
         node_b = Node.create("transform", name="divFloatMathB")
@@ -1111,7 +1190,7 @@ class TestFloatMathFallbackPaths:
 
     def test_rsub_scalar_uses_floatmath_when_native_unavailable(self):
         """Test __rsub__ (scalar - plug) uses floatMath when native unavailable."""
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import PropertyMock, patch
 
         node = Node.create("transform", name="rsubFloatMath")
         node["tx"].value = 3.0
@@ -1129,7 +1208,7 @@ class TestFloatMathFallbackPaths:
 
     def test_rtruediv_scalar_uses_floatmath_when_native_unavailable(self):
         """Test __rtruediv__ (scalar / plug) uses floatMath when native unavailable."""
-        from unittest.mock import patch, PropertyMock
+        from unittest.mock import PropertyMock, patch
 
         node = Node.create("transform", name="rdivFloatMath")
         node["tx"].value = 5.0

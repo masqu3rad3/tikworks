@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-import tik.maya as tm
 from maya import cmds
+
+import tik.maya as tm
 from tik.trigger.core.reconcile import RenderedGuide
 from tik.trigger.maya import tags
 
@@ -42,9 +43,12 @@ def snapshot() -> list:
     found = []
     # cmds rather than tik.maya: one attribute-qualified ls finds every tagged
     # joint without walking the DAG. This runs on every refresh.
-    for name in cmds.ls(
-        f"*.{tm.META_PREFIX}{tags.KIND}", long=True, objectsOnly=True, type="joint"
-    ) or []:
+    for name in (
+        cmds.ls(
+            f"*.{tm.META_PREFIX}{tags.KIND}", long=True, objectsOnly=True, type="joint"
+        )
+        or []
+    ):
         node = tm.resolve(name)
         data = node.meta.as_dict()
         if data.get(tags.KIND) != tags.GUIDE or tags.INSTANCE not in data:
@@ -60,10 +64,14 @@ def snapshot() -> list:
                 index=int(data.get(tags.INDEX, 0)),
                 node=node.long_name,
                 position=tuple(
-                    cmds.xform(node.long_name, query=True, worldSpace=True, translation=True)
+                    cmds.xform(
+                        node.long_name, query=True, worldSpace=True, translation=True
+                    )
                 ),
                 rotation=tuple(
-                    cmds.xform(node.long_name, query=True, worldSpace=True, rotation=True)
+                    cmds.xform(
+                        node.long_name, query=True, worldSpace=True, rotation=True
+                    )
                 ),
                 rotate_order=int(cmds.getAttr(f"{node.long_name}.rotateOrder")),
                 attrs=_guide_attrs(node),

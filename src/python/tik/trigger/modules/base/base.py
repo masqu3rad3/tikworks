@@ -19,9 +19,11 @@ class Base(Module):
     controller_size = FloatField(10.0, min=0.01, label="Controller Size")
 
     def draw_guides(self, guides) -> None:
+        """A single root joint."""
         guides.joint("root", (0, 0, 0), radius=2.0)
 
     def build(self, rig) -> None:
+        """One root controller with a bind joint under it."""
         root_guide = rig.guide("root")
         controller = rig.controller(
             "root",

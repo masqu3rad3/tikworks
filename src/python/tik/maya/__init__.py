@@ -4,16 +4,6 @@ from functools import partial
 
 from maya import cmds
 
-from .core import naming
-from .core.constants import ALL_CHANNELS, TRANSFORM_CHANNELS
-from .core.dagnode import DagNode
-from .core.plug import Plug
-from .core.meta import META_PREFIX, find_by_meta
-from .core.node import Node
-from .core.registry import resolve
-from .core.scene import *  # noqa: F401, F403
-from .core.scene import proxy_wrapper
-from .core.shapenode import ShapeNode
 from .constructs import (
     AimFrame,
     AngleBetween,
@@ -28,8 +18,25 @@ from .constructs import (
     SoftIk,
     SpaceSwitch,
 )
+from .core import naming
+from .core.constants import ALL_CHANNELS, TRANSFORM_CHANNELS
+from .core.dagnode import DagNode
+from .core.meta import META_PREFIX, find_by_meta
+from .core.node import Node
+from .core.plug import Plug
+from .core.registry import resolve
+from .core.scene import (
+    create_node,
+    createNode,
+    ensure_plugin,
+    list_scene_nodes,
+    ls,
+    proxy_wrapper,
+    select,
+    select_nodes,
+)
+from .core.shapenode import ShapeNode
 from .types.blendshape import BlendShape
-from .types.skincluster import SkinCluster
 from .types.camera import Camera
 from .types.curve import Curve
 from .types.ikhandle import IkHandle
@@ -38,6 +45,7 @@ from .types.light import Light
 from .types.locator import Locator
 from .types.mesh import Mesh
 from .types.nurbs import Nurbs
+from .types.skincluster import SkinCluster
 from .types.transform import Transform
 
 __all__ = [
@@ -74,6 +82,14 @@ __all__ = [
     "Ribbon",
     "SoftIk",
     "META_PREFIX",
+    "create_node",
+    "createNode",
+    "ensure_plugin",
+    "list_scene_nodes",
+    "ls",
+    "proxy_wrapper",
+    "select",
+    "select_nodes",
 ]
 
 # --- MODULE LEVEL GETATTR (PEP 562) ---

@@ -24,7 +24,9 @@ LOSSES = (
 #: guides, not Designer chrome), so this is not a per-module loss the way
 #: ``LOSSES`` is -- it is true of the whole document the moment there is
 #: anything to snapshot at all.
-GRAPH_LOSSES = "the graph is auto-laid out, and named scene-nodes groups are not restored"
+GRAPH_LOSSES = (
+    "the graph is auto-laid out, and named scene-nodes groups are not restored"
+)
 
 
 class SnapshotDialog(QtWidgets.QDialog):

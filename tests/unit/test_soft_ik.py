@@ -8,14 +8,14 @@ import math
 
 import tik.maya as tm
 
-L = 10.0
+LENGTH = 10.0
 
 
 def _rig(soft=1.0, stretch=0.0):
     root = tm.Transform.create(name="soft_root")
     goal = tm.Transform.create(name="soft_goal")
     holder = tm.Transform.create(name="soft_holder")
-    length = holder["chainLength"].create("float", default=L)
+    length = holder["chainLength"].create("float", default=LENGTH)
     soft_ik = tm.SoftIk.create(root, goal, length, name="soft")
     soft_ik.soft_plug.value = soft
     soft_ik.stretch_plug.value = stretch
@@ -35,9 +35,9 @@ def test_identity_below_the_seam():
 
 
 def test_c0_continuity_at_the_seam():
-    """f(da) == da, with da = L - ds."""
+    """f(da) == da, with da = LENGTH - ds."""
     _root, goal, soft_ik = _rig(soft=1.0)
-    da = L - (1.0 + 0.001)
+    da = LENGTH - (1.0 + 0.001)
     assert abs(_at(goal, soft_ik, da) - da) < 1e-3
 
 
@@ -45,7 +45,7 @@ def test_c1_continuity_at_the_seam():
     """f'(da) == 1 — no velocity discontinuity."""
     _root, goal, soft_ik = _rig(soft=1.0)
     ds = 1.0 + 0.001
-    da = L - ds
+    da = LENGTH - ds
     step = 1e-3
     at = _at(goal, soft_ik, da)
     above = _at(goal, soft_ik, da + step)
@@ -54,26 +54,26 @@ def test_c1_continuity_at_the_seam():
 
 
 def test_asymptotic_to_chain_length():
-    """f(d) -> L from below, so the chain never fully straightens.
+    """f(d) -> LENGTH from below, so the chain never fully straightens.
 
     Strictly below is only observable while the exponential term is still
-    representable against L; far out it underflows to exactly L in float64.
+    representable against LENGTH; far out it underflows to exactly LENGTH in float64.
     """
     _root, goal, soft_ik = _rig(soft=1.0)
-    assert _at(goal, soft_ik, 12.0) < L
-    assert _at(goal, soft_ik, 20.0) < L
+    assert _at(goal, soft_ik, 12.0) < LENGTH
+    assert _at(goal, soft_ik, 20.0) < LENGTH
     for distance in (12.0, 20.0, 50.0, 500.0):
-        assert _at(goal, soft_ik, distance) <= L + 1e-9
-    assert abs(_at(goal, soft_ik, 50.0) - L) < 1e-3
+        assert _at(goal, soft_ik, distance) <= LENGTH + 1e-9
+    assert abs(_at(goal, soft_ik, 50.0) - LENGTH) < 1e-3
 
 
 def test_never_overshoots_the_chain_length():
-    """The elbow must not pop: f is monotonic and bounded by L."""
+    """The elbow must not pop: f is monotonic and bounded by LENGTH."""
     _root, goal, soft_ik = _rig(soft=2.0)
     previous = -1.0
     for distance in [step * 0.5 for step in range(1, 60)]:
         value = _at(goal, soft_ik, distance)
-        assert value <= L + 1e-9
+        assert value <= LENGTH + 1e-9
         assert value >= previous - 1e-9
         previous = value
 
@@ -81,15 +81,15 @@ def test_never_overshoots_the_chain_length():
 def test_matches_the_closed_form_above_the_seam():
     _root, goal, soft_ik = _rig(soft=2.0)
     ds = 2.0 + 0.001
-    da = L - ds
+    da = LENGTH - ds
     distance = 12.0
-    expected = L - ds * math.exp(-(distance - da) / ds)
+    expected = LENGTH - ds * math.exp(-(distance - da) / ds)
     assert abs(_at(goal, soft_ik, distance) - expected) < 1e-3
 
 
 def test_softness_zero_reaches_almost_the_full_length():
     _root, goal, soft_ik = _rig(soft=0.0)
-    assert abs(_at(goal, soft_ik, 20.0) - L) < 1e-2
+    assert abs(_at(goal, soft_ik, 20.0) - LENGTH) < 1e-2
 
 
 def test_gap_is_zero_without_stretch():

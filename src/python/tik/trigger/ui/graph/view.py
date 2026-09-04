@@ -15,27 +15,21 @@ from tik.trigger.core.schemas import split_source
 
 from .constants import (
     COLUMN_GAP,
-    GLYPH_WIDTH,
     GRID,
     HEADER,
-    MODE_CONNECTED,
     MODE_FULL,
-    MODE_MINIMAL,
     NODE_WIDTH,
     PORT_RADIUS,
-    PORT_SPACE,
     ROW,
     ROW_GAP,
-    WIRE_PRIMARY,
-    WIRE_SECONDARY,
     WORLD,
 )
-from .items import NodeItem, Port, WireItem
+from .items import NodeItem, NodeSpec, WireItem
 from .scene import GraphScene
 
 
 class GraphView(QtWidgets.QGraphicsView):
-    """Renders a ``GuideScene``'s instances and connections; edits go back through it."""
+    """Renders a ``GuideScene``'s instances and connections; edits go through it."""
 
     selection_changed = QtCore.Signal(str)
     external_selection_changed = QtCore.Signal(str)
@@ -67,7 +61,9 @@ class GraphView(QtWidgets.QGraphicsView):
         self._zoom_anchor = QtCore.QPointF()
         self._zoom_origin = QtCore.QPoint()
         self._slice_item: Optional[QtWidgets.QGraphicsLineItem] = None
-        self._ctrl_press: Optional[QtCore.QPoint] = None  # Ctrl+LMB pressed, not yet a drag
+        self._ctrl_press: Optional[QtCore.QPoint] = (
+            None  # Ctrl+LMB pressed, not yet a drag
+        )
         self.graph.connect_requested.connect(self.connect_input)
         self.graph.disconnect_requested.connect(self.disconnect_input)
         self.graph.remove_group_requested.connect(self.remove_scene_group)
@@ -78,14 +74,18 @@ class GraphView(QtWidgets.QGraphicsView):
 
     # ------------------------------------------------------------ building
     def rebuild(self) -> None:
+        """Redraw every node and wire from the document and its layout."""
         layout = self.guides.layout
         positions = dict(layout.get("positions", {}))
         collapse = dict(layout.get("collapse", {}))
-        groups = {name: list(nodes) for name, nodes in layout.get("scene_nodes", {}).items()}
+        groups = {
+            name: list(nodes) for name, nodes in layout.get("scene_nodes", {}).items()
+        }
         self.graph.clear_graph()
         handles = self.guides.instances()
         by_key = {handle.key: handle for handle in handles}
-        # scene sources nobody grouped yet -> implicit "scene" group (shown, not written)
+        # scene sources nobody grouped yet -> implicit "scene" group (shown, not
+        # written)
         grouped = {node for nodes in groups.values() for node in nodes}
         for handle in handles:
             for source in handle.inputs.values():
@@ -95,7 +95,9 @@ class GraphView(QtWidgets.QGraphicsView):
                     grouped.add(source)
         depth = self._depths(handles, by_key)
         auto = self._auto_positions(handles, groups, depth)
-        placed: list[QtCore.QRectF] = []  # rects of nodes with a stored position; new nodes avoid them
+        placed: list[QtCore.QRectF] = (
+            []
+        )  # rects of nodes with a stored position; new nodes avoid them
 
         def rect_at(pos, height):
             return QtCore.QRectF(pos[0], pos[1], NODE_WIDTH + PORT_RADIUS * 2, height)
@@ -108,7 +110,14 @@ class GraphView(QtWidgets.QGraphicsView):
             pos = list(auto[key])
             candidate = rect_at(pos, height)
             for _ in range(200):
-                hit = next((r for r in placed if r.intersects(candidate.adjusted(-8, -8, 8, 8))), None)
+                hit = next(
+                    (
+                        rect
+                        for rect in placed
+                        if rect.intersects(candidate.adjusted(-8, -8, 8, 8))
+                    ),
+                    None,
+                )
                 if hit is None:
                     break
                 pos[1] = hit.bottom() + ROW_GAP
@@ -120,24 +129,47 @@ class GraphView(QtWidgets.QGraphicsView):
 
         for name in sorted(groups):
             pos = free_pos(name, HEADER + len(groups[name]) * ROW + 8)
-            node = self.graph.add_node(name, name, "scene", [], groups[name], "", external=True, pos=pos, mode=collapse.get(name, MODE_FULL))
+            node = self.graph.add_node(
+                NodeSpec(
+                    key=name,
+                    title=name,
+                    subtitle="scene",
+                    inputs=[],
+                    outputs=groups[name],
+                    color="",
+                    external=True,
+                    mode=collapse.get(name, MODE_FULL),
+                ),
+                pos=pos,
+            )
             exists = getattr(self.guides, "scene_node", lambda _n: True)
             missing = [item for item in groups[name] if exists(item) is None]
             node.subtitle = "scene ✗ missing" if missing else "scene ✓"
-        for handle in sorted(handles, key=lambda item: (depth.get(item.key, 1), item.key)):
+        for handle in sorted(
+            handles, key=lambda item: (depth.get(item.key, 1), item.key)
+        ):
             module_cls = handle.module_class
-            space_names = [item.name for item in module_cls.space_inputs(handle.settings)]
+            space_names = [
+                item.name for item in module_cls.space_inputs(handle.settings)
+            ]
             rows = max(
                 len(module_cls.inputs) + len(space_names), len(handle.outputs), 1
             )
             pos = free_pos(handle.key, HEADER + rows * ROW + 8)
             primary = module_cls.primary_input()
             self.graph.add_node(
-                handle.key, handle.key, module_cls.display_label(),
-                [item.name for item in module_cls.inputs], list(handle.outputs),
-                theme.SIDE.get(handle.side.value, theme.SIDE["C"]),
-                primary_input=primary.name if primary else None, pos=pos,
-                mode=collapse.get(handle.key, MODE_FULL), spaces=space_names,
+                NodeSpec(
+                    key=handle.key,
+                    title=handle.key,
+                    subtitle=module_cls.display_label(),
+                    inputs=[item.name for item in module_cls.inputs],
+                    outputs=list(handle.outputs),
+                    color=theme.SIDE.get(handle.side.value, theme.SIDE["C"]),
+                    primary_input=primary.name if primary else None,
+                    mode=collapse.get(handle.key, MODE_FULL),
+                    spaces=space_names,
+                ),
+                pos=pos,
             )
         node_group = {node: name for name, nodes in groups.items() for node in nodes}
         for handle in handles:
@@ -148,7 +180,11 @@ class GraphView(QtWidgets.QGraphicsView):
                     source_key = f"{key}.{output}"
                 else:
                     source_key = f"{node_group.get(source, 'scene')}.{source}"
-                self.graph.add_wire(source_key, f"{handle.key}.{input_name}", primary is not None and input_name == primary.name)
+                self.graph.add_wire(
+                    source_key,
+                    f"{handle.key}.{input_name}",
+                    primary is not None and input_name == primary.name,
+                )
         self.graph.finish_build()
         if not self._fitted:
             self.fit()
@@ -159,13 +195,15 @@ class GraphView(QtWidgets.QGraphicsView):
         result: dict[str, tuple] = {}
 
         def place(key, column, height):
-            y = columns.get(column, 0.0)
-            result[key] = (20 + column * (NODE_WIDTH + COLUMN_GAP), 30 + y)
-            columns[column] = y + height + ROW_GAP
+            top = columns.get(column, 0.0)
+            result[key] = (20 + column * (NODE_WIDTH + COLUMN_GAP), 30 + top)
+            columns[column] = top + height + ROW_GAP
 
         for name in sorted(groups):
             place(name, 0, HEADER + len(groups[name]) * ROW + 8)
-        for handle in sorted(handles, key=lambda item: (depth.get(item.key, 1), item.key)):
+        for handle in sorted(
+            handles, key=lambda item: (depth.get(item.key, 1), item.key)
+        ):
             rows = max(
                 len(handle.module_class.inputs)
                 + len(handle.module_class.space_inputs(handle.settings)),
@@ -181,7 +219,10 @@ class GraphView(QtWidgets.QGraphicsView):
         by_key = {handle.key: handle for handle in handles}
         groups = self.guides.scene_groups()
         depth = self._depths(handles, by_key)
-        positions = {key: [x, y] for key, (x, y) in self._auto_positions(handles, groups, depth).items()}
+        positions = {
+            key: list(position)
+            for key, position in self._auto_positions(handles, groups, depth).items()
+        }
         self.guides.update_layout(positions=positions)
         self.rebuild()
         self.fit()
@@ -195,6 +236,7 @@ class GraphView(QtWidgets.QGraphicsView):
         self.graph.moved = set()
 
     def set_mode(self, key: str, mode: int) -> None:
+        """Set the collapse mode of node ``key`` and store it in the layout."""
         node = self.graph.nodes.get(key)
         if node is None:
             return
@@ -204,6 +246,7 @@ class GraphView(QtWidgets.QGraphicsView):
         self.guides.update_layout(collapse=collapse)
 
     def set_selected_mode(self, mode: int) -> None:
+        """Set the collapse mode of every selected node."""
         for node in self.graph.selected_nodes():
             self.set_mode(node.key, mode)
 
@@ -214,7 +257,11 @@ class GraphView(QtWidgets.QGraphicsView):
         if rect.isEmpty() or view.width() < 60 or view.height() < 60:
             return
         self.resetTransform()
-        scale = min(1.0, (view.width() - 20) / max(rect.width(), 1), (view.height() - 20) / max(rect.height(), 1))
+        scale = min(
+            1.0,
+            (view.width() - 20) / max(rect.width(), 1),
+            (view.height() - 20) / max(rect.height(), 1),
+        )
         self.scale(max(scale, 0.3), max(scale, 0.3))
         self.centerOn(rect.center())
         self._fitted = True
@@ -252,7 +299,10 @@ class GraphView(QtWidgets.QGraphicsView):
         return True
 
     def resolve_source(self, source_key: str) -> str:
-        """``group.node`` on a scene-nodes group -> plain scene node name; module sources unchanged."""
+        """``group.node`` on a scene-nodes group -> plain scene node name.
+
+        Module sources are returned unchanged.
+        """
         node_key, _dot, port = source_key.rpartition(".")
         node = self.graph.nodes.get(node_key)
         if node is not None and node.external:
@@ -260,32 +310,40 @@ class GraphView(QtWidgets.QGraphicsView):
         return source_key
 
     def connect_input(self, input_key: str, source_key: str) -> None:
+        """Connect ``input_key`` to ``source_key`` through the guides."""
         source = self.resolve_source(source_key)
         self._apply(lambda: self.guides.connect(input_key, source))
 
     def disconnect_input(self, input_key: str) -> None:
+        """Clear ``input_key`` through the guides."""
         self._apply(lambda: self.guides.disconnect(input_key))
+
     def sever(self, key: str) -> None:
-        """Drop every connection into or out of the node ``key`` (module or scene-nodes group)."""
+        """Drop every connection into or out of node ``key`` (module or group)."""
         group_nodes = set(self.guides.scene_groups().get(key, []))
 
         def run():
             for item in self.guides.connections():
                 source_key, _output = split_source(item["source"])
-                if item["input"].startswith(f"{key}.") or source_key == key or item["source"] in group_nodes:
+                if (
+                    item["input"].startswith(f"{key}.")
+                    or source_key == key
+                    or item["source"] in group_nodes
+                ):
                     self.guides.disconnect(item["input"])
 
         self._apply(run)
 
     # ----------------------------------------------------- scene groups
     def add_scene_group(self, name: str = "", nodes: Optional[list] = None) -> str:
+        """Create a scene-nodes group, redraw and select it."""
         name = self.guides.add_scene_group(name, nodes)
         self.rebuild()
         self.graph.select_key(name)
         return name
 
     def add_scene_node(self, name: str, group: str = "scene") -> None:
-        """Convenience: put scene node ``name`` into ``group`` (created when missing)."""
+        """Put scene node ``name`` into ``group``, creating the group if needed."""
         groups = self.guides.scene_groups()
         if group not in groups:
             self.guides.add_scene_group(group, [name])
@@ -294,26 +352,36 @@ class GraphView(QtWidgets.QGraphicsView):
         self.rebuild()
 
     def remove_scene_group(self, name: str) -> None:
+        """Delete a scene-nodes group through the guides."""
         self._apply(lambda: self.guides.remove_scene_group(name))
 
     def scene_nodes(self) -> list[tuple[str, str]]:
         """``[(group, node), ...]`` for source menus."""
-        return [(group, node) for group, nodes in sorted(self.guides.scene_groups().items()) for node in nodes]
+        return [
+            (group, node)
+            for group, nodes in sorted(self.guides.scene_groups().items())
+            for node in nodes
+        ]
 
     def delete_selected(self) -> bool:
+        """Disconnect selected wires and remove selected groups."""
         return self.graph.delete_selected()
 
     def select_key(self, key: Optional[str]) -> None:
+        """Select only the node with ``key`` (None clears)."""
         self.graph.select_key(key)
 
     def select_keys(self, keys) -> None:
+        """Select exactly the nodes with ``keys``."""
         self.graph.select_keys(keys)
 
     def set_grid(self, visible: bool) -> None:
+        """Show or hide the background grid."""
         self.graph.show_grid = bool(visible)
         self.viewport().update()
 
     def set_snap(self, enabled: bool) -> None:
+        """Snap dragged nodes to the grid or not."""
         self.graph.snap = bool(enabled)
 
     # ---------------------------------------------------------- navigation
@@ -346,7 +414,9 @@ class GraphView(QtWidgets.QGraphicsView):
     def wheelEvent(self, event) -> None:  # noqa: N802
         self._navigated = True
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
-        origin = event.position().toPoint() if hasattr(event, "position") else event.pos()
+        origin = (
+            event.position().toPoint() if hasattr(event, "position") else event.pos()
+        )
         self.zoom_at(factor, origin)
 
     def pan_by(self, dx: int, dy: int) -> None:
@@ -357,8 +427,13 @@ class GraphView(QtWidgets.QGraphicsView):
         finally:
             self.setTransformationAnchor(QtWidgets.QGraphicsView.AnchorUnderMouse)
 
-    def zoom_at(self, factor: float, origin: QtCore.QPoint, anchor: Optional[QtCore.QPointF] = None) -> None:
-        """Scale by ``factor`` keeping scene point ``anchor`` under viewport point ``origin``."""
+    def zoom_at(
+        self,
+        factor: float,
+        origin: QtCore.QPoint,
+        anchor: Optional[QtCore.QPointF] = None,
+    ) -> None:
+        """Scale by ``factor``, keeping scene ``anchor`` under viewport ``origin``."""
         anchor = self.mapToScene(origin) if anchor is None else anchor
         self.setTransformationAnchor(QtWidgets.QGraphicsView.NoAnchor)
         try:
@@ -371,7 +446,9 @@ class GraphView(QtWidgets.QGraphicsView):
     def mousePressEvent(self, event) -> None:  # noqa: N802
         alt = bool(event.modifiers() & QtCore.Qt.AltModifier)
         ctrl = bool(event.modifiers() & QtCore.Qt.ControlModifier)
-        if event.button() == QtCore.Qt.MiddleButton or (alt and event.button() == QtCore.Qt.LeftButton):
+        if event.button() == QtCore.Qt.MiddleButton or (
+            alt and event.button() == QtCore.Qt.LeftButton
+        ):
             self._nav = "pan"
         elif alt and event.button() == QtCore.Qt.RightButton:
             self._nav = "zoom"
@@ -385,7 +462,13 @@ class GraphView(QtWidgets.QGraphicsView):
         if self._nav:
             self._navigated = self._navigated or self._nav != "slice"
             self._nav_last = event.pos()
-            self.setCursor({"pan": QtCore.Qt.ClosedHandCursor, "zoom": QtCore.Qt.SizeHorCursor, "slice": QtCore.Qt.CrossCursor}[self._nav])
+            self.setCursor(
+                {
+                    "pan": QtCore.Qt.ClosedHandCursor,
+                    "zoom": QtCore.Qt.SizeHorCursor,
+                    "slice": QtCore.Qt.CrossCursor,
+                }[self._nav]
+            )
             event.accept()
             return
         super().mousePressEvent(event)
@@ -395,12 +478,15 @@ class GraphView(QtWidgets.QGraphicsView):
         self._nav_last = origin
         start = self.mapToScene(origin)
         self._slice_item = QtWidgets.QGraphicsLineItem(QtCore.QLineF(start, start))
-        self._slice_item.setPen(QtGui.QPen(QtGui.QColor("#e05555"), 1.5, QtCore.Qt.DashLine))
+        self._slice_item.setPen(
+            QtGui.QPen(QtGui.QColor("#e05555"), 1.5, QtCore.Qt.DashLine)
+        )
         self._slice_item.setZValue(5)
         self.graph.addItem(self._slice_item)
         self.setCursor(QtCore.Qt.CrossCursor)
 
     def toggle_node_at(self, pos: QtCore.QPoint) -> None:
+        """Flip the selection of the node under viewport point ``pos``."""
         item = self.itemAt(pos)
         while item is not None and not isinstance(item, NodeItem):
             item = item.parentItem()
@@ -463,10 +549,16 @@ class GraphView(QtWidgets.QGraphicsView):
             return
         menu = QtWidgets.QMenu(self)
         if isinstance(item, WireItem):
-            menu.addAction("Disconnect", lambda key=item.target_key: self.disconnect_input(key))
+            menu.addAction(
+                "Disconnect", lambda key=item.target_key: self.disconnect_input(key)
+            )
         elif isinstance(item, NodeItem):
-            menu.addAction("Sever all connections", lambda key=item.key: self.sever(key))
-            menu.addAction("Remove scene nodes", lambda key=item.key: self.remove_scene_group(key))
+            menu.addAction(
+                "Sever all connections", lambda key=item.key: self.sever(key)
+            )
+            menu.addAction(
+                "Remove scene nodes", lambda key=item.key: self.remove_scene_group(key)
+            )
         else:
             menu.addAction("Add scene nodes", lambda: self.add_scene_group())
         menu.addSeparator()

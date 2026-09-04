@@ -56,23 +56,23 @@ def test_delete():
 
 
 def test_create_accepts_matrix_plugs():
-    a = tm.Transform.create(name="plug_measure_a")
-    b = tm.Transform.create(name="plug_measure_b")
-    b.translate = (0, 0, 5)
+    start = tm.Transform.create(name="plug_measure_a")
+    end = tm.Transform.create(name="plug_measure_b")
+    end.translate = (0, 0, 5)
 
     measure = tm.Measure.create(
-        a["worldMatrix[0]"], b["worldMatrix[0]"], name="plug_measure"
+        start["worldMatrix[0]"], end["worldMatrix[0]"], name="plug_measure"
     )
     assert abs(measure.distance.value - 5.0) < 1e-4
 
-    b.translate = (0, 0, 9)
+    end.translate = (0, 0, 9)
     assert abs(measure.distance.value - 9.0) < 1e-4
 
 
 def test_create_mixes_a_node_and_a_plug():
-    a = tm.Transform.create(name="mixed_measure_a")
-    b = tm.Transform.create(name="mixed_measure_b")
-    b.translate = (4, 0, 0)
+    start = tm.Transform.create(name="mixed_measure_a")
+    end = tm.Transform.create(name="mixed_measure_b")
+    end.translate = (4, 0, 0)
 
-    measure = tm.Measure.create(a, b["worldMatrix[0]"], name="mixed_measure")
+    measure = tm.Measure.create(start, end["worldMatrix[0]"], name="mixed_measure")
     assert abs(measure.distance.value - 4.0) < 1e-4

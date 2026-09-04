@@ -1,12 +1,11 @@
 """Each session tab owns a Guide Designer and the scene's checkout."""
 
 import pytest
+from test_pipeline_ui import _stub_designer
 
 from tik.trigger.session import Session
 from tik.trigger.ui.main import TriggerWindow
 from tik.trigger.ui.session_view import DESIGNER_TAB, SESSION_TAB
-
-from test_pipeline_ui import _stub_designer
 
 
 @pytest.fixture
@@ -43,8 +42,9 @@ def test_the_active_designer_follows_the_session_tab(window):
 
 def test_opening_the_designer_hands_the_scene_to_that_session(window, monkeypatch):
     calls = []
-    monkeypatch.setattr(Session, "hand_over",
-                        staticmethod(lambda out, inc: calls.append((out, inc))))
+    monkeypatch.setattr(
+        Session, "hand_over", staticmethod(lambda out, inc: calls.append((out, inc)))
+    )
     view = window.views[0]
     view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
     assert calls == [(None, view.session)]
@@ -54,8 +54,9 @@ def test_switching_session_tabs_hands_over(window, monkeypatch):
     # patched from the start: the window only advances its bookkeeping when a
     # hand-over succeeds, and the real one cannot here (no Maya)
     calls = []
-    monkeypatch.setattr(Session, "hand_over",
-                        staticmethod(lambda out, inc: calls.append((out, inc))))
+    monkeypatch.setattr(
+        Session, "hand_over", staticmethod(lambda out, inc: calls.append((out, inc)))
+    )
     first = window.views[0]
     window.new_session()
     second = window.views[-1]
@@ -69,8 +70,9 @@ def test_switching_session_tabs_hands_over(window, monkeypatch):
 def test_switching_sub_tabs_does_not_hand_over(window, monkeypatch):
     """Session and Guide Designer are two views of one document."""
     calls = []
-    monkeypatch.setattr(Session, "hand_over",
-                        staticmethod(lambda out, inc: calls.append((out, inc))))
+    monkeypatch.setattr(
+        Session, "hand_over", staticmethod(lambda out, inc: calls.append((out, inc)))
+    )
     view = window.views[0]
     view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
     calls.clear()

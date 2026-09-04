@@ -4,7 +4,6 @@ import pytest
 from maya import cmds
 
 import tik.maya as tm
-import tik.trigger as trigger
 from tik.trigger.core import ParentRef, get_module
 from tik.trigger.guides import GuideScene
 from tik.trigger.maya import Builder, tags
@@ -37,7 +36,9 @@ def _build_arm(scene, side="L", **settings):
             ws=True,
             t=(position[0] * mult, position[1], position[2]),
         )
-    report = Builder().build(document=scene.document, rig_name="hero", afterlife="delete")
+    report = Builder().build(
+        document=scene.document, rig_name="hero", afterlife="delete"
+    )
     return report, body, arm
 
 
@@ -68,11 +69,17 @@ def test_has_only_the_behaviour_fields():
     """No ik_solver, no ribbon fields, no soft_ik, no size or limit knobs."""
     names = set(get_module("arm").fields())
     assert names == {
-        "stretch", "squash", "pole_pin", "anim_spaces",
-        "limb_lock", "lock_from",
+        "stretch",
+        "squash",
+        "pole_pin",
+        "anim_spaces",
+        "limb_lock",
+        "lock_from",
         "auto_collar",
-        "auto_collar_lift_angles", "auto_collar_lift_degrees",
-        "auto_collar_swing_angles", "auto_collar_swing_degrees",
+        "auto_collar_lift_angles",
+        "auto_collar_lift_degrees",
+        "auto_collar_swing_angles",
+        "auto_collar_swing_degrees",
         "auto_collar_interpolation",
     }
 
@@ -152,7 +159,7 @@ def test_collar_is_a_behaviour_control(scene):
 
 
 def test_builds_without_a_ribbon(scene):
-    ctx = _arm_ctx(scene)
+    _arm_ctx(scene)
     assert not cmds.ls(type="nurbsSurface")
     assert not cmds.ls("*ribbon*")
 
@@ -182,7 +189,7 @@ def test_segment_scale_and_soft_ik_are_always_present(scene):
 
 
 def test_stretch_off_builds_a_smaller_graph(scene):
-    ctx = _arm_ctx(scene, stretch=False, squash=False)
+    _arm_ctx(scene, stretch=False, squash=False)
     lean = len(cmds.ls(type="condition"))
     cmds.file(new=True, force=True)
     fresh = GuideScene()
@@ -256,9 +263,13 @@ def test_the_old_auto_collar_attributes_are_gone(scene):
 
 def test_auto_collar_fields_exist():
     names = set(get_module("arm").fields())
-    assert {"auto_collar", "auto_collar_lift_angles",
-            "auto_collar_lift_degrees", "auto_collar_swing_angles",
-            "auto_collar_interpolation"} <= names
+    assert {
+        "auto_collar",
+        "auto_collar_lift_angles",
+        "auto_collar_lift_degrees",
+        "auto_collar_swing_angles",
+        "auto_collar_interpolation",
+    } <= names
 
 
 def test_auto_collar_can_be_switched_off(scene):
@@ -316,7 +327,13 @@ def test_auto_collar_on_follows_the_hand(scene):
     before = tuple(collar.world_axis("x"))
     control.translate = (0, 20, 0)
     after = tuple(collar.world_axis("x"))
-    assert max(abs(a - b) for a, b in zip(before, after)) > 0.05
+    assert (
+        max(
+            abs(before_value - after_value)
+            for before_value, after_value in zip(before, after)
+        )
+        > 0.05
+    )
 
 
 def test_wrist_roll_does_not_spin_the_collar(scene):
@@ -360,7 +377,7 @@ def test_bind_pose_is_exact_with_the_automation_full_on(scene):
 
 
 def test_raising_the_arm_never_dips_the_collar(scene):
-    """The original complaint, as a test.
+    """The original complaint, as earlier test.
 
     The old mechanism blended the collar toward pointing at the hand, so from
     an A-pose any weight above zero rotated it down, and the dip deepened as
@@ -370,7 +387,7 @@ def test_raising_the_arm_never_dips_the_collar(scene):
     collar = _collar_control(ctx)
     control = _ik_control(ctx)
     control["autoCollarLift"].value = 1.0
-    # The automation drives a parent group, so the control's own channels stay
+    # The automation drives earlier parent group, so the control's own channels stay
     # zero -- how far the collar's own X has tilted up is the honest measure.
     heights = []
     for height in range(0, 15):
@@ -379,7 +396,9 @@ def test_raising_the_arm_never_dips_the_collar(scene):
     rest = heights[0]  # zero offset is the bind pose, which is the neutral
     readings = [value - rest for value in heights]
     assert min(readings) > -1e-4, f"collar dipped: {readings}"
-    assert all(b >= a - 1e-6 for a, b in zip(readings, readings[1:])), readings
+    assert all(
+        later >= earlier - 1e-6 for earlier, later in zip(readings, readings[1:])
+    ), readings
     assert max(readings) > 0.05, readings
 
 
@@ -428,9 +447,9 @@ def test_two_rows_on_one_control_make_one_enum(scene):
     _report, ctx = _arm_with_spaces(scene, rows, wires)
     control = _ik_control(ctx)
     assert control.has_attr("parentSwitch")
-    listed = cmds.attributeQuery(
-        "parentSwitch", node=control.long_name, listEnum=True
-    )[0]
+    listed = cmds.attributeQuery("parentSwitch", node=control.long_name, listEnum=True)[
+        0
+    ]
     assert listed.split(":") == ["body", "root"]
 
 
@@ -464,7 +483,10 @@ def test_trg_round_trip_keeps_rows_and_wires(scene, tmp_path):
     guides = GuideScene()
     body = guides.add("base", name="body")
     guides.add(
-        "arm", side="L", name="arm", parent=body,
+        "arm",
+        side="L",
+        name="arm",
+        parent=body,
         anim_spaces=[{"control": "ik", "mode": "parent", "label": "body"}],
     )
     guides.connect("L_arm.ik_body", "body.root")
@@ -511,7 +533,6 @@ def test_pole_still_drives_the_solve(scene):
     before = elbow.world_position
     pole.translate = (0, 0, 12)
     assert (elbow.world_position - before).length() > 0.1
-
 
 
 # --------------------------------------------------------------- field groups
@@ -578,7 +599,9 @@ def _auto_arm(scene, side, **settings):
 
 def _shoulder_move(ik, shoulder, rest, delta):
     """How far the automation alone moves the shoulder, at this hand pose."""
-    cmds.xform(ik.long_name, ws=True, t=[a + b for a, b in zip(rest, delta)])
+    cmds.xform(
+        ik.long_name, ws=True, t=[base + offset for base, offset in zip(rest, delta)]
+    )
     ik["autoCollarLift"].value = 0.0
     ik["autoCollarSwing"].value = 0.0
     off = shoulder.world_translation
@@ -616,7 +639,8 @@ def test_the_shoulder_retracts_on_a_backward_reach(scene, side):
 def test_the_authored_lift_amounts_are_not_swapped(scene, side):
     """Rising must use the UPPER degrees. A mirrored frame can swap them."""
     ik, shoulder, rest = _auto_arm(
-        scene, side,
+        scene,
+        side,
         auto_collar_lift_angles=(-30.0, 40.0),
         auto_collar_lift_degrees=(-2.0, 20.0),
     )
@@ -630,7 +654,8 @@ def test_the_authored_lift_amounts_are_not_swapped(scene, side):
 def test_the_authored_swing_amounts_are_not_swapped(scene, side):
     """Reaching forward must use the FRONT degrees. `n x u` mirrors."""
     ik, shoulder, rest = _auto_arm(
-        scene, side,
+        scene,
+        side,
         auto_collar_swing_angles=(-30.0, 40.0),
         auto_collar_swing_degrees=(-2.0, 20.0),
     )

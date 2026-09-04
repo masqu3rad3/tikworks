@@ -101,7 +101,7 @@ class UserSettings:
 
         if not add_missing_keys:
             self._current_value.update(
-                (k, data[k]) for k in self._current_value.keys() & data.keys()
+                (key, data[key]) for key in self._current_value.keys() & data.keys()
             )
         else:
             self._current_value.update(data)

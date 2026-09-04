@@ -8,16 +8,19 @@ regenerate, and stays valid when the guide joints are deleted.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from tik.core.side import Side
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import instance_key
 
+if TYPE_CHECKING:
+    from .scene import GuideScene
+
 
 def mirror_source(source: str, side: str, target_side: str) -> str:
-    """``L_arm.hand`` -> ``R_arm.hand`` when mirroring; center/scene sources unchanged."""
+    """Mirror ``L_arm.hand`` to ``R_arm.hand``; center and scene sources unchanged."""
     key, dot, output = source.rpartition(".")
     if dot and key.startswith(f"{side}_"):
         return f"{target_side}_{key[2:]}{dot}{output}"
@@ -41,15 +44,19 @@ class GuideHandle:
         """
         found = self._guides.document.module(self._instance_id)
         if found is None:
-            raise GuideError(f"Module '{self._instance_id}' is no longer in the document.")
+            raise GuideError(
+                f"Module '{self._instance_id}' is no longer in the document."
+            )
         return found
 
     @property
     def instance_id(self) -> str:
+        """The uuid that identifies this module in the document."""
         return self._instance_id
 
     @property
     def name(self) -> str:
+        """The module's name (without its side)."""
         return self.entry.name
 
     @name.setter
@@ -67,18 +74,22 @@ class GuideHandle:
 
     @property
     def module_type(self) -> str:
+        """The registered module type."""
         return self.entry.module_type
 
     @property
     def side(self) -> Side:
+        """The module's side."""
         return Side.from_value(self.entry.side)
 
     @property
     def key(self) -> str:
+        """Display key: ``name`` for center modules, ``<side>_<name>`` otherwise."""
         return self.entry.key
 
     @property
     def module_class(self) -> type:
+        """The ``Module`` subclass registered for this type."""
         return registry.get_module(self.entry.module_type)
 
     def __repr__(self) -> str:
@@ -113,11 +124,13 @@ class GuideHandle:
         return self._guides.get(source.rpartition(".")[0])
 
     def select(self) -> None:
+        """Select this module's guide joints."""
         self._guides.select_guides(self._instance_id)
 
     # ---------------------------------------------------------- settings
     @property
     def settings(self) -> dict:
+        """The module's settings with defaults filled in."""
         module = self.module_class(settings=self.entry.settings)
         return module.values()
 
@@ -148,6 +161,7 @@ class GuideHandle:
         self._guides.write_settings(self.instance_id, settings)
 
     def set(self, **settings) -> "GuideHandle":
+        """Assign several settings at once; returns the handle for chaining."""
         for key, value in settings.items():
             setattr(self, key, value)
         return self
@@ -155,18 +169,21 @@ class GuideHandle:
     # ------------------------------------------------------------ inputs
     @property
     def inputs(self) -> dict:
-        """``{input name: source}``; sources are ``"<key>.<output>"`` or a scene node."""
+        """``{input name: source}``; a source is ``"<key>.<output>"`` or a node."""
         return self._guides.inputs_as_keys(self.entry)
 
     @property
     def input_names(self) -> list[str]:
+        """Declared inputs plus the space inputs the settings add."""
         return self.module_class.input_names(self.settings)
 
     @property
     def outputs(self) -> tuple:
+        """The output names this module exposes with its settings."""
         return self.module_class.output_names(self.settings)
 
     def set_input(self, input_name: str, source: Optional[str]) -> None:
+        """Point ``input_name`` at ``source`` (``key.output`` or node); None clears."""
         if self.module_class.get_input(input_name, self.settings) is None:
             raise GuideError(f"'{self.module_type}' has no input '{input_name}'.")
         self._guides.set_input(self.instance_id, input_name, source)

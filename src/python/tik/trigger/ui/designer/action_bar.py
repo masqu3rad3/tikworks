@@ -42,7 +42,11 @@ class DesignerActionBar(QtWidgets.QFrame):
         self.mirror_button = QtWidgets.QPushButton("Mirror")
         self.build_selected_button = QtWidgets.QPushButton("Build selected")
         layout.addWidget(self.selection_label)
-        for button in (self.select_button, self.mirror_button, self.build_selected_button):
+        for button in (
+            self.select_button,
+            self.mirror_button,
+            self.build_selected_button,
+        ):
             layout.addWidget(button)
 
         layout.addStretch(1)
@@ -55,7 +59,8 @@ class DesignerActionBar(QtWidgets.QFrame):
         self.auto_check = QtWidgets.QCheckBox("Auto")
         self.auto_check.setChecked(True)
         self.auto_check.setToolTip(
-            "Follow the scene automatically. Off, the session updates only when you press Sync."
+            "Follow the scene automatically. "
+            "Off, the session updates only when you press Sync."
         )
         layout.addWidget(self.auto_check)
         self.drift_pill = QtWidgets.QLabel("")
@@ -113,7 +118,11 @@ class DesignerActionBar(QtWidgets.QFrame):
         else:
             text = f"{len(keys)} modules"
         self.selection_label.setText(f"SELECTION  {text}")
-        for button in (self.select_button, self.mirror_button, self.build_selected_button):
+        for button in (
+            self.select_button,
+            self.mirror_button,
+            self.build_selected_button,
+        ):
             button.setEnabled(bool(keys))
 
     def set_auto_sync(self, on: bool) -> None:

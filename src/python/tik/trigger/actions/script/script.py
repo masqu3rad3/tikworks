@@ -18,6 +18,7 @@ class Script(Action):
     code = StringField("", help="Inline code run after the file")
 
     def run(self, ctx) -> None:
+        """Execute the script file or inline code with ``ctx`` in its namespace."""
         namespace = {"ctx": ctx, "__name__": "__trigger_script__"}
         if self.file_path:
             path = Path(self.file_path)
@@ -25,6 +26,8 @@ class Script(Action):
                 path = Path(ctx.paths["directory"]) / path
             if not path.exists():
                 raise ActionExecutionError(f"Script not found: {path}")
-            exec(compile(path.read_text(encoding="utf-8"), str(path), "exec"), namespace)
+            exec(
+                compile(path.read_text(encoding="utf-8"), str(path), "exec"), namespace
+            )
         if self.code:
             exec(compile(self.code, "<trigger script>", "exec"), namespace)

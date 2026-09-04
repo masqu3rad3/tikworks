@@ -15,8 +15,10 @@ from __future__ import annotations
 from typing import Optional
 
 from maya import cmds
+
 from tik.trigger.core import registry
 from tik.trigger.core.guide_document import GuideDocument, ModuleEntry
+from tik.trigger.core.ordering import dependency_order
 from tik.trigger.maya import tags
 from tik.trigger.maya.rig import GuideDraft
 
@@ -55,7 +57,9 @@ def _producer_guide(entry: ModuleEntry, document: Optional[GuideDocument]):
     if producer is None:
         return None
     producer_cls = registry.get_module(producer.module_type)
-    role = output if output in producer_cls.guides.all_roles else producer_cls.guides.root
+    role = (
+        output if output in producer_cls.guides.all_roles else producer_cls.guides.root
+    )
     found = nodes.guide_nodes(producer_id)
     return found.get((role, 0)) or found.get((producer_cls.guides.root, 0))
 
@@ -138,25 +142,22 @@ def regenerate_all(document: GuideDocument) -> None:
 
 
 def ordered(document: GuideDocument) -> list:
-    """Entries with producers before consumers, so root parenting resolves."""
-    by_id = {entry.instance_id: entry for entry in document.modules}
-    result: list = []
-    done: set = set()
-    visiting: set = set()
+    """Entries with producers before consumers, so root parenting resolves.
 
-    def visit(entry: ModuleEntry) -> None:
-        if entry.instance_id in done or entry.instance_id in visiting:
-            return  # a cycle: break it rather than recursing forever
-        visiting.add(entry.instance_id)
+    A cyclic connection is broken rather than reported: regenerate has to draw
+    every module even when the document is inconsistent.
+    """
+    by_id = {entry.instance_id: entry for entry in document.modules}
+
+    def producers(entry: ModuleEntry) -> list[ModuleEntry]:
+        found = []
         for source in entry.inputs.values():
             if source and "." in source:
                 producer = by_id.get(source.rpartition(".")[0])
                 if producer is not None and producer is not entry:
-                    visit(producer)
-        visiting.discard(entry.instance_id)
-        done.add(entry.instance_id)
-        result.append(entry)
+                    found.append(producer)
+        return found
 
-    for entry in document.modules:
-        visit(entry)
-    return result
+    return dependency_order(
+        document.modules, producers, lambda entry: entry.instance_id
+    )

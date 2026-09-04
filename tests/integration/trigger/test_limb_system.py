@@ -13,7 +13,8 @@ def _limb(ctx, **kwargs):
         [(0, 0, 0), (4, 0, -1), (8, 0, 0)], name_pattern="limb_guide_{index}"
     )
     binds = [
-        ctx.bind_joint(f"bind{index}", match=guide) for index, guide in enumerate(guides)
+        ctx.bind_joint(f"bind{index}", match=guide)
+        for index, guide in enumerate(guides)
     ]
     kwargs.setdefault("labels", ("upper", "lower", "end"))
     return build_ikfk_limb(ctx, guides, bind_joints=binds, name="limb", **kwargs), binds
@@ -271,14 +272,20 @@ def test_the_tweak_rides_along_with_the_main(build_context):
 
 def test_pole_tweak_is_the_pole_vector_target(build_context):
     result, _binds = _limb(build_context())
-    targets = cmds.listConnections(
-        f"{result.ik_handle.long_name}.poleVector", source=True, destination=False
-    ) or []
-    connected = cmds.listConnections(
-        f"{result.pole_tweak.transform.long_name}.translate",
-        source=False,
-        destination=True,
-    ) or []
+    targets = (
+        cmds.listConnections(
+            f"{result.ik_handle.long_name}.poleVector", source=True, destination=False
+        )
+        or []
+    )
+    connected = (
+        cmds.listConnections(
+            f"{result.pole_tweak.transform.long_name}.translate",
+            source=False,
+            destination=True,
+        )
+        or []
+    )
     assert targets or connected
 
 

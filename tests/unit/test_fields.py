@@ -110,7 +110,15 @@ def test_values_apply_reset():
 def test_schema_is_json_serializable_and_ordered():
     schema = Child.schema()
     assert list(schema) == [
-        "segments", "ratio", "local", "title", "solver", "up", "tags", "target", "extra",
+        "segments",
+        "ratio",
+        "local",
+        "title",
+        "solver",
+        "up",
+        "tags",
+        "target",
+        "extra",
     ]
     json.dumps(schema)
     assert schema["segments"]["min"] == 1
@@ -144,7 +152,9 @@ def test_table_field_coerces_rows_to_dicts():
     from tik.core.fields import Column, Schema, TableField
 
     class Holder(Schema):
-        rows = TableField(columns=(Column("label"), Column("mode", "choice", choices=("a", "b"))))
+        rows = TableField(
+            columns=(Column("label"), Column("mode", "choice", choices=("a", "b")))
+        )
 
     holder = Holder()
     holder.rows = [{"label": "chest", "mode": "a"}]
@@ -188,7 +198,9 @@ def test_table_field_fills_missing_columns():
     from tik.core.fields import Column, Schema, TableField
 
     class Holder(Schema):
-        rows = TableField(columns=(Column("label"), Column("mode", "choice", choices=("a",))))
+        rows = TableField(
+            columns=(Column("label"), Column("mode", "choice", choices=("a",)))
+        )
 
     holder = Holder()
     holder.rows = [{"label": "chest"}]
@@ -198,12 +210,19 @@ def test_table_field_fills_missing_columns():
 def test_table_field_schema_carries_columns():
     from tik.core.fields import Column, TableField
 
-    field = TableField(columns=(Column("mode", "choice", choices=("a", "b"), choices_from="modes"),))
+    field = TableField(
+        columns=(Column("mode", "choice", choices=("a", "b"), choices_from="modes"),)
+    )
     schema = field.to_schema()
     assert schema["type"] == "table"
     assert schema["columns"] == [
-        {"name": "mode", "kind": "choice", "choices": ["a", "b"],
-         "choices_from": "modes", "label": "Mode"}
+        {
+            "name": "mode",
+            "kind": "choice",
+            "choices": ["a", "b"],
+            "choices_from": "modes",
+            "label": "Mode",
+        }
     ]
 
 

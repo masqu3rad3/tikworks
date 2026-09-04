@@ -6,6 +6,8 @@ using the Maya Python API 2.0 for better performance.
 ANY FUNCTIONS HERE MUST NOT HAVE ANY DEPENDENCY TO tik.maya NODE WRAPPERS.
 """
 
+from __future__ import annotations
+
 from maya.api import OpenMaya
 
 from .undo import commit as undocommit
@@ -35,7 +37,8 @@ def obj_exists(name):
 def node_type(name):
     """Get the type of a Maya node.
 
-    Faster equivalent of cmds.nodeType(name) (without inherited=True) using Maya API 2.0.
+    Faster equivalent of ``cmds.nodeType(name)`` (without ``inherited=True``)
+    using Maya API 2.0.
 
     Args:
         name: Name of the node.

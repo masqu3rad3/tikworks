@@ -1,6 +1,7 @@
-"""Controller shape library UI widget for TikWorks Maya tools."""
+"""TikWorks.
 
-import sys
+``tik.core`` is pure Python, ``tik.maya`` wraps Maya, and the tools build on both.
+"""
 
 # Lazy loading of Maya-dependent code.
 # This allows tik.trigger to be imported in headless/test environments
@@ -11,8 +12,14 @@ _maya_available = True
 
 def __getattr__(name):
     global _maya_available
-    if name in ("cs_handler", "MOCK_DATA", "ShapeLibraryModel", "FlatLeafProxyModel",
-                "HoverOverlay", "ShapeLibraryWidget"):
+    if name in (
+        "cs_handler",
+        "MOCK_DATA",
+        "ShapeLibraryModel",
+        "FlatLeafProxyModel",
+        "HoverOverlay",
+        "ShapeLibraryWidget",
+    ):
         if _maya_available:
             try:
                 from tik.maya.utils import control_shapes
@@ -40,8 +47,14 @@ def __getattr__(name):
         raise AttributeError(
             "tik.MOCK_DATA requires Maya and is not available in this environment"
         )
-    if name in ("ShapeLibraryModel", "FlatLeafProxyModel", "HoverOverlay", "ShapeLibraryWidget"):
+    if name in (
+        "ShapeLibraryModel",
+        "FlatLeafProxyModel",
+        "HoverOverlay",
+        "ShapeLibraryWidget",
+    ):
         raise AttributeError(
-            f"tik.{name} requires Maya Qt widgets and is not available in this environment"
+            f"tik.{name} requires Maya Qt widgets and is not available "
+            "in this environment"
         )
     raise AttributeError(f"module 'tik' has no attribute '{name}'")

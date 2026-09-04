@@ -37,7 +37,9 @@ def test_a_deleted_guide_comes_back_where_it_was(scene):
     cmds.delete(scene.guide_nodes(handle.instance_id)[("segment", 1)].long_name)
     scene.sync()  # regenerate it
     restored = scene.guide_nodes(handle.instance_id)[("segment", 1)]
-    placed = cmds.xform(restored.long_name, query=True, worldSpace=True, translation=True)
+    placed = cmds.xform(
+        restored.long_name, query=True, worldSpace=True, translation=True
+    )
     assert placed == pytest.approx([13.0, 4.0, 0.0])
 
 
@@ -98,10 +100,16 @@ def test_orphans_are_reported_and_left_alone(scene):
     """Untracked scene content is a rigger's business, not ours to delete."""
     scene.add("fkchain", side="C", name="tail", segments=1)
     ghost = cmds.joint(name="ghost_guide")
-    tm.Joint(ghost).meta.update({
-        tags.KIND: tags.GUIDE, tags.MODULE: "fkchain",
-        tags.INSTANCE: "nosuchmodule", tags.ROLE: "root", tags.INDEX: 0, tags.SIDE: "C",
-    })
+    tm.Joint(ghost).meta.update(
+        {
+            tags.KIND: tags.GUIDE,
+            tags.MODULE: "fkchain",
+            tags.INSTANCE: "nosuchmodule",
+            tags.ROLE: "root",
+            tags.INDEX: 0,
+            tags.SIDE: "C",
+        }
+    )
     diff = scene.sync()
     assert diff.orphans
     assert cmds.objExists("ghost_guide")
@@ -109,10 +117,16 @@ def test_orphans_are_reported_and_left_alone(scene):
 
 def test_sync_on_a_clean_scene_changes_nothing(scene):
     handle = scene.add("fkchain", side="C", name="tail", segments=2)
-    before = {pair: node.long_name for pair, node in scene.guide_nodes(handle.instance_id).items()}
+    before = {
+        pair: node.long_name
+        for pair, node in scene.guide_nodes(handle.instance_id).items()
+    }
     diff = scene.sync()
     assert diff.structural == []
-    after = {pair: node.long_name for pair, node in scene.guide_nodes(handle.instance_id).items()}
+    after = {
+        pair: node.long_name
+        for pair, node in scene.guide_nodes(handle.instance_id).items()
+    }
     assert after == before  # nothing was rebuilt
 
 
@@ -128,7 +142,9 @@ def test_sync_return_value_reflects_what_it_just_fixed(scene):
     handle = scene.add("fkchain", side="C", name="tail", segments=3)
     cmds.delete(scene.guide_nodes(handle.instance_id)[("segment", 1)].long_name)
     diff = scene.sync()
-    assert diff.structural == []  # sync() just redrew it -- the return value must say so
+    assert (
+        diff.structural == []
+    )  # sync() just redrew it -- the return value must say so
     assert diff.drifted == []
     assert scene.diff().is_clean  # and a fresh scan agrees: not a stale answer
 
@@ -146,7 +162,9 @@ def test_sync_on_a_dismissed_document_still_reports_outstanding_staleness(scene)
         cmds.delete(joint.long_name)
     scene.dismissed = True  # the policy a build with afterlife='delete' sets
     diff = scene.sync()
-    assert diff.structural == [handle.instance_id]  # unregenerated: still the pre-sync truth
+    assert diff.structural == [
+        handle.instance_id
+    ]  # unregenerated: still the pre-sync truth
     assert scene.guide_nodes(handle.instance_id) == {}  # confirms nothing was redrawn
 
 
@@ -234,7 +252,9 @@ def test_document_survives_a_full_round_trip(scene):
 
     assert scene.document.to_dict() == before
     restored = scene.guide_nodes(handle.instance_id)[("segment", 1)]
-    placed = cmds.xform(restored.long_name, query=True, worldSpace=True, translation=True)
+    placed = cmds.xform(
+        restored.long_name, query=True, worldSpace=True, translation=True
+    )
     assert placed == pytest.approx([6.0, 7.0, 8.0])
 
 
@@ -286,7 +306,9 @@ def test_restoring_brings_dismissed_guides_back(scene):
     Builder().build(document=scene.document, rig_name="afterlife", afterlife="delete")
     scene.restore()
     restored = scene.guide_nodes(handle.instance_id)[("root", 0)]
-    placed = cmds.xform(restored.long_name, query=True, worldSpace=True, translation=True)
+    placed = cmds.xform(
+        restored.long_name, query=True, worldSpace=True, translation=True
+    )
     assert placed == pytest.approx([3.0, 4.0, 5.0])
 
 
@@ -319,10 +341,12 @@ def test_a_new_scene_leaves_the_modules_and_redraws_them(scene):
 
     cmds.file(new=True, force=True)
 
-    assert scene.get(handle.instance_id).name == "tail"   # never left
+    assert scene.get(handle.instance_id).name == "tail"  # never left
     scene.sync()
     restored = scene.guide_nodes(handle.instance_id)[("root", 0)]
-    placed = cmds.xform(restored.long_name, query=True, worldSpace=True, translation=True)
+    placed = cmds.xform(
+        restored.long_name, query=True, worldSpace=True, translation=True
+    )
     assert placed == pytest.approx([2.0, 3.0, 4.0])
 
 
@@ -349,15 +373,23 @@ def test_the_scene_holds_no_module_nodes_at_all(scene):
 # capture first threw the rigger's posing away. Adding sync() to these tests
 # would hide exactly the bug they exist to catch.
 
+
 def _posed(scene, handle, pair=("segment", 0), where=(11.0, 2.0, 3.0)):
-    cmds.xform(scene.guide_nodes(handle.instance_id)[pair].long_name,
-               worldSpace=True, translation=where)
+    cmds.xform(
+        scene.guide_nodes(handle.instance_id)[pair].long_name,
+        worldSpace=True,
+        translation=where,
+    )
     return where
 
 
 def _placed(scene, handle, pair=("segment", 0)):
-    return cmds.xform(scene.guide_nodes(handle.instance_id)[pair].long_name,
-                      query=True, worldSpace=True, translation=True)
+    return cmds.xform(
+        scene.guide_nodes(handle.instance_id)[pair].long_name,
+        query=True,
+        worldSpace=True,
+        translation=True,
+    )
 
 
 def test_changing_a_property_keeps_the_pose(scene):

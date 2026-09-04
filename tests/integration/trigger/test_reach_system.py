@@ -21,16 +21,30 @@ NEUTRAL = (16.0, 0.0, 0.0)
 
 def _setup(ctx, lift=LIFT, swing=SWING, **kwargs):
     """A socket, an origin, a target, and the reach driving a group."""
-    socket = tm.Transform.create(name="reach_socket", parent=ctx.groups.socket.long_name)
+    socket = tm.Transform.create(
+        name="reach_socket", parent=ctx.groups.socket.long_name
+    )
     origin = tm.Transform.create(name="reach_origin", parent=socket.long_name)
     origin.translate = (ORIGIN, 0, 0)
     holder = tm.Transform.create(name="reach_holder", parent=ctx.groups.rig.long_name)
-    target = tm.Transform.create(name="reach_target", parent=ctx.groups.control.long_name)
+    target = tm.Transform.create(
+        name="reach_target", parent=ctx.groups.control.long_name
+    )
     target.translate = (14, 0, 0)
     control = ctx.controller("reach_ctrl", mirror="world")
     reach = build_reach(
-        ctx, holder, origin, socket, NEUTRAL, target, control.transform,
-        prefix="autoCollar", lift=lift, swing=swing, name="reach", **kwargs
+        ctx,
+        holder,
+        origin,
+        socket,
+        NEUTRAL,
+        target,
+        control.transform,
+        prefix="autoCollar",
+        lift=lift,
+        swing=swing,
+        name="reach",
+        **kwargs,
     )
     return socket, target, control.transform, reach
 
@@ -77,7 +91,10 @@ def test_off_is_inert(build_context):
     _socket, target, _control, reach = _setup(build_context())
     before = _rotation(reach)
     _place(target, 60.0, 40.0)
-    assert all(abs(a - b) < 1e-4 for a, b in zip(_rotation(reach), before))
+    assert all(
+        abs(actual - expected) < 1e-4
+        for actual, expected in zip(_rotation(reach), before)
+    )
 
 
 # ------------------------------------------------------------- the neutral
@@ -123,7 +140,9 @@ def test_lift_is_monotonic_from_the_neutral_to_the_limit(build_context):
     for elevation in range(0, 76, 5):
         _place(target, float(elevation))
         samples.append(_lift(reach))
-    assert all(b >= a - 1e-6 for a, b in zip(samples, samples[1:])), samples
+    assert all(
+        later >= earlier - 1e-6 for earlier, later in zip(samples, samples[1:])
+    ), samples
     assert abs(samples[-1] - LIFT.max_output) < 1e-3
 
 

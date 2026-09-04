@@ -34,7 +34,9 @@ class _VectorEditor(QtWidgets.QWidget):
                 float(maximum) if maximum is not None else 1e9,
             )
             spin.setDecimals(3)
-            spin.valueChanged.connect(lambda _value: self.valueChanged.emit(self.value()))
+            spin.valueChanged.connect(
+                lambda _value: self.valueChanged.emit(self.value())
+            )
             if labels and index < len(labels):
                 column = QtWidgets.QVBoxLayout()
                 column.setContentsMargins(0, 0, 0, 0)
@@ -72,7 +74,9 @@ class _TableEditor(QtWidgets.QWidget):
         layout.setSpacing(2)
 
         self.table = QtWidgets.QTableWidget(0, len(self.columns))
-        self.table.setHorizontalHeaderLabels([column.display() for column in self.columns])
+        self.table.setHorizontalHeaderLabels(
+            [column.display() for column in self.columns]
+        )
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
@@ -112,6 +116,7 @@ class _TableEditor(QtWidgets.QWidget):
         return widget
 
     def add_row(self, row: Optional[dict] = None) -> None:
+        """Append a row, filled from ``row`` or the column defaults."""
         row = row or {}
         index = self.table.rowCount()
         self.table.insertRow(index)
@@ -122,12 +127,15 @@ class _TableEditor(QtWidgets.QWidget):
         self._emit()
 
     def remove_row(self, index: int) -> None:
+        """Delete row ``index`` if it exists."""
         if 0 <= index < self.table.rowCount():
             self.table.removeRow(index)
             self._emit()
 
     def _remove_selected(self) -> None:
-        rows = sorted({item.row() for item in self.table.selectedIndexes()}, reverse=True)
+        rows = sorted(
+            {item.row() for item in self.table.selectedIndexes()}, reverse=True
+        )
         if not rows and self.table.rowCount():
             rows = [self.table.rowCount() - 1]
         for index in rows:
@@ -136,6 +144,7 @@ class _TableEditor(QtWidgets.QWidget):
         self._emit()
 
     def cell_widget(self, row: int, column: int):
+        """The editor widget at ``row``/``column``."""
         return self.table.cellWidget(row, column)
 
     # ------------------------------------------------------------ value
@@ -159,7 +168,9 @@ class _TableEditor(QtWidgets.QWidget):
             self.table.insertRow(index)
             for column_index, column in enumerate(self.columns):
                 self.table.setCellWidget(
-                    index, column_index, self._make_cell(column, row.get(column.name, ""))
+                    index,
+                    column_index,
+                    self._make_cell(column, row.get(column.name, "")),
                 )
 
     def _emit(self, *_args) -> None:
@@ -205,7 +216,9 @@ class _FileEditor(QtWidgets.QWidget):
 
     valueChanged = QtCore.Signal(object)
 
-    def __init__(self, extensions=(), mode="open", parent=None, extra=None, browser=None) -> None:
+    def __init__(
+        self, extensions=(), mode="open", parent=None, extra=None, browser=None
+    ) -> None:
         super().__init__(parent)
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -239,11 +252,17 @@ class _FileEditor(QtWidgets.QWidget):
         if self.browser is not None:
             picked = self.browser(self.mode, self.extensions, self.value())
         elif self.mode == "dir":
-            picked = QtWidgets.QFileDialog.getExistingDirectory(self, "Choose folder", self.value())
+            picked = QtWidgets.QFileDialog.getExistingDirectory(
+                self, "Choose folder", self.value()
+            )
         elif self.mode == "save":
-            picked, _filter = QtWidgets.QFileDialog.getSaveFileName(self, "Save", self.value(), self._filter())
+            picked, _filter = QtWidgets.QFileDialog.getSaveFileName(
+                self, "Save", self.value(), self._filter()
+            )
         else:
-            picked, _filter = QtWidgets.QFileDialog.getOpenFileName(self, "Open", self.value(), self._filter())
+            picked, _filter = QtWidgets.QFileDialog.getOpenFileName(
+                self, "Open", self.value(), self._filter()
+            )
         if picked:
             self.line.setText(picked)
             self.valueChanged.emit(picked)
@@ -279,8 +298,10 @@ class FormBuilder(QtWidgets.QWidget):
         Args:
             target: The Schema instance to edit.
             node_picker: Callable returning a node name for NodeRefField pickers.
-            file_browser: Optional ``(mode, extensions, current) -> path`` replacing the dialogs.
-            file_extras: ``{extension: (label, callback(path))}`` extra button on matching FileFields.
+            file_browser: Optional ``(mode, extensions, current) -> path``
+                replacing the dialogs.
+            file_extras: ``{extension: (label, callback(path))}``: an extra
+                button on matching FileFields.
         """
         super().__init__(parent)
         self._layout = QtWidgets.QVBoxLayout(self)
@@ -306,9 +327,11 @@ class FormBuilder(QtWidgets.QWidget):
     # ------------------------------------------------------------ building
     @property
     def target(self) -> Optional[Schema]:
+        """The schema object the form edits, or None."""
         return self._target
 
     def clear(self) -> None:
+        """Remove every field widget and forget the target."""
         self._clear_layout(self._layout)
         self._plain = None
         self._groups.clear()
@@ -339,6 +362,7 @@ class FormBuilder(QtWidgets.QWidget):
         return form
 
     def set_target(self, target: Optional[Schema]) -> None:
+        """Rebuild the form for ``target``'s fields (None clears it)."""
         self.clear()
         self._target = target
         if target is None:
@@ -368,8 +392,8 @@ class FormBuilder(QtWidgets.QWidget):
                 )
                 fold = CollapsibleGroup(group.label, expanded=expanded)
                 fold.toggled.connect(
-                    lambda state, g=group: self._collapsed.__setitem__(
-                        self._fold_key(g), state
+                    lambda state, fold=group: self._collapsed.__setitem__(
+                        self._fold_key(fold), state
                     )
                 )
                 holder = QtWidgets.QWidget()
@@ -389,18 +413,24 @@ class FormBuilder(QtWidgets.QWidget):
         self.refresh()
 
     def mark_overrides(self, names, reference_values: Optional[dict] = None) -> None:
-        """Highlight fields carrying an override; ``reference_values`` show in tooltips."""
+        """Highlight fields carrying an override.
+
+        ``reference_values`` show in the tooltips.
+        """
         self._overridden = set(names)
         self._reference = dict(reference_values or {})
         for name, label in self._labels.items():
             if name in self._overridden:
                 label.setStyleSheet("color: #FE7E00; font-weight: bold;")
-                label.setToolTip(f"override (referenced value: {self._reference.get(name, '?')!r})")
+                label.setToolTip(
+                    f"override (referenced value: {self._reference.get(name, '?')!r})"
+                )
             else:
                 label.setStyleSheet("")
                 label.setToolTip("")
 
     def widget(self, name: str) -> QtWidgets.QWidget:
+        """The editor widget for field ``name``."""
         return self._widgets[name]
 
     def _make_widget(self, name: str, field: Field) -> QtWidgets.QWidget:
@@ -411,7 +441,9 @@ class FormBuilder(QtWidgets.QWidget):
                 int(field.min) if field.min is not None else -(2**31),
                 int(field.max) if field.max is not None else 2**31 - 1,
             )
-            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+            widget.valueChanged.connect(
+                lambda value, field_name=name: self._on_change(field_name, value)
+            )
         elif kind == "float":
             widget = QtWidgets.QDoubleSpinBox()
             widget.setDecimals(3)
@@ -419,16 +451,22 @@ class FormBuilder(QtWidgets.QWidget):
                 float(field.min) if field.min is not None else -1e9,
                 float(field.max) if field.max is not None else 1e9,
             )
-            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+            widget.valueChanged.connect(
+                lambda value, field_name=name: self._on_change(field_name, value)
+            )
         elif kind == "bool":
             widget = QtWidgets.QCheckBox()
-            widget.toggled.connect(lambda value, n=name: self._on_change(n, bool(value)))
+            widget.toggled.connect(
+                lambda value, field_name=name: self._on_change(field_name, bool(value))
+            )
         elif kind == "choice":
             widget = QtWidgets.QComboBox()
             for choice in field.choices or []:
                 widget.addItem(str(choice), choice)
             widget.currentIndexChanged.connect(
-                lambda index, n=name, w=widget: self._on_change(n, w.itemData(index))
+                lambda index, field_name=name, combo=widget: self._on_change(
+                    field_name, combo.itemData(index)
+                )
             )
         elif kind == "vector":
             widget = _VectorEditor(
@@ -437,16 +475,22 @@ class FormBuilder(QtWidgets.QWidget):
                 maximum=field.max,
                 labels=getattr(field, "labels", None),
             )
-            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+            widget.valueChanged.connect(
+                lambda value, field_name=name: self._on_change(field_name, value)
+            )
         elif kind == "list":
             widget = QtWidgets.QLineEdit()
             widget.setPlaceholderText("comma separated")
             widget.editingFinished.connect(
-                lambda n=name, w=widget: self._on_change(n, self._parse_list(w.text()))
+                lambda field_name=name, editor=widget: self._on_change(
+                    field_name, self._parse_list(editor.text())
+                )
             )
         elif kind == "node":
             widget = _NodeEditor(self.node_picker)
-            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+            widget.valueChanged.connect(
+                lambda value, field_name=name: self._on_change(field_name, value)
+            )
         elif kind == "file":
             extra = None
             for ext in getattr(field, "extensions", []):
@@ -455,20 +499,33 @@ class FormBuilder(QtWidgets.QWidget):
                     break
             from tik.shared.ui.versioned_field import VersionedFileField
 
-            widget = VersionedFileField(getattr(field, "extensions", ()), getattr(field, "mode", "open"),
-                                        extra=extra, browser=self.file_browser, base_dir=self.base_dir)
-            widget.changed.connect(lambda value, n=name: self._on_change(n, value))
+            widget = VersionedFileField(
+                getattr(field, "extensions", ()),
+                getattr(field, "mode", "open"),
+                extra=extra,
+                browser=self.file_browser,
+                base_dir=self.base_dir,
+            )
+            widget.changed.connect(
+                lambda value, field_name=name: self._on_change(field_name, value)
+            )
         elif kind == "table":
             widget = _TableEditor(
                 getattr(field, "columns", ()),
                 choices_resolver=lambda attr: getattr(self._target, attr, ()),
             )
-            widget.valueChanged.connect(lambda value, n=name: self._on_change(n, value))
+            widget.valueChanged.connect(
+                lambda value, field_name=name: self._on_change(field_name, value)
+            )
         elif kind == "dict":
             widget = QtWidgets.QLabel("(edited in place)")
         else:  # string and unknown types
             widget = QtWidgets.QLineEdit()
-            widget.editingFinished.connect(lambda n=name, w=widget: self._on_change(n, w.text()))
+            widget.editingFinished.connect(
+                lambda field_name=name, editor=widget: self._on_change(
+                    field_name, editor.text()
+                )
+            )
         return widget
 
     @staticmethod
@@ -497,12 +554,16 @@ class FormBuilder(QtWidgets.QWidget):
             widget.setCurrentIndex(max(index, 0))
         elif isinstance(widget, (QtWidgets.QSpinBox, QtWidgets.QDoubleSpinBox)):
             widget.setValue(value)
-        elif hasattr(widget, "setValue") and not isinstance(widget, (QtWidgets.QSpinBox, QtWidgets.QDoubleSpinBox)):
+        elif hasattr(widget, "setValue") and not isinstance(
+            widget, (QtWidgets.QSpinBox, QtWidgets.QDoubleSpinBox)
+        ):
             widget.setValue(value)
         elif isinstance(widget, QtWidgets.QLabel):
             return
         elif isinstance(widget, QtWidgets.QLineEdit):
-            widget.setText(", ".join(map(str, value)) if isinstance(value, list) else str(value))
+            widget.setText(
+                ", ".join(map(str, value)) if isinstance(value, list) else str(value)
+            )
 
     def _on_change(self, name: str, value: Any) -> None:
         if self._target is None:
@@ -516,4 +577,5 @@ class FormBuilder(QtWidgets.QWidget):
         self.changed.emit(name, getattr(self._target, name))
 
     def values(self) -> dict:
+        """The target's current values, or ``{}`` without a target."""
         return self._target.values() if self._target is not None else {}

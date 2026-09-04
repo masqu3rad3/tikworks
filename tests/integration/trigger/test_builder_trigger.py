@@ -61,7 +61,9 @@ class ToyChain(Module):
     def draw_guides(self, guides) -> None:
         previous = guides.joint("root", (0, 0, 0))
         for index in range(self.segments):
-            previous = guides.joint("segment", (index + 1, 0, 0), index=index, parent=previous)
+            previous = guides.joint(
+                "segment", (index + 1, 0, 0), index=index, parent=previous
+            )
 
     def build(self, rig) -> None:
         guide_nodes = [rig.guide("root"), *rig.chain("segment")]
@@ -97,7 +99,11 @@ class ToyBoom(Module):
 def toys():
     cmds.file(new=True, force=True)
     trigger.load_plugins()
-    for name, cls in (("toy_root", ToyRoot), ("toy_chain", ToyChain), ("toy_boom", ToyBoom)):
+    for name, cls in (
+        ("toy_root", ToyRoot),
+        ("toy_chain", ToyChain),
+        ("toy_boom", ToyBoom),
+    ):
         register_module(name)(cls)
     yield GuideScene()
     for name in ("toy_root", "toy_chain", "toy_boom"):
@@ -123,7 +129,9 @@ def test_builds_in_order_and_connects(pair):
     seen = []
     events.subscribe("progress", lambda **kw: seen.append(kw["label"]))
 
-    report = Builder(events).build(document=scene.document, rig_name="rig", afterlife="hide")
+    report = Builder(events).build(
+        document=scene.document, rig_name="rig", afterlife="hide"
+    )
 
     assert report.built == [body.instance_id, tail.instance_id]
     assert seen == ["Building body", "Building tail"]
@@ -131,8 +139,12 @@ def test_builds_in_order_and_connects(pair):
     # the socket really is driven by the producer's output
     socket = report.rigs[tail.instance_id].attachments["root"]
     assert tm.Transform(socket.long_name).parent.name.endswith("socket_grp")
-    driver = cmds.listConnections(socket.long_name, source=True, destination=False,
-                                  type="decomposeMatrix") or []
+    driver = (
+        cmds.listConnections(
+            socket.long_name, source=True, destination=False, type="decomposeMatrix"
+        )
+        or []
+    )
     assert driver and driver[0].startswith("L_tail_attach_root")
     # afterlife="hide" leaves the guides in place but hidden
     assert not cmds.getAttr(f"{tags.GUIDE_HOLDER}.visibility")
@@ -146,7 +158,9 @@ def test_scene_node_sources_must_exist_and_optional_inputs_may_be_empty(pair):
     scene, _body, tail = pair
     tail.set_input("space", "some_jnt")
     with pytest.raises(AttachError) as info:
-        Builder().build(document=scene.document, )
+        Builder().build(
+            document=scene.document,
+        )
     assert "some_jnt" in str(info.value) and "L_tail.space" in str(info.value)
 
     tm.Transform.create(name="some_jnt")
@@ -155,13 +169,17 @@ def test_scene_node_sources_must_exist_and_optional_inputs_may_be_empty(pair):
 
     tail.set_input("root", "body.nope")
     with pytest.raises(AttachError) as info:
-        Builder().build(document=scene.document, )
+        Builder().build(
+            document=scene.document,
+        )
     assert "not built" in str(info.value)
 
     tail.set_input("root", "")
     tail.set_input("space", "")
     with pytest.raises(AttachError) as info:
-        Builder().build(document=scene.document, )
+        Builder().build(
+            document=scene.document,
+        )
     assert "required input" in str(info.value)
 
 
@@ -172,7 +190,9 @@ def test_a_failing_module_is_named_in_the_error(toys):
     events.subscribe("error", lambda **kw: errors.append(kw["context"]))
 
     with pytest.raises(BuildError) as info:
-        Builder(events).build(document=toys.document, )
+        Builder(events).build(
+            document=toys.document,
+        )
 
     assert info.value.instance_id == boom.instance_id
     assert errors == ["building kaboom"]
@@ -184,12 +204,21 @@ def test_missing_guides_fail_validation(pair):
     cmds.delete(scene.guide_node(tail.instance_id, "segment", 0).long_name)
 
     with pytest.raises(BuildError) as info:
-        Builder().build(document=scene.document, )
+        Builder().build(
+            document=scene.document,
+        )
     assert "needs at least" in str(info.value)
 
 
 def test_empty_scene_and_bad_afterlife(toys):
-    assert Builder().build(document=toys.document, ).count == 0
+    assert (
+        Builder()
+        .build(
+            document=toys.document,
+        )
+        .count
+        == 0
+    )
     with pytest.raises(ValueError):
         Builder().build(document=toys.document, afterlife="burn")
 
@@ -233,10 +262,13 @@ def test_space_connections_are_grouped_by_control_and_mode(toys):
     toys.add("toy_root", name="body")
     toys.add("toy_root", name="head")
     arm = toys.add("toy_root", name="arm")
-    _rows(arm, [
-        {"control": "root", "mode": "parent", "label": "body"},
-        {"control": "root", "mode": "parent", "label": "head"},
-    ])
+    _rows(
+        arm,
+        [
+            {"control": "root", "mode": "parent", "label": "body"},
+            {"control": "root", "mode": "parent", "label": "head"},
+        ],
+    )
     arm.set_input("root_body", "body.root")
     arm.set_input("root_head", "head.root")
 
@@ -244,26 +276,36 @@ def test_space_connections_are_grouped_by_control_and_mode(toys):
 
     control = report.rigs[arm.instance_id].controller_by_role("root")
     assert control.transform.has_attr("parentSwitch")
-    listed = cmds.attributeQuery("parentSwitch", node=control.transform.long_name, listEnum=True)[0]
+    listed = cmds.attributeQuery(
+        "parentSwitch", node=control.transform.long_name, listEnum=True
+    )[0]
     assert listed.split(":") == ["body", "head"]
-    assert sorted(report.spaces) == [("arm.root_body", "body.root"), ("arm.root_head", "head.root")]
+    assert sorted(report.spaces) == [
+        ("arm.root_body", "body.root"),
+        ("arm.root_head", "head.root"),
+    ]
 
 
 def test_row_order_is_enum_order(toys):
     toys.add("toy_root", name="body")
     toys.add("toy_root", name="head")
     arm = toys.add("toy_root", name="arm")
-    _rows(arm, [
-        {"control": "root", "mode": "parent", "label": "head"},
-        {"control": "root", "mode": "parent", "label": "body"},
-    ])
+    _rows(
+        arm,
+        [
+            {"control": "root", "mode": "parent", "label": "head"},
+            {"control": "root", "mode": "parent", "label": "body"},
+        ],
+    )
     arm.set_input("root_body", "body.root")
     arm.set_input("root_head", "head.root")
 
     report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
 
     control = report.rigs[arm.instance_id].controller_by_role("root")
-    listed = cmds.attributeQuery("parentSwitch", node=control.transform.long_name, listEnum=True)[0]
+    listed = cmds.attributeQuery(
+        "parentSwitch", node=control.transform.long_name, listEnum=True
+    )[0]
     assert listed.split(":") == ["head", "body"]
 
 

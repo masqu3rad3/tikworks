@@ -10,7 +10,8 @@ import logging
 from pathlib import Path
 from typing import Any, Optional, Union
 
-from tik.core.jsonio import load as _json_load, save as _json_save
+from tik.core.jsonio import load as _json_load
+from tik.core.jsonio import save as _json_save
 
 LOG = logging.getLogger(__name__)
 
@@ -116,9 +117,9 @@ class IO:
         """
         try:
             return _json_load(file_path)
-        except Exception as e:
+        except Exception as error:  # noqa: BLE001 - report, never crash on user data
             LOG.error("Corrupted file => %s", file_path)
-            raise Exception(f"Corrupted file => {file_path}") from e
+            raise Exception(f"Corrupted file => {file_path}") from error
 
     @staticmethod
     def file_exists(file_path: Union[str, Path]) -> bool:

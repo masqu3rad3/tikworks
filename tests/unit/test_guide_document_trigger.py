@@ -42,7 +42,9 @@ def test_record_radius_colour_orient_round_trip_through_dict():
     assert restored.color is None
     assert restored.joint_orient is None
 
-    authored = GuideRecord(role="root", radius=2.5, color=6, joint_orient=(1.0, 2.0, 3.0))
+    authored = GuideRecord(
+        role="root", radius=2.5, color=6, joint_orient=(1.0, 2.0, 3.0)
+    )
     data = authored.to_dict()
     assert data["radius"] == 2.5
     assert data["color"] == 6
@@ -60,7 +62,10 @@ def test_entry_key_follows_side():
 
 def test_entry_guide_lookup():
     entry = ModuleEntry(
-        "id1", "fkchain", "tail", "C",
+        "id1",
+        "fkchain",
+        "tail",
+        "C",
         guides=[GuideRecord("root"), GuideRecord("segment", 1)],
     )
     assert entry.guide("segment", 1).index == 1
@@ -72,10 +77,17 @@ def test_document_round_trip_preserves_everything():
     document = GuideDocument(
         modules=[
             ModuleEntry(
-                "id1", "arm", "arm", "L",
+                "id1",
+                "arm",
+                "arm",
+                "L",
                 settings={"segments": 3},
                 inputs={"root": "id2.hand"},
-                guides=[GuideRecord("root", position=(1.0, 0.0, 0.0), attrs={"twistWeight": 0.5})],
+                guides=[
+                    GuideRecord(
+                        "root", position=(1.0, 0.0, 0.0), attrs={"twistWeight": 0.5}
+                    )
+                ],
             )
         ],
         scene_groups=[SceneGroup("g1", "sceneNodes1", ["some_jnt"])],
@@ -109,7 +121,10 @@ def test_from_dict_rejects_newer_schema():
 def test_expand_guides_grows_keeping_existing_poses():
     layout = GuideLayout("root", multi="segment", min=1, max=50)
     entry = ModuleEntry(
-        "id1", "fkchain", "tail", "C",
+        "id1",
+        "fkchain",
+        "tail",
+        "C",
         guides=[
             GuideRecord("root", position=(0.0, 0.0, 0.0)),
             GuideRecord("segment", 0, position=(5.0, 0.0, 0.0)),
@@ -117,7 +132,13 @@ def test_expand_guides_grows_keeping_existing_poses():
         ],
     )
     expand_guides(entry, layout, 4)
-    assert entry.pairs == [("root", 0), ("segment", 0), ("segment", 1), ("segment", 2), ("segment", 3)]
+    assert entry.pairs == [
+        ("root", 0),
+        ("segment", 0),
+        ("segment", 1),
+        ("segment", 2),
+        ("segment", 3),
+    ]
     assert entry.guide("segment", 0).position == (5.0, 0.0, 0.0)
     assert entry.guide("segment", 1).position == (10.0, 0.0, 0.0)
     assert entry.guide("segment", 2).posed is False
@@ -127,8 +148,15 @@ def test_expand_guides_grows_keeping_existing_poses():
 def test_expand_guides_shrinks():
     layout = GuideLayout("root", multi="segment", min=1, max=50)
     entry = ModuleEntry(
-        "id1", "fkchain", "tail", "C",
-        guides=[GuideRecord("root"), GuideRecord("segment", 0), GuideRecord("segment", 1)],
+        "id1",
+        "fkchain",
+        "tail",
+        "C",
+        guides=[
+            GuideRecord("root"),
+            GuideRecord("segment", 0),
+            GuideRecord("segment", 1),
+        ],
     )
     expand_guides(entry, layout, 1)
     assert entry.pairs == [("root", 0), ("segment", 0)]
@@ -137,7 +165,10 @@ def test_expand_guides_shrinks():
 def test_expand_guides_keeps_fixed_roles():
     layout = GuideLayout("collar", "shoulder", "elbow", "hand")
     entry = ModuleEntry(
-        "id1", "arm", "arm", "L",
+        "id1",
+        "arm",
+        "arm",
+        "L",
         guides=[GuideRecord("collar", position=(1.0, 0.0, 0.0))],
     )
     expand_guides(entry, layout, 0)

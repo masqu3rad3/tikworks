@@ -1,6 +1,8 @@
 """Panel construct for managing model panels and camera settings."""
 
-from typing import Any, Dict, Optional, Tuple, Union
+from __future__ import annotations
+
+from typing import Any, Optional, Union
 
 from maya import cmds
 
@@ -147,14 +149,15 @@ class Panel:
     def __init__(
         self,
         camera: Union[str, Camera, Transform],
-        resolution: Tuple[int, int] = (1920, 1080),
+        resolution: tuple[int, int] = (1920, 1080),
         inherit: bool = True,
         title: str = "Tik Panel",
     ):
         """Initialize the Panel construct.
 
         Args:
-            camera: The camera to look through (name, Camera wrapper, or Transform wrapper).
+            camera: The camera to look through (name, Camera wrapper, or
+                Transform wrapper).
             resolution: The initial resolution of the window (width, height).
             inherit: Whether to inherit settings from the active or existing panels.
             title: The title of the window.
@@ -162,15 +165,12 @@ class Panel:
         self._camera = self._resolve_camera(camera)
         self._window: Optional[str] = None
         self._panel: Optional[str] = None
-        self._original_camera_state: Dict[str, Any] = {}
+        self._original_camera_state: dict[str, Any] = {}
 
-        # Store original camera state
         self._capture_camera_state()
 
-        # Create the UI
         self._create_ui(resolution, title)
 
-        # Inherit settings if requested
         if inherit:
             self._inherit_panel_properties()
         else:
@@ -193,7 +193,6 @@ class Panel:
             return camera
 
         if isinstance(camera, Transform):
-            # Find camera shape under transform
             shapes = camera.shapes
             for shape in shapes:
                 if isinstance(shape, Camera):
@@ -204,7 +203,6 @@ class Panel:
             if not cmds.objExists(camera):
                 raise ValueError(f"Camera '{camera}' does not exist.")
 
-            # Try to resolve using tikmaya registry
             node = resolve(camera)
             return self._resolve_camera(node)
 
@@ -213,20 +211,15 @@ class Panel:
     def _capture_camera_state(self):
         """Store the current state of camera display attributes."""
         for attr in self.CAMERA_ATTRS:
-            # Query the attribute value
             # Note: cmds.camera(q=True, ...) works for these flags
             val = cmds.camera(self._camera.name, query=True, **{attr: True})
             self._original_camera_state[attr] = val
 
-    def _create_ui(self, resolution: Tuple[int, int], title: str):
+    def _create_ui(self, resolution: tuple[int, int], title: str):
         """Create the window and model panel."""
         width, height = resolution
         # Compensate for menu bar height roughly
         window_height = height + 40
-
-        # Check if window exists (though we usually want a new one,
-        # but let's ensure unique name if possible or just let Maya handle it)
-        # Using a unique name based on camera might be good, but for now simple is fine.
 
         self._window = cmds.window(
             title=title,
@@ -240,8 +233,7 @@ class Panel:
         cmds.showWindow(self._window)
 
     def _inherit_panel_properties(self):
-        """Inherit properties from an existing model panel looking at the same camera."""
-        # Find existing panels for this camera
+        """Inherit the properties of an existing model panel on the same camera."""
         camera_shape_name = self._camera.name
         # Also consider the transform name just in case
         camera_transform_name = cmds.listRelatives(camera_shape_name, p=True)[0]
@@ -254,7 +246,8 @@ class Panel:
                 continue
 
             cam = cmds.modelPanel(panel, query=True, camera=True)
-            # cam returned by modelPanel might be transform or shape name, usually transform
+            # cam returned by modelPanel might be transform or shape name, usually
+            # transform
             if cam == camera_shape_name or cam == camera_transform_name:
                 candidate_panels.append(panel)
 
@@ -271,14 +264,12 @@ class Panel:
             # Pick the last one (most recently created/used?)
             source_panel = candidate_panels[-1]
 
-        # Copy settings
         for flag in self.MODEL_EDITOR_FLAGS:
             try:
                 val = cmds.modelEditor(source_panel, query=True, **{flag: True})
                 if val is None:
                     continue
 
-                # Apply to our panel
                 # Some flags might be query-only or behave differently, wrap in try
                 cmds.modelEditor(self._panel, edit=True, **{flag: val})
             except RuntimeError:
@@ -319,7 +310,6 @@ class Panel:
             self.display_resolution = False
             self.display_safe_action = False
             self.display_safe_title = False
-            # Add more as needed
 
     # === Camera Properties ===
 

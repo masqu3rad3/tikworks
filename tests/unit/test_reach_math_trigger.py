@@ -42,10 +42,10 @@ def test_the_middle_point_stays_inside_the_ramp():
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"min_angle": 10.0, "max_angle": 60.0},    # neutral outside the range
+        {"min_angle": 10.0, "max_angle": 60.0},  # neutral outside the range
         {"min_angle": -60.0, "max_angle": -10.0},  # neutral outside the range
-        {"min_angle": 0.0, "max_angle": 60.0},     # neutral on the boundary
-        {"min_angle": -60.0, "max_angle": 0.0},    # neutral on the boundary
+        {"min_angle": 0.0, "max_angle": 60.0},  # neutral on the boundary
+        {"min_angle": -60.0, "max_angle": 0.0},  # neutral on the boundary
     ],
 )
 def test_rejects_a_neutral_outside_the_input_range(kwargs):

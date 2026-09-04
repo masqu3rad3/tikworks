@@ -6,18 +6,7 @@ write the current selection through ``self.guides``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
-
-from tik.shared.ui.binding import MayaAttributeAdapter, bind
-from tik.shared.ui.Qt import QtWidgets
-from tik.trigger.core import registry
 from tik.trigger.core.exceptions import TriggerError
-from tik.trigger.core.schemas import split_source
-
-from .widgets import SCENE_NODE
-
-if TYPE_CHECKING:
-    from tik.trigger.guides import GuideHandle
 
 
 class DesignerProperties:
@@ -45,7 +34,11 @@ class DesignerProperties:
         return [name] if name else []
 
     def _pick_source(self) -> str:
-        picked = self.guides.selected_guide() if hasattr(self.guides, "selected_guide") else None
+        picked = (
+            self.guides.selected_guide()
+            if hasattr(self.guides, "selected_guide")
+            else None
+        )
         if picked is not None:
             handle = self.guides.get(picked.instance_id)
             if handle is not None:
@@ -64,7 +57,9 @@ class DesignerProperties:
                 self.guides.disconnect(f"{self._current.key}.{input_name}")
         except TriggerError as error:
             self.events.log(str(error), level="warning")
-            self._input_rows[input_name].set_source(self._current.inputs.get(input_name, ""))
+            self._input_rows[input_name].set_source(
+                self._current.inputs.get(input_name, "")
+            )
             return
         self.refresh()
 
@@ -104,7 +99,8 @@ class DesignerProperties:
         except TriggerError as error:
             self.events.log(str(error), level="warning")
             return
-        self.graph.rebuild()  # keep the rows the user is typing in; only the graph/tree change
+        # keep the rows the user is typing in; only the graph and tree change
+        self.graph.rebuild()
         self.graph.select_key(self._external)
         connections = self.guides.connections()
         self.status.set("connections", f"{len(connections)} connection(s)")

@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 from functools import wraps
-from tik.core.benchmark import Benchmark
+
 from maya import cmds
+
+from tik.core.benchmark import Benchmark
 
 
 class MayaBenchmark(Benchmark):
@@ -10,6 +14,7 @@ class MayaBenchmark(Benchmark):
     """
 
     def measure(self, name, iterations=10, warmup=2, new_scene=False):
+        """Like ``Benchmark.measure``; ``new_scene`` resets the scene per run."""
         context = super().measure(name, iterations, warmup)
         context._new_scene = new_scene  # Store it on the context object
         original_run = context.run
@@ -47,4 +52,3 @@ class MayaBenchmark(Benchmark):
 
         context.run = maya_wrapped_run
         return context
-
