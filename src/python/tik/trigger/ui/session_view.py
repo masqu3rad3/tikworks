@@ -474,15 +474,8 @@ class SessionView(QtWidgets.QWidget):
 
     # ------------------------------------------------------------ editing
     def show_palette(self) -> None:
-        """Open the action palette next to the selection."""
-        tree = self.current_tree
-        anchor = (
-            tree.visualRect(tree.currentIndex())
-            if tree.currentIndex().isValid()
-            else tree.rect()
-        )
-        point = tree.viewport().mapToGlobal(anchor.bottomLeft() + QtCore.QPoint(20, 4))
-        self.palette.popup(point)
+        """Open the action palette under the cursor, as the Guide Designer does."""
+        self.palette.popup(QtGui.QCursor.pos())
 
     def add_action(
         self, action_type: str, as_child: bool = False
