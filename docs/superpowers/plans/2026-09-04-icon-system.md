@@ -1310,8 +1310,10 @@ After Task 7, confirm the whole feature end to end:
 make tests-unit
 make tests-integration
 make tests-ui
-make lint
 ```
+
+There is no `make lint` target and no linter configuration in this repo, so the
+88-column rule is a convention the reviewer enforces, not a command you can run.
 
 Then load the tool in Maya and look at it — the shelf, the pipeline tree at
 16px, and an `L`/`R` module pair in the Guide Designer, which is the one
