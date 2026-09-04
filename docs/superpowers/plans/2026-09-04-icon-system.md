@@ -1312,8 +1312,11 @@ make tests-integration
 make tests-ui
 ```
 
-There is no `make lint` target and no linter configuration in this repo, so the
-88-column rule is a convention the reviewer enforces, not a command you can run.
+`make lint` does not exist on this branch, so there is no command to run here.
+It *does* exist on the `refactoring` branch (`.flake8`, `max-line-length = 88`,
+black + isort), whose work has not merged into `TW-12-icons`. Treat the
+88-column rule as binding: it becomes machine-enforced the moment these
+branches converge.
 
 Then load the tool in Maya and look at it — the shelf, the pipeline tree at
 16px, and an `L`/`R` module pair in the Guide Designer, which is the one
