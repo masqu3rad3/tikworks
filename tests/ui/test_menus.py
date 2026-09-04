@@ -218,10 +218,10 @@ def test_snapshot_menu_command_reports_then_replaces_the_session(window, monkeyp
     view = window.views[0]
     view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
     # This test really replaces the session's document, which leaves it
-    # modified; the fixture's teardown then closes the window, and entry modified
-    # session makes closeEvent pop entry real, blocking "discard changes?"
-    # QMessageBox. Answer it without entry dialog so teardown cannot hang.
-    monkeypatch.setattr(window, "ask_discard", lambda session: True)
+    # modified; the fixture's teardown then closes the window, and a modified
+    # session makes closeEvent pop a real "save changes?" box, blocking
+    # teardown. Answer it without a dialog so teardown cannot hang.
+    monkeypatch.setattr(window, "ask_save_discard", lambda session: "discard")
     designer = view.designer
     entry = ModuleEntry(
         instance_id="new-id", module_type="fkchain", name="arm", side="L"

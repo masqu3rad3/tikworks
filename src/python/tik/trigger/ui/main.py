@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Optional
 
 from tik.shared.ui import theme
+from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.maya_window import HAS_MAYA, MayaToolWindow
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.scene_watcher import SceneWatcher
@@ -556,7 +557,7 @@ class TriggerWindow(MayaToolWindow):
             other
             for other in self.views
             if other is not view
-            and not other.session.actions
+            and not other.session.is_modified
             and not other.session.file_path
         ]
         for item in untouched:
@@ -618,7 +619,7 @@ class TriggerWindow(MayaToolWindow):
 
         for node in Document.load(path).actions:
             session.document.add(node)
-        session._touch()
+        session.touch()
         self._view_call("refresh")
 
     def export_actions(self, path: Optional[str] = None) -> None:
@@ -634,24 +635,66 @@ class TriggerWindow(MayaToolWindow):
             return
         session.document.save(path if path.endswith(EXTENSION) else path + EXTENSION)
 
-    def ask_discard(self, session: Session) -> bool:
-        """Ask whether unsaved changes in ``session`` may be dropped."""
-        answer = QtWidgets.QMessageBox.question(
-            self,
-            "Unsaved changes",
-            f"Discard unsaved changes in {session.name}?",
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+    def ask_save_discard(self, session: Session) -> str:
+        """Ask what to do with ``session``'s unsaved changes.
+
+        Returns ``"save"``, ``"discard"`` or ``"cancel"`` -- never a Qt enum,
+        so the callers stay readable and a test can answer with a string.
+        """
+        answer = Feedback(self).pop_question(
+            title="Unsaved changes",
+            text=f"Save changes to {session.name} before closing?",
+            details="Your changes will be lost if you discard them.",
+            buttons=["save", "discard", "cancel"],
         )
-        return answer == QtWidgets.QMessageBox.Yes
+        return answer or "cancel"
+
+    def _save_view(self, view, path: Optional[str] = None) -> bool:
+        """Save ``view``'s session; False when it could not be written.
+
+        Targets a view rather than the current tab: closing the window saves
+        tabs that are not the one in front.
+        """
+        session = view.session
+        if not path and session.file_path is None:
+            path = Feedback(self).browse_save(
+                "Save session", "", (EXTENSION,), FILE_FILTER
+            )
+            if not path:
+                return False
+        try:
+            session.save(path or None)
+        except Exception as error:  # noqa: BLE001 - report, never trap
+            self.events.log(f"Could not save {session.name}: {error}", level="warning")
+            return False
+        self._remember(str(session.file_path))
+        self._update_title()
+        return not session.is_modified
+
+    def _confirm_close(self, view) -> bool:
+        """True when ``view``'s tab may close: clean, saved, or discarded."""
+        if not isinstance(view, SessionView):
+            return True
+        if view is self._checked_out_view:
+            # nothing in Maya fires when a guide is dragged, so a session can
+            # look clean while the scene holds an afternoon of posing
+            try:
+                view.session.capture_guides()
+            except Exception as error:  # noqa: BLE001 - never trap the window
+                self.events.log(f"Could not read the guides: {error}", level="warning")
+        if not view.session.is_modified:
+            return True
+        answer = self.ask_save_discard(view.session)
+        if answer == "discard":
+            return True
+        if answer != "save":
+            return False
+        return self._save_view(view)
 
     def close_tab(self, index: int) -> bool:
         """Close the tab at ``index`` unless the user keeps unsaved changes."""
         view = self.tabs.widget(index)
-        if (
-            isinstance(view, SessionView)
-            and view.session.is_modified
-            and not self.ask_discard(view.session)
-        ):
+        if not self._confirm_close(view):
             return False
         self._drop_designer(view)
         self.tabs.removeTab(index)
@@ -870,12 +913,24 @@ class TriggerWindow(MayaToolWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802
         for view in self.views:
-            if view.session.is_modified and not self.ask_discard(view.session):
+            if not self._confirm_close(view):
                 event.ignore()
                 return
         for view in self.views:
             view.teardown()
         super().closeEvent(event)
+
+    def dockCloseEventTriggered(self) -> None:  # noqa: N802
+        """Maya's workspace-control close, which cannot be vetoed.
+
+        Returning early does not keep the control alive, so a cancel re-shows
+        the window instead. The work survives; a flicker is possible.
+        """
+        for view in self.views:
+            if not self._confirm_close(view):
+                self.show_tool()
+                return
+        super().dockCloseEventTriggered()
 
 
 def show(dockable: bool = True) -> TriggerWindow:
