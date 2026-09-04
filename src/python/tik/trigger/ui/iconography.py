@@ -13,9 +13,8 @@ from typing import Optional
 from tik.shared.ui import pick, theme
 from tik.shared.ui.icons import glyph_icon, initials
 from tik.shared.ui.Qt import QtCore, QtGui
+from tik.shared.ui.theme import MODULE_COLORS
 from tik.trigger.core import icons
-
-from .designer.widgets import MODULE_COLORS
 
 DEFAULT_SIZE = 22
 

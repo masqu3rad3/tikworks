@@ -24,6 +24,23 @@ if not os.environ.get("TIK_TESTS_NO_MAYA"):
         pass
 
 
+class _MFn:
+    """Auto-vivifying ``OpenMaya.MFn.*`` constants for the mock maya module.
+
+    ``tik/maya/core/plug.py`` builds two frozensets out of ``OpenMaya.MFn.*``
+    at import time (module scope, not inside a function), so the mock needs
+    *some* value for every constant name it reads -- a frozenset only needs
+    its members to be distinct and hashable, not real Maya type ids, so a
+    plain counter satisfies it.
+    """
+
+    def __init__(self) -> None:
+        self._values: dict = {}
+
+    def __getattr__(self, name):
+        return self._values.setdefault(name, len(self._values))
+
+
 def _create_mock_maya():
     """Create a mock maya module for headless test environments."""
     mock_maya = types.ModuleType("maya")
@@ -36,12 +53,25 @@ def _create_mock_maya():
     mock_api = types.ModuleType("maya.api")
     mock_api.OpenMaya = types.ModuleType("maya.api.OpenMaya")
     mock_api.OpenMaya.MPxCommand = type("MPxCommand", (), {})
+    mock_api.OpenMaya.MFn = _MFn()
+    # tik/maya/types/skincluster.py does `from maya.api import OpenMaya,
+    # OpenMayaAnim` at module scope (its own use of OpenMayaAnim is only in
+    # annotations, deferred by `from __future__ import annotations`, but the
+    # submodule itself still has to exist to import at all).
+    mock_api.OpenMayaAnim = types.ModuleType("maya.api.OpenMayaAnim")
     mock_maya.api = mock_api
+    # tik/maya/types/camera.py does `from maya import cmds, mel` at module
+    # scope; the mock never provided this at all, which broke importing any
+    # real tik.maya code (and thus every shipped tik.trigger guide module).
+    mock_maya.mel = types.ModuleType("maya.mel")
+    mock_maya.mel.eval = lambda *args, **kwargs: None
     sys.modules["maya"] = mock_maya
     sys.modules["maya.cmds"] = mock_maya.cmds
     sys.modules["maya.standalone"] = mock_maya.standalone
     sys.modules["maya.api"] = mock_api
     sys.modules["maya.api.OpenMaya"] = mock_api.OpenMaya
+    sys.modules["maya.api.OpenMayaAnim"] = mock_api.OpenMayaAnim
+    sys.modules["maya.mel"] = mock_maya.mel
     return mock_maya
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from tik.shared.ui.Qt import QtCore, QtWidgets
+from tik.shared.ui.theme import MODULE_COLORS  # noqa: F401 - re-exported
 from tik.shared.ui.tile_grid import TileEntry
 from tik.trigger.core import registry
 
@@ -11,13 +12,6 @@ from ..palette import PaletteEntry
 MIME_MODULE = "application/x-trigger-module-type"
 # pseudo module: a group of arbitrary scene nodes that modules can connect to
 SCENE_NODE = "__scene_node__"
-MODULE_COLORS = {
-    "body": "#c9a24a",
-    "limbs": "#5b8fd0",
-    "generic": "#7fa86a",
-    "face": "#b86b9a",
-    "scene": "#8a93a0",
-}
 
 
 def module_entries():
