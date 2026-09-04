@@ -26,14 +26,25 @@ BOTH = "both"
 SCOPES = (BUILD, PUBLISH, BOTH)
 
 
-def register_module(name: str) -> Callable[[type[Registered]], type[Registered]]:
-    """Register a ``Module`` subclass under ``name``."""
+def register_module(
+    name: str, category: str = "generic", icon: str = ""
+) -> Callable[[type[Registered]], type[Registered]]:
+    """Register a ``Module`` subclass under ``name``.
+
+    Args:
+        name: Unique module type name.
+        category: Shelf/palette group (``body``, ``limbs``, ``generic``,
+            ``face``). Drives the tile colour and the icon tint.
+        icon: Icon file name beside the module's ``.py`` (defaults to ``name``).
+    """
 
     def inner(cls: type[Registered]) -> type[Registered]:
         existing = _MODULES.get(name)
         if existing is not None and existing is not cls:
             raise DuplicateRegistrationError(name, kind="module")
         cls.module_type = name  # type: ignore[attr-defined]
+        cls.category = category  # type: ignore[attr-defined]
+        cls.icon = icon or name  # type: ignore[attr-defined]
         _MODULES[name] = cls
         logger.debug("Registered module: %s", name)
         return cls

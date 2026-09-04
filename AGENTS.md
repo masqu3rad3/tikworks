@@ -89,3 +89,4 @@ description: What this agent does
 - `CLAUDE.md` — Project-level context
 - `AI/coding_rules.md` — Detailed coding standards
 - `AI/system_prompt.md` — System instructions
+- `AI/icon_rules.md` — Icon drawing rules for tik.trigger actions and modules

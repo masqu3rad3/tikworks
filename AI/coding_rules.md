@@ -224,7 +224,7 @@ These rules apply when writing tools that use tik.maya.
 ### tik.trigger Specific
 - **Registry Decorators:** Use `@register_action` / `@register_module` for plugin registration
 - **Folder Discovery:** Each action/module is a folder with named `.py` file
-- **JSON Configs:** Use JSON files for UI definitions and defaults
+- **JSON Configs:** Python field declarations are the schema (the UI is generated from them by `FormBuilder`); an optional `defaults.json` beside a module/action overrides field default values only
 - **DCC-Agnostic Core:** `core/` imports no Maya modules
 
 #### tik.trigger Core Development
@@ -234,6 +234,14 @@ When implementing `core/` modules:
 - Custom exceptions must inherit from appropriate `TriggerError` subclasses
 - Registry-based code must use `setup_method`/`teardown_method` for isolation
 - Test files follow naming: `test_<module_name>_trigger.py`
+
+#### Icons
+Every action and guide module ships a hand-drawn `<name>.svg` beside its
+`.py` — actions full colour and never tinted, modules monochrome and tinted
+by side or category at runtime. `test_icon_assets.py` fails the suite for
+any registered plugin with no icon file, so this is not optional for a new
+action or module folder. Drawing rules, the Qt SVG Tiny 1.2 subset a file
+must stay inside, and copy-paste templates live in `AI/icon_rules.md`.
 
 ---
 
@@ -252,3 +260,4 @@ When implementing `core/` modules:
 - `AGENTS.md` — Agent definitions
 - `AI/testing_rules.md` — Test-specific guidelines
 - `AI/documentation_rules.md` — Doc conventions
+- `AI/icon_rules.md` — Icon drawing rules for tik.trigger actions and modules

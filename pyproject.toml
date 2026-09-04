@@ -14,6 +14,9 @@ readme = "README.md"
 package-dir = {"" = "src/python"}
 packages = { find = {} }
 
+[tool.setuptools.package-data]
+"*" = ["*.svg", "*.png", "*.qss", "*.json"]
+
 [tool.black]
 line-length = 88
 target-version = ["py310"]

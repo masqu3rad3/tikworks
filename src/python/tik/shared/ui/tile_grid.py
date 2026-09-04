@@ -30,14 +30,24 @@ class Tile(QtWidgets.QToolButton):
     HEIGHT = 58
 
     def __init__(
-        self, entry: TileEntry, color: str, mime_type: str, parent=None
+        self,
+        entry: TileEntry,
+        color: str,
+        mime_type: str,
+        parent=None,
+        icon_provider=None,
     ) -> None:
         super().__init__(parent)
         self.entry = entry
         self.mime_type = mime_type
         self.setObjectName("ShelfTile")
         self.setToolButtonStyle(QtCore.Qt.ToolButtonTextUnderIcon)
-        self.setIcon(glyph_icon(initials(entry.label), color, size=22))
+        icon = (
+            icon_provider(entry, 22)
+            if icon_provider is not None
+            else glyph_icon(initials(entry.label), color, size=22)
+        )
+        self.setIcon(icon)
         self.setIconSize(QtCore.QSize(22, 22))
         self.setText(entry.label)
         self.setToolTip(entry.tooltip or f"{entry.label} — click: add · drag: place")
@@ -82,6 +92,7 @@ class TileGrid(QtWidgets.QScrollArea):
         parent=None,
         colors: Optional[dict] = None,
         columns_hint: int = 2,
+        icon_provider=None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("TileGrid")
@@ -91,6 +102,7 @@ class TileGrid(QtWidgets.QScrollArea):
         self.entries = list(entries)
         self.mime_type = mime_type
         self.colors = colors or theme.CATEGORY
+        self.icon_provider = icon_provider
         self.tiles: dict[str, Tile] = {}
         self._sections: list[
             tuple[QtWidgets.QLabel, list[Tile], QtWidgets.QGridLayout]
@@ -126,6 +138,7 @@ class TileGrid(QtWidgets.QScrollArea):
                 entry,
                 self.colors.get(entry.category, theme.CATEGORY["utility"]),
                 self.mime_type,
+                icon_provider=self.icon_provider,
             )
             tile.clicked.connect(
                 lambda _c=False, key=entry.key: self.activated.emit(key)

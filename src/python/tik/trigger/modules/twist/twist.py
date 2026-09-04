@@ -51,7 +51,7 @@ EXTRACTION = FieldGroup("Extraction", collapsed=True)
 GUIDES = FieldGroup("Guides", collapsed=True)
 
 
-@register_module("twist")
+@register_module("twist", category="generic")
 class Twist(Module):
     """A strip of twist joints between two inputs."""
 

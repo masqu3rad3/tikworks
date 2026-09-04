@@ -13,7 +13,7 @@ from tik.trigger.core import (
 )
 
 
-@register_module("fkchain")
+@register_module("fkchain", category="generic")
 class FkChain(Module):
     """A simple FK chain (tails, fingers, antennas...)."""
 

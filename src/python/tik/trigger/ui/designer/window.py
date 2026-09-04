@@ -26,10 +26,11 @@ from tik.shared.ui import theme
 from tik.shared.ui.binding import BindingManager
 from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.filter_bar import FilterBar
-from tik.shared.ui.icons import glyph_icon, initials
+from tik.shared.ui.icons import glyph_icon
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.scene_watcher import SceneWatcher
 from tik.shared.ui.status import StatusFields
+from tik.shared.ui.theme import MODULE_COLORS
 from tik.shared.ui.tile_grid import TileGrid
 from tik.trigger.core.schemas import split_source
 
@@ -37,19 +38,13 @@ if TYPE_CHECKING:  # the scene layer imports Maya; the UI only needs the name
     from tik.trigger.guides import GuideHandle
 
 from ..graph import GraphView
+from ..iconography import icon_for_tile, module_icon
 from ..palette import SearchPalette
 from ..session_view import pane
 from .action_bar import DesignerActionBar
 from .commands import DesignerCommands
 from .properties import DesignerProperties
-from .widgets import (
-    MIME_MODULE,
-    MODULE_COLORS,
-    GuideTree,
-    InputRow,
-    SceneNodesPanel,
-    module_entries,
-)
+from .widgets import MIME_MODULE, GuideTree, InputRow, SceneNodesPanel, module_entries
 
 SIDES = ("L", "R", "C", "Both", "Auto")
 
@@ -174,7 +169,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.action_bar = DesignerActionBar(self)
         layout.addWidget(self.action_bar)
 
-        self.palette = SearchPalette(palette_entries, self, colors=MODULE_COLORS)
+        self.palette = SearchPalette(
+            palette_entries, self, colors=MODULE_COLORS, icon_provider=icon_for_tile
+        )
         self.palette.chosen.connect(lambda key, _child: self.create_guides(key))
 
         self._connect_signals()
@@ -197,7 +194,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         modules_header = QtWidgets.QLabel("MODULES")
         modules_header.setObjectName("PaneHeader")
         left_layout.addWidget(modules_header)
-        self.shelf = TileGrid(tiles, MIME_MODULE, colors=MODULE_COLORS)
+        self.shelf = TileGrid(
+            tiles, MIME_MODULE, colors=MODULE_COLORS, icon_provider=icon_for_tile
+        )
         self.shelf.activated.connect(lambda key: self.create_guides(key))
         left_layout.addWidget(self.shelf, 1)
         return left
@@ -474,13 +473,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                         [handle.key, label, entry.side, primary_text or "—"]
                     )
                     item.setData(0, QtCore.Qt.UserRole, handle.instance_id)
-                    item.setIcon(
-                        0,
-                        glyph_icon(
-                            initials(module_cls.display_label()),
-                            theme.SIDE.get(entry.side, theme.SIDE["C"]),
-                        ),
-                    )
+                    item.setIcon(0, module_icon(module_cls, side=entry.side, size=16))
                     item.setFlags(
                         item.flags()
                         | QtCore.Qt.ItemIsDragEnabled
@@ -785,11 +778,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.name_edit.setText(entry.name)
         self.type_label.setText(f"{module_cls.display_label()} · {entry.side}")
         self.icon.setPixmap(
-            glyph_icon(
-                initials(module_cls.display_label()),
-                theme.SIDE.get(entry.side, theme.SIDE["C"]),
-                24,
-            ).pixmap(24, 24)
+            module_icon(module_cls, side=entry.side, size=24).pixmap(24, 24)
         )
         multi = len(self._multi) > 1
         if multi:

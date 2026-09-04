@@ -35,6 +35,18 @@ CATEGORY = {
     "finish": "#7fa86a",
     "utility": "#6a6a6a",
 }
+#: Guide module category -> tint. Lives beside SIDE/CATEGORY (not in
+#: trigger/ui/designer/widgets.py, where it used to live) because
+#: iconography.py needs it and importing it from a designer widget module
+#: risks a circular import once anything the designer imports pulls in
+#: iconography.py itself.
+MODULE_COLORS = {
+    "body": "#c9a24a",
+    "limbs": "#5b8fd0",
+    "generic": "#7fa86a",
+    "face": "#b86b9a",
+    "scene": "#8a93a0",
+}
 
 
 TOOL_QSS = """

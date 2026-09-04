@@ -31,7 +31,7 @@ LIMB_LOCK = FieldGroup("Limb Lock")
 AUTO_COLLAR = FieldGroup("Auto Collar", collapsed=True)
 
 
-@register_module("arm")
+@register_module("arm", category="limbs")
 class Arm(Module):
     """Biped arm: collar, shoulder, elbow, hand."""
 

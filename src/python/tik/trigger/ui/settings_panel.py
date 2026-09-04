@@ -7,13 +7,12 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
-from tik.shared.ui import theme
 from tik.shared.ui.fields import FormBuilder
-from tik.shared.ui.icons import glyph_icon, initials
 from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.trigger.core import registry
 from tik.trigger.core.document import BUILD
 from tik.trigger.session import ActionHandle
+from tik.trigger.ui.iconography import action_icon
 
 
 class ActionSettingsPanel(QtWidgets.QWidget):
@@ -121,13 +120,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
             return
         action_cls = registry.get_action(handle.type)
         self._action = action_cls(settings=handle.settings)
-        self.icon.setPixmap(
-            glyph_icon(
-                initials(action_cls.display_label()),
-                theme.CATEGORY.get(action_cls.category, theme.CATEGORY["utility"]),
-                26,
-            ).pixmap(26, 26)
-        )
+        self.icon.setPixmap(action_icon(action_cls, size=26).pixmap(26, 26))
         self.title.setText(handle.name)
         self.subtitle.setText(f"{action_cls.display_label()} · {handle.path}")
         self.form.set_target(self._action)

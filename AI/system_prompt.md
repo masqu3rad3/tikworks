@@ -78,7 +78,7 @@ src/tik/trigger/
 - Explicit `@register_action` / `@register_module` decorators
 
 ### UI Definitions
-- JSON files for declarative UI (`ui_definition.json`)
+- Python field declarations are the schema; the UI is generated from them by `tik.shared.ui.fields.FormBuilder`
 - Uses tik_manager4's `SettingsLayout` pattern for auto-generated Qt UI
 
 ---
