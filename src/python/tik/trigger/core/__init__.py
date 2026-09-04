@@ -21,7 +21,7 @@ from tik.core.fields import (
 )
 from tik.core.side import Side
 
-from . import versioning
+from . import icons, versioning
 from .action import Action, ActionContext
 from .document import BUILD, PHASES, PUBLISH, ActionNode, Document
 from .events import ERROR, LOG, PROGRESS, EventBus
