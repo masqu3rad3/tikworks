@@ -4,8 +4,6 @@ import json
 
 import pytest
 from toy_modules import ToyChain, ToyRoot
-
-import tik.trigger as trigger
 from tik.trigger.core import (
     DuplicateRegistrationError,
     GuideLayout,
