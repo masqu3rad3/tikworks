@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
+from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.trigger.core import registry
@@ -191,8 +192,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         if self._handle is None:
             return
         action_cls = registry.get_action(self._handle.type)
-        QtWidgets.QMessageBox.information(
-            self,
+        Feedback(self).pop_info(
             action_cls.display_label(),
             action_cls.description() or "No description.",
         )

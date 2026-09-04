@@ -265,7 +265,7 @@ def test_open_guide_designer_shows_the_guides_view(qapp):
 
 def test_main_window_tabs_and_files(qapp, tmp_path):
     window = TriggerWindow()
-    window.ask_discard = lambda session: True
+    window.ask_save_discard = lambda session: "discard"
     window.show()
     assert window.tabs.count() == 1
     view = window.current_view

@@ -71,6 +71,12 @@ See `AGENTS.md` for detailed agent and developer guidance.
 2. **Source of Truth** — Maya scene state is always authoritative
 3. **Testing** — All tests run via `pytest` under Maya standalone (`mayapy`)
 4. **No third-party deps** — Stick to stdlib and Maya-bundled modules
+5. **One dialog surface** — Every user dialog goes through
+   `tik.shared.ui.feedback.Feedback` (message boxes, file browsers, text
+   prompts). Raw `QMessageBox` / `QFileDialog` / `QInputDialog` outside
+   `shared/ui/feedback.py` fails `tests/unit/test_dialog_boundaries.py`.
+   `feedback.set_browser` lets a pipeline replace file picking repo-wide;
+   `feedback.set_handler` lets a headless test answer a message box
 
 ## Key Files
 

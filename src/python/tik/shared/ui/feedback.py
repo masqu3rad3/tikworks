@@ -1,13 +1,157 @@
-from collections.abc import Callable
+"""The one place a tikworks tool asks the user something.
+
+Every dialog in the repo goes through here: message boxes, file browsers and
+text prompts alike. That is not tidiness for its own sake -- it is what makes
+three things possible at all. A pipeline can replace file picking everywhere
+with one ``set_browser`` call; a headless test run can answer message boxes
+with ``set_handler`` instead of hanging on a modal; and parenting under Maya
+is fixed in one place rather than twelve.
+
+Widgets that already accept their own ``browser`` callable keep it, and it
+still wins: being handed a picker is more specific than the module default.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Optional
 
 from tik.shared.ui.Qt import QtWidgets
+from tik.shared.ui.qtmaya import get_main_window
+
+#: Button key -> ``QMessageBox`` standard button. Keys are what callers pass
+#: and what ``pop_question`` gives back, so a call site never touches a Qt
+#: enum: ``buttons=["save", "discard", "cancel"]`` in, ``"discard"`` out.
+BUTTONS = {
+    "yes": QtWidgets.QMessageBox.Yes,
+    "yes_to_all": QtWidgets.QMessageBox.YesToAll,
+    "save": QtWidgets.QMessageBox.Save,
+    "ok": QtWidgets.QMessageBox.Ok,
+    "open": QtWidgets.QMessageBox.Open,
+    "close": QtWidgets.QMessageBox.Close,
+    "continue": QtWidgets.QMessageBox.Yes,
+    "discard": QtWidgets.QMessageBox.Discard,
+    "apply": QtWidgets.QMessageBox.Apply,
+    "reset": QtWidgets.QMessageBox.Reset,
+    "restore_defaults": QtWidgets.QMessageBox.RestoreDefaults,
+    "help": QtWidgets.QMessageBox.Help,
+    "save_all": QtWidgets.QMessageBox.SaveAll,
+    "no": QtWidgets.QMessageBox.No,
+    "no_to_all": QtWidgets.QMessageBox.NoToAll,
+    "cancel": QtWidgets.QMessageBox.Cancel,
+    "ignore": QtWidgets.QMessageBox.Ignore,
+    "abort": QtWidgets.QMessageBox.Abort,
+    "retry": QtWidgets.QMessageBox.Retry,
+}
+
+_ICONS = {
+    "info": QtWidgets.QMessageBox.Information,
+    "error": QtWidgets.QMessageBox.Critical,
+    "warning": QtWidgets.QMessageBox.Warning,
+    "question": QtWidgets.QMessageBox.Question,
+    "about": QtWidgets.QMessageBox.Information,
+}
+
+#: ``fn(mode, extensions, current) -> str``; ``mode`` is open/save/dir.
+_browser: Optional[Callable] = None
+#: ``fn(kind, title, text, details, buttons) -> str | None``. Returning None
+#: falls through to a real dialog.
+_handler: Optional[Callable] = None
+
+
+def set_browser(browser: Optional[Callable]) -> Optional[Callable]:
+    """Route every file dialog through ``browser``; returns the previous one.
+
+    The hook a pipeline uses to put its own asset browser behind every Browse
+    button in every tool at once.
+    """
+    global _browser
+    previous, _browser = _browser, browser
+    return previous
+
+
+def set_handler(handler: Optional[Callable]) -> Optional[Callable]:
+    """Answer message boxes with ``handler``; returns the previous one.
+
+    Returning ``None`` from the handler falls through to a real dialog, so a
+    handler can intercept one kind of question and leave the rest alone.
+    """
+    global _handler
+    previous, _handler = _handler, handler
+    return previous
 
 
 class Feedback:
-    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
+    """Dialogs, parented to ``parent`` (or Maya's main window when None)."""
+
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         self.parent = parent
-        self.result: str | None = None
+        self.result: Optional[str] = None
+
+    def _host(self):
+        """The dialog's parent, resolved at dialog time, not at construction.
+
+        A ``Feedback`` built during import would otherwise capture a main
+        window that does not exist yet.
+        """
+        return self.parent if self.parent is not None else get_main_window()
+
+    # ------------------------------------------------------ message boxes
+    def _pop(
+        self,
+        kind: str,
+        title: str,
+        text: str,
+        details: str,
+        buttons: list,
+        modal: bool,
+        on_close: Optional[Callable] = None,
+    ) -> Optional[str]:
+        """Build, show and decode one message box. The single Qt entry point."""
+        if _handler is not None:
+            answered = _handler(kind, title, text, details, list(buttons))
+            if answered is not None:
+                if on_close:
+                    on_close(BUTTONS.get(answered, 0))
+                self.result = answered
+                return answered
+
+        unknown = [key for key in buttons if key not in BUTTONS]
+        if unknown:
+            raise ValueError(
+                f"Invalid button(s): {unknown}. Valid buttons are: {sorted(BUTTONS)}"
+            )
+
+        message_box = QtWidgets.QMessageBox(parent=self._host())
+        message_box.setIcon(_ICONS[kind])
+        message_box.setWindowTitle(title)
+        message_box.setModal(modal)
+        message_box.setText(text)
+        message_box.setInformativeText(details)
+
+        standard = BUTTONS[buttons[0]]
+        for key in buttons[1:]:
+            standard |= BUTTONS[key]
+        message_box.setStandardButtons(standard)
+        # the first button offered is the safe one -- Save, not Discard
+        message_box.setDefaultButton(BUTTONS[buttons[0]])
+
+        code = message_box.exec()
+        if on_close:
+            on_close(code)
+
+        # requested buttons first: "continue" and "yes" share a Qt value, and
+        # the caller's own vocabulary is the one to answer in
+        for key in buttons:
+            if code == BUTTONS[key]:
+                self.result = key
+                return key
+        for key, value in BUTTONS.items():
+            if code == value:
+                self.result = key
+                return key
+        return None
 
     def pop_info(
         self,
@@ -16,39 +160,19 @@ class Feedback:
         details: str = "",
         critical: bool = False,
         modal: bool = True,
-        on_close: Callable[[int], None] | None = None,
+        on_close: Optional[Callable[[int], None]] = None,
     ) -> int:
-        """
-        Show an informational dialog box.
-
-        Args:
-            title: The title of the dialog.
-            text: The main text.
-            details: The informative text (smaller).
-            critical: If True, shows a critical icon.
-            modal: If True, the dialog is modal.
-            on_close: Optional callback to run when closed.
-
-        Returns:
-            The result code from the dialog execution.
-        """
-        message_box = QtWidgets.QMessageBox(parent=self.parent)
-        icon = (
-            QtWidgets.QMessageBox.Critical
-            if critical
-            else QtWidgets.QMessageBox.Information
+        """Show an informational dialog; ``critical`` makes it an error."""
+        self._pop(
+            "error" if critical else "info",
+            title,
+            text,
+            details,
+            ["ok"],
+            modal,
+            on_close,
         )
-        message_box.setIcon(icon)
-        message_box.setWindowTitle(title)
-        message_box.setModal(modal)
-        message_box.setText(text)
-        message_box.setInformativeText(details)
-        message_box.setStandardButtons(QtWidgets.QMessageBox.Ok)
-
-        result = message_box.exec()
-        if on_close:
-            on_close(result)
-        return result
+        return QtWidgets.QMessageBox.Ok
 
     def pop_error(
         self,
@@ -56,9 +180,9 @@ class Feedback:
         text: str = "",
         details: str = "",
         modal: bool = True,
-        on_close: Callable[[int], None] | None = None,
+        on_close: Optional[Callable[[int], None]] = None,
     ) -> int:
-        """Show an error dialog box."""
+        """Show an error dialog."""
         return self.pop_info(
             title=title,
             text=text,
@@ -68,103 +192,102 @@ class Feedback:
             on_close=on_close,
         )
 
+    def pop_warning(
+        self,
+        title: str = "Warning",
+        text: str = "",
+        details: str = "",
+        modal: bool = True,
+        on_close: Optional[Callable[[int], None]] = None,
+    ) -> int:
+        """Show a warning: something worth stopping for, but not a failure."""
+        self._pop("warning", title, text, details, ["ok"], modal, on_close)
+        return QtWidgets.QMessageBox.Ok
+
+    def pop_about(self, title: str = "About", text: str = "") -> None:
+        """Show a version/about box."""
+        self._pop("about", title, text, "", ["ok"], True)
+
     def pop_question(
         self,
         title: str = "Question",
         text: str = "",
         details: str = "",
-        buttons: list[str] | None = None,
+        buttons: Optional[list] = None,
         modal: bool = True,
-    ) -> str | None:
+    ) -> Optional[str]:
+        """Ask a question; returns the key of the button that was clicked.
+
+        The first key in ``buttons`` becomes the default, so the safe answer
+        is the one Enter picks.
         """
-        Show a question dialog box with configurable buttons.
+        return self._pop(
+            "question",
+            title,
+            text,
+            details,
+            list(buttons or ["save", "no", "cancel"]),
+            modal,
+        )
 
-        Args:
-            title: The title of the dialog.
-            text: The main text.
-            details: The informative text.
-            buttons: List of button keys (e.g., "save", "cancel").
-            modal: If True, the dialog is modal.
+    # ----------------------------------------------------------- browsing
+    @staticmethod
+    def _file_filter(extensions: Sequence[str]) -> str:
+        """A Qt name filter for ``extensions`` (``.tr`` -> ``Files (*.tr)``)."""
+        if not extensions:
+            return "All files (*)"
+        return "Files (" + " ".join(f"*{ext}" for ext in extensions) + ")"
 
-        Returns:
-            The key of the clicked button, or None.
-        """
-        if buttons is None:
-            buttons = ["save", "no", "cancel"]
+    def browse_open(
+        self,
+        caption: str = "Open",
+        start: str = "",
+        extensions: Sequence[str] = (),
+        file_filter: Optional[str] = None,
+    ) -> str:
+        """Ask for an existing file; ``""`` when the user cancels."""
+        if _browser is not None:
+            return _browser("open", tuple(extensions), start) or ""
+        picked, _selected = QtWidgets.QFileDialog.getOpenFileName(
+            self._host(), caption, start, file_filter or self._file_filter(extensions)
+        )
+        return picked or ""
 
-        button_map = {
-            "yes": QtWidgets.QMessageBox.Yes,
-            "yes_to_all": QtWidgets.QMessageBox.YesToAll,
-            "save": QtWidgets.QMessageBox.Save,
-            "ok": QtWidgets.QMessageBox.Ok,
-            "open": QtWidgets.QMessageBox.Open,
-            "close": QtWidgets.QMessageBox.Close,
-            "continue": QtWidgets.QMessageBox.Yes,
-            "discard": QtWidgets.QMessageBox.Discard,
-            "apply": QtWidgets.QMessageBox.Apply,
-            "reset": QtWidgets.QMessageBox.Reset,
-            "restore_defaults": QtWidgets.QMessageBox.RestoreDefaults,
-            "help": QtWidgets.QMessageBox.Help,
-            "save_all": QtWidgets.QMessageBox.SaveAll,
-            "no": QtWidgets.QMessageBox.No,
-            "no_to_all": QtWidgets.QMessageBox.NoToAll,
-            "cancel": QtWidgets.QMessageBox.Cancel,
-            "ignore": QtWidgets.QMessageBox.Ignore,
-            "abort": QtWidgets.QMessageBox.Abort,
-            "retry": QtWidgets.QMessageBox.Retry,
-        }
+    def browse_save(
+        self,
+        caption: str = "Save",
+        start: str = "",
+        extensions: Sequence[str] = (),
+        file_filter: Optional[str] = None,
+    ) -> str:
+        """Ask where to write a file; ``""`` when the user cancels."""
+        if _browser is not None:
+            return _browser("save", tuple(extensions), start) or ""
+        picked, _selected = QtWidgets.QFileDialog.getSaveFileName(
+            self._host(), caption, start, file_filter or self._file_filter(extensions)
+        )
+        return picked or ""
 
-        button_widgets = []
-        for button_key in buttons:
-            widget = button_map.get(button_key)
-            if not widget:
-                raise ValueError(
-                    f"Invalid button: {button_key}. Valid buttons are: {list(button_map.keys())}"
-                )
-            button_widgets.append(widget)
+    def browse_dir(self, caption: str = "Choose folder", start: str = "") -> str:
+        """Ask for a folder; ``""`` when the user cancels."""
+        if _browser is not None:
+            return _browser("dir", (), start) or ""
+        picked = QtWidgets.QFileDialog.getExistingDirectory(
+            self._host(), caption, start
+        )
+        return picked or ""
 
-        message_box = QtWidgets.QMessageBox(parent=self.parent)
-        message_box.setIcon(QtWidgets.QMessageBox.Question)
-        message_box.setWindowTitle(title)
-        message_box.setModal(modal)
-        message_box.setText(text)
-        message_box.setInformativeText(details)
+    def browse_directory(self, modal: bool = True) -> Optional[str]:
+        """Deprecated: use ``browse_dir``."""
+        picked = self.browse_dir()
+        return str(Path(picked)) if picked else None
 
-        # Combine buttons using bitwise OR operator
-        combined_buttons = button_widgets[0]
-        for widget in button_widgets[1:]:
-            combined_buttons |= widget
-
-        message_box.setStandardButtons(combined_buttons)
-
-        result_code = message_box.exec()
-
-        # Check against requested buttons first to ensure correct mapping
-        # (e.g. distinguishing 'continue' from 'yes')
-        for key in buttons:
-            if result_code == button_map[key]:
-                self.result = key
-                return key
-
-        # Fallback for implicit returns (like Escape key mapping to Cancel/No)
-        for key, value in button_map.items():
-            if result_code == value:
-                self.result = key
-                return key
-
-        return None
-
-    def browse_directory(self, modal: bool = True) -> str | None:
-        """
-        Browse for a directory.
-
-        Deprecated: Consider moving to a utility function.
-        """
-        file_dialog = QtWidgets.QFileDialog(parent=self.parent)
-        file_dialog.setModal(modal)
-        file_dialog.setFileMode(QtWidgets.QFileDialog.Directory)
-        if file_dialog.exec():
-            selected_files = file_dialog.selectedFiles()
-            if selected_files:
-                return str(Path(selected_files[0]))
-        return None
+    # -------------------------------------------------------------- input
+    def ask_text(
+        self, title: str = "", label: str = "", text: str = ""
+    ) -> Optional[str]:
+        """Ask for a line of text; ``None`` when the user cancels."""
+        entered, accepted = QtWidgets.QInputDialog.getText(
+            self._host(), title, label, text=text
+        )
+        return entered if accepted else None
