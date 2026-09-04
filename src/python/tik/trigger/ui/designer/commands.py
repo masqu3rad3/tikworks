@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from tik.core.side import Side
+from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import TriggerError
@@ -128,13 +129,12 @@ class DesignerCommands:
         """Ask for a source and connect the current module's first input to it."""
         if self._current is None or not self._current.input_names():
             return
-        text, ok = QtWidgets.QInputDialog.getText(
-            self,
+        text = Feedback(self).ask_text(
             "Connect input",
             f"{self._current.key}.<input> = <source>",
-            text=f"{self._current.input_names()[0]} = ",
+            f"{self._current.input_names()[0]} = ",
         )
-        if ok and "=" in text:
+        if text and "=" in text:
             input_name, _eq, source = text.partition("=")
             self._on_input_changed(input_name.strip(), source.strip())
 
@@ -335,18 +335,18 @@ class DesignerCommands:
             return (
                 self.file_browser(mode, [GUIDE_EXTENSION], self.last_guide_file) or ""
             )
+        dialog = Feedback(self)
+        guide_filter = f"GuideLayout (*{GUIDE_EXTENSION})"
         if mode == "save":
-            path, _f = QtWidgets.QFileDialog.getSaveFileName(
-                self,
+            return dialog.browse_save(
                 "Export guides",
                 self.last_guide_file,
-                f"GuideLayout (*{GUIDE_EXTENSION})",
+                (GUIDE_EXTENSION,),
+                guide_filter,
             )
-        else:
-            path, _f = QtWidgets.QFileDialog.getOpenFileName(
-                self,
-                "Import guides",
-                self.last_guide_file,
-                f"GuideLayout (*{GUIDE_EXTENSION})",
-            )
-        return path
+        return dialog.browse_open(
+            "Import guides",
+            self.last_guide_file,
+            (GUIDE_EXTENSION,),
+            guide_filter,
+        )

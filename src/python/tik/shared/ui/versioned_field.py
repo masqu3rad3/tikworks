@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
+from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.trigger.core import versioning
 
@@ -199,27 +200,20 @@ class VersionedFileField(QtWidgets.QWidget):
         self._commit()
         return True
 
-    def _filter(self) -> str:
-        if not self.extensions:
-            return "All files (*)"
-        return "Files (" + " ".join(f"*{ext}" for ext in self.extensions) + ")"
-
     def _browse(self) -> None:
         start = str(self.resolved() or "")
+        # an injected browser wins over the module-wide one: being handed a
+        # picker is more specific than the default every tool shares
         if self.browser is not None:
             picked = self.browser(self.mode, self.extensions, start)
-        elif self.mode == "dir":
-            picked = QtWidgets.QFileDialog.getExistingDirectory(
-                self, "Choose folder", start
-            )
-        elif self.mode == "save":
-            picked, _f = QtWidgets.QFileDialog.getSaveFileName(
-                self, "Save", start, self._filter()
-            )
         else:
-            picked, _f = QtWidgets.QFileDialog.getOpenFileName(
-                self, "Open", start, self._filter()
-            )
+            dialog = Feedback(self)
+            if self.mode == "dir":
+                picked = dialog.browse_dir("Choose folder", start)
+            elif self.mode == "save":
+                picked = dialog.browse_save("Save", start, self.extensions)
+            else:
+                picked = dialog.browse_open("Open", start, self.extensions)
         if picked:
             self.line.setText(str(picked).replace("\\", "/"))
             self._commit()

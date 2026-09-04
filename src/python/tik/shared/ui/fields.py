@@ -10,6 +10,7 @@ from typing import Any, Callable, Optional
 
 from tik.core.fields import Field, FieldValidationError, Schema
 from tik.shared.ui.collapsible import CollapsibleGroup
+from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.Qt import QtCore, QtWidgets
 
 
@@ -242,27 +243,20 @@ class _FileEditor(QtWidgets.QWidget):
         self.line.editingFinished.connect(lambda: self.valueChanged.emit(self.value()))
         self.browse.clicked.connect(self._browse)
 
-    def _filter(self) -> str:
-        if not self.extensions:
-            return "All files (*)"
-        patterns = " ".join(f"*{ext}" for ext in self.extensions)
-        return f"Files ({patterns})"
-
     def _browse(self) -> None:
+        # an injected browser wins over the module-wide one: being handed a
+        # picker is more specific than the default every tool shares
         if self.browser is not None:
             picked = self.browser(self.mode, self.extensions, self.value())
-        elif self.mode == "dir":
-            picked = QtWidgets.QFileDialog.getExistingDirectory(
-                self, "Choose folder", self.value()
-            )
-        elif self.mode == "save":
-            picked, _filter = QtWidgets.QFileDialog.getSaveFileName(
-                self, "Save", self.value(), self._filter()
-            )
         else:
-            picked, _filter = QtWidgets.QFileDialog.getOpenFileName(
-                self, "Open", self.value(), self._filter()
-            )
+            dialog = Feedback(self)
+            start = self.value()
+            if self.mode == "dir":
+                picked = dialog.browse_dir("Choose folder", start)
+            elif self.mode == "save":
+                picked = dialog.browse_save("Save", start, self.extensions)
+            else:
+                picked = dialog.browse_open("Open", start, self.extensions)
         if picked:
             self.line.setText(picked)
             self.valueChanged.emit(picked)

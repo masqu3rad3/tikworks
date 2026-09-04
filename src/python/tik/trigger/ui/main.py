@@ -542,8 +542,8 @@ class TriggerWindow(MayaToolWindow):
     def open_session(self, path: Optional[str] = None) -> Optional[SessionView]:
         """Open a ``.tr`` file (asking for one when ``path`` is empty)."""
         if not path:
-            path, _f = QtWidgets.QFileDialog.getOpenFileName(
-                self, "Open session", "", FILE_FILTER
+            path = Feedback(self).browse_open(
+                "Open session", "", (EXTENSION,), FILE_FILTER
             )
         if not path:
             return None
@@ -567,15 +567,9 @@ class TriggerWindow(MayaToolWindow):
 
     def save_session(self) -> None:
         """Save the current session, asking for a path if it has none."""
-        session = self.session
-        if session is None:
-            return
-        if session.file_path is None:
-            self.save_session_as()
-            return
-        session.save()
-        self._remember(str(session.file_path))
-        self._update_title()
+        view = self.current_view
+        if view is not None:
+            self._save_view(view)
 
     def save_session_as(self, path: Optional[str] = None) -> None:
         """Save the current session to ``path`` (asking when empty)."""
@@ -583,8 +577,8 @@ class TriggerWindow(MayaToolWindow):
         if session is None:
             return
         if not path:
-            path, _f = QtWidgets.QFileDialog.getSaveFileName(
-                self, "Save session", "", FILE_FILTER
+            path = Feedback(self).browse_save(
+                "Save session", "", (EXTENSION,), FILE_FILTER
             )
         if not path:
             return
@@ -610,8 +604,8 @@ class TriggerWindow(MayaToolWindow):
         if session is None:
             return
         if not path:
-            path, _f = QtWidgets.QFileDialog.getOpenFileName(
-                self, "Import actions", "", FILE_FILTER
+            path = Feedback(self).browse_open(
+                "Import actions", "", (EXTENSION,), FILE_FILTER
             )
         if not path:
             return
@@ -628,8 +622,8 @@ class TriggerWindow(MayaToolWindow):
         if session is None:
             return
         if not path:
-            path, _f = QtWidgets.QFileDialog.getSaveFileName(
-                self, "Export actions", "", FILE_FILTER
+            path = Feedback(self).browse_save(
+                "Export actions", "", (EXTENSION,), FILE_FILTER
             )
         if not path:
             return
@@ -763,9 +757,7 @@ class TriggerWindow(MayaToolWindow):
 
     def open_settings(self) -> None:
         """Placeholder until the settings dialog exists."""
-        QtWidgets.QMessageBox.information(
-            self, "Settings", "Settings are not available yet."
-        )
+        Feedback(self).pop_info("Settings", "Settings are not available yet.")
 
     def open_docs(self) -> None:
         """Open the project page in the browser."""
@@ -775,8 +767,8 @@ class TriggerWindow(MayaToolWindow):
 
     def about(self) -> None:
         """Show the version box."""
-        QtWidgets.QMessageBox.about(
-            self, "About Trigger", f"Trigger {VERSION}\nModular rigging on tik.maya."
+        Feedback(self).pop_about(
+            "About Trigger", f"Trigger {VERSION}\nModular rigging on tik.maya."
         )
 
     # -------------------------------------------------------------- recent
