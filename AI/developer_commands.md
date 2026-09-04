@@ -128,18 +128,19 @@ cd docs && sphinx-autobuild source build/html
 
 ### Implement New Action in tik.trigger
 1. Create folder: `src/python/tik/trigger/actions/my_action/`
-2. Create `my_action.py` with class inheriting from `ActionCore`
-3. Apply `@register_action("my_action")` decorator
-4. Create `ui_definition.json` (optional)
-5. Create `defaults.json` (optional)
+2. Create `my_action.py` with a class inheriting from `Action`
+3. Apply `@register_action("my_action", category="build")` decorator
+4. Create `my_action.svg` beside it — see `AI/icon_rules.md` (required)
+5. Create `defaults.json` (optional; overrides field defaults only)
 6. Write tests under `tests/unit/test_action_<name>.py`
 
 ### Implement New Module in tik.trigger
 1. Create folder: `src/python/tik/trigger/modules/my_module/`
-2. Create `my_module.py` with `MyModuleGuide(GuidesCore)` and `MyModule(ModuleCore)`
-3. Apply `@register_module("my_module")` decorator
-4. Create `data.json` with module-specific data
-5. Create `ui_definition.json` (optional)
+2. Create `my_module.py` with a class inheriting from `Module`
+3. Apply `@register_module("my_module", category="generic")` decorator
+4. Create `my_module.svg` beside it — must depict the module's guide
+   topology; see `AI/icon_rules.md` (required)
+5. Create `defaults.json` (optional)
 6. Write tests under `tests/unit/test_module_<name>.py`
 
 ### Implement New tik.trigger Core Module

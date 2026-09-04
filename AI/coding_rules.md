@@ -235,6 +235,14 @@ When implementing `core/` modules:
 - Registry-based code must use `setup_method`/`teardown_method` for isolation
 - Test files follow naming: `test_<module_name>_trigger.py`
 
+#### Icons
+Every action and guide module ships a hand-drawn `<name>.svg` beside its
+`.py` — actions full colour and never tinted, modules monochrome and tinted
+by side or category at runtime. `test_icon_assets.py` fails the suite for
+any registered plugin with no icon file, so this is not optional for a new
+action or module folder. Drawing rules, the Qt SVG Tiny 1.2 subset a file
+must stay inside, and copy-paste templates live in `AI/icon_rules.md`.
+
 ---
 
 ## Error Handling
@@ -252,3 +260,4 @@ When implementing `core/` modules:
 - `AGENTS.md` — Agent definitions
 - `AI/testing_rules.md` — Test-specific guidelines
 - `AI/documentation_rules.md` — Doc conventions
+- `AI/icon_rules.md` — Icon drawing rules for tik.trigger actions and modules
