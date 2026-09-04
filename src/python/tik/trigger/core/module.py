@@ -49,6 +49,8 @@ class Module(Schema):
     space_controls: tuple[str, ...] = ()  # controller roles that accept spaces
     outputs: tuple[str, ...] = ("root",)
     module_type: str = ""  # stamped by @register_module
+    category: str = "generic"  # stamped by @register_module
+    icon: str = ""  # stamped by @register_module
     anim_spaces = TableField(
         [],
         label="Anim Spaces",

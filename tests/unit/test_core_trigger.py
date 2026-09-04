@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+import tik.trigger as trigger
 from toy_modules import ToyChain, ToyRoot
 from tik.trigger.core import (
     DuplicateRegistrationError,
@@ -175,6 +176,57 @@ def test_order_by_connections_keeps_unconnected_order():
     b = ToyChain(name="b").to_instance()
     ordered = order_by_connections([b, a], lambda item: {})
     assert [item.name for item in ordered] == ["b", "a"]
+
+
+# ------------------------------------------------------------- categories
+def test_register_module_stamps_category_and_icon():
+    from tik.trigger.core import Module, register_module, registry
+
+    @register_module("probe_limb", category="limbs")
+    class ProbeLimb(Module):
+        pass
+
+    try:
+        assert ProbeLimb.module_type == "probe_limb"
+        assert ProbeLimb.category == "limbs"
+        assert ProbeLimb.icon == "probe_limb"  # defaults to the registered name
+    finally:
+        registry.unregister_module("probe_limb")
+
+
+def test_register_module_category_defaults_to_generic():
+    from tik.trigger.core import Module, register_module, registry
+
+    @register_module("probe_plain")
+    class ProbePlain(Module):
+        pass
+
+    try:
+        assert ProbePlain.category == "generic"
+    finally:
+        registry.unregister_module("probe_plain")
+
+
+def test_shipped_modules_declare_a_category():
+    from tik.trigger.core import registry
+
+    trigger.load_plugins()
+    expected = {
+        "base": "body",
+        "fkchain": "generic",
+        "arm": "limbs",
+        "twist": "generic",
+        "ribbon": "generic",
+    }
+    for name, category in expected.items():
+        assert registry.get_module(name).category == category
+
+
+def test_import_asset_icon_defaults_to_its_own_name():
+    from tik.trigger.core import registry
+
+    trigger.load_plugins()
+    assert registry.get_action("import_asset").icon == "import_asset"
 
 
 def test_order_by_connections_ignores_bare_scene_sources():

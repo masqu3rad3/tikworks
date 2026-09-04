@@ -28,7 +28,7 @@ DEFORMATION = FieldGroup("Deformation", collapsed=True)
 GUIDES = FieldGroup("Guides", collapsed=True)
 
 
-@register_module("ribbon")
+@register_module("ribbon", category="generic")
 class RibbonModule(Module):
     """A ribbon strip pinned between two inputs."""
 

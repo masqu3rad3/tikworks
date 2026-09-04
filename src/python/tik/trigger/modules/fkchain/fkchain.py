@@ -6,7 +6,7 @@ import tik.maya as tm
 from tik.trigger.core import FloatField, GuideLayout, Input, IntField, Module, register_module
 
 
-@register_module("fkchain")
+@register_module("fkchain", category="generic")
 class FkChain(Module):
     """A simple FK chain (tails, fingers, antennas...)."""
 

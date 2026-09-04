@@ -6,7 +6,7 @@ import tik.maya as tm
 from tik.trigger.core import FloatField, GuideLayout, Module, register_module
 
 
-@register_module("base")
+@register_module("base", category="body")
 class Base(Module):
     """Root of a rig. Everything else attaches to its ``root`` plug."""
 

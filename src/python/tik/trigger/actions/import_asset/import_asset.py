@@ -8,7 +8,7 @@ from tik.trigger.core import Action, BoolField, FileField, StringField, register
 from tik.trigger.core.exceptions import ActionExecutionError
 
 
-@register_action("import_asset", category="build", icon="import_model")
+@register_action("import_asset", category="build")
 class ImportAsset(Action):
     """Bring model/asset files into the build scene."""
 

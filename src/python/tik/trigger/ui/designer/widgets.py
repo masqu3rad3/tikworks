@@ -15,14 +15,12 @@ from ..palette import PaletteEntry
 MIME_MODULE = "application/x-trigger-module-type"
 SCENE_NODE = "__scene_node__"  # pseudo module: a group of arbitrary scene nodes modules can connect to
 MODULE_COLORS = {"body": "#c9a24a", "limbs": "#5b8fd0", "generic": "#7fa86a", "face": "#b86b9a", "scene": "#8a93a0"}
-MODULE_CATEGORY = {"base": "body", "spine": "body", "head": "body", "arm": "limbs", "leg": "limbs",
-                   "finger": "limbs", "fkchain": "generic", "tail": "generic", "surface": "generic"}
 
 
 def module_entries():
     tiles, palette = [], []
     for module_cls in registry.iter_modules():
-        category = MODULE_CATEGORY.get(module_cls.module_type, "generic")
+        category = getattr(module_cls, "category", "generic")
         tiles.append(TileEntry(module_cls.module_type, module_cls.display_label(), category))
         palette.append(PaletteEntry(module_cls.module_type, module_cls.display_label(), category))
     tiles.append(TileEntry(SCENE_NODE, "Scene", "scene"))
