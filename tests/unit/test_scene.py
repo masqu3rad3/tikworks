@@ -1,3 +1,4 @@
+import pytest
 from maya import cmds
 
 from tik.maya.core.scene import (
@@ -5,6 +6,7 @@ from tik.maya.core.scene import (
     _wrap_output,
     list_scene_nodes,
     proxy_wrapper,
+    reset_scene,
     select_nodes,
 )
 from tik.maya.types.transform import Transform
@@ -287,3 +289,32 @@ def test_select_nodes_handles_mixed_input():
     selection = cmds.ls(selection=True)
     assert len(selection) == 2
     assert set(selection) == {"nodeA", "nodeB"}
+
+
+def test_reset_scene_wipes_the_scene_and_keeps_the_camera():
+    """A reset is a new file -- but the rigger keeps their framing."""
+    cmds.file(new=True, force=True)
+    cmds.createNode("transform", name="doomedT")
+    cmds.xform("persp", worldSpace=True, translation=(10.0, 20.0, 30.0))
+    cmds.setAttr("perspShape.centerOfInterest", 42.0)
+    matrix = cmds.xform("persp", query=True, worldSpace=True, matrix=True)
+
+    reset_scene()
+
+    assert not cmds.objExists("doomedT")
+    assert cmds.xform(
+        "persp", query=True, worldSpace=True, matrix=True
+    ) == pytest.approx(matrix)
+    assert cmds.getAttr("perspShape.centerOfInterest") == pytest.approx(42.0)
+
+
+def test_reset_scene_without_keep_camera_leaves_the_default_view():
+    cmds.file(new=True, force=True)
+    default_matrix = cmds.xform("persp", query=True, worldSpace=True, matrix=True)
+    cmds.xform("persp", worldSpace=True, translation=(10.0, 20.0, 30.0))
+
+    reset_scene(keep_camera=False)
+
+    assert cmds.xform(
+        "persp", query=True, worldSpace=True, matrix=True
+    ) == pytest.approx(default_matrix)

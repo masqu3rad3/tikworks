@@ -3,6 +3,7 @@
 import pytest
 from test_pipeline_ui import _stub_designer
 
+from tik.shared.ui import feedback
 from tik.trigger.core.guide_document import GuideDocument, ModuleEntry
 from tik.trigger.core.scene_recovery import RecoveredModule, RecoveryReport
 from tik.trigger.ui.designer.snapshot_dialog import SnapshotDialog
@@ -313,3 +314,42 @@ def test_session_menu_has_build_and_publish(window):
     # it sits beside the plain build verbs
     labels = [item.text() for item in menu(window, "&Session").actions()]
     assert labels[:3] == ["Build Rig", "Build & Publish", "Build Until Here"]
+
+
+def test_file_offers_reset_scene(window):
+    entries = items(menu(window, "&File"))
+    assert "Reset Scene" in entries
+    reset = next(
+        entry
+        for entry in menu(window, "&File").actions()
+        if entry.text() == "Reset Scene"
+    )
+    # destructive: no shortcut to fat-finger
+    assert reset.shortcut().isEmpty()
+
+
+def test_reset_scene_asks_before_wiping_the_scene(window, monkeypatch):
+    """Cancel leaves the scene alone; confirming resets it."""
+    from tik.trigger.guides import nodes
+
+    wiped = []
+    monkeypatch.setattr(nodes, "new_scene", lambda: wiped.append("reset"))
+    answers = ["cancel", "reset"]
+    asked = []
+
+    def _answer(kind, title, text, details, buttons):
+        asked.append((title, buttons))
+        return answers.pop(0)
+
+    previous = feedback.set_handler(_answer)
+    try:
+        window.reset_scene()
+        assert wiped == []
+
+        window.reset_scene()
+        assert wiped == ["reset"]
+    finally:
+        feedback.set_handler(previous)
+
+    # cancel first, so Enter is the safe answer
+    assert [buttons[0] for _title, buttons in asked] == ["cancel", "cancel"]

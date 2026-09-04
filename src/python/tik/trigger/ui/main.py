@@ -161,6 +161,9 @@ class TriggerWindow(MayaToolWindow):
             lambda: self._designer_call("export_file", ask=True),
         )
         file_menu.addSeparator()
+        # no shortcut: it throws the scene away, and there is nothing to undo
+        self._action(file_menu, "Reset Scene", self.reset_scene)
+        file_menu.addSeparator()
         self._action(
             file_menu,
             "Close Tab",
@@ -754,6 +757,33 @@ class TriggerWindow(MayaToolWindow):
         """Show or hide the log dock."""
         self.log_dock.setVisible(not self.log_dock.isVisible())
         self.log_action.setChecked(self.log_dock.isVisible())
+
+    def reset_scene(self) -> None:
+        """Wipe the Maya scene, after asking.
+
+        The guides are not redrawn: the session document still holds them, so
+        nothing is lost, and a rigger who resets usually wants the empty scene
+        they asked for. The run statuses go with it -- the build they described
+        no longer exists.
+        """
+        answer = Feedback(self).pop_question(
+            title="Reset Scene",
+            text="Delete everything in the Maya scene?",
+            details=(
+                "Your session and its guides are kept. Anything built or "
+                "imported into the scene is lost."
+            ),
+            buttons=["cancel", "reset"],
+        )
+        if answer != "reset":
+            return
+        from tik.trigger.guides import nodes
+
+        nodes.new_scene()
+        view = self.current_view
+        if view is not None:
+            view.clear_statuses()
+        self.status.set_activity("Scene reset")
 
     def open_settings(self) -> None:
         """Placeholder until the settings dialog exists."""

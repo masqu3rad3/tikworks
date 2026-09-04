@@ -32,6 +32,7 @@ from .core.scene import (
     list_scene_nodes,
     ls,
     proxy_wrapper,
+    reset_scene,
     select,
     select_nodes,
 )
@@ -88,6 +89,7 @@ __all__ = [
     "list_scene_nodes",
     "ls",
     "proxy_wrapper",
+    "reset_scene",
     "select",
     "select_nodes",
 ]

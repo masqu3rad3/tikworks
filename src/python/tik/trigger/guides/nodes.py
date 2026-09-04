@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------- scene
 def new_scene() -> None:
-    """Open a new, empty scene without asking."""
-    cmds.file(new=True, force=True)
+    """Open a new, empty scene without asking, keeping the persp camera."""
+    tm.reset_scene()
 
 
 def scene_node(name: str):

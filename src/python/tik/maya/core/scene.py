@@ -48,6 +48,28 @@ def proxy_wrapper(func_name, *args, **kwargs):
     return result
 
 
+def reset_scene(keep_camera: bool = True) -> None:
+    """Open a new, empty scene, keeping the perspective camera where it is.
+
+    A reset is ``file(new=True, force=True)`` -- it discards the scene without
+    asking. ``keep_camera`` restores the ``persp`` view afterwards, so a rebuild
+    leaves the user looking at what they were looking at.
+    """
+    view = None
+    if keep_camera and cmds.objExists("persp"):
+        view = (
+            cmds.xform("persp", query=True, worldSpace=True, matrix=True),
+            cmds.getAttr("perspShape.centerOfInterest"),
+        )
+
+    cmds.file(new=True, force=True)
+
+    if view is not None:
+        matrix, center_of_interest = view
+        cmds.xform("persp", worldSpace=True, matrix=matrix)
+        cmds.setAttr("perspShape.centerOfInterest", center_of_interest)
+
+
 def ensure_plugin(plugin_name: str) -> None:
     """Load ``plugin_name`` if it is not loaded yet (quietly)."""
     if not cmds.pluginInfo(plugin_name, query=True, loaded=True):
