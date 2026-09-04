@@ -3,7 +3,7 @@
 import pytest
 
 from tik.core.fields import FileField
-from tik.shared.ui.Qt import QtCore
+from tik.shared.ui.Qt import QtCore, QtGui
 from tik.trigger.core import (
     Action,
     IntField,
@@ -104,6 +104,15 @@ def test_add_via_palette_and_shelf(view):
     assert view.palette.visible_keys() == ["weights"]
     view.palette._choose(False)
     assert "mark1/weights1" in _paths(view.model)
+
+
+def test_the_palette_opens_under_the_pointer(view):
+    # it used to anchor on the tree, which dropped it at the bottom of the
+    # pipeline instead of where the rigger pressed Tab
+    view.add_action("mark")
+    view.show_palette()
+    assert view.palette.pos() == QtGui.QCursor.pos()
+    view.palette.hide()
 
 
 def test_settings_panel_edits_session(view):
