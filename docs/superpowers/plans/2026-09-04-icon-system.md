@@ -4,7 +4,7 @@
 
 **Goal:** Give every tik.trigger action and guide module a real icon, loaded from a file beside its `.py`, falling back to today's generated glyph when there is none.
 
-**Architecture:** Three modules with one job each. `tik/trigger/core/icons.py` is pure path resolution (no Qt — `trigger/core` may not import it). `tik/shared/ui/pick.py` turns paths into Qt objects and recolours them. `tik/trigger/ui/iconography.py` holds the family rules: actions are full-colour and never tinted, guide modules are monochrome and tinted by side or category. Six existing call sites swap `glyph_icon(initials(...))` for an `iconography` call.
+**Architecture:** Three modules with one job each. `tik/trigger/core/icons.py` is pure path resolution (no Qt — `trigger/core` may not import it). `tik/shared/ui/pick.py` turns paths into Qt objects and recolours them. `tik/trigger/ui/iconography.py` holds the family rules: actions are full-colour and never tinted, guide modules are monochrome and tinted by side or category. Five live call sites swap `glyph_icon(initials(...))` for an `iconography` call.
 
 **Tech Stack:** Python 3.10+, Qt through `tik.shared.ui.Qt` (the vendored shim), SVG assets, pytest under `mayapy`.
 
@@ -37,7 +37,7 @@
 | `pyproject.toml` | **Modify.** `package-data` so assets ship. |
 | `AI/icon_rules.md` | **Create.** The drawing rules. |
 
-**Task order is dependency order.** 1 and 2 are independent; 3 is independent; 4 needs 3 (categories); 5 needs 1, 2, 3, 4; 6 needs 5; 7 is independent.
+**Task order is dependency order.** 1, 2 and 3 are mutually independent; 4 needs 1 (its lint calls `icons.find`); 5 needs 1, 2, 3 and 4; 6 needs 5; 7 is independent.
 
 ---
 
@@ -621,7 +621,13 @@ Pure text checks -- no Qt here, so this runs in the plain unit suite.
 
 import pytest
 
+import tik.trigger as trigger
 from tik.trigger.core import icons, registry
+
+# Nothing populates the registries on import; only an explicit call does. This
+# must run before the parametrize lists below are built, or they come out empty
+# and every case below passes while asserting nothing.
+trigger.load_plugins()
 
 # Qt renders SVG Tiny 1.2. These elements and attributes are silently ignored,
 # so a file using them looks right in a browser and wrong (or blank) in Maya.
@@ -632,6 +638,17 @@ def _plugins():
     return [(cls, "action") for cls in registry.iter_actions()] + [
         (cls, "module") for cls in registry.iter_modules()
     ]
+
+
+@pytest.fixture(autouse=True)
+def _plugins_loaded():
+    """Re-register after any test that called ``clear_registries()``."""
+    trigger.load_plugins()
+
+
+def test_the_plugin_list_is_not_empty():
+    """Guard against the whole suite below silently collecting zero cases."""
+    assert len(_plugins()) >= 9
 
 
 @pytest.mark.parametrize("cls,family", _plugins(), ids=lambda item: getattr(item, "__name__", item))
@@ -762,10 +779,28 @@ Create `tests/ui/test_iconography.py`:
 
 import pytest
 
+import tik.trigger as trigger
 from tik.shared.ui import theme
 from tik.shared.ui.Qt import QtGui
 from tik.trigger.core import registry
 from tik.trigger.ui import iconography
+
+# Must precede the parametrize lists below: nothing populates the registries on
+# import, and an empty list would make every parametrized case vanish silently.
+trigger.load_plugins()
+
+
+@pytest.fixture(autouse=True)
+def _plugins_loaded():
+    """``tests/ui/test_guide_designer.py`` calls ``clear_registries()`` and
+    pytest ordering is not guaranteed, so restore the real plugins per test."""
+    trigger.load_plugins()
+
+
+def test_the_registries_are_populated():
+    """Guard against the parametrized suites below collecting zero cases."""
+    assert len(registry.iter_actions()) >= 4
+    assert len(registry.iter_modules()) >= 5
 
 
 def _drawn(icon, size):
@@ -805,8 +840,8 @@ def test_actions_keep_their_own_colour(qapp):
 
 def test_modules_take_the_side_tint(qapp):
     arm = registry.get_module("arm")
-    assert _colours(iconography.module_icon(arm, side="L", size=22)) == {theme.SIDE["L"]}
-    assert _colours(iconography.module_icon(arm, side="R", size=22)) == {theme.SIDE["R"]}
+    assert _colours(iconography.module_icon(arm, side="L", size=22), 22) == {theme.SIDE["L"]}
+    assert _colours(iconography.module_icon(arm, side="R", size=22), 22) == {theme.SIDE["R"]}
 
 
 def test_module_without_a_side_takes_its_category_colour(qapp):
@@ -814,7 +849,7 @@ def test_module_without_a_side_takes_its_category_colour(qapp):
 
     arm = registry.get_module("arm")
     expected = MODULE_COLORS[arm.category]
-    assert _colours(iconography.module_icon(arm, size=22)) == {expected}
+    assert _colours(iconography.module_icon(arm, size=22), 22) == {expected}
 
 
 def test_a_raster_module_icon_is_never_tinted(qapp, tmp_path, monkeypatch):
