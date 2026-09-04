@@ -584,3 +584,28 @@ def test_statuses_are_routed_to_the_right_tree(qapp):
     )
     view.clear_statuses()
     assert view.models[PUBLISH].data(view.publish_model.index(0, 0), StatusRole) == ""
+
+
+def test_reset_scene_clears_the_run_statuses(qapp, monkeypatch):
+    """The build those ticks described is gone along with the scene."""
+    from tik.shared.ui import feedback
+    from tik.trigger.guides import nodes
+
+    monkeypatch.setattr(nodes, "new_scene", lambda: None)
+    window = TriggerWindow(designer_factory=_stub_designer)
+    window.show()
+    view = window.current_view
+    view.add_action("mark")
+    view.model.set_status("mark", "done")
+    assert view.model.status("mark") == "done"
+
+    previous = feedback.set_handler(lambda *args: "reset")
+    try:
+        window.reset_scene()
+    finally:
+        feedback.set_handler(previous)
+    # the session is dirty: never let the close dialog hang the run
+    window.ask_save_discard = lambda session: "discard"
+    window.close()
+
+    assert view.model.status("mark") == ""

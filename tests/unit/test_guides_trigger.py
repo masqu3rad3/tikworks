@@ -359,3 +359,18 @@ def test_importing_remaps_connections_onto_the_new_ids(guides, tmp_path):
     # the copy points at its own copy of the producer, not the original
     assert new_child.inputs["root"] == f"{new_parent.key}.root"
     assert new_parent.instance_id != parent.instance_id
+
+
+def test_new_scene_keeps_the_perspective_camera():
+    """A build's scene reset must not throw away the rigger's framing."""
+    cmds.file(new=True, force=True)
+    cmds.createNode("transform", name="doomedT")
+    cmds.xform("persp", worldSpace=True, translation=(7.0, 8.0, 9.0))
+    matrix = cmds.xform("persp", query=True, worldSpace=True, matrix=True)
+
+    nodes.new_scene()
+
+    assert not cmds.objExists("doomedT")
+    assert cmds.xform(
+        "persp", query=True, worldSpace=True, matrix=True
+    ) == pytest.approx(matrix)
