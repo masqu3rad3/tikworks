@@ -503,17 +503,38 @@ The centre of the change. After this task nothing in `GuideScene` moves data bot
 
 **Interfaces:**
 - Consumes: `capture(..., scope=)` from Task 4; `GuideDiff.not_drawn` / `.stale` from Task 1.
-- Produces: `GuideScene.draw(scope=None, poses="keep") -> GuideDiff` and `GuideScene.sync(scope=None) -> GuideDiff`. `GuideScene.dismissed`, `GuideScene.restore()` and `sync(regenerate_stale=)` no longer exist.
+- Produces: `GuideScene.draw(scope=None, poses="keep") -> GuideDiff`, `GuideScene.sync(scope=None) -> GuideDiff`, `GuideScene.draw_on_create: bool = True`, and `GuideScene._write_entry(module, parent=None, poses=None, inputs=None) -> ModuleEntry`. `GuideScene.dismissed`, `GuideScene.restore()` and `sync(regenerate_stale=)` no longer exist.
+
+**Amended by the spec's section 2 (2026-09-05):** creating a module *does* draw it, governed
+by `draw_on_create` (default True). `create_guides()` keeps its name and its write-draw-capture
+behaviour; `add()` writes the entry through `_write_entry()` and draws only when the flag is
+set. Opening a session, importing a `.trg` and checkout still draw nothing.
 
 - [ ] **Step 1: Write the failing tests**
 
 Append to `tests/unit/test_guide_scene_trigger.py`, using its existing `guides` fixture:
 
 ```python
-def test_adding_a_module_creates_no_joints(guides):
+def test_adding_a_module_draws_it_by_default(guides):
+    handle = guides.add("fkchain", side="L", name="arm")
+    assert guides.guide_nodes(handle.instance_id) != {}
+    assert guides.diff().not_drawn == []
+
+
+def test_adding_a_module_draws_nothing_when_the_setting_is_off(guides):
+    guides.draw_on_create = False
     handle = guides.add("fkchain", side="L", name="arm")
     assert guides.guide_nodes(handle.instance_id) == {}
     assert guides.diff().not_drawn == [handle.instance_id]
+
+
+def test_a_module_added_undrawn_still_draws_at_its_own_defaults(guides):
+    """expand_guides writes unposed records; draw_guides decides where they go."""
+    guides.draw_on_create = False
+    handle = guides.add("fkchain", side="L", name="arm")
+    guides.draw()
+    root = guides.guide_node(handle.instance_id, handle.module_class.guides.root)
+    assert root.exists()
 
 
 def test_changing_a_setting_leaves_the_joints_alone(guides):
@@ -566,7 +587,64 @@ Add `import pytest`, `from maya import cmds` and `from tik.trigger.guides.snapsh
 Run: `TP tests/unit/test_guide_scene_trigger.py -k "no_joints or leaves_the_joints or never_creates or keeps_poses or discard"`
 Expected: FAIL with `AttributeError: 'GuideScene' object has no attribute 'draw'`.
 
-- [ ] **Step 3: Rewrite `_apply`**
+- [ ] **Step 3: Split the entry write out of `create_guides`, and add the flag**
+
+In `GuideScene.__init__`, beside `self.auto_sync = True`:
+
+```python
+        # Creation is the one automatic draw left: the rigger just asked for
+        # the module and it has no joints yet, so nothing can be moved or
+        # discarded. It governs creation and nothing else -- it can never
+        # bring back the redraw-on-edit this design removed.
+        self.draw_on_create = True
+```
+
+Split `create_guides` so the document write is reusable. Everything from
+`from tik.trigger.core.guide_document import ModuleEntry, expand_guides` down to the
+`for pose in poses or []:` loop moves into a new method, and `create_guides` keeps the
+undo chunk that draws:
+
+```python
+    def _write_entry(self, module, parent=None, poses=None, inputs=None):
+        """Write a module's document entry. Touches nothing in the scene."""
+        from tik.trigger.core.guide_document import ModuleEntry, expand_guides
+
+        ...unchanged body, ending with...
+        self.document.modules.append(entry)
+        self._touch()
+        return entry
+
+    def create_guides(self, module, parent=None, poses=None, inputs=None):
+        """Write a module's document entry, draw it, and own the first render.
+
+        The draw is not optional here and the name says so: this is the
+        low-level call scripts and tests use to get guides in the scene. The
+        authoring path is ``add()``, which consults ``draw_on_create``.
+        """
+        with nodes.undo_chunk(f"Trigger guides: {module.name}"):
+            entry = self._write_entry(module, parent, poses, inputs)
+            created = regenerate(entry, self.document)
+            if not created:
+                raise GuideError(f"'{module.module_type}' drew no guides.")
+            if not poses:
+                # the first render defines the poses the document then owns
+                capture(self.document, snapshot(), scope=[entry.instance_id])
+        return nodes.instance_from_nodes(module.instance_id, created, entry=entry)
+```
+
+Note the capture is now scoped to the module just drawn — drawing one module must not
+pull the rest of the scene into the document.
+
+Then in `add()`, replace the `self.create_guides(...)` line:
+
+```python
+        if self.draw_on_create:
+            self.create_guides(module, parent=parent_ref, inputs=inputs)
+        else:
+            self._write_entry(module, parent=parent_ref, inputs=inputs)
+```
+
+- [ ] **Step 4: Rewrite `_apply`**
 
 Replace the whole `_apply` method:
 
@@ -586,7 +664,7 @@ Replace the whole `_apply` method:
 
 `entry` is now unused but every call site passes it; keep the parameter so the call sites are untouched.
 
-- [ ] **Step 4: Delete `dismissed` and `restore`, and rewrite `sync`**
+- [ ] **Step 5: Delete `dismissed` and `restore`, and rewrite `sync`**
 
 Remove the `dismissed` property, its setter and `restore()` entirely (`scene.py:100-114`). Remove `self.dismissed = False` from `create_guides` (`scene.py:294`).
 
@@ -623,7 +701,7 @@ Replace `sync`:
 
 Add `Iterable` to the `typing` import at the top of `scene.py`.
 
-- [ ] **Step 5: Add `draw`**
+- [ ] **Step 6: Add `draw`**
 
 Immediately after `sync`:
 
@@ -671,7 +749,7 @@ Immediately after `sync`:
         return self.diff()
 ```
 
-- [ ] **Step 6: Fix `test_build`**
+- [ ] **Step 7: Fix `test_build`**
 
 `GuideScene.test_build` (`scene.py:676-683`) calls `self.sync(regenerate_stale=False)`. Replace its body's sync line with the full sync-then-draw preamble:
 
@@ -695,12 +773,12 @@ Immediately after `sync`:
         )
 ```
 
-- [ ] **Step 7: Run the tests**
+- [ ] **Step 8: Run the tests**
 
 Run: `TP tests/unit/test_guide_scene_trigger.py`
 Expected: PASS. Tests that relied on a write redrawing the scene will fail — fix them by adding an explicit `guides.draw()`, which is the behaviour change this task exists to make.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/scene.py tests/unit/test_guide_scene_trigger.py
@@ -1834,6 +1912,7 @@ def test_the_guides_menu_offers_both_draw_scopes(window):
     labels = [action.text() for action in window.guides_menu.actions()]
     assert "Draw Selected Guides" in labels
     assert "Draw All Guides" in labels
+    assert "Draw New Modules" in labels
     assert "Delete All Modules" in labels
     assert "Clear Scene Guides" not in labels
 ```
@@ -1862,6 +1941,36 @@ In `main.py`'s Guides menu, above the `Sync From Scene` group:
             lambda: self._designer_call("draw_all"),
             "F5",
         )
+        self.draw_on_create_action = self._action(
+            guides_menu,
+            "Draw New Modules",
+            lambda: self._designer_call(
+                "set_draw_on_create", self.draw_on_create_action.isChecked()
+            ),
+            checkable=True,
+        )
+        self.draw_on_create_action.setChecked(True)
+```
+
+`set_draw_on_create` goes in `commands.py` beside `_apply_auto_sync`, and mirrors it exactly
+— no sync afterwards, because the flag only affects the *next* module created:
+
+```python
+    def set_draw_on_create(self, on: bool) -> None:
+        """Persist whether creating a module also draws it (spec 2.2)."""
+        self.guides.draw_on_create = bool(on)
+        QtCore.QSettings("tikworks", "trigger").setValue(
+            "designer/draw_on_create", bool(on)
+        )
+```
+
+and is restored at Designer construction next to the `auto_sync` restore:
+
+```python
+        stored = QtCore.QSettings("tikworks", "trigger").value(
+            "designer/draw_on_create", True
+        )
+        self.guides.draw_on_create = stored not in (False, "false", "0", 0)
 ```
 
 Rename the last entry — the action deletes every module from the session document, not just the rendering, and under this design's vocabulary "Clear Scene Guides" reads as "undraw everything":

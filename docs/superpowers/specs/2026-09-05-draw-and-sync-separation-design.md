@@ -38,12 +38,13 @@ moves data both ways, and the rigger has no vocabulary to say which one they wan
 There are no backward dependencies. Everything this design makes redundant is deleted, not
 deprecated.
 
-## 2. Draw is never automatic
+## 2. Nothing is *re*drawn unless the rigger asks
 
-**Nothing is drawn unless the rigger asks.** One rule, no exceptions:
+**A rendering that already exists is never rebuilt behind the rigger's back, and no session
+ever draws itself when it opens.**
 
-- adding a module from the palette writes its document entry and creates **no joints**
-- importing a `.trg` adds entries and creates no joints
+- **creating** a module draws it, when `Draw new modules` is on — the default
+- importing a `.trg` adds entries and creates **no joints**
 - opening a `.tr` session creates no joints
 - checking the scene out for a session creates no joints
 - changing a drawn module's settings **does not** redraw it — it is *flagged*, and the joints
@@ -51,12 +52,49 @@ deprecated.
 
 The last one is the point of the whole design. A redraw that happens on its own is the tool
 moving the rigger's work without being asked, and there is no setting that makes that
-acceptable — only an explicit press.
+acceptable — only an explicit press. **`Draw new modules` cannot switch it back on**: the
+setting governs creation and nothing else.
+
+### 2.1 Why creation is the exception
+
+Creation is the one moment where the two dangers this design exists to remove are both
+absent. The rigger has just said "I want an arm", so the draw is not unsolicited; and there
+are no joints for that module yet, so nothing can be moved or discarded. Every other
+automatic draw fails one of those tests — a settings change redraws work the rigger did not
+ask to have rebuilt, and opening a session floods a scene the rigger may have opened for
+something else entirely.
+
+Creation is also where the *poses* come from. `expand_guides` writes **unposed** records; the
+module's own `draw_guides` is what decides where its guides sit, and the document only learns
+those positions by drawing once and capturing. With `Draw new modules` off, a new module's
+records stay unposed until its first Draw — which is still correct, because `regenerate`
+leaves an unposed guide wherever `draw_guides` puts it, and Sync captures it from there.
+
+### 2.2 Where the setting lives
+
+`GuideScene.draw_on_create: bool`, defaulting to `True`, mirroring `auto_sync` exactly: a
+working preference, persisted per user in `QSettings` (`designer/draw_on_create` under
+`tikworks/trigger`), never in the `.tr`. It is surfaced as a checkable `Draw New Modules`
+menu action beside `Auto Sync`, and deliberately **not** on the action bar — the bar is the
+scarce surface and this is a set-once preference, not a per-operation control.
+
+`GuideScene` reads the attribute, never `QSettings`; the Designer restores it at construction
+and writes it back on change, the way it already does for `auto_sync`.
+
+### 2.3 `add()` and `create_guides()`
+
+`GuideScene.create_guides(module)` keeps its name and its behaviour — write the entry, draw
+it, capture the first render — because that is honestly what it does, and it is the low-level
+call that scripts and tests use to get drawn guides.
+
+`add()` is the authoring entry point (the palette, the shelf, `.trg` import). It writes the
+entry through a new `_write_entry()` and then draws **only when `draw_on_create` is set**.
+That split is what lets opening a session add entries without touching the scene.
 
 There is no **Undraw**. Drawing again discards the previous rendering, and `Delete All
 Modules` or `Reset Scene` covers the rest.
 
-### 2.1 "Is it drawn?" is not stored
+### 2.4 "Is it drawn?" is not stored
 
 The scene answers it. `reconcile()` already computes `absent` per module, so drawn-ness is
 derived on every diff and never persisted. Deleting guide joints by hand therefore becomes a
@@ -291,6 +329,7 @@ The Designer's `StatusFields` gains a `guides` field:
 Guides menu:
 
 - **add** `Draw Selected Guides`, `Draw All Guides` (`F5`, beside Sync's `F6`)
+- **add** `Draw New Modules`, checkable, default on (section 2.2)
 - `Sync From Scene` (`F6`) and `Auto Sync` keep their names and checkable state
 - `Build Selected Guides` keeps its entry
 - **rename** `Clear Scene Guides` → `Delete All Modules`
