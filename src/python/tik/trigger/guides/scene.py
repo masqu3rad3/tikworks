@@ -709,7 +709,7 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         return GuideHandle(self, module.instance_id)
 
     # ------------------------------------------------------------- build
-    def test_build(self, *handles: GuideHandle, rig_name: str = "test") -> Any:
+    def test_build(self, *handles: GuideHandle) -> Any:
         """Build the given modules (or every module) into a throwaway rig.
 
         Draws first, and has to: ``find_instances`` reads tagged joints, so a
@@ -724,7 +724,7 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         self.sync()
         self.draw(ids or None)
         return Builder(self.events).build(
-            scope=scope, document=self.document, rig_name=rig_name, afterlife="keep"
+            scope=scope, document=self.document, afterlife="keep"
         )
 
     def __repr__(self) -> str:

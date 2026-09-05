@@ -53,3 +53,42 @@ class ToyChain(Module):
         rig.output("end", rig.chain("segment")[-1])
         for joint in rig.chain("segment"):
             rig.deform_joint(joint)
+
+
+class ToyTiers(Module):
+    """One controller per tier, plus a tweak, for the visibility tests."""
+
+    label = "Toy Tiers"
+    sided = False
+    guides = GuideLayout("root")
+    inputs = ()
+    outputs = ("root",)
+    controls = ("primary", "secondary", "tertiary")
+
+    def draw_guides(self, guides):
+        guides.joint("root", (0, 0, 0))
+
+    def build(self, rig):
+        main = rig.controller("primary", tier="primary")
+        rig.controller("secondary", tier="secondary")
+        rig.controller("tertiary", tier="tertiary")
+        rig.tweak_control(main)
+        joint = rig.bind_joint("root", match=rig.guide("root"))
+        rig.output("root", joint)
+
+
+class ToyStill(Module):
+    """Declares and builds no controllers at all."""
+
+    label = "Toy Still"
+    sided = False
+    guides = GuideLayout("root")
+    inputs = ()
+    outputs = ("root",)
+    controls = ()
+
+    def draw_guides(self, guides):
+        guides.joint("root", (0, 0, 0))
+
+    def build(self, rig):
+        rig.output("root", rig.bind_joint("root", match=rig.guide("root")))

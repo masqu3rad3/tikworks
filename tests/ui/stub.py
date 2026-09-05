@@ -589,6 +589,6 @@ class StubScene:
             self.set_layout(layout)
         return [GuideHandle(self, item.instance_id) for item in created]
 
-    def test_build(self, *handles, rig_name: str = "test"):
+    def test_build(self, *handles):
         self.calls.append(("test_build", len(handles)))
         return None

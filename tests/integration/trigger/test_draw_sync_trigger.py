@@ -289,7 +289,7 @@ def test_a_build_that_deletes_the_guides_leaves_them_not_drawn(scene):
     from tik.trigger.maya.build import Builder
 
     handle = scene.add("base", side="C", name="body")
-    Builder().build(document=scene.document, rig_name="afterlife", afterlife="delete")
+    Builder().build(document=scene.document, afterlife="delete")
     diff = scene.sync()
     assert scene.guide_nodes(handle.instance_id) == {}
     assert diff.not_drawn == [handle.instance_id]
@@ -305,7 +305,7 @@ def test_drawing_after_a_build_brings_the_guides_back_where_they_were(scene):
     root = scene.guide_nodes(handle.instance_id)[("root", 0)]
     cmds.xform(root.long_name, worldSpace=True, translation=(3.0, 4.0, 5.0))
     scene.sync()
-    Builder().build(document=scene.document, rig_name="afterlife", afterlife="delete")
+    Builder().build(document=scene.document, afterlife="delete")
     scene.draw()
     restored = scene.guide_nodes(handle.instance_id)[("root", 0)]
     placed = cmds.xform(
@@ -320,7 +320,7 @@ def test_adding_a_module_after_a_build_draws_only_that_module(scene):
     from tik.trigger.maya.build import Builder
 
     body = scene.add("base", side="C", name="body")
-    Builder().build(document=scene.document, rig_name="afterlife", afterlife="delete")
+    Builder().build(document=scene.document, afterlife="delete")
     tail = scene.add("fkchain", side="C", name="tail", segments=1)
     assert scene.guide_nodes(tail.instance_id)
     assert scene.guide_nodes(body.instance_id) == {}
@@ -330,7 +330,7 @@ def test_keeping_the_guides_leaves_them_drawn(scene):
     from tik.trigger.maya.build import Builder
 
     handle = scene.add("base", side="C", name="body")
-    Builder().build(document=scene.document, rig_name="afterlife", afterlife="keep")
+    Builder().build(document=scene.document, afterlife="keep")
     assert scene.guide_nodes(handle.instance_id)
 
 

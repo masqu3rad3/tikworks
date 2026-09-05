@@ -15,6 +15,7 @@ import tik.maya as tm
 from tik.maya import naming
 from tik.maya.roles.controller import Controller
 from tik.trigger.core.exceptions import GuideError
+from tik.trigger.core.manifest import TIERS
 from tik.trigger.core.schemas import ModuleInstance
 from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_joint
 
@@ -98,7 +99,7 @@ class ModuleRig:
         self,
         module,
         instance: ModuleInstance,
-        rig_root,
+        scaffold,
         guide_nodes: dict,
         bind_parent=None,
     ) -> None:
@@ -106,7 +107,9 @@ class ModuleRig:
         self.instance = instance
         self.side = module.side
         self.side_mult = module.side.multiplier
-        self.rig_root = rig_root
+        self.scaffold = scaffold
+        # trigger_grp: the world-space anchor every module hangs under
+        self.rig_root = scaffold.trigger
         self._guides = guide_nodes  # (role, index) -> Joint
         self.outputs: dict[str, Any] = {}
         self.attachments: dict[str, Any] = {}
@@ -256,14 +259,21 @@ class ModuleRig:
         match: Any = None,
         mirror: str = "world",
         offset: bool = True,
+        tier: Optional[str] = "primary",
     ) -> Controller:
         """A tagged controller with its offset group.
 
         ``match`` snaps it to a node; ``mirror`` is ``"behaviour"`` (FK-like,
         follows its joint) or ``"world"`` (IK/world-aligned), recorded for a
         pose-mirror tool. ``offset=False`` skips the offset group, for a
-        controller that hangs under another one (a tweak).
+        controller that hangs under another one (a tweak). ``tier`` places the
+        control in the rig's visibilities enum (one of ``TIERS``); ``None``
+        leaves it untiered, which is what a tweak wants.
         """
+        if tier is not None and tier not in TIERS:
+            raise GuideError(
+                f"'{name}': tier must be one of {TIERS} or None, got {tier!r}."
+            )
         parent = parent if parent is not None else self.groups.control
         controller = Controller.create(
             name=self.name(name, suffix="ctrl"),
@@ -287,6 +297,8 @@ class ModuleRig:
                 tags.MIRROR: mirror,
             },
         )
+        if tier is not None:
+            controller.transform.meta[tags.TIER] = tier
         controller.offset = (
             controller.create_offset_group(name=self.name(name, suffix="offset"))
             if offset
@@ -313,6 +325,7 @@ class ModuleRig:
             match=main,
             mirror=main.meta.get(tags.MIRROR, tags.WORLD),
             offset=False,
+            tier=None,
         )
         visible = main.transform["tweakVis"].create(
             "bool", default=False, keyable=False

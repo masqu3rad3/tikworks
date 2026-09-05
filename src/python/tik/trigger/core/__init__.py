@@ -48,7 +48,7 @@ from .guide_document import (
     SceneGroup,
     expand_guides,
 )
-from .manifest import GuideAttr, GuideLayout, Input, instance_key
+from .manifest import TIERS, GuideAttr, GuideLayout, Input, instance_key
 from .module import Module
 from .reconcile import GuideDiff, ModuleDiff, RenderedGuide, reconcile
 from .registry import (
@@ -104,6 +104,7 @@ __all__ = [
     "expand_guides",
     "reconcile",
     "Input",
+    "TIERS",
     "instance_key",
     "Module",
     "Side",

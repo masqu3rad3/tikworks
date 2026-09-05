@@ -32,9 +32,7 @@ def _solo(module_type):
             get_module(module_type)(name=module_type),
             parent=ParentRef(body.instance_id, "root"),
         )
-    report = Builder().build(
-        document=scene.document, rig_name="rules", afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     return report.rigs[instance.instance_id]
 
 
@@ -85,9 +83,7 @@ def _built_with(module_type, settings):
         # Drawing is manual since the Draw/Sync split: write_settings flags the
         # module, it does not rebuild its joints.
         scene.draw()
-    report = Builder().build(
-        document=scene.document, rig_name="rules", afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     return report.rigs[instance.instance_id]
 
 
@@ -132,9 +128,7 @@ def connected_rig():
         get_module("arm")(name="arm", side="L"),
         parent=ParentRef(body.instance_id, "root"),
     )
-    report = Builder().build(
-        document=scene.document, rig_name="rules", afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     return report, body, arm
 
 
@@ -252,14 +246,14 @@ def test_module_parents_everything_it_creates(module_type):
         )
     else:
         scene.create_guides(get_module(module_type)(name=module_type))
-    Builder().build(document=scene.document, rig_name="rules", afterlife="delete")
+    Builder().build(document=scene.document, afterlife="delete")
 
     # trigger_modules_grp holds the guide *document*, which deliberately
     # outlives the guides it renders -- it is not module output.
     stray = (
         set(cmds.ls(assemblies=True, long=True))
         - before
-        - {"|rules_rig", "|trigger_modules_grp"}
+        - {"|rig_grp", "|trigger_modules_grp"}
     )
     assert not stray, f"'{module_type}' left {sorted(stray)} at the world root"
 
@@ -295,9 +289,7 @@ def test_space_inputs_get_no_socket():
         ),
         parent=ParentRef(body.instance_id, "root"),
     )
-    report = Builder().build(
-        document=scene.document, rig_name="rules", afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     rig = report.rigs[arm.instance_id]
 
     assert "root" in rig.attachments
@@ -328,3 +320,31 @@ def test_every_top_level_controller_has_an_offset_group(module_type):
         # the offset is above the control; a module may insert its own group
         # between them (the arm's auto-collar does)
         assert control.transform.long_name.startswith(control.offset.long_name + "|")
+
+
+# ------------------------------------------------------------------- tiers
+@pytest.mark.parametrize("module_type", MODULE_TYPES)
+def test_every_controller_carries_a_valid_tier(module_type):
+    """Rule: a tweak has no tier; everything else declares one of TIERS."""
+    from tik.trigger.core import TIERS
+
+    ctx = _solo(module_type)
+    for controller in ctx.controllers:
+        role = controller.transform.meta.get(tags.ROLE, "")
+        tier = controller.transform.meta.get(tags.TIER)
+        if role.endswith("_tweak"):
+            assert tier is None, f"{controller.transform.name} is a tiered tweak"
+        else:
+            assert tier in TIERS, f"{controller.transform.name} has tier {tier!r}"
+
+
+@pytest.mark.parametrize("module_type", _shipped_module_types())
+def test_visibilities_enum_matches_the_control_manifest(module_type):
+    """One enum on visibilities_ctrl iff the module declares controls."""
+    module_cls = get_module(module_type)
+    ctx = _built_with(module_type, {})
+    vis = ctx.scaffold.visibilities.transform
+    expected = bool(module_cls.control_names(ctx.instance.settings))
+    assert (
+        vis[ctx.instance.key].exists() is expected
+    ), f"{module_type}: enum present={not expected}"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -11,6 +12,7 @@ import tik.maya as tm
 from tik.trigger.core import registry
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import AttachError, BuildError
+from tik.trigger.core.manifest import TIERS
 from tik.trigger.core.schemas import (
     AFTERLIFE_MODES,
     ModuleInstance,
@@ -22,6 +24,7 @@ from tik.trigger.guides import nodes as guide_nodes
 
 from . import tags
 from .rig import ModuleRig
+from .scaffold import RigScaffold, ensure_rig
 
 
 @dataclass
@@ -36,7 +39,7 @@ class BuildReport:
     spaces: list[tuple[str, str]] = field(
         default_factory=list
     )  # ("L_arm.ik_chest", "body.root")
-    rig_root: Any = None
+    scaffold: Any = None  # RigScaffold
 
     @property
     def count(self) -> int:
@@ -45,29 +48,86 @@ class BuildReport:
 
 
 # ------------------------------------------------------------------- scene
-def build_context(module, instance, rig_root, bind_parent=None) -> ModuleRig:
+def build_context(
+    module, instance, scaffold: RigScaffold, bind_parent=None
+) -> ModuleRig:
     """The object a module builds through, wired to its guides."""
     return ModuleRig(
         module,
         instance,
-        rig_root,
+        scaffold,
         guide_nodes.guide_nodes(instance.instance_id),
         bind_parent,
     )
 
 
-def ensure_rig_root(rig_name: str) -> tm.Transform:
-    """The tagged top group every module hangs under, created once per rig."""
-    for node in tm.find_by_meta(tags.KIND, tags.RIG_ROOT):
-        if node.meta.get(tags.NAME) == rig_name:
-            return node
-    root = tm.Transform.create(name=f"{rig_name}_rig")
-    root.meta.update({tags.KIND: tags.RIG_ROOT, tags.NAME: rig_name})
-    return root
+def wire_preferences(rig) -> None:
+    """Hand the module's visibility switches to the rig-wide preferences.
+
+    The limb group keeps its three attributes so a module stays testable on
+    its own; once built into a rig, the preferences drive them and they lock.
+    """
+    prefs = rig.scaffold.preferences.transform
+    limb = rig.groups.limb
+    for pref, attr in (
+        ("controls", "controlVisibility"),
+        ("rig", "rigVisibility"),
+        ("joints", "bindVisibility"),
+    ):
+        plug = limb[attr]
+        prefs[pref] >> plug
+        plug.locked = True
+    for pref, group in (
+        ("rigDisplay", rig.groups.rig),
+        ("jointsDisplay", rig.groups.bind),
+    ):
+        group["overrideEnabled"].value = True
+        prefs[pref] >> group["overrideDisplayType"]
+
+
+TIER_ITEMS = (*TIERS, "all")
+ALL_INDEX = len(TIERS)
+
+
+def tier_attr_name(key: str) -> str:
+    """The visibilities enum for a module: its display key, made attribute-safe."""
+    return re.sub(r"\W", "_", key)
+
+
+def wire_tiers(rig) -> None:
+    """One exclusive-tier enum per module on visibilities_ctrl, driving shapes.
+
+    Tiers are exclusive: ``secondary`` shows secondary controls only, ``all``
+    shows the three tiers. Shapes are driven, not transforms, so an FK chain
+    whose next control hangs under the previous one keeps its hierarchy.
+    Tweaks carry no tier and are left to ``tweakVis`` on their main.
+    """
+    by_tier: dict[str, list] = {}
+    for controller in rig.controllers:
+        tier = controller.transform.meta.get(tags.TIER)
+        if tier is not None:
+            by_tier.setdefault(tier, []).append(controller)
+    if not by_tier:
+        return
+    vis = rig.scaffold.visibilities.transform
+    enum = vis[tier_attr_name(rig.instance.key)]
+    if not enum.exists():
+        enum.create("enum", items=list(TIER_ITEMS), default=ALL_INDEX, keyable=False)
+        enum.visible = True
+    is_all = enum.eq(ALL_INDEX, 1, 0)
+    is_all.node.rename(rig.name("vis", "all", suffix="cond"))
+    for tier, controllers in by_tier.items():
+        shown = enum.eq(TIERS.index(tier), 1, is_all)
+        shown.node.rename(rig.name("vis", tier, suffix="cond"))
+        for controller in controllers:
+            for shape in controller.transform.shapes:
+                shown >> shape["visibility"]
 
 
 def finalize(rig) -> None:
-    """Tag a built module's outputs and sockets so tools can find them."""
+    """Tag a built module's outputs and sockets, and wire it to the scaffold."""
+    wire_preferences(rig)
+    wire_tiers(rig)
     for name, node in rig.outputs.items():
         # Every output is a bind joint, so trg_kind must stay "deform" -
         # overwriting it with "output" would erase the classification that
@@ -164,13 +224,9 @@ class Builder:
         return order_instances(instances)
 
     def build(
-        self,
-        scope: Any = "scene",
-        rig_name: str = "trigger",
-        afterlife: str = "delete",
-        document=None,
+        self, scope: Any = "scene", afterlife: str = "delete", document=None
     ) -> BuildReport:
-        """Build every guide instance in ``scope`` into a rig called ``rig_name``."""
+        """Build every guide instance in ``scope`` into the scene's one rig."""
         if afterlife not in AFTERLIFE_MODES:
             raise ValueError(f"afterlife must be one of {AFTERLIFE_MODES}.")
         instances = self.order(guide_nodes.find_instances(scope, document))
@@ -188,8 +244,8 @@ class Builder:
             self.events.log("No module guides found to build.", level="warning")
             return report
 
-        with guide_nodes.undo_chunk(f"Trigger build: {rig_name}"):
-            report.rig_root = ensure_rig_root(rig_name)
+        with guide_nodes.undo_chunk("Trigger build"):
+            report.scaffold = ensure_rig(self.events)
 
             # Producers must be built before consumers: rig.bind_parent is
             # resolved from the producer's output, so bind joints can be created
@@ -215,7 +271,7 @@ class Builder:
                 bind_parent = self._bind_parent_for(
                     instance, module_cls, inputs, by_key, report
                 )
-                ctx = self._build_one(instance, report.rig_root, bind_parent)
+                ctx = self._build_one(instance, report.scaffold, bind_parent)
                 report.rigs[instance.instance_id] = ctx
                 report.built.append(instance.instance_id)
                 by_key[instance.key] = instance
@@ -224,7 +280,7 @@ class Builder:
                 )
             self._connect_spaces(instances, report, by_key)
             apply_afterlife(instances, afterlife)
-        self.events.log(f"Built {total} module(s) into '{rig_name}'.")
+        self.events.log(f"Built {total} module(s).")
         return report
 
     # ------------------------------------------------------------- connect
@@ -369,7 +425,7 @@ class Builder:
         return node
 
     # --------------------------------------------------------------- build
-    def _build_one(self, instance: ModuleInstance, rig_root, bind_parent=None):
+    def _build_one(self, instance: ModuleInstance, scaffold, bind_parent=None):
         module_cls = registry.get_module(instance.module_type)
         module = module_cls.from_instance(instance)
         problems = module.validate()
@@ -382,7 +438,7 @@ class Builder:
         for warning in module.warnings():
             self.events.log(f"{instance.key}: {warning}", level="warning")
         try:
-            ctx = build_context(module, instance, rig_root, bind_parent)
+            ctx = build_context(module, instance, scaffold, bind_parent)
             module.build(ctx)
             missing = [
                 name

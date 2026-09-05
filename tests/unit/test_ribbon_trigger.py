@@ -29,7 +29,7 @@ def _built(**settings):
     body = guides.add("base", name="body")
     strip = guides.add("ribbon", side="L", name="upper", parent=body, **settings)
     guides.connect("L_upper.end", "body.root")
-    report = Builder().build(document=guides.document, rig_name="rbn", afterlife="keep")
+    report = Builder().build(document=guides.document, afterlife="keep")
     return report.rigs[strip.instance_id]
 
 

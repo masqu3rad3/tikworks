@@ -19,6 +19,11 @@ class ImportAsset(Action):
     )
     namespace = StringField("", help="Optional namespace")
     reference = BoolField(False, help="Reference instead of import")
+    parent_to_geo = BoolField(
+        True,
+        label="Parent to geo_grp",
+        help="Move what the file brings in under the rig's geo_grp.",
+    )
 
     def resolve_path(self, ctx) -> Path:
         """The asset path, made absolute against the session folder."""
@@ -31,11 +36,26 @@ class ImportAsset(Action):
         path = self.resolve_path(ctx)
         if not path.exists():
             raise ActionExecutionError(f"File not found: {path}")
-        kwargs = {"force": True}
+        kwargs = {"force": True, "returnNewNodes": True}
         if self.namespace:
             kwargs["namespace"] = self.namespace
         if self.reference:
-            cmds.file(str(path), reference=True, **kwargs)
+            new_nodes = cmds.file(str(path), reference=True, **kwargs) or []
         else:
-            cmds.file(str(path), i=True, **kwargs)
+            new_nodes = cmds.file(str(path), i=True, **kwargs) or []
+        if self.parent_to_geo and ctx.rig is not None:
+            self._parent_top_nodes(new_nodes, ctx.rig.geo)
         ctx.log(f"Imported {path}")
+
+    @staticmethod
+    def _parent_top_nodes(new_nodes, geo) -> None:
+        """Every world-level DAG node the file brought in goes under geo_grp."""
+        from maya import cmds
+
+        top = [
+            node
+            for node in cmds.ls(new_nodes, long=True, dag=True, type="transform") or []
+            if node.count("|") == 1
+        ]
+        if top:
+            cmds.parent(top, geo.long_name)

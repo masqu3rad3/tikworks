@@ -112,11 +112,9 @@ def test_build_pipeline_creates_groups_controllers_and_attaches(scene):
         scene.guide_node(child.instance_id, "root").long_name, ws=True, t=(2, 10, 0)
     )
 
-    report = Builder().build(
-        document=scene.document, rig_name="hero", afterlife="delete"
-    )
+    report = Builder().build(document=scene.document, afterlife="delete")
     assert report.count == 2
-    assert cmds.objExists("hero_rig")
+    assert cmds.objExists("rig_grp")
     assert cmds.objExists("C_body_grp") and cmds.objExists("L_tail_grp")
     assert cmds.objExists("L_tail_control_grp")
     assert cmds.objExists("L_tail_0_jnt") and cmds.objExists("L_tail_2_jnt")
@@ -144,11 +142,11 @@ def test_build_pipeline_creates_groups_controllers_and_attaches(scene):
 
 def test_build_afterlife_keep_and_hide(scene):
     scene.create_guides(get_module("base")(name="body"))
-    Builder().build(document=scene.document, rig_name="a", afterlife="keep")
+    Builder().build(document=scene.document, afterlife="keep")
     assert cmds.getAttr(f"{tags.GUIDE_HOLDER}.v")
-    Builder().build(document=scene.document, rig_name="b", afterlife="hide")
+    Builder().build(document=scene.document, afterlife="hide")
     assert not cmds.getAttr(f"{tags.GUIDE_HOLDER}.v")
-    assert cmds.objExists("a_rig") and cmds.objExists("b_rig")
+    assert len(cmds.ls("rig_grp")) == 1
 
 
 def test_build_is_undoable(scene):
@@ -160,10 +158,13 @@ def test_build_is_undoable(scene):
 
 
 def test_visibility_attributes(scene):
+    """Once built into a rig, the preferences own the module's switches."""
     scene.create_guides(get_module("base")(name="body"))
-    Builder().build(document=scene.document, afterlife="keep")
+    report = Builder().build(document=scene.document, afterlife="keep")
+    prefs = report.scaffold.preferences.transform
     limb = tm.Transform("C_body_grp")
-    limb["controlVisibility"].value = False
+    assert limb["controlVisibility"].locked
+    prefs["controls"].value = False
     assert not tm.Transform("C_body_control_grp").visibility
     assert not tm.Transform("C_body_rig_grp").visibility
 
@@ -175,9 +176,7 @@ def _built(scene, module_type="base", name="body", settings=None):
     """Build one instance and return its build context."""
     module = get_module(module_type)(name=name, settings=settings or {})
     instance = scene.create_guides(module)
-    report = Builder().build(
-        document=scene.document, rig_name="rules", afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     return report.rigs[instance.instance_id]
 
 
@@ -216,12 +215,12 @@ def test_old_scale_groups_are_gone(scene):
 
 def test_visibility_attributes_drive_the_new_groups(scene):
     ctx = _built(scene)
-    limb = ctx.groups.limb
-    limb["controlVisibility"].value = False
+    prefs = ctx.scaffold.preferences.transform
+    prefs["controls"].value = False
     assert not ctx.groups.control.visibility
-    limb["rigVisibility"].value = True
+    prefs["rig"].value = True
     assert ctx.groups.rig.visibility
-    limb["bindVisibility"].value = False
+    prefs["joints"].value = False
     assert not ctx.groups.bind.visibility
 
 
@@ -287,9 +286,7 @@ def _connected(scene):
         get_module("fkchain")(name="tail", side="L", settings={"segments": 2}),
         parent=ParentRef(root.instance_id, "root"),
     )
-    report = Builder().build(
-        document=scene.document, rig_name="single", afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     return report.rigs[root.instance_id], report.rigs[child.instance_id]
 
 
@@ -450,3 +447,25 @@ def test_deleting_a_module_takes_its_joints(guides):
     handle = guides.add("fkchain", side="L", name="arm")
     guides.remove(handle)
     assert guides.guide_nodes(handle.instance_id) == {}
+
+
+# ---------------------------------------------------------------- tiers
+def test_controller_defaults_to_primary_tier(scene):
+    ctx = _built(scene)
+    control = ctx.controller("hand", mirror="world")
+    assert control.transform.meta[tags.TIER] == "primary"
+
+
+def test_controller_accepts_a_tier_and_rejects_unknown_ones(scene):
+    ctx = _built(scene)
+    control = ctx.controller("hand", mirror="world", tier="secondary")
+    assert control.transform.meta[tags.TIER] == "secondary"
+    with pytest.raises(trigger.TriggerError):
+        ctx.controller("other", mirror="world", tier="quaternary")
+
+
+def test_tweaks_carry_no_tier(scene):
+    ctx = _built(scene)
+    main = ctx.controller("hand", mirror="world")
+    tweak = ctx.tweak_control(main)
+    assert tags.TIER not in tweak.transform.meta

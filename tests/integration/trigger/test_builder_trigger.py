@@ -7,6 +7,7 @@ modules build real nodes, so the assertions are about the rig.
 
 import pytest
 from maya import cmds
+from toy_modules import ToyStill, ToyTiers
 
 import tik.maya as tm
 import tik.trigger as trigger
@@ -136,10 +137,19 @@ def toys():
         ("toy_chain", ToyChain),
         ("toy_boom", ToyBoom),
         ("toy_fan", ToyFan),
+        ("toy_tiers", ToyTiers),
+        ("toy_still", ToyStill),
     ):
         register_module(name)(cls)
     yield GuideScene()
-    for name in ("toy_root", "toy_chain", "toy_boom", "toy_fan"):
+    for name in (
+        "toy_root",
+        "toy_chain",
+        "toy_boom",
+        "toy_fan",
+        "toy_tiers",
+        "toy_still",
+    ):
         unregister_module(name)
 
 
@@ -162,9 +172,7 @@ def test_builds_in_order_and_connects(pair):
     seen = []
     events.subscribe("progress", lambda **kw: seen.append(kw["label"]))
 
-    report = Builder(events).build(
-        document=scene.document, rig_name="rig", afterlife="hide"
-    )
+    report = Builder(events).build(document=scene.document, afterlife="hide")
 
     assert report.built == [body.instance_id, tail.instance_id]
     assert seen == ["Building body", "Building tail"]
@@ -260,7 +268,7 @@ def test_empty_scene_and_bad_afterlife(toys):
 def test_bind_parent_comes_from_the_producer(pair):
     """A connected module builds its bind joints inside the producer's."""
     scene, body, tail = pair
-    report = Builder().build(document=scene.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=scene.document, afterlife="keep")
 
     producer = report.rigs[body.instance_id]
     consumer = report.rigs[tail.instance_id]
@@ -272,7 +280,7 @@ def test_bind_parent_comes_from_the_producer(pair):
 
 def test_bind_parent_defaults_to_the_modules_own_group_when_unconnected(toys):
     solo = toys.add("toy_root", name="solo")
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
     rig = report.rigs[solo.instance_id]
     assert rig.bind_parent.long_name == rig.groups.bind.long_name
 
@@ -287,7 +295,7 @@ def test_space_inputs_do_not_feed_build_order(toys):
     first.set_input("root_b", "b.root")
     second.set_input("root_a", "a.root")
 
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
     assert report.count == 2
 
 
@@ -305,7 +313,7 @@ def test_space_connections_are_grouped_by_control_and_mode(toys):
     arm.set_input("root_body", "body.root")
     arm.set_input("root_head", "head.root")
 
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
 
     control = report.rigs[arm.instance_id].controller_by_role("root")
     assert control.transform.has_attr("parentSwitch")
@@ -333,7 +341,7 @@ def test_row_order_is_enum_order(toys):
     arm.set_input("root_body", "body.root")
     arm.set_input("root_head", "head.root")
 
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
 
     control = report.rigs[arm.instance_id].controller_by_role("root")
     listed = cmds.attributeQuery(
@@ -346,7 +354,7 @@ def test_an_unconnected_space_row_is_skipped(toys):
     arm = toys.add("toy_root", name="arm")
     _rows(arm, [{"control": "root", "mode": "parent", "label": "ghost"}])
 
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
 
     control = report.rigs[arm.instance_id].controller_by_role("root")
     assert not control.transform.has_attr("parentSwitch")
@@ -360,7 +368,7 @@ def test_a_space_on_a_dynamic_control_builds_a_switch(toys):
     _rows(fan, [{"control": "fk2", "mode": "parent", "label": "anchor"}])
     fan.set_input("fk2_anchor", "anchor.root")
 
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
 
     control = report.rigs[fan.instance_id].controller_by_role("fk2")
     assert control is not None
@@ -377,9 +385,7 @@ def test_a_space_on_a_removed_control_warns_and_still_builds(toys):
     events = EventBus()
     logged = []
     events.subscribe("log", lambda **kw: logged.append((kw["level"], kw["message"])))
-    report = Builder(events).build(
-        document=toys.document, rig_name="rig", afterlife="keep"
-    )
+    report = Builder(events).build(document=toys.document, afterlife="keep")
 
     assert fan.instance_id in report.built
     assert report.rigs[fan.instance_id].controller_by_role("fk2") is None
@@ -399,3 +405,121 @@ def test_a_guide_with_no_document_entry_is_not_built(toys):
     ]
     assert toys.find_instances("scene") == []
     assert toys.diff().orphans
+
+
+def test_modules_build_under_the_scaffold(pair):
+    scene, body, tail = pair
+    report = Builder().build(document=scene.document, afterlife="keep")
+    assert report.scaffold.trigger.long_name == "|rig_grp|trigger_grp"
+    for ctx in report.rigs.values():
+        assert ctx.groups.limb.parent.long_name == "|rig_grp|trigger_grp"
+        assert ctx.rig_root.long_name == "|rig_grp|trigger_grp"
+        assert ctx.scaffold is report.scaffold
+    # a second build reuses the same scaffold rather than making another
+    Builder().build(document=scene.document, afterlife="keep")
+    assert len(cmds.ls("rig_grp")) == 1
+
+
+def test_preferences_drive_module_visibility(pair):
+    scene, body, tail = pair
+    report = Builder().build(document=scene.document, afterlife="keep")
+    prefs = report.scaffold.preferences.transform
+    groups = [ctx.groups for ctx in report.rigs.values()]
+    assert all(group.control.visibility for group in groups)
+    prefs["controls"].value = False
+    assert not any(group.control.visibility for group in groups)
+    assert not any(group.rig.visibility for group in groups)  # default off
+    prefs["rig"].value = True
+    assert all(group.rig.visibility for group in groups)
+    prefs["joints"].value = False
+    assert not any(group.bind.visibility for group in groups)
+    # the module-level switches are now owned by the preferences
+    for group in groups:
+        for attr in ("controlVisibility", "rigVisibility", "bindVisibility"):
+            assert group.limb[attr].locked, f"{group.limb.name}.{attr}"
+
+
+def test_preferences_drive_module_display_mode(pair):
+    scene, body, tail = pair
+    report = Builder().build(document=scene.document, afterlife="keep")
+    prefs = report.scaffold.preferences.transform
+    for ctx in report.rigs.values():
+        assert ctx.groups.rig["overrideEnabled"].value
+        assert ctx.groups.bind["overrideEnabled"].value
+    prefs["rigDisplay"].value = 1
+    prefs["jointsDisplay"].value = 2
+    for ctx in report.rigs.values():
+        assert ctx.groups.rig["overrideDisplayType"].value == 1
+        assert ctx.groups.bind["overrideDisplayType"].value == 2
+
+
+# ------------------------------------------------------------------- tiers
+def _shape_visible(controller):
+    return [shape.visibility for shape in controller.transform.shapes]
+
+
+def test_visibilities_control_has_one_enum_per_module_with_controls(toys):
+    toys.add("toy_tiers", name="tiers")
+    toys.add("toy_root", name="body")
+    report = Builder().build(document=toys.document, afterlife="keep")
+    vis = report.scaffold.visibilities.transform
+    assert vis["tiers"].exists() and vis["body"].exists()
+    assert cmds.attributeQuery("tiers", node=vis.long_name, listEnum=True) == [
+        "primary:secondary:tertiary:all"
+    ]
+    assert vis["tiers"].value == 3
+    assert not vis["tiers"].keyable and vis["tiers"].visible
+
+
+def test_tiers_are_exclusive_and_all_shows_everything(toys):
+    handle = toys.add("toy_tiers", name="tiers")
+    report = Builder().build(document=toys.document, afterlife="keep")
+    ctx = report.rigs[handle.instance_id]
+    vis = report.scaffold.visibilities.transform["tiers"]
+    by_tier = {
+        controller.transform.meta[tags.TIER]: controller
+        for controller in ctx.controllers
+        if tags.TIER in controller.transform.meta
+    }
+    assert set(by_tier) == {"primary", "secondary", "tertiary"}
+    for index, tier in enumerate(("primary", "secondary", "tertiary")):
+        vis.value = index
+        for other, controller in by_tier.items():
+            expected = other == tier
+            assert all(
+                state == expected for state in _shape_visible(controller)
+            ), f"{other} at enum={tier}"
+    vis.value = 3
+    for controller in by_tier.values():
+        assert all(_shape_visible(controller))
+
+
+def test_tier_enum_hides_shapes_not_transforms(toys):
+    handle = toys.add("toy_tiers", name="tiers")
+    report = Builder().build(document=toys.document, afterlife="keep")
+    ctx = report.rigs[handle.instance_id]
+    report.scaffold.visibilities.transform["tiers"].value = 1  # secondary only
+    primary = ctx.controller_by_role("primary")
+    assert primary.transform.visibility
+    assert not any(_shape_visible(primary))
+
+
+def test_tweak_shapes_ignore_the_tier_enum(toys):
+    handle = toys.add("toy_tiers", name="tiers")
+    report = Builder().build(document=toys.document, afterlife="keep")
+    ctx = report.rigs[handle.instance_id]
+    tweak = ctx.controller_by_role("primary_tweak")
+    report.scaffold.visibilities.transform["tiers"].value = 1
+    assert all(_shape_visible(tweak))
+    # the tweak's own switch is untouched
+    ctx.controller_by_role("primary").transform["tweakVis"].value = True
+    assert tweak.transform.visibility
+
+
+def test_module_without_controls_adds_no_enum(toys):
+    toys.add("toy_root", name="body")
+    toys.add("toy_still", name="still")
+    report = Builder().build(document=toys.document, afterlife="keep")
+    vis = report.scaffold.visibilities.transform
+    assert vis["body"].exists()
+    assert not vis["still"].exists()

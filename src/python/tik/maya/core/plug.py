@@ -1312,6 +1312,19 @@ class Plug:
         """
         return self._condition(2, threshold, if_true, if_false)  # 2 = Greater Than
 
+    def eq(self, other, if_true, if_false) -> "Plug":
+        """Return ``if_true`` when ``self == other``, else ``if_false``.
+
+        Args:
+            other: Value compared against (Plug or numeric value).
+            if_true: Result when the values are equal.
+            if_false: Result otherwise.
+
+        Returns:
+            Plug: The selected value.
+        """
+        return self._condition(0, other, if_true, if_false)  # 0 = Equal
+
     def __repr__(self):
         """Return a debug-friendly representation."""
         return f"<Plug '{self.path}'>"

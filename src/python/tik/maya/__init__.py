@@ -19,7 +19,13 @@ from .constructs import (
     SpaceSwitch,
 )
 from .core import naming
-from .core.constants import ALL_CHANNELS, TRANSFORM_CHANNELS
+from .core.constants import (
+    ALL_CHANNELS,
+    TRANSFORM_CHANNELS,
+    TRANSLATE_CHANNELS,
+    ROTATE_CHANNELS,
+    SCALE_CHANNELS,
+)
 from .core.dagnode import DagNode
 from .core.meta import META_PREFIX, find_by_meta
 from .core.node import Node
@@ -68,6 +74,9 @@ __all__ = [
     "resolve",
     "find_by_meta",
     "naming",
+    "TRANSLATE_CHANNELS",
+    "ROTATE_CHANNELS",
+    "SCALE_CHANNELS",
     "TRANSFORM_CHANNELS",
     "ALL_CHANNELS",
     "AimFrame",

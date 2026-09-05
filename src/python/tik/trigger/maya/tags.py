@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 # "guide" | "rig" | "deform" | "controller" | "output" | "input" | "rig_root"
+# | "rig_trigger" | "rig_geo" | "preferences" | "visibilities"
 KIND = "trg_kind"
 MODULE = "trg_module"  # module type name
 INSTANCE = "trg_instance"  # instance uuid
@@ -22,6 +23,9 @@ DOCUMENT = "trg_document"  # scene groups / positions / collapse (guide holder o
 SESSION = "trg_session"  # id of the session whose guides are checked out
 MIRROR = "trg_mirror"  # "behaviour" | "world" - how a pose-mirror tool treats it
 OUTPUT_NAME = "trg_output"  # declared output this node fulfils
+TIER = (
+    "trg_tier"  # "primary" | "secondary" | "tertiary" - controllers only, never tweaks
+)
 
 GUIDE = "guide"
 RIG = "rig"
@@ -30,6 +34,10 @@ DEFORM = "deform"
 CONTROLLER = "controller"
 OUTPUT = "output"
 INPUT = "input"
+RIG_TRIGGER = "rig_trigger"  # trigger_grp: every module's top group hangs here
+RIG_GEO = "rig_geo"  # geo_grp: imported geometry
+PREFERENCES = "preferences"  # preferences_ctrl
+VISIBILITIES = "visibilities"  # visibilities_ctrl
 
 BEHAVIOUR = "behaviour"  # FK-like: follows its joint, equal values mirror
 WORLD = "world"  # IK/world: world-aligned, mirroring is tool logic

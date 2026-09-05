@@ -39,6 +39,13 @@ def undo_chunk(label: str):
     return nodes.undo_chunk(label)
 
 
+def ensure_rig(events=None):
+    """The scaffold every action receives as ``ctx.rig``, created or healed."""
+    from .scaffold import ensure_rig as _ensure_rig
+
+    return _ensure_rig(events)
+
+
 class Runner:
     """Plans and executes a document."""
 
@@ -184,6 +191,7 @@ class Runner:
             )
         try:
             with undo_chunk(f"Trigger: {step.display_chain}"):
+                ctx.rig = ensure_rig(self.events)
                 action.run(ctx)
         except Exception as error:  # noqa: BLE001 - report then wrap
             seconds = time.perf_counter() - started

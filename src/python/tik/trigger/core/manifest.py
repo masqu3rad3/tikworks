@@ -5,6 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Sequence
 
+#: Control tiers, in the order the visibilities enum lists them. ``all`` is
+#: the enum's fourth item, not a tier a control can be given.
+TIERS = ("primary", "secondary", "tertiary")
+
 
 @dataclass(frozen=True)
 class Input:

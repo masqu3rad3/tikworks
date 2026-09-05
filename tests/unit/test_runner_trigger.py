@@ -32,6 +32,11 @@ class Boom(Action):
         raise RuntimeError("boom")
 
 
+class SeesRig(Action):
+    def run(self, ctx):
+        CALLS.append(("rig", ctx.rig))
+
+
 class NeedsFile(Action):
     file = FileField("", extensions=[".txt"])
 
@@ -46,6 +51,7 @@ def _registered():
     register_action("mark", category="build")(Mark)
     register_action("boom")(Boom)
     register_action("needs_file")(NeedsFile)
+    register_action("sees_rig")(SeesRig)
     from tik.trigger.actions.reference.reference import Reference
 
     register_action("reference", category="structure")(Reference)
@@ -303,3 +309,43 @@ def test_a_reference_contributes_build_actions_only(tmp_path):
 
     Runner().run(outer, str(tmp_path), publish=True)
     assert _marks() == ["ref/inner_build", "own"]
+
+
+# ---------------------------------------------------------------- scaffold
+def test_every_step_receives_the_scaffold():
+    from maya import cmds
+
+    from tik.trigger.maya.scaffold import RigScaffold
+
+    doc = Document()
+    doc.add(ActionNode("first", "sees_rig"))
+    doc.add(ActionNode("second", "sees_rig"))
+    Runner().run(doc, "D:/x")
+    rigs = [call[1] for call in CALLS if call[0] == "rig"]
+    assert len(rigs) == 2 and all(isinstance(rig, RigScaffold) for rig in rigs)
+    assert rigs[0].root.long_name == rigs[1].root.long_name == "|rig_grp"
+    assert len(cmds.ls("rig_grp")) == 1
+
+
+def test_a_script_can_extend_the_preferences_control():
+    from maya import cmds
+
+    from tik.trigger.actions.script.script import Script
+
+    register_action("script", category="structure", scope="both")(Script)
+    doc = Document()
+    doc.add(
+        ActionNode(
+            "extend",
+            "script",
+            settings={
+                "code": (
+                    "plug = ctx.rig.preferences.transform['exportLod']\n"
+                    "plug.create('int', default=0, keyable=False)\n"
+                    "plug.visible = True\n"
+                )
+            },
+        )
+    )
+    Runner().run(doc, "D:/x")
+    assert cmds.attributeQuery("exportLod", node="preferences_ctrl", exists=True)
