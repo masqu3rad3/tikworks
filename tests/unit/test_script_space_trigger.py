@@ -125,6 +125,23 @@ def test_create_script_file_writes_a_versioned_stub(tmp_path):
         create_script_file(tmp_path, "9lives")
 
 
+def test_editor_command_reads_settings_lazily_and_tolerates_failure(monkeypatch):
+    import types
+
+    from tik.trigger.actions.script.script import editor_command
+
+    # the settings store can be unreadable or unwritable (Maya's cwd): the
+    # editor falls back to the OS default rather than breaking the tool
+    monkeypatch.setitem(sys.modules, "tik.trigger.config", None)
+    assert editor_command() == ""
+    fake = types.ModuleType("tik.trigger.config")
+    fake.trigger_settings = types.SimpleNamespace(
+        get=lambda key, default=None: "code --goto {path}"
+    )
+    monkeypatch.setitem(sys.modules, "tik.trigger.config", fake)
+    assert editor_command() == "code --goto {path}"
+
+
 def test_open_external_uses_the_configured_command(monkeypatch, tmp_path):
     from tik.shared import io
 

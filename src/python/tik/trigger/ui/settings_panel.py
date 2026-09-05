@@ -12,7 +12,7 @@ from tik.shared.io import open_external
 from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.Qt import QtCore, QtWidgets
-from tik.trigger.config import trigger_settings
+from tik.trigger.actions.script.script import editor_command
 from tik.trigger.core import registry
 from tik.trigger.core.document import BUILD
 from tik.trigger.session import ActionHandle
@@ -183,7 +183,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         if not target.is_absolute() and base:
             target = Path(base) / target
         try:
-            open_external(target, trigger_settings.get("external_editor") or "")
+            open_external(target, editor_command())
         except OSError as error:
             Feedback(self).pop_warning(
                 "Open script", f"Could not open {target}", str(error)

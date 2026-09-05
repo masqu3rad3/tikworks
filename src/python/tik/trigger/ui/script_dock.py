@@ -12,7 +12,7 @@ from typing import Optional
 from tik.shared.io import open_external
 from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
-from tik.trigger.config import trigger_settings
+from tik.trigger.actions.script.script import editor_command
 
 PLACEHOLDER = "Select a script action."
 RULE = "\n\n# " + "-" * 60 + "  inline code\n\n"
@@ -111,7 +111,7 @@ class ScriptViewer(QtWidgets.QWidget):
         if self._path is None:
             return
         try:
-            open_external(self._path, trigger_settings.get("external_editor") or "")
+            open_external(self._path, editor_command())
         except OSError as error:
             Feedback(self).pop_warning(
                 "Open script", f"Could not open {self._path}", str(error)
