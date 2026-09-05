@@ -1,0 +1,13 @@
+"""$name -- session scripts.
+
+Loaded by the Trigger script action as ``$alias``. Functions here receive the
+build context explicitly; nothing is injected.
+"""
+
+from tik.trigger.maya import scaffold  # noqa: F401 - handy for post-build helpers
+
+
+def build(ctx):
+    """Called from an inline snippet: ``$alias.build(ctx)``."""
+    rig = ctx.rig
+    ctx.log(f"$alias.build running on {rig.root.long_name}")

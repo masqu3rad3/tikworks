@@ -1,5 +1,6 @@
 {
     "debug_mode": false,
+    "external_editor": "",
     "mirror_mapping": {
         "L_*": "R_*",
         "*_L": "*_R"

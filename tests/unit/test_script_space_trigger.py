@@ -109,3 +109,32 @@ def test_import_error_hint_names_the_missing_alias(tmp_path):
         with pytest.raises(ImportError) as info:
             space.load(cfx, "cfx_utils")
         assert space.hint_for(info.value) == ""
+
+
+def test_create_script_file_writes_a_versioned_stub(tmp_path):
+    from tik.trigger.actions.script.script import create_script_file
+
+    first = create_script_file(tmp_path, "claw setup")
+    assert first == tmp_path / "scripts" / "claw_setup_v001.py"
+    text = first.read_text(encoding="utf-8")
+    assert "claw_setup" in text and "def build(ctx)" in text
+    assert "$" not in text
+    second = create_script_file(tmp_path, "claw_setup")
+    assert second.name == "claw_setup_v002.py"
+    with pytest.raises(ValueError):
+        create_script_file(tmp_path, "9lives")
+
+
+def test_open_external_uses_the_configured_command(monkeypatch, tmp_path):
+    from tik.shared import io
+
+    launched = []
+    monkeypatch.setattr(
+        io.subprocess, "Popen", lambda args, **kw: launched.append(args)
+    )
+    target = tmp_path / "a.py"
+    target.write_text("", encoding="utf-8")
+    io.open_external(target, command="code --goto {path}")
+    assert launched == [["code", "--goto", str(target)]]
+    io.open_external(target, command="subl")
+    assert launched[-1] == ["subl", str(target)]
