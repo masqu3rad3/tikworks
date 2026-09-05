@@ -356,6 +356,21 @@ def test_warnings_are_empty_when_every_control_exists():
     assert module.warnings() == []
 
 
+def test_shipped_modules_declare_their_controls():
+    """The bug this replaces: fkchain offered an empty control combo."""
+    from tik.trigger.core import get_module
+
+    trigger.load_plugins()
+    assert get_module("base").control_names() == ("root",)
+    assert get_module("twist").control_names() == ()
+    assert get_module("fkchain").control_names({"segments": 4}) == (
+        "fk0",
+        "fk1",
+        "fk2",
+        "fk3",
+    )
+
+
 def _with_space_rows(instance, rows):
     instance.settings["anim_spaces"] = rows
     return instance
