@@ -20,7 +20,7 @@ class ActionContext:
     path: str = ""  # action path in the running document (for logs)
     depth: int = 0
     rig: Any = None  # the RigScaffold, set by the Maya runner; core never reads it
-    scripts: Any = None  # the run's ScriptSpace, set by the Maya runner; core never reads
+    scripts: Any = None  # the run's ScriptSpace, set by the Maya runner; core ignores
 
     def resolve(self, file_path: str) -> Path:
         """Return an absolute path; relative paths are resolved from ``base_dir``."""
