@@ -15,6 +15,7 @@ class Base(Module):
     guides = GuideLayout("root")
     inputs = ()
     outputs = ("root",)
+    controls = ("root",)
 
     controller_size = FloatField(10.0, min=0.01, label="Controller Size")
 

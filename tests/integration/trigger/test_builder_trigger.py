@@ -33,7 +33,7 @@ class ToyRoot(Module):
     guides = GuideLayout("root")
     inputs = ()
     outputs = ("root",)
-    space_controls = ("root",)
+    controls = ("root",)
 
     def draw_guides(self, guides) -> None:
         guides.joint("root", (0, 0, 0))
@@ -52,7 +52,7 @@ class ToyChain(Module):
     guides = GuideLayout("root", multi="segment", min=1)
     inputs = (Input("root", primary=True), Input("space", optional=True))
     outputs = ("root", "end")
-    space_controls = ("fk",)
+    controls = ("fk",)
     segments = IntField(2, min=1)
 
     def guide_count(self) -> int:
@@ -80,6 +80,38 @@ class ToyChain(Module):
         rig.output("end", joints[-1])
 
 
+class ToyFan(Module):
+    """One controller per segment, so the manifest follows a setting."""
+
+    label = "Toy Fan"
+    sided = False
+    guides = GuideLayout("root", multi="segment", min=1)
+    inputs = ()
+    outputs = ("root",)
+    segments = IntField(2, min=1)
+
+    @classmethod
+    def control_names(cls, settings=None):
+        count = int((settings or {}).get("segments", cls.segments.default))
+        return tuple(f"fk{index}" for index in range(count))
+
+    def guide_count(self) -> int:
+        return self.segments
+
+    def draw_guides(self, guides) -> None:
+        previous = guides.joint("root", (0, 0, 0))
+        for index in range(self.segments):
+            previous = guides.joint(
+                "segment", (index + 1, 0, 0), index=index, parent=previous
+            )
+
+    def build(self, rig) -> None:
+        joint = rig.bind_joint("root", match=rig.guide("root"))
+        for index in range(self.segments):
+            rig.controller(f"fk{index}", match=joint)
+        rig.output("root", joint)
+
+
 class ToyBoom(Module):
     """Fails while building, to prove the builder reports which module broke."""
 
@@ -103,10 +135,11 @@ def toys():
         ("toy_root", ToyRoot),
         ("toy_chain", ToyChain),
         ("toy_boom", ToyBoom),
+        ("toy_fan", ToyFan),
     ):
         register_module(name)(cls)
     yield GuideScene()
-    for name in ("toy_root", "toy_chain", "toy_boom"):
+    for name in ("toy_root", "toy_chain", "toy_boom", "toy_fan"):
         unregister_module(name)
 
 
@@ -318,6 +351,39 @@ def test_an_unconnected_space_row_is_skipped(toys):
     control = report.rigs[arm.instance_id].controller_by_role("root")
     assert not control.transform.has_attr("parentSwitch")
     assert report.spaces == []
+
+
+def test_a_space_on_a_dynamic_control_builds_a_switch(toys):
+    """A control the manifest computes from a setting is a real space target."""
+    toys.add("toy_root", name="anchor")
+    fan = toys.add("toy_fan", name="fan", segments=3)
+    _rows(fan, [{"control": "fk2", "mode": "parent", "label": "anchor"}])
+    fan.set_input("fk2_anchor", "anchor.root")
+
+    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+
+    control = report.rigs[fan.instance_id].controller_by_role("fk2")
+    assert control is not None
+    assert control.transform.has_attr("parentSwitch")
+
+
+def test_a_space_on_a_removed_control_warns_and_still_builds(toys):
+    """Lowering a count must cost a warning, never the rig."""
+    toys.add("toy_root", name="anchor")
+    fan = toys.add("toy_fan", name="fan", segments=1)
+    _rows(fan, [{"control": "fk2", "mode": "parent", "label": "anchor"}])
+    fan.set_input("fk2_anchor", "anchor.root")
+
+    events = EventBus()
+    logged = []
+    events.subscribe("log", lambda **kw: logged.append((kw["level"], kw["message"])))
+    report = Builder(events).build(
+        document=toys.document, rig_name="rig", afterlife="keep"
+    )
+
+    assert fan.instance_id in report.built
+    assert report.rigs[fan.instance_id].controller_by_role("fk2") is None
+    assert any("fk2" in message for level, message in logged if level == "warning")
 
 
 def test_a_guide_with_no_document_entry_is_not_built(toys):

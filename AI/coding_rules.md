@@ -172,10 +172,11 @@ A module declares and then builds:
 ```python
 @register_module("arm")
 class Arm(Module):
-    guides  = GuideLayout("collar", "shoulder", "elbow", "hand")
-    inputs  = (Input("root", primary=True),)
-    outputs = ("collar", "upperarm", "lowerarm", "hand")
-    stretch = BoolField(True)
+    guides   = GuideLayout("collar", "shoulder", "elbow", "hand")
+    inputs   = (Input("root", primary=True),)
+    outputs  = ("collar", "upperarm", "lowerarm", "hand")
+    controls = ("collar", "ik", "fk_upper", "fk_lower", "fk_hand", "pole")
+    stretch  = BoolField(True)
 
     def draw_guides(self, guides): ...
     def build(self, rig): ...
@@ -185,6 +186,36 @@ The four groups, the naming, the tagging, **a socket per declared input**, and
 **an offset group per controller** are created for it. `rig.socket("root")`
 fetches the socket the declaration made; `ctrl.offset` is the controller's
 offset group.
+
+### The Control Manifest
+
+`controls` lists **every controller the module builds** — not a curated subset.
+Every one of them can host an animation space, and it is the rigger, not the
+module author, who decides which deserve one. When a setting drives the set,
+override `control_names(settings)`, exactly as `output_names(settings)` does
+for outputs:
+
+```python
+@classmethod
+def control_names(cls, settings=None):
+    count = int((settings or {}).get("segments", cls.segments.default))
+    return tuple(f"fk{index}" for index in range(count))
+```
+
+Two rules keep the manifest honest:
+
+- **Tweaks are excluded by construction.** `rig.tweak_control(main)` creates the
+  role `<main>_tweak` parented under its main, so a space switch on one would
+  fight the parent it hangs from. A role ending in `_tweak` is never declared.
+- **Roles a system chooses are named by that system.** A module using
+  `build_ikfk_limb` calls `limb_control_names(labels=...)` rather than writing
+  `"fk_upper"` out; hardcoding would drift the moment the system renamed a role.
+
+`tests/integration/trigger/test_module_ground_rules.py` builds every shipped
+module and asserts the manifest **equals** the roles tagged on the controllers
+it created, minus tweaks. A control the module forgot to declare is invisible
+in the anim-space table — which is exactly how `fkchain` and `ribbon` once
+shipped with animation spaces that could not be used at all.
 
 **The boundary rule:** `rig` owns naming, tagging, group placement and
 registration. tik.maya owns the mechanism. A helper earns a place on `rig` only

@@ -28,6 +28,12 @@ class FkChain(Module):
         count = int((settings or {}).get("segments", cls.segments.default))
         return ("root", *(f"segment{index + 1}" for index in range(count)), "end")
 
+    @classmethod
+    def control_names(cls, settings=None):
+        """One FK controller per segment: ``build`` skips the last joint."""
+        count = int((settings or {}).get("segments", cls.segments.default))
+        return tuple(f"fk{index}" for index in range(count))
+
     segments = IntField(3, min=1, max=50, help="Number of joints after the root")
     spacing = FloatField(5.0, min=0.01, help="Default distance between guides")
     controller_size = FloatField(2.0, min=0.01, label="Controller Size")

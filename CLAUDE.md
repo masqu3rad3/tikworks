@@ -46,7 +46,13 @@ Four groups per module (`socket` / `control` / `rig` / `bind`); two skeletons
 TRS** for baking/export); one bind hierarchy per rig, built in final position via
 `rig.bind_parent`, never reparented. A **socket per declared input** is created
 for you in `socket_grp` — declaring the input is what makes it. Controllers come
-with their offset group (`ctrl.offset`). Full text in `AI/coding_rules.md`.
+with their offset group (`ctrl.offset`). A module also declares the
+**controllers it builds** — `controls`, or `control_names(settings)` when a
+setting drives them, the same shape as `outputs` / `output_names(settings)`.
+Every declared control can host an animation space; tweak controllers are
+excluded by construction. The manifest must equal what `build()` actually
+creates, minus tweaks — `tests/integration/trigger/test_module_ground_rules.py`
+enforces it. Full text in `AI/coding_rules.md`.
 
 ### The `rig` object
 `rig` owns naming, tagging, group placement and registration; tik.maya owns the

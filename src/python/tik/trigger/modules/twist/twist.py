@@ -68,6 +68,7 @@ class Twist(Module):
         ),
     )
     outputs = ("twist0",)
+    controls = ()  # the joints ride an aimed frame; nothing here is animated
     guide_attrs = {
         "twist": (
             GuideAttr(

@@ -13,6 +13,10 @@ from tik.shared.ui.collapsible import CollapsibleGroup
 from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.Qt import QtCore, QtWidgets
 
+#: Appended to a choice the target no longer offers, so a row referencing a
+#: renamed or removed option stays visible instead of being rewritten.
+MISSING_SUFFIX = " (missing)"
+
 
 class _VectorEditor(QtWidgets.QWidget):
     """Row of double spin boxes."""
@@ -105,11 +109,16 @@ class _TableEditor(QtWidgets.QWidget):
     def _make_cell(self, column, value):
         if column.kind == "choice":
             widget = QtWidgets.QComboBox()
-            widget.addItems([str(item) for item in self._choices(column)])
+            for item in self._choices(column):
+                widget.addItem(str(item), str(item))
             if value:
-                index = widget.findText(str(value))
-                if index >= 0:
-                    widget.setCurrentIndex(index)
+                index = widget.findData(str(value))
+                if index < 0:
+                    # The target stopped offering this option. Keep it, marked:
+                    # falling back to index 0 would quietly rewrite the row.
+                    widget.addItem(f"{value}{MISSING_SUFFIX}", str(value))
+                    index = widget.count() - 1
+                widget.setCurrentIndex(index)
             widget.currentIndexChanged.connect(self._emit)
             return widget
         widget = QtWidgets.QLineEdit(str(value or ""))
@@ -156,7 +165,12 @@ class _TableEditor(QtWidgets.QWidget):
             for column_index, column in enumerate(self.columns):
                 widget = self.table.cellWidget(row_index, column_index)
                 if isinstance(widget, QtWidgets.QComboBox):
-                    row[column.name] = widget.currentText()
+                    # The raw value rides as item data, so a marked "missing"
+                    # entry round-trips as the value it stands for.
+                    data = widget.currentData()
+                    row[column.name] = (
+                        data if data is not None else widget.currentText()
+                    )
                 else:
                     row[column.name] = widget.text()
             rows.append(row)
@@ -506,7 +520,7 @@ class FormBuilder(QtWidgets.QWidget):
         elif kind == "table":
             widget = _TableEditor(
                 getattr(field, "columns", ()),
-                choices_resolver=lambda attr: getattr(self._target, attr, ()),
+                choices_resolver=self._resolve_choices,
             )
             widget.valueChanged.connect(
                 lambda value, field_name=name: self._on_change(field_name, value)
@@ -521,6 +535,21 @@ class FormBuilder(QtWidgets.QWidget):
                 )
             )
         return widget
+
+    def _resolve_choices(self, attr: str) -> tuple:
+        """The options a column's ``choices_from`` names on the current target.
+
+        The attribute may be a plain sequence or a callable taking the
+        target's values -- a field is a class attribute and cannot know the
+        subclass it will be edited on, so a column whose options depend on the
+        target's *settings* has to compute them at render time.
+        """
+        if self._target is None:
+            return ()
+        found = getattr(self._target, attr, ())
+        if callable(found):
+            found = found(self._target.values())
+        return tuple(found or ())
 
     @staticmethod
     def _parse_list(text: str) -> list:

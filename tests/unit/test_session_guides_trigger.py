@@ -217,3 +217,20 @@ def test_checkout_clears_another_sessions_rendering():
     second = Session()
     second.checkout_guides(force=True)
     assert first.guides.guide_nodes(handle.instance_id) == {}
+
+
+# ------------------------------------------------------------- validation
+def test_validate_reports_a_module_warning():
+    """A broken space is caught before Build, not during it."""
+    session = Session()
+    chain = session.guides.add("fkchain", side="C", name="tail", segments=2)
+    chain.set(anim_spaces=[{"control": "fk5", "mode": "parent", "label": "world"}])
+    problems = session.validate()
+    assert any("fk5" in item and item.startswith("warning:") for item in problems)
+
+
+def test_validate_is_quiet_when_every_space_control_exists():
+    session = Session()
+    chain = session.guides.add("fkchain", side="C", name="tail", segments=3)
+    chain.set(anim_spaces=[{"control": "fk1", "mode": "parent", "label": "world"}])
+    assert session.validate() == []

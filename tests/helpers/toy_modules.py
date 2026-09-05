@@ -15,7 +15,7 @@ class ToyRoot(Module):
     guides = GuideLayout("root")
     inputs = ()
     outputs = ("root",)
-    space_controls = ("root",)
+    controls = ("root",)
 
     def draw_guides(self, guides):
         guides.joint("root", (0, 0, 0))
@@ -31,6 +31,12 @@ class ToyChain(Module):
     inputs = (Input("root", primary=True), Input("space", optional=True))
     outputs = ("root", "end")
     segments = IntField(2, min=1)
+
+    @classmethod
+    def control_names(cls, settings=None):
+        """One per segment: this toy stands in for a settings-driven manifest."""
+        count = int((settings or {}).get("segments", cls.segments.default))
+        return tuple(f"fk{index}" for index in range(count))
 
     def guide_count(self):
         return self.segments

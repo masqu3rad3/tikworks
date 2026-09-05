@@ -23,12 +23,16 @@ from tik.trigger.core import (
     Vector2Field,
     register_module,
 )
-from tik.trigger.systems.limb import _derive_size, build_ikfk_limb
+from tik.trigger.systems.limb import _derive_size, build_ikfk_limb, limb_control_names
 from tik.trigger.systems.limb_lock import build_limb_lock
 from tik.trigger.systems.reach import ReachAxis, build_reach
 
 LIMB_LOCK = FieldGroup("Limb Lock")
 AUTO_COLLAR = FieldGroup("Auto Collar", collapsed=True)
+
+#: The FK labels ``build()`` passes to ``build_ikfk_limb``. Named once so the
+#: manifest and the build cannot disagree.
+LIMB_LABELS = ("upper", "lower", "hand")
 
 
 @register_module("arm", category="limbs")
@@ -39,7 +43,7 @@ class Arm(Module):
     guides = GuideLayout("collar", "shoulder", "elbow", "hand", "neutral")
     inputs = (Input("root", primary=True, help="Where the collar hangs (chest/body)"),)
     outputs = ("collar", "upperarm", "lowerarm", "hand")
-    space_controls = ("ik", "pole")
+    controls = ("collar", *limb_control_names(labels=LIMB_LABELS))
 
     stretch = BoolField(True, help="Build the stretch network")
     squash = BoolField(True, help="Build the compress-side network")
@@ -212,7 +216,7 @@ class Arm(Module):
             stretch=self.stretch,
             squash=self.squash,
             pole_pin=self.pole_pin,
-            labels=("upper", "lower", "hand"),
+            labels=LIMB_LABELS,
         )
         if self.auto_collar:
             reach = build_reach(

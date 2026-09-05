@@ -38,6 +38,90 @@ def _solo(module_type):
     return report.rigs[instance.instance_id]
 
 
+#: Settings each shipped module is checked at. A type absent from this mapping
+#: is checked once, at its defaults.
+CONTROL_VARIATIONS = {
+    "fkchain": [{"segments": 1}, {"segments": 5}],
+    "ribbon": [
+        {"mid_count": 0},
+        {"mid_count": 2, "start_controller": True, "end_controller": True},
+    ],
+}
+
+
+def _shipped_module_types():
+    """The modules this repo ships, ignoring anything a test registered."""
+    import tik.trigger as trigger
+    from tik.trigger.core import registry
+
+    trigger.load_plugins()  # collection runs before any fixture
+    return sorted(
+        cls.module_type
+        for cls in registry.iter_modules()
+        if cls.__module__.startswith("tik.trigger.modules.")
+    )
+
+
+def _built_with(module_type, settings):
+    """Build one instance under a base, with every required input wired."""
+    cmds.file(new=True, force=True)
+    scene = GuideScene()
+    body = scene.create_guides(get_module("base")(name="body"))
+    module_cls = get_module(module_type)
+    primary = module_cls.primary_input()
+    instance = scene.create_guides(
+        module_cls(name=module_type),
+        parent=ParentRef(body.instance_id, "root") if primary is not None else None,
+    )
+    for declared in module_cls.inputs:
+        if declared.optional or (primary is not None and declared.name == primary.name):
+            continue
+        scene.set_input(instance.instance_id, declared.name, f"{body.key}.root")
+    if settings:
+        scene.write_settings(
+            instance.instance_id,
+            {**scene.read_settings(instance.instance_id), **settings},
+        )
+        # Drawing is manual since the Draw/Sync split: write_settings flags the
+        # module, it does not rebuild its joints.
+        scene.draw()
+    report = Builder().build(
+        document=scene.document, rig_name="rules", afterlife="keep"
+    )
+    return report.rigs[instance.instance_id]
+
+
+def _built_control_roles(ctx):
+    """Roles tagged on the controllers a build created, tweaks excluded.
+
+    A tweak is parented under its main and follows it, so a space switch on
+    one would fight the parent it hangs from -- it is never in a manifest.
+    """
+    return sorted(
+        role
+        for role in (
+            controller.transform.meta.get(tags.ROLE) for controller in ctx.controllers
+        )
+        if role and not role.endswith("_tweak")
+    )
+
+
+@pytest.mark.parametrize("module_type", _shipped_module_types())
+def test_every_module_declares_exactly_the_controllers_it_builds(module_type):
+    """Rule: the control manifest is what the module builds, minus tweaks.
+
+    Equality, not subset. A control the module forgot to declare is invisible
+    in the anim-space table -- the exact bug fkchain and ribbon shipped with.
+    """
+    module_cls = get_module(module_type)
+    for settings in CONTROL_VARIATIONS.get(module_type, [{}]):
+        ctx = _built_with(module_type, settings)
+        declared = sorted(module_cls.control_names(ctx.instance.settings))
+        assert (
+            _built_control_roles(ctx) == declared
+        ), f"{module_type} at {settings or 'defaults'}: manifest and build disagree"
+
+
 @pytest.fixture
 def connected_rig():
     """A base with an arm attached: one hierarchy spanning two modules."""

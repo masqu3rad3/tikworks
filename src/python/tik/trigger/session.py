@@ -449,6 +449,31 @@ class Session:
 
         return Runner(self.events)
 
+    def _module_problems(self) -> list[str]:
+        """Problems and warnings from every module in the guide document.
+
+        The rigger should not have to press Build to find out that a settings
+        change orphaned an animation space.
+        """
+        problems: list[str] = []
+        for entry in self.document.guides.modules:
+            try:
+                module_cls = registry.get_module(entry.module_type)
+            except Exception:  # an unregistered type is the runner's report
+                continue
+            module = module_cls(
+                instance_id=entry.instance_id,
+                name=entry.name,
+                side=entry.side,
+                settings=entry.settings,
+            )
+            module.guide_pairs = list(entry.pairs)
+            problems.extend(f"{entry.key}: {item}" for item in module.validate())
+            problems.extend(
+                f"warning: {entry.key}: {item}" for item in module.warnings()
+            )
+        return problems
+
     def validate(self) -> list[str]:
         """Pre-flight problems for every runnable step, in both lists."""
         from tik.trigger.core.action import ActionContext
@@ -476,6 +501,7 @@ class Session:
                 problems.extend(
                     f"{prefix}{step.path}: {item}" for item in action.validate(ctx)
                 )
+        problems.extend(self._module_problems())
         return problems
 
     def build(

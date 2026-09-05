@@ -364,7 +364,7 @@ def test_space_rows_become_ports():
 
     class Spaced(Module):
         inputs = (Input("root", primary=True),)
-        space_controls = ("ik",)
+        controls = ("ik",)
 
     settings = {"anim_spaces": [{"control": "ik", "mode": "parent", "label": "chest"}]}
     assert Spaced.input_names(settings) == ["root", "ik_chest"]

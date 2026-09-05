@@ -471,6 +471,21 @@ def _role(*parts) -> str:
     return "_".join(part for part in parts if part)
 
 
+def limb_control_names(name: str = "", labels: Sequence[str] = ()) -> tuple[str, ...]:
+    """The controller roles ``build_ikfk_limb`` creates for these arguments.
+
+    A module declaring its controls must not hardcode names this system
+    chose: the two would drift the moment a role is renamed. Tweaks are
+    omitted -- ``rig.tweak_control`` parents them under their main, so a
+    space switch on one would fight the parent it hangs from.
+    """
+    return (
+        _role(name, "ik"),
+        *(_role(name, "fk", label) for label in labels),
+        _role(name, "pole"),
+    )
+
+
 def _derive_size(joints: Sequence) -> float:
     """Base controller size from the chain's rest length."""
     total = 0.0

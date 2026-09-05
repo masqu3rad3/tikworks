@@ -260,9 +260,23 @@ def _spaced_module():
     from tik.trigger.core import Module
 
     class Spaced(Module):
-        space_controls = ("ik", "pole")
+        controls = ("ik", "pole")
 
     return Spaced
+
+
+def _dynamic_module():
+    from tik.trigger.core import IntField, Module
+
+    class Dynamic(Module):
+        segments = IntField(3, min=1)
+
+        @classmethod
+        def control_names(cls, settings=None):
+            count = int((settings or {}).get("segments", cls.segments.default))
+            return tuple(f"fk{index}" for index in range(count))
+
+    return Dynamic
 
 
 def test_space_rows_are_empty_by_default():
@@ -296,12 +310,6 @@ def test_validate_rejects_an_empty_label():
     assert any("label" in problem for problem in module.validate())
 
 
-def test_validate_rejects_an_unknown_control():
-    module = _spaced_module()(name="x")
-    module.anim_spaces = [{"control": "ghost", "mode": "parent", "label": "chest"}]
-    assert any("ghost" in problem for problem in module.validate())
-
-
 def test_validate_rejects_duplicate_rows():
     """(control, label) is the derived port name; a clash would drop a wire."""
     module = _spaced_module()(name="x")
@@ -310,6 +318,57 @@ def test_validate_rejects_duplicate_rows():
         {"control": "ik", "mode": "orient", "label": "chest"},
     ]
     assert any("ik_chest" in problem for problem in module.validate())
+
+
+def test_control_names_defaults_to_the_declared_controls():
+    assert _spaced_module().control_names() == ("ik", "pole")
+    assert _spaced_module().control_names({}) == ("ik", "pole")
+
+
+def test_control_names_can_follow_a_setting():
+    module_cls = _dynamic_module()
+    assert module_cls.control_names({"segments": 2}) == ("fk0", "fk1")
+    assert module_cls.control_names() == ("fk0", "fk1", "fk2")
+
+
+def test_a_stale_control_warns_instead_of_failing_validation():
+    """Lowering a count must not make an authored rig unbuildable."""
+    module = _dynamic_module()(name="x")
+    module.segments = 2
+    module.anim_spaces = [{"control": "fk5", "mode": "parent", "label": "world"}]
+    assert module.validate() == []
+    assert any("fk5" in item for item in module.warnings())
+
+
+def test_a_stale_control_keeps_its_row_and_its_port():
+    """Ports come from rows, not from controls, so the wire survives."""
+    module_cls = _dynamic_module()
+    settings = {
+        "segments": 2,
+        "anim_spaces": [{"control": "fk5", "mode": "parent", "label": "world"}],
+    }
+    assert module_cls.input_names(settings) == ["root", "fk5_world"]
+
+
+def test_warnings_are_empty_when_every_control_exists():
+    module = _spaced_module()(name="x")
+    module.anim_spaces = [{"control": "ik", "mode": "parent", "label": "chest"}]
+    assert module.warnings() == []
+
+
+def test_shipped_modules_declare_their_controls():
+    """The bug this replaces: fkchain offered an empty control combo."""
+    from tik.trigger.core import get_module
+
+    trigger.load_plugins()
+    assert get_module("base").control_names() == ("root",)
+    assert get_module("twist").control_names() == ()
+    assert get_module("fkchain").control_names({"segments": 4}) == (
+        "fk0",
+        "fk1",
+        "fk2",
+        "fk3",
+    )
 
 
 def _with_space_rows(instance, rows):

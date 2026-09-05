@@ -65,12 +65,13 @@ class DesignerProperties:
 
     @staticmethod
     def _topology(handle) -> tuple:
-        """What a settings change might alter: ports and guide count."""
+        """What a settings change might alter: ports, controls and guide count."""
         module_cls = handle.module_class
         settings = handle.settings
         return (
             tuple(module_cls.input_names(settings)),
             tuple(module_cls.output_names(settings)),
+            tuple(module_cls.control_names(settings)),
             len(handle.instance.guides),
         )
 

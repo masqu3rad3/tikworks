@@ -101,18 +101,16 @@ def connect(rig, input_name: str, source_node) -> None:
     )
 
 
-def connect_space(rig, control, mode, targets, labels) -> None:
+def connect_space(rig, control, mode, targets, labels) -> bool:
     """Build one space switch on the controller with role ``control``.
 
     ``world=False``: nothing appears in the enum that the rigger did not define.
+    Returns False, having built nothing, when no controller carries ``control``
+    -- a setting that removed the control must cost a warning, not the rig.
     """
     controller = rig.controller_by_role(control)
     if controller is None:
-        raise AttachError(
-            f"{rig.instance.key}: no controller with role '{control}'.",
-            instance_id=rig.instance.instance_id,
-            module_type=rig.module.module_type,
-        )
+        return False
     tm.SpaceSwitch.create(
         controller.transform,
         targets,
@@ -122,6 +120,7 @@ def connect_space(rig, control, mode, targets, labels) -> None:
         world=False,
         name=rig.name(control, mode),
     )
+    return True
 
 
 def apply_afterlife(instances, mode: str) -> None:
@@ -322,7 +321,12 @@ class Builder:
                 labels.append(label)
                 report.spaces.append((f"{instance.key}.{control}_{label}", source))
             for (control, mode), (targets, labels) in groups.items():
-                connect_space(ctx, control, mode, targets, labels)
+                if not connect_space(ctx, control, mode, targets, labels):
+                    self.events.log(
+                        f"{instance.key}: no controller with role '{control}'; "
+                        f"its {mode} space was skipped.",
+                        level="warning",
+                    )
 
     def resolve(
         self,
@@ -375,6 +379,8 @@ class Builder:
                 instance_id=instance.instance_id,
                 module_type=instance.module_type,
             )
+        for warning in module.warnings():
+            self.events.log(f"{instance.key}: {warning}", level="warning")
         try:
             ctx = build_context(module, instance, rig_root, bind_parent)
             module.build(ctx)
