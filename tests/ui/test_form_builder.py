@@ -163,6 +163,25 @@ def test_table_widget_resolves_choices_from_a_callable():
     assert [combo.itemText(index) for index in range(combo.count())] == ["fk0", "fk1"]
 
 
+def test_table_widget_keeps_a_value_the_target_no_longer_offers():
+    """A row is never silently rewritten to the first choice."""
+    from tik.core.fields import Column, TableField
+
+    class Holder(Schema):
+        controls = ("fk0", "fk1")
+        rows = TableField(
+            columns=(Column("control", "choice", choices_from="controls"),)
+        )
+
+    holder = Holder()
+    builder = FormBuilder(holder)
+    widget = builder.widget("rows")
+    widget.setValue([{"control": "fk5"}])
+    combo = widget.cell_widget(0, 0)
+    assert "missing" in combo.currentText()
+    assert widget.value() == [{"control": "fk5"}]
+
+
 # ------------------------------------------------------------ vector editors
 
 
