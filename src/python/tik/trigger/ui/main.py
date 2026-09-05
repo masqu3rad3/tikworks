@@ -952,26 +952,18 @@ class TriggerWindow(MayaToolWindow):
         self.log_dock.show()
         self.log_action.setChecked(True)
 
-    def closeEvent(self, event) -> None:  # noqa: N802
-        for view in self.views:
-            if not self._confirm_close(view):
-                event.ignore()
-                return
+    def confirm_close(self) -> bool:
+        """Ask about every dirty tab in order; the first Cancel stops the close.
+
+        Serves both entrances -- the Qt ``closeEvent`` and Maya's workspace
+        control -- so a Cancel behaves the same whichever X was pressed.
+        """
+        return all(self._confirm_close(view) for view in self.views)
+
+    def teardown(self) -> None:
         for view in self.views:
             view.teardown()
-        super().closeEvent(event)
-
-    def dockCloseEventTriggered(self) -> None:  # noqa: N802
-        """Maya's workspace-control close, which cannot be vetoed.
-
-        Returning early does not keep the control alive, so a cancel re-shows
-        the window instead. The work survives; a flicker is possible.
-        """
-        for view in self.views:
-            if not self._confirm_close(view):
-                self.show_tool()
-                return
-        super().dockCloseEventTriggered()
+        super().teardown()
 
 
 def show(dockable: bool = True) -> TriggerWindow:

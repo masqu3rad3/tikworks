@@ -2,6 +2,19 @@
 
 Ported from creature_kit ``shared/widgets/maya_window.py``. Works headless:
 without Maya it degrades to a plain ``QMainWindow``.
+
+Closing has two entrances that end in different places:
+
+* the Qt ``closeEvent`` (a plain window, headless runs) -- vetoed the usual
+  way, with ``event.ignore()``;
+* Maya's workspace control (the title-bar X, or ``File > Quit`` asking the
+  control to close) -- Maya runs :meth:`dockCloseEventTriggered` *before* it
+  acts, and returning early from the callback does not keep the control open.
+
+So the control is created with ``retain=True``: closing only hides it, and a
+cancelled close re-shows it once Maya is done. A confirmed close deletes the
+control itself, deferred, since deleting it from inside its own close callback
+is what leaves an emptied frame behind.
 """
 
 from __future__ import annotations
@@ -33,6 +46,7 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
         super().__init__(parent if parent is not None else get_main_window())
         self.setObjectName(self.WINDOW_NAME)
         self._script_jobs: list[int] = []
+        self._shutting_down = False
 
     # ---------------------------------------------------------- scriptjobs
     def register_script_job(self, job_id: int) -> int:
@@ -55,15 +69,91 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
                 LOG.debug("scriptJob %s already gone", job)
 
     # ------------------------------------------------------------- close
-    def closeEvent(self, event) -> None:  # noqa: N802
+    def confirm_close(self) -> bool:
+        """True when the window may close. Override to ask about unsaved work."""
+        return True
+
+    def teardown(self) -> None:
+        """Release what the window holds; runs once, right before it goes."""
         self._kill_script_jobs()
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        if not self._shutting_down and not self.confirm_close():
+            event.ignore()
+            return
+        self.teardown()
         super().closeEvent(event)
 
-    def close(self):
-        """Close the window; a parentless window closes as a plain widget."""
-        if self.parent() is None:
+    def close(self) -> bool:
+        """Close the window, asking first; False when the user kept it open.
+
+        Inside a workspace control the question is asked here, in Python,
+        because once Maya is told to close the control nothing can stop it.
+        """
+        if self._workspace_control() is None:
             return QtWidgets.QWidget.close(self)
-        return super().close()
+        if not self.confirm_close():
+            return False
+        self.shutdown()
+        return True
+
+    def shutdown(self) -> None:
+        """Tear down for good and delete the workspace control, deferred."""
+        if self._shutting_down:
+            return
+        self._shutting_down = True
+        self.teardown()
+        control = self._workspace_control()
+        if control is None:
+            return
+        from maya import cmds
+
+        def delete() -> None:
+            if cmds.workspaceControl(control, q=True, exists=True):
+                cmds.deleteUI(control, control=True)
+
+        # deleting the control also fires its close callback, and deleting it
+        # from inside that callback is what leaves an emptied frame behind
+        cmds.evalDeferred(delete)
+
+    def dockCloseEventTriggered(self) -> None:  # noqa: N802
+        """Maya is closing the workspace control; it cannot be vetoed here.
+
+        With ``retain=True`` the control is only hidden, so a cancel re-shows
+        it once Maya has finished. Deleting the control (a confirmed close, or
+        a relaunch) fires this too, hence the guard.
+        """
+        if self._shutting_down:
+            return
+        control = self._workspace_control()
+        if self.confirm_close():
+            self.shutdown()
+            return
+        if control is None:
+            return
+        from maya import cmds
+
+        def restore() -> None:
+            try:
+                still_ours = self._workspace_control() == control
+            except RuntimeError:  # destroyed with its control meanwhile
+                return
+            if still_ours:
+                cmds.workspaceControl(control, e=True, restore=True)
+
+        cmds.evalDeferred(restore)
+
+    def _workspace_control(self):
+        """The name of the workspace control hosting this window, or None."""
+        if not HAS_MAYA:
+            return None
+        from maya import cmds
+
+        parent = self.parent()
+        name = parent.objectName() if parent is not None else ""
+        if name and cmds.workspaceControl(name, q=True, exists=True):
+            return name
+        return None
 
     @staticmethod
     def has_maya_ui() -> bool:
@@ -82,10 +172,6 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
             return QtWidgets.QWidget.setVisible(self, True)
         return super().show(*args, **kwargs)
 
-    def dockCloseEventTriggered(self) -> None:  # noqa: N802
-        self._kill_script_jobs()
-        self.close()
-
     @classmethod
     def teardown_workspace_control(cls) -> None:
         """Delete a leftover workspaceControl so relaunching does not dock twice."""
@@ -102,6 +188,8 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
     def show_tool(self, dockable: bool = True) -> None:
         """Show as a dockable workspace control in Maya, plain window elsewhere."""
         if self.has_maya_ui():
-            super().show(dockable=dockable, retain=False)
+            # retained: closing hides the control, so a cancelled close can
+            # bring it back -- see dockCloseEventTriggered
+            super().show(dockable=dockable, retain=True)
         else:
             QtWidgets.QWidget.setVisible(self, True)
