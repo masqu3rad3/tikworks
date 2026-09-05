@@ -45,7 +45,10 @@ class Module(Schema):
     #: Per-guide authored attributes, keyed by guide role. Roles absent from
     #: the mapping carry none, so existing modules are unaffected.
     guide_attrs: dict[str, tuple[GuideAttr, ...]] = {}
-    space_controls: tuple[str, ...] = ()  # controller roles that accept spaces
+    #: Controller roles this module builds. Every one of them can host an
+    #: animation space; tweak controllers are excluded by construction, since
+    #: ``rig.tweak_control`` parents them under their main.
+    controls: tuple[str, ...] = ()
     outputs: tuple[str, ...] = ("root",)
     module_type: str = ""  # stamped by @register_module
     category: str = "generic"  # stamped by @register_module
@@ -57,7 +60,7 @@ class Module(Schema):
         help="Each row adds one animation space and one input port.",
         last=True,
         columns=(
-            Column("control", "choice", choices_from="space_controls"),
+            Column("control", "choice", choices_from="control_names"),
             Column("mode", "choice", choices=("parent", "point", "orient")),
             Column("label", "string"),
         ),
@@ -135,6 +138,16 @@ class Module(Schema):
         return tuple(cls.outputs)
 
     @classmethod
+    def control_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Controller roles an instance builds.
+
+        Override when a setting drives them -- ``fkchain`` builds one per
+        segment. This is the shape of ``output_names`` on purpose: one idiom
+        for a manifest entry whose set depends on settings, not two.
+        """
+        return tuple(cls.controls)
+
+    @classmethod
     def attrs_for_role(cls, role: str) -> tuple[GuideAttr, ...]:
         """Declared per-guide attributes for ``role`` (empty when none)."""
         return tuple(cls.guide_attrs.get(role, ()))
@@ -171,6 +184,28 @@ class Module(Schema):
         problems.extend(self._validate_spaces())
         return problems
 
+    def warnings(self) -> list[str]:
+        """Problems worth showing that must not stop a build.
+
+        Separate from ``validate`` because the builder treats every validation
+        problem as fatal. Lowering ``segments`` leaves a row naming a control
+        that is no longer built; that must cost the rigger a warning, not the
+        rig -- and the row is kept, so raising the count restores the setup
+        with its wire intact.
+        """
+        problems = []
+        known = type(self).control_names(self.values())
+        for row in self.anim_spaces:
+            control, label = row.get("control", ""), row.get("label", "")
+            if not control or not label:
+                continue
+            if control not in known:
+                problems.append(
+                    f"anim space '{control}_{label}': control '{control}' is "
+                    f"not built with the current settings"
+                )
+        return problems
+
     def _validate_spaces(self) -> list[str]:
         """Anim-space rows must derive unique, well-formed port names."""
         problems, seen = [], set()
@@ -178,12 +213,6 @@ class Module(Schema):
             control, label = row.get("control", ""), row.get("label", "")
             if not label:
                 problems.append(f"anim space row {index + 1}: label is required")
-                continue
-            if control not in self.space_controls:
-                problems.append(
-                    f"anim space row {index + 1}: '{control}' is not one of "
-                    f"{list(self.space_controls)}"
-                )
                 continue
             name = f"{control}_{label}"
             if name in seen:

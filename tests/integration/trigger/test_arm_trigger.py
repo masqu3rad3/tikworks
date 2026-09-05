@@ -434,8 +434,8 @@ def _arm_with_spaces(scene, rows, wires):
     return report, report.rigs[arm.instance_id]
 
 
-def test_arm_declares_its_space_controls():
-    assert get_module("arm").space_controls == ("ik", "pole")
+def test_arm_declares_its_controls():
+    assert get_module("arm").control_names() == ("ik", "pole")
 
 
 def test_two_rows_on_one_control_make_one_enum(scene):

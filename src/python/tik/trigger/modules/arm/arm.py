@@ -39,7 +39,7 @@ class Arm(Module):
     guides = GuideLayout("collar", "shoulder", "elbow", "hand", "neutral")
     inputs = (Input("root", primary=True, help="Where the collar hangs (chest/body)"),)
     outputs = ("collar", "upperarm", "lowerarm", "hand")
-    space_controls = ("ik", "pole")
+    controls = ("ik", "pole")
 
     stretch = BoolField(True, help="Build the stretch network")
     squash = BoolField(True, help="Build the compress-side network")

@@ -15,7 +15,7 @@ class ToyRoot(Module):
     guides = GuideLayout("root")
     inputs = ()
     outputs = ("root",)
-    space_controls = ("root",)
+    controls = ("root",)
 
     def draw_guides(self, guides):
         guides.joint("root", (0, 0, 0))

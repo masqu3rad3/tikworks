@@ -33,7 +33,7 @@ class ToyRoot(Module):
     guides = GuideLayout("root")
     inputs = ()
     outputs = ("root",)
-    space_controls = ("root",)
+    controls = ("root",)
 
     def draw_guides(self, guides) -> None:
         guides.joint("root", (0, 0, 0))
@@ -52,7 +52,7 @@ class ToyChain(Module):
     guides = GuideLayout("root", multi="segment", min=1)
     inputs = (Input("root", primary=True), Input("space", optional=True))
     outputs = ("root", "end")
-    space_controls = ("fk",)
+    controls = ("fk",)
     segments = IntField(2, min=1)
 
     def guide_count(self) -> int:
