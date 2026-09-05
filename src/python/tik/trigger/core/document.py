@@ -48,17 +48,27 @@ class ActionNode:
         settings = data.get("settings")
         if settings is None:  # old flat format used "data"
             settings = data.get("data", {})
+        settings = _migrate_settings(data["type"], dict(settings or {}))
         return cls(
             name=data["name"],
             type=data["type"],
             enabled=bool(data.get("enabled", True)),
-            settings=dict(settings or {}),
+            settings=settings,
             children=[cls.from_dict(item) for item in data.get("children", [])],
         )
 
     def copy(self) -> "ActionNode":
         """A deep copy, children included."""
         return ActionNode.from_dict(self.to_dict())
+
+
+def _migrate_settings(action_type: str, settings: dict) -> dict:
+    """Let a registered action translate its own legacy settings."""
+    from . import registry  # local: registry imports this module
+
+    if not registry.is_action_registered(action_type):
+        return settings
+    return registry.get_action(action_type).migrate_settings(settings)
 
 
 def join_path(*parts: str) -> str:
