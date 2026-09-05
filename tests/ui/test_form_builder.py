@@ -139,6 +139,30 @@ def test_table_widget_resolves_choices_from_the_target():
     assert [combo.itemText(index) for index in range(combo.count())] == ["ik", "pole"]
 
 
+def test_table_widget_resolves_choices_from_a_callable():
+    """A column's options may be computed from the target's own values."""
+    from tik.core.fields import Column, TableField
+
+    class Holder(Schema):
+        count = IntField(3)
+        rows = TableField(
+            columns=(Column("control", "choice", choices_from="control_names"),)
+        )
+
+        @classmethod
+        def control_names(cls, settings=None):
+            total = int((settings or {}).get("count", 3))
+            return tuple(f"fk{index}" for index in range(total))
+
+    holder = Holder()
+    holder.count = 2
+    builder = FormBuilder(holder)
+    widget = builder.widget("rows")
+    widget.add_row()
+    combo = widget.cell_widget(0, 0)
+    assert [combo.itemText(index) for index in range(combo.count())] == ["fk0", "fk1"]
+
+
 # ------------------------------------------------------------ vector editors
 
 

@@ -376,7 +376,9 @@ class Column:
     ``choices_from`` names an attribute on the *target object* supplying the
     options. A field is a class attribute and cannot know the subclass it will
     be edited on, so a column whose options vary per module resolves them at
-    render time instead.
+    render time instead. The named attribute may be a plain sequence, or a
+    callable taking the target's values and returning one -- which is how a
+    column follows options that depend on the target's own settings.
     """
 
     name: str

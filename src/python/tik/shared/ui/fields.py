@@ -506,7 +506,7 @@ class FormBuilder(QtWidgets.QWidget):
         elif kind == "table":
             widget = _TableEditor(
                 getattr(field, "columns", ()),
-                choices_resolver=lambda attr: getattr(self._target, attr, ()),
+                choices_resolver=self._resolve_choices,
             )
             widget.valueChanged.connect(
                 lambda value, field_name=name: self._on_change(field_name, value)
@@ -521,6 +521,21 @@ class FormBuilder(QtWidgets.QWidget):
                 )
             )
         return widget
+
+    def _resolve_choices(self, attr: str) -> tuple:
+        """The options a column's ``choices_from`` names on the current target.
+
+        The attribute may be a plain sequence or a callable taking the
+        target's values -- a field is a class attribute and cannot know the
+        subclass it will be edited on, so a column whose options depend on the
+        target's *settings* has to compute them at render time.
+        """
+        if self._target is None:
+            return ()
+        found = getattr(self._target, attr, ())
+        if callable(found):
+            found = found(self._target.values())
+        return tuple(found or ())
 
     @staticmethod
     def _parse_list(text: str) -> list:
