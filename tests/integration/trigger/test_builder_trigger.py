@@ -412,3 +412,36 @@ def test_modules_build_under_the_scaffold(pair):
     # a second build reuses the same scaffold rather than making another
     Builder().build(document=scene.document, afterlife="keep")
     assert len(cmds.ls("rig_grp")) == 1
+
+
+def test_preferences_drive_module_visibility(pair):
+    scene, body, tail = pair
+    report = Builder().build(document=scene.document, afterlife="keep")
+    prefs = report.scaffold.preferences.transform
+    groups = [ctx.groups for ctx in report.rigs.values()]
+    assert all(group.control.visibility for group in groups)
+    prefs["controls"].value = False
+    assert not any(group.control.visibility for group in groups)
+    assert not any(group.rig.visibility for group in groups)  # default off
+    prefs["rig"].value = True
+    assert all(group.rig.visibility for group in groups)
+    prefs["joints"].value = False
+    assert not any(group.bind.visibility for group in groups)
+    # the module-level switches are now owned by the preferences
+    for group in groups:
+        for attr in ("controlVisibility", "rigVisibility", "bindVisibility"):
+            assert group.limb[attr].locked, f"{group.limb.name}.{attr}"
+
+
+def test_preferences_drive_module_display_mode(pair):
+    scene, body, tail = pair
+    report = Builder().build(document=scene.document, afterlife="keep")
+    prefs = report.scaffold.preferences.transform
+    for ctx in report.rigs.values():
+        assert ctx.groups.rig["overrideEnabled"].value
+        assert ctx.groups.bind["overrideEnabled"].value
+    prefs["rigDisplay"].value = 1
+    prefs["jointsDisplay"].value = 2
+    for ctx in report.rigs.values():
+        assert ctx.groups.rig["overrideDisplayType"].value == 1
+        assert ctx.groups.bind["overrideDisplayType"].value == 2

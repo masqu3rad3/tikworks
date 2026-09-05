@@ -59,8 +59,33 @@ def build_context(
     )
 
 
+def wire_preferences(rig) -> None:
+    """Hand the module's visibility switches to the rig-wide preferences.
+
+    The limb group keeps its three attributes so a module stays testable on
+    its own; once built into a rig, the preferences drive them and they lock.
+    """
+    prefs = rig.scaffold.preferences.transform
+    limb = rig.groups.limb
+    for pref, attr in (
+        ("controls", "controlVisibility"),
+        ("rig", "rigVisibility"),
+        ("joints", "bindVisibility"),
+    ):
+        plug = limb[attr]
+        prefs[pref] >> plug
+        plug.locked = True
+    for pref, group in (
+        ("rigDisplay", rig.groups.rig),
+        ("jointsDisplay", rig.groups.bind),
+    ):
+        group["overrideEnabled"].value = True
+        prefs[pref] >> group["overrideDisplayType"]
+
+
 def finalize(rig) -> None:
-    """Tag a built module's outputs and sockets so tools can find them."""
+    """Tag a built module's outputs and sockets, and wire it to the scaffold."""
+    wire_preferences(rig)
     for name, node in rig.outputs.items():
         # Every output is a bind joint, so trg_kind must stay "deform" -
         # overwriting it with "output" would erase the classification that
