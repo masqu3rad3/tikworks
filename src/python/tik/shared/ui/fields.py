@@ -11,7 +11,7 @@ from typing import Any, Callable, Optional
 from tik.core.fields import Field, FieldValidationError, Schema
 from tik.shared.ui.collapsible import CollapsibleGroup
 from tik.shared.ui.feedback import Feedback
-from tik.shared.ui.Qt import QtCore, QtWidgets
+from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 
 #: Appended to a choice the target no longer offers, so a row referencing a
 #: renamed or removed option stays visible instead of being rewritten.
@@ -282,6 +282,72 @@ class _FileEditor(QtWidgets.QWidget):
         self.line.setText(str(value or ""))
 
 
+class _TextEditor(QtWidgets.QWidget):
+    """Multi-line editor: commits on focus-out and Ctrl+Return, not per key."""
+
+    valueChanged = QtCore.Signal(object)
+    MIN_LINES = 6
+    MAX_LINES = 20
+
+    def __init__(self, language: str = "", parent=None) -> None:
+        super().__init__(parent)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.edit = QtWidgets.QPlainTextEdit()
+        self.edit.setObjectName("TextFieldEditor")
+        self.language = language
+        if language == "python":
+            font = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.FixedFont)
+            font.setStyleHint(QtGui.QFont.Monospace)
+            font.setFixedPitch(True)
+            self.edit.setFont(font)
+            self.edit.setTabStopDistance(
+                4 * QtGui.QFontMetricsF(font).horizontalAdvance(" ")
+            )
+        layout.addWidget(self.edit)
+        self._committed = ""
+        self.edit.installEventFilter(self)
+        self.edit.textChanged.connect(self._fit_height)
+        self._fit_height()
+
+    def _fit_height(self) -> None:
+        metrics = QtGui.QFontMetrics(self.edit.font())
+        lines = max(self.MIN_LINES, min(self.MAX_LINES, self.edit.blockCount()))
+        frame = 2 * self.edit.frameWidth() + 8
+        self.edit.setFixedHeight(lines * metrics.lineSpacing() + frame)
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802 - Qt style
+        if obj is self.edit:
+            if event.type() == QtCore.QEvent.FocusOut:
+                self.commit()
+            elif event.type() == QtCore.QEvent.KeyPress:
+                key, mods = event.key(), event.modifiers()
+                if key in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter) and (
+                    mods & QtCore.Qt.ControlModifier
+                ):
+                    self.commit()
+                    return True
+                if key == QtCore.Qt.Key_Tab and self.language == "python":
+                    self.edit.insertPlainText("    ")
+                    return True
+        return super().eventFilter(obj, event)
+
+    def commit(self) -> None:
+        """Emit the text if it changed since the last commit."""
+        text = self.value()
+        if text != self._committed:
+            self._committed = text
+            self.valueChanged.emit(text)
+
+    def value(self) -> str:
+        return self.edit.toPlainText()
+
+    def setValue(self, value) -> None:  # noqa: N802
+        text = str(value or "")
+        self._committed = text
+        self.edit.setPlainText(text)
+
+
 class FormBuilder(QtWidgets.QWidget):
     """Form generated from a ``Schema`` object.
 
@@ -416,7 +482,13 @@ class FormBuilder(QtWidgets.QWidget):
                 self._widgets[name] = widget
                 label = QtWidgets.QLabel(field.label or name)
                 self._labels[name] = label
-                form.addRow(label, widget)
+                if field.type_name == "text":
+                    # code is not squeezed into the value column: the label
+                    # gets its own row and the editor spans both
+                    form.addRow(label)
+                    form.addRow(widget)
+                else:
+                    form.addRow(label, widget)
         self._layout.addStretch(1)
         self.refresh()
 
@@ -522,6 +594,11 @@ class FormBuilder(QtWidgets.QWidget):
                 getattr(field, "columns", ()),
                 choices_resolver=self._resolve_choices,
             )
+            widget.valueChanged.connect(
+                lambda value, field_name=name: self._on_change(field_name, value)
+            )
+        elif kind == "text":
+            widget = _TextEditor(getattr(field, "language", ""))
             widget.valueChanged.connect(
                 lambda value, field_name=name: self._on_change(field_name, value)
             )
