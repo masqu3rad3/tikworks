@@ -24,8 +24,6 @@ from tik.trigger.core.steps import (
     StepResult,
 )
 
-from .scaffold import ensure_rig
-
 
 def new_scene() -> None:
     """Start a build from an empty scene."""
@@ -39,6 +37,13 @@ def undo_chunk(label: str):
     from tik.trigger.guides import nodes
 
     return nodes.undo_chunk(label)
+
+
+def ensure_rig(events=None):
+    """The scaffold every action receives as ``ctx.rig``, created or healed."""
+    from .scaffold import ensure_rig as _ensure_rig
+
+    return _ensure_rig(events)
 
 
 class Runner:

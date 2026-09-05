@@ -123,6 +123,29 @@ Full rationale: `docs/superpowers/specs/2026-08-30-arm-module-and-module-ground-
 
 ### Group Taxonomy
 
+Every module hangs under the rig's scaffold, which `ensure_rig()` creates or
+heals before any build or action (`tik/trigger/maya/scaffold.py`; spec
+`docs/superpowers/specs/2026-09-05-rig-scaffold-and-master-controls-design.md`).
+One rig per scene, no name:
+
+```
+rig_grp
+├── trigger_grp            every <side>_<name>_grp
+│   ├── preferences_ctrl   rig-wide switches: cacheMode, controls, rig/rigDisplay,
+│   │                      joints/jointsDisplay, geo/geoDisplay
+│   └── visibilities_ctrl  one enum per module: primary / secondary / tertiary / all
+└── geo_grp                what Import Model brings in
+```
+
+Modules never add attributes to `preferences_ctrl`; scripts and actions reach
+it as `ctx.rig.preferences`. The one thing a module says about visibility is
+the **tier** of each controller: `rig.controller(name, tier="secondary")`,
+default `primary`, one of `tik.trigger.core.TIERS`. Tiers are exclusive in the
+enum; `all` shows the three. Tweaks have no tier and stay on `tweakVis`. Tier
+wiring drives shape visibility, never transforms. Once built into the rig, the
+module's own `controlVisibility` / `rigVisibility` / `bindVisibility` are
+driven by the preferences and locked.
+
 Exactly four children per module, created by the backend, never by the module:
 
 ```

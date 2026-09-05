@@ -190,13 +190,14 @@ def test_reference_rows_are_linked_and_checkable(view, tmp_path):
 
 @pytest.fixture(autouse=True)
 def _no_scene(monkeypatch):
-    """Qt tests have no Maya, so the runner's two scene calls are stubbed."""
+    """Qt tests have no Maya, so the runner's three scene calls are stubbed."""
     import contextlib
 
     from tik.trigger.maya import runner
 
     monkeypatch.setattr(runner, "new_scene", lambda: CALLS.append(("new_scene",)))
     monkeypatch.setattr(runner, "undo_chunk", lambda label: contextlib.nullcontext())
+    monkeypatch.setattr(runner, "ensure_rig", lambda events=None: None)
 
 
 def test_build_updates_statuses_and_log(view):

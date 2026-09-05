@@ -23,7 +23,9 @@ DOCUMENT = "trg_document"  # scene groups / positions / collapse (guide holder o
 SESSION = "trg_session"  # id of the session whose guides are checked out
 MIRROR = "trg_mirror"  # "behaviour" | "world" - how a pose-mirror tool treats it
 OUTPUT_NAME = "trg_output"  # declared output this node fulfils
-TIER = "trg_tier"  # "primary" | "secondary" | "tertiary" - controllers only, never tweaks
+TIER = (
+    "trg_tier"  # "primary" | "secondary" | "tertiary" - controllers only, never tweaks
+)
 
 GUIDE = "guide"
 RIG = "rig"

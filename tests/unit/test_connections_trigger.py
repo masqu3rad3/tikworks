@@ -81,9 +81,7 @@ def test_export_import_keeps_connections_and_mirror_maps_sides(guides, tmp_path)
     tail = guides.by_key("tail")
     assert tail.inputs == {"root": "L_arm.hand"}
     assert guides.by_key("R_arm").inputs == {"root": "body.root"}
-    report = Builder().build(
-        document=guides.document, afterlife="keep"
-    )
+    report = Builder().build(document=guides.document, afterlife="keep")
     assert ("tail.root", "L_arm.hand") in report.connections
     # exporting a subset keeps only its connections
     subset = guides.export(tmp_path / "subset", guides.by_key("tail"))

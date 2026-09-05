@@ -54,8 +54,7 @@ class ImportAsset(Action):
 
         top = [
             node
-            for node in cmds.ls(new_nodes, long=True, dag=True, type="transform")
-            or []
+            for node in cmds.ls(new_nodes, long=True, dag=True, type="transform") or []
             if node.count("|") == 1
         ]
         if top:

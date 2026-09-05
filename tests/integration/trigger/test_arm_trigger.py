@@ -36,9 +36,7 @@ def _build_arm(scene, side="L", **settings):
             ws=True,
             t=(position[0] * mult, position[1], position[2]),
         )
-    report = Builder().build(
-        document=scene.document, afterlife="delete"
-    )
+    report = Builder().build(document=scene.document, afterlife="delete")
     return report, body, arm
 
 

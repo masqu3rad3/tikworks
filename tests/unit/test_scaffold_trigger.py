@@ -35,8 +35,7 @@ def test_fresh_scene_gets_the_whole_scaffold():
         rig.preferences.transform.long_name == "|rig_grp|trigger_grp|preferences_ctrl"
     )
     assert (
-        rig.visibilities.transform.long_name
-        == "|rig_grp|trigger_grp|visibilities_ctrl"
+        rig.visibilities.transform.long_name == "|rig_grp|trigger_grp|visibilities_ctrl"
     )
     assert rig.root.meta[tags.KIND] == tags.RIG_ROOT
     assert rig.trigger.meta[tags.KIND] == tags.RIG_TRIGGER
@@ -85,9 +84,7 @@ def test_untagged_rig_grp_is_adopted_with_a_warning():
     assert rig.root.long_name == "|rig_grp"
     assert len(cmds.ls("rig_grp")) == 1
     assert rig.root.meta[tags.KIND] == tags.RIG_ROOT
-    assert any(
-        level == "warning" and "rig_grp" in message for level, message in logged
-    )
+    assert any(level == "warning" and "rig_grp" in message for level, message in logged)
 
 
 def test_missing_pieces_are_healed():

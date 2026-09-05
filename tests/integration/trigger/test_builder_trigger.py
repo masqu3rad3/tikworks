@@ -7,6 +7,7 @@ modules build real nodes, so the assertions are about the rig.
 
 import pytest
 from maya import cmds
+from toy_modules import ToyStill, ToyTiers
 
 import tik.maya as tm
 import tik.trigger as trigger
@@ -23,7 +24,6 @@ from tik.trigger.core import (
 )
 from tik.trigger.guides import GuideScene
 from tik.trigger.maya import Builder, tags
-from toy_modules import ToyStill, ToyTiers
 
 
 class ToyRoot(Module):
@@ -142,7 +142,14 @@ def toys():
     ):
         register_module(name)(cls)
     yield GuideScene()
-    for name in ("toy_root", "toy_chain", "toy_boom", "toy_fan", "toy_tiers", "toy_still"):
+    for name in (
+        "toy_root",
+        "toy_chain",
+        "toy_boom",
+        "toy_fan",
+        "toy_tiers",
+        "toy_still",
+    ):
         unregister_module(name)
 
 
@@ -165,9 +172,7 @@ def test_builds_in_order_and_connects(pair):
     seen = []
     events.subscribe("progress", lambda **kw: seen.append(kw["label"]))
 
-    report = Builder(events).build(
-        document=scene.document, afterlife="hide"
-    )
+    report = Builder(events).build(document=scene.document, afterlife="hide")
 
     assert report.built == [body.instance_id, tail.instance_id]
     assert seen == ["Building body", "Building tail"]
@@ -380,9 +385,7 @@ def test_a_space_on_a_removed_control_warns_and_still_builds(toys):
     events = EventBus()
     logged = []
     events.subscribe("log", lambda **kw: logged.append((kw["level"], kw["message"])))
-    report = Builder(events).build(
-        document=toys.document, afterlife="keep"
-    )
+    report = Builder(events).build(document=toys.document, afterlife="keep")
 
     assert fan.instance_id in report.built
     assert report.rigs[fan.instance_id].controller_by_role("fk2") is None

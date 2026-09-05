@@ -32,9 +32,7 @@ def _solo(module_type):
             get_module(module_type)(name=module_type),
             parent=ParentRef(body.instance_id, "root"),
         )
-    report = Builder().build(
-        document=scene.document, afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     return report.rigs[instance.instance_id]
 
 
@@ -85,9 +83,7 @@ def _built_with(module_type, settings):
         # Drawing is manual since the Draw/Sync split: write_settings flags the
         # module, it does not rebuild its joints.
         scene.draw()
-    report = Builder().build(
-        document=scene.document, afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     return report.rigs[instance.instance_id]
 
 
@@ -132,9 +128,7 @@ def connected_rig():
         get_module("arm")(name="arm", side="L"),
         parent=ParentRef(body.instance_id, "root"),
     )
-    report = Builder().build(
-        document=scene.document, afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     return report, body, arm
 
 
@@ -295,9 +289,7 @@ def test_space_inputs_get_no_socket():
         ),
         parent=ParentRef(body.instance_id, "root"),
     )
-    report = Builder().build(
-        document=scene.document, afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     rig = report.rigs[arm.instance_id]
 
     assert "root" in rig.attachments

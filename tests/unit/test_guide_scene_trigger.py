@@ -112,9 +112,7 @@ def test_build_pipeline_creates_groups_controllers_and_attaches(scene):
         scene.guide_node(child.instance_id, "root").long_name, ws=True, t=(2, 10, 0)
     )
 
-    report = Builder().build(
-        document=scene.document, afterlife="delete"
-    )
+    report = Builder().build(document=scene.document, afterlife="delete")
     assert report.count == 2
     assert cmds.objExists("rig_grp")
     assert cmds.objExists("C_body_grp") and cmds.objExists("L_tail_grp")
@@ -178,9 +176,7 @@ def _built(scene, module_type="base", name="body", settings=None):
     """Build one instance and return its build context."""
     module = get_module(module_type)(name=name, settings=settings or {})
     instance = scene.create_guides(module)
-    report = Builder().build(
-        document=scene.document, afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     return report.rigs[instance.instance_id]
 
 
@@ -290,9 +286,7 @@ def _connected(scene):
         get_module("fkchain")(name="tail", side="L", settings={"segments": 2}),
         parent=ParentRef(root.instance_id, "root"),
     )
-    report = Builder().build(
-        document=scene.document, afterlife="keep"
-    )
+    report = Builder().build(document=scene.document, afterlife="keep")
     return report.rigs[root.instance_id], report.rigs[child.instance_id]
 
 
