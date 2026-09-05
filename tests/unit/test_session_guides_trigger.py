@@ -171,6 +171,11 @@ def test_a_saved_session_round_trips_its_guides(tmp_path):
     reopened = Session.open(str(path))
     assert reopened.document.guides.module(handle.instance_id).name == "tail"
     reopened.checkout_guides()
+    # reopening claims the scene but draws nothing: the modules are all there,
+    # reported not-drawn, and Draw is the rigger's to press
+    assert reopened.guides.guide_nodes(handle.instance_id) == {}
+    assert reopened.guides.diff().not_drawn == [handle.instance_id]
+    reopened.guides.draw()
     assert len(reopened.guides.guide_nodes(handle.instance_id)) == 3
 
 
@@ -181,3 +186,34 @@ def test_guide_work_makes_the_session_dirty(tmp_path):
     assert session.is_modified is False
     session.guides.add("fkchain", side="C", name="tail", segments=1)
     assert session.is_modified is True
+
+
+def test_checkout_draws_nothing():
+    """Opening a session must not put joints in a scene the rigger may have
+    opened for something else."""
+    session = Session()
+    session.guides.draw_on_create = False
+    handle = session.guides.add("fkchain", side="C", name="tail", segments=1)
+    session.checkout_guides()
+    assert session.guides.guide_nodes(handle.instance_id) == {}
+    assert session.guides.diff().not_drawn == [handle.instance_id]
+
+
+def test_checkout_keeps_our_own_rendering():
+    """Re-checking out a scene we already hold must not undraw it -- the
+    Designer sub-tab does this on every switch."""
+    session = Session()
+    handle = session.guides.add("fkchain", side="C", name="tail", segments=1)
+    drawn = set(session.guides.guide_nodes(handle.instance_id))
+    session.checkout_guides()
+    assert set(session.guides.guide_nodes(handle.instance_id)) == drawn
+
+
+def test_checkout_clears_another_sessions_rendering():
+    first = Session()
+    handle = first.guides.add("fkchain", side="C", name="tail", segments=1)
+    first.capture_guides()
+    assert first.guides.guide_nodes(handle.instance_id) != {}
+    second = Session()
+    second.checkout_guides(force=True)
+    assert first.guides.guide_nodes(handle.instance_id) == {}

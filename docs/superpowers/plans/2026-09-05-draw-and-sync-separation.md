@@ -801,7 +801,7 @@ the scene. dismissed and restore() go with the automatic redraw."
 - Consumes: `GuideScene.draw` from Task 5.
 - Produces: `apply_afterlife(instances, mode)` — two parameters. `Session.checkout_guides(force=False)` clears and stamps without drawing.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/test_session_guides_trigger.py`:
 
@@ -817,18 +817,18 @@ def test_checkout_does_not_draw(tmp_path):
 
 Match the file's existing `Session` import and fixture style — read the neighbouring tests first.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `TP tests/unit/test_session_guides_trigger.py -k does_not_draw`
 Expected: FAIL — `not_drawn == []`, because checkout drew the guides.
 
-- [ ] **Step 3: Delete the field and the tag**
+- [x] **Step 3: Delete the field and the tag**
 
 In `core/guide_document.py`, delete the `dismissed` field and its two comment lines (194-197).
 
 In `maya/tags.py`, delete the `DISMISSED` line. It is defined and read nowhere else — confirm with `grep -rn DISMISSED src tests` before deleting, and expect no other hits.
 
-- [ ] **Step 4: Simplify `apply_afterlife`**
+- [x] **Step 4: Simplify `apply_afterlife`**
 
 In `maya/build.py`:
 
@@ -849,7 +849,7 @@ def apply_afterlife(instances, mode: str) -> None:
 
 Keep everything from `holder = guide_nodes.holder()` down unchanged, and delete the `if document is not None: document.dismissed = True` block. Change the call at line 229 to `apply_afterlife(instances, afterlife)`.
 
-- [ ] **Step 5: Stop `checkout_guides` from drawing**
+- [x] **Step 5: Stop `checkout_guides` from drawing**
 
 In `session.py`, delete the `regenerate.regenerate_all(scene.document)` line so the tail reads:
 
@@ -864,12 +864,12 @@ In `session.py`, delete the `regenerate.regenerate_all(scene.document)` line so 
 
 Remove the now-unused `regenerate` import from `session.py` if nothing else in the file uses it — check with `grep -n regenerate src/python/tik/trigger/session.py`.
 
-- [ ] **Step 6: Run the affected suites**
+- [x] **Step 6: Run the affected suites**
 
 Run: `TP tests/unit/test_session_guides_trigger.py` then `TP tests/integration/trigger/test_session_checkout_trigger.py`
 Expected: PASS. The checkout tests that assert joints exist after `checkout_guides()` must gain an explicit `session.guides.draw()` — that is the behaviour change.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/python/tik/trigger/core/guide_document.py src/python/tik/trigger/maya/tags.py src/python/tik/trigger/maya/build.py src/python/tik/trigger/session.py tests/unit/test_session_guides_trigger.py tests/integration/trigger/test_session_checkout_trigger.py
