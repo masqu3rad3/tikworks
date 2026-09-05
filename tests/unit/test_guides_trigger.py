@@ -68,7 +68,7 @@ def test_mirror_and_test_build(guides):
     with pytest.raises(GuideError):
         guides.mirror(body)
     report = guides.test_build(body, arm)
-    assert report.count == 2 and cmds.objExists("test_rig")
+    assert report.count == 2 and cmds.objExists("rig_grp")
     assert guides.find("arm", "L") is not None  # guides kept
     assert guides["body"].instance_id == body.instance_id
     with pytest.raises(GuideError):

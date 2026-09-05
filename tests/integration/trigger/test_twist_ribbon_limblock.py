@@ -50,7 +50,7 @@ def rigged(guides):
         node = guides.guide_node(upper.instance_id, role, 0)
         node.world_position = arm_guide(arm_role).world_position
     report = Builder().build(
-        document=guides.document, rig_name="hero", afterlife="keep"
+        document=guides.document, afterlife="keep"
     )
     return report, arm, fore, upper
 

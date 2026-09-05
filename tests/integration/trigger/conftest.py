@@ -7,6 +7,7 @@ import tik.trigger as trigger
 from tik.trigger.core import get_module
 from tik.trigger.guides import GuideScene
 from tik.trigger.maya import build
+from tik.trigger.maya import scaffold as scaffold_module
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -35,8 +36,8 @@ def build_context(scene):
     ):
         module = get_module(module_type)(name=name, side=side, settings=settings or {})
         instance = scene.create_guides(module)
-        rig_root = build.ensure_rig_root("test")
+        rig = scaffold_module.ensure_rig()
         built = get_module(module_type).from_instance(instance)
-        return build.build_context(built, instance, rig_root)
+        return build.build_context(built, instance, rig)
 
     return _make

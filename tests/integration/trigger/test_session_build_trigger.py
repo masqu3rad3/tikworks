@@ -37,7 +37,6 @@ def test_session_builds_from_files_and_rebuilds(scene, tmp_path):
     rig.add(
         "kinematics",
         guides_file="guides/hero_guides.trg",
-        rig_name="hero",
         after_build="delete",
     )
     rig.add(
@@ -54,7 +53,7 @@ def test_session_builds_from_files_and_rebuilds(scene, tmp_path):
     assert [item.status for item in results] == ["done"] * 3
     assert (
         cmds.objExists("hero_geo")
-        and cmds.objExists("hero_rig")
+        and cmds.objExists("rig_grp")
         and cmds.objExists("from_script")
     )
     assert cmds.objExists("L_arm_hand_jnt") and cmds.objExists("R_arm_hand_jnt")
@@ -65,7 +64,7 @@ def test_session_builds_from_files_and_rebuilds(scene, tmp_path):
     rig["tag"].enabled = False
     rig.build()
     assert cmds.objExists("trigger_guides_grp") and not cmds.objExists("from_script")
-    assert len(cmds.ls("hero_rig")) == 1
+    assert len(cmds.ls("rig_grp")) == 1
 
     # reopen from disk and build until kinematics only
     reopened = trigger.Session.open(str(tmp_path / "hero.tr"))
@@ -80,7 +79,6 @@ def test_kinematics_roots_filter(scene, tmp_path):
         "kinematics",
         guides_file=str(guides_path),
         guide_roots=["body"],
-        rig_name="hero",
     )
     rig.build()
     assert cmds.objExists("C_body_grp") and cmds.objExists(
@@ -92,7 +90,6 @@ def test_kinematics_roots_filter(scene, tmp_path):
         "kinematics",
         guides_file=str(guides_path),
         guide_roots=["tail"],
-        rig_name="only_tail",
     )
     rig.build()
     assert cmds.objExists("C_tail_grp") and not cmds.objExists("L_arm_grp")
@@ -115,9 +112,9 @@ def test_kinematics_builds_from_the_sessions_own_guides():
     cmds.file(new=True, force=True)
     session = Session()
     session.guides.add("base", side="C", name="body")
-    session.add("kinematics", rig_name="fromsession")
+    session.add("kinematics")
     session.build()
-    assert cmds.objExists("fromsession_rig")
+    assert cmds.objExists("rig_grp")
 
 
 def test_kinematics_without_guides_or_a_file_reports_clearly():
@@ -127,6 +124,6 @@ def test_kinematics_without_guides_or_a_file_reports_clearly():
     trigger.load_plugins()
     cmds.file(new=True, force=True)
     session = Session()
-    session.add("kinematics", rig_name="empty")
+    session.add("kinematics")
     with pytest.raises(ActionExecutionError, match="no guides"):
         session.build()

@@ -19,7 +19,6 @@ _LAZY = {
     "build_context": ".build",
     "connect": ".build",
     "connect_space": ".build",
-    "ensure_rig_root": ".build",
     "finalize": ".build",
     "ModuleRig": ".rig",
     "GuideDraft": ".rig",

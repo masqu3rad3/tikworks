@@ -153,7 +153,7 @@ def _armed(**settings):
     body = guides.add("base", name="body")
     arm = guides.add("arm", side="L", name="arm", parent=body, **settings)
     report = Builder().build(
-        document=guides.document, rig_name="hero", afterlife="keep"
+        document=guides.document, afterlife="keep"
     )
     return report.rigs[arm.instance_id]
 

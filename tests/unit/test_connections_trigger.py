@@ -46,11 +46,11 @@ def test_build_connects_to_scene_node_and_errors(guides):
     guides.add("fkchain", name="tail", parent=body, segments=2)
     guides.connect("tail.root", "anchor_jnt")
     with pytest.raises(AttachError) as info:
-        Builder().build(document=guides.document, rig_name="a", afterlife="keep")
+        Builder().build(document=guides.document, afterlife="keep")
     assert "anchor_jnt" in str(info.value)
     anchor = tm.Joint.create(name="anchor_jnt")
     anchor.translate = (0, 20, 0)
-    report = Builder().build(document=guides.document, rig_name="a", afterlife="keep")
+    report = Builder().build(document=guides.document, afterlife="keep")
     assert report.connections == [("tail.root", "anchor_jnt")]
     socket = tm.Transform("C_tail_root_socket")
     before = socket.world_position
@@ -82,7 +82,7 @@ def test_export_import_keeps_connections_and_mirror_maps_sides(guides, tmp_path)
     assert tail.inputs == {"root": "L_arm.hand"}
     assert guides.by_key("R_arm").inputs == {"root": "body.root"}
     report = Builder().build(
-        document=guides.document, rig_name="hero", afterlife="keep"
+        document=guides.document, afterlife="keep"
     )
     assert ("tail.root", "L_arm.hand") in report.connections
     # exporting a subset keeps only its connections

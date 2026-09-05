@@ -9,7 +9,6 @@ from tik.trigger.core import (
     FieldGroup,
     FileField,
     ListField,
-    StringField,
     register_action,
 )
 from tik.trigger.core.exceptions import ActionExecutionError
@@ -35,7 +34,6 @@ class Kinematics(Action):
         help="Root guide names to build; empty = all",
         group=BUILD_OPTIONS,
     )
-    rig_name = StringField("trigger", label="Rig name")
     after_build = ChoiceField(
         "delete",
         choices=list(AFTERLIFE_MODES),
@@ -73,7 +71,6 @@ class Kinematics(Action):
         report = Builder(ctx.events).build(
             scope=scope,
             document=document,
-            rig_name=self.rig_name,
             afterlife=self.after_build,
         )
         source = self.guides_file or "this session"

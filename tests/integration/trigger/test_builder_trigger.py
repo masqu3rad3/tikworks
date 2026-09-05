@@ -163,7 +163,7 @@ def test_builds_in_order_and_connects(pair):
     events.subscribe("progress", lambda **kw: seen.append(kw["label"]))
 
     report = Builder(events).build(
-        document=scene.document, rig_name="rig", afterlife="hide"
+        document=scene.document, afterlife="hide"
     )
 
     assert report.built == [body.instance_id, tail.instance_id]
@@ -260,7 +260,7 @@ def test_empty_scene_and_bad_afterlife(toys):
 def test_bind_parent_comes_from_the_producer(pair):
     """A connected module builds its bind joints inside the producer's."""
     scene, body, tail = pair
-    report = Builder().build(document=scene.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=scene.document, afterlife="keep")
 
     producer = report.rigs[body.instance_id]
     consumer = report.rigs[tail.instance_id]
@@ -272,7 +272,7 @@ def test_bind_parent_comes_from_the_producer(pair):
 
 def test_bind_parent_defaults_to_the_modules_own_group_when_unconnected(toys):
     solo = toys.add("toy_root", name="solo")
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
     rig = report.rigs[solo.instance_id]
     assert rig.bind_parent.long_name == rig.groups.bind.long_name
 
@@ -287,7 +287,7 @@ def test_space_inputs_do_not_feed_build_order(toys):
     first.set_input("root_b", "b.root")
     second.set_input("root_a", "a.root")
 
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
     assert report.count == 2
 
 
@@ -305,7 +305,7 @@ def test_space_connections_are_grouped_by_control_and_mode(toys):
     arm.set_input("root_body", "body.root")
     arm.set_input("root_head", "head.root")
 
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
 
     control = report.rigs[arm.instance_id].controller_by_role("root")
     assert control.transform.has_attr("parentSwitch")
@@ -333,7 +333,7 @@ def test_row_order_is_enum_order(toys):
     arm.set_input("root_body", "body.root")
     arm.set_input("root_head", "head.root")
 
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
 
     control = report.rigs[arm.instance_id].controller_by_role("root")
     listed = cmds.attributeQuery(
@@ -346,7 +346,7 @@ def test_an_unconnected_space_row_is_skipped(toys):
     arm = toys.add("toy_root", name="arm")
     _rows(arm, [{"control": "root", "mode": "parent", "label": "ghost"}])
 
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
 
     control = report.rigs[arm.instance_id].controller_by_role("root")
     assert not control.transform.has_attr("parentSwitch")
@@ -360,7 +360,7 @@ def test_a_space_on_a_dynamic_control_builds_a_switch(toys):
     _rows(fan, [{"control": "fk2", "mode": "parent", "label": "anchor"}])
     fan.set_input("fk2_anchor", "anchor.root")
 
-    report = Builder().build(document=toys.document, rig_name="rig", afterlife="keep")
+    report = Builder().build(document=toys.document, afterlife="keep")
 
     control = report.rigs[fan.instance_id].controller_by_role("fk2")
     assert control is not None
@@ -378,7 +378,7 @@ def test_a_space_on_a_removed_control_warns_and_still_builds(toys):
     logged = []
     events.subscribe("log", lambda **kw: logged.append((kw["level"], kw["message"])))
     report = Builder(events).build(
-        document=toys.document, rig_name="rig", afterlife="keep"
+        document=toys.document, afterlife="keep"
     )
 
     assert fan.instance_id in report.built
@@ -399,3 +399,16 @@ def test_a_guide_with_no_document_entry_is_not_built(toys):
     ]
     assert toys.find_instances("scene") == []
     assert toys.diff().orphans
+
+
+def test_modules_build_under_the_scaffold(pair):
+    scene, body, tail = pair
+    report = Builder().build(document=scene.document, afterlife="keep")
+    assert report.scaffold.trigger.long_name == "|rig_grp|trigger_grp"
+    for ctx in report.rigs.values():
+        assert ctx.groups.limb.parent.long_name == "|rig_grp|trigger_grp"
+        assert ctx.rig_root.long_name == "|rig_grp|trigger_grp"
+        assert ctx.scaffold is report.scaffold
+    # a second build reuses the same scaffold rather than making another
+    Builder().build(document=scene.document, afterlife="keep")
+    assert len(cmds.ls("rig_grp")) == 1

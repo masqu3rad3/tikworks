@@ -37,7 +37,7 @@ def _build_arm(scene, side="L", **settings):
             t=(position[0] * mult, position[1], position[2]),
         )
     report = Builder().build(
-        document=scene.document, rig_name="hero", afterlife="delete"
+        document=scene.document, afterlife="delete"
     )
     return report, body, arm
 
@@ -430,7 +430,7 @@ def _arm_with_spaces(scene, rows, wires):
     inputs = dict(scene.find_instances([arm.instance_id])[0].inputs)
     inputs.update(wires)
     scene.set_inputs(arm.instance_id, inputs)
-    report = Builder().build(document=scene.document, rig_name="hero", afterlife="keep")
+    report = Builder().build(document=scene.document, afterlife="keep")
     return report, report.rigs[arm.instance_id]
 
 

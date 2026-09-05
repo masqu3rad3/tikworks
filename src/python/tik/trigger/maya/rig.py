@@ -98,7 +98,7 @@ class ModuleRig:
         self,
         module,
         instance: ModuleInstance,
-        rig_root,
+        scaffold,
         guide_nodes: dict,
         bind_parent=None,
     ) -> None:
@@ -106,7 +106,9 @@ class ModuleRig:
         self.instance = instance
         self.side = module.side
         self.side_mult = module.side.multiplier
-        self.rig_root = rig_root
+        self.scaffold = scaffold
+        # trigger_grp: the world-space anchor every module hangs under
+        self.rig_root = scaffold.trigger
         self._guides = guide_nodes  # (role, index) -> Joint
         self.outputs: dict[str, Any] = {}
         self.attachments: dict[str, Any] = {}

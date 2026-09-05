@@ -113,10 +113,10 @@ def test_build_pipeline_creates_groups_controllers_and_attaches(scene):
     )
 
     report = Builder().build(
-        document=scene.document, rig_name="hero", afterlife="delete"
+        document=scene.document, afterlife="delete"
     )
     assert report.count == 2
-    assert cmds.objExists("hero_rig")
+    assert cmds.objExists("rig_grp")
     assert cmds.objExists("C_body_grp") and cmds.objExists("L_tail_grp")
     assert cmds.objExists("L_tail_control_grp")
     assert cmds.objExists("L_tail_0_jnt") and cmds.objExists("L_tail_2_jnt")
@@ -144,11 +144,11 @@ def test_build_pipeline_creates_groups_controllers_and_attaches(scene):
 
 def test_build_afterlife_keep_and_hide(scene):
     scene.create_guides(get_module("base")(name="body"))
-    Builder().build(document=scene.document, rig_name="a", afterlife="keep")
+    Builder().build(document=scene.document, afterlife="keep")
     assert cmds.getAttr(f"{tags.GUIDE_HOLDER}.v")
-    Builder().build(document=scene.document, rig_name="b", afterlife="hide")
+    Builder().build(document=scene.document, afterlife="hide")
     assert not cmds.getAttr(f"{tags.GUIDE_HOLDER}.v")
-    assert cmds.objExists("a_rig") and cmds.objExists("b_rig")
+    assert len(cmds.ls("rig_grp")) == 1
 
 
 def test_build_is_undoable(scene):
@@ -176,7 +176,7 @@ def _built(scene, module_type="base", name="body", settings=None):
     module = get_module(module_type)(name=name, settings=settings or {})
     instance = scene.create_guides(module)
     report = Builder().build(
-        document=scene.document, rig_name="rules", afterlife="keep"
+        document=scene.document, afterlife="keep"
     )
     return report.rigs[instance.instance_id]
 
@@ -288,7 +288,7 @@ def _connected(scene):
         parent=ParentRef(root.instance_id, "root"),
     )
     report = Builder().build(
-        document=scene.document, rig_name="single", afterlife="keep"
+        document=scene.document, afterlife="keep"
     )
     return report.rigs[root.instance_id], report.rigs[child.instance_id]
 

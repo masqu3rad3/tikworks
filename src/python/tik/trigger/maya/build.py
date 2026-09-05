@@ -22,6 +22,7 @@ from tik.trigger.guides import nodes as guide_nodes
 
 from . import tags
 from .rig import ModuleRig
+from .scaffold import RigScaffold, ensure_rig
 
 
 @dataclass
@@ -36,7 +37,7 @@ class BuildReport:
     spaces: list[tuple[str, str]] = field(
         default_factory=list
     )  # ("L_arm.ik_chest", "body.root")
-    rig_root: Any = None
+    scaffold: Any = None  # RigScaffold
 
     @property
     def count(self) -> int:
@@ -45,25 +46,17 @@ class BuildReport:
 
 
 # ------------------------------------------------------------------- scene
-def build_context(module, instance, rig_root, bind_parent=None) -> ModuleRig:
+def build_context(
+    module, instance, scaffold: RigScaffold, bind_parent=None
+) -> ModuleRig:
     """The object a module builds through, wired to its guides."""
     return ModuleRig(
         module,
         instance,
-        rig_root,
+        scaffold,
         guide_nodes.guide_nodes(instance.instance_id),
         bind_parent,
     )
-
-
-def ensure_rig_root(rig_name: str) -> tm.Transform:
-    """The tagged top group every module hangs under, created once per rig."""
-    for node in tm.find_by_meta(tags.KIND, tags.RIG_ROOT):
-        if node.meta.get(tags.NAME) == rig_name:
-            return node
-    root = tm.Transform.create(name=f"{rig_name}_rig")
-    root.meta.update({tags.KIND: tags.RIG_ROOT, tags.NAME: rig_name})
-    return root
 
 
 def finalize(rig) -> None:
@@ -164,13 +157,9 @@ class Builder:
         return order_instances(instances)
 
     def build(
-        self,
-        scope: Any = "scene",
-        rig_name: str = "trigger",
-        afterlife: str = "delete",
-        document=None,
+        self, scope: Any = "scene", afterlife: str = "delete", document=None
     ) -> BuildReport:
-        """Build every guide instance in ``scope`` into a rig called ``rig_name``."""
+        """Build every guide instance in ``scope`` into the scene's one rig."""
         if afterlife not in AFTERLIFE_MODES:
             raise ValueError(f"afterlife must be one of {AFTERLIFE_MODES}.")
         instances = self.order(guide_nodes.find_instances(scope, document))
@@ -188,8 +177,8 @@ class Builder:
             self.events.log("No module guides found to build.", level="warning")
             return report
 
-        with guide_nodes.undo_chunk(f"Trigger build: {rig_name}"):
-            report.rig_root = ensure_rig_root(rig_name)
+        with guide_nodes.undo_chunk("Trigger build"):
+            report.scaffold = ensure_rig(self.events)
 
             # Producers must be built before consumers: rig.bind_parent is
             # resolved from the producer's output, so bind joints can be created
@@ -215,7 +204,7 @@ class Builder:
                 bind_parent = self._bind_parent_for(
                     instance, module_cls, inputs, by_key, report
                 )
-                ctx = self._build_one(instance, report.rig_root, bind_parent)
+                ctx = self._build_one(instance, report.scaffold, bind_parent)
                 report.rigs[instance.instance_id] = ctx
                 report.built.append(instance.instance_id)
                 by_key[instance.key] = instance
@@ -224,7 +213,7 @@ class Builder:
                 )
             self._connect_spaces(instances, report, by_key)
             apply_afterlife(instances, afterlife)
-        self.events.log(f"Built {total} module(s) into '{rig_name}'.")
+        self.events.log(f"Built {total} module(s).")
         return report
 
     # ------------------------------------------------------------- connect
@@ -369,7 +358,7 @@ class Builder:
         return node
 
     # --------------------------------------------------------------- build
-    def _build_one(self, instance: ModuleInstance, rig_root, bind_parent=None):
+    def _build_one(self, instance: ModuleInstance, scaffold, bind_parent=None):
         module_cls = registry.get_module(instance.module_type)
         module = module_cls.from_instance(instance)
         problems = module.validate()
@@ -382,7 +371,7 @@ class Builder:
         for warning in module.warnings():
             self.events.log(f"{instance.key}: {warning}", level="warning")
         try:
-            ctx = build_context(module, instance, rig_root, bind_parent)
+            ctx = build_context(module, instance, scaffold, bind_parent)
             module.build(ctx)
             missing = [
                 name
