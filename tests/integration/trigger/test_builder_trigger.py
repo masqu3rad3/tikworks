@@ -23,6 +23,7 @@ from tik.trigger.core import (
 )
 from tik.trigger.guides import GuideScene
 from tik.trigger.maya import Builder, tags
+from toy_modules import ToyStill, ToyTiers
 
 
 class ToyRoot(Module):
@@ -136,10 +137,12 @@ def toys():
         ("toy_chain", ToyChain),
         ("toy_boom", ToyBoom),
         ("toy_fan", ToyFan),
+        ("toy_tiers", ToyTiers),
+        ("toy_still", ToyStill),
     ):
         register_module(name)(cls)
     yield GuideScene()
-    for name in ("toy_root", "toy_chain", "toy_boom", "toy_fan"):
+    for name in ("toy_root", "toy_chain", "toy_boom", "toy_fan", "toy_tiers", "toy_still"):
         unregister_module(name)
 
 
@@ -445,3 +448,75 @@ def test_preferences_drive_module_display_mode(pair):
     for ctx in report.rigs.values():
         assert ctx.groups.rig["overrideDisplayType"].value == 1
         assert ctx.groups.bind["overrideDisplayType"].value == 2
+
+
+# ------------------------------------------------------------------- tiers
+def _shape_visible(controller):
+    return [shape.visibility for shape in controller.transform.shapes]
+
+
+def test_visibilities_control_has_one_enum_per_module_with_controls(toys):
+    toys.add("toy_tiers", name="tiers")
+    toys.add("toy_root", name="body")
+    report = Builder().build(document=toys.document, afterlife="keep")
+    vis = report.scaffold.visibilities.transform
+    assert vis["tiers"].exists() and vis["body"].exists()
+    assert cmds.attributeQuery("tiers", node=vis.long_name, listEnum=True) == [
+        "primary:secondary:tertiary:all"
+    ]
+    assert vis["tiers"].value == 3
+    assert not vis["tiers"].keyable and vis["tiers"].visible
+
+
+def test_tiers_are_exclusive_and_all_shows_everything(toys):
+    handle = toys.add("toy_tiers", name="tiers")
+    report = Builder().build(document=toys.document, afterlife="keep")
+    ctx = report.rigs[handle.instance_id]
+    vis = report.scaffold.visibilities.transform["tiers"]
+    by_tier = {
+        controller.transform.meta[tags.TIER]: controller
+        for controller in ctx.controllers
+        if tags.TIER in controller.transform.meta
+    }
+    assert set(by_tier) == {"primary", "secondary", "tertiary"}
+    for index, tier in enumerate(("primary", "secondary", "tertiary")):
+        vis.value = index
+        for other, controller in by_tier.items():
+            expected = other == tier
+            assert all(
+                state == expected for state in _shape_visible(controller)
+            ), f"{other} at enum={tier}"
+    vis.value = 3
+    for controller in by_tier.values():
+        assert all(_shape_visible(controller))
+
+
+def test_tier_enum_hides_shapes_not_transforms(toys):
+    handle = toys.add("toy_tiers", name="tiers")
+    report = Builder().build(document=toys.document, afterlife="keep")
+    ctx = report.rigs[handle.instance_id]
+    report.scaffold.visibilities.transform["tiers"].value = 1  # secondary only
+    primary = ctx.controller_by_role("primary")
+    assert primary.transform.visibility
+    assert not any(_shape_visible(primary))
+
+
+def test_tweak_shapes_ignore_the_tier_enum(toys):
+    handle = toys.add("toy_tiers", name="tiers")
+    report = Builder().build(document=toys.document, afterlife="keep")
+    ctx = report.rigs[handle.instance_id]
+    tweak = ctx.controller_by_role("primary_tweak")
+    report.scaffold.visibilities.transform["tiers"].value = 1
+    assert all(_shape_visible(tweak))
+    # the tweak's own switch is untouched
+    ctx.controller_by_role("primary").transform["tweakVis"].value = True
+    assert tweak.transform.visibility
+
+
+def test_module_without_controls_adds_no_enum(toys):
+    toys.add("toy_root", name="body")
+    toys.add("toy_still", name="still")
+    report = Builder().build(document=toys.document, afterlife="keep")
+    vis = report.scaffold.visibilities.transform
+    assert vis["body"].exists()
+    assert not vis["still"].exists()

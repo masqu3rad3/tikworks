@@ -328,3 +328,31 @@ def test_every_top_level_controller_has_an_offset_group(module_type):
         # the offset is above the control; a module may insert its own group
         # between them (the arm's auto-collar does)
         assert control.transform.long_name.startswith(control.offset.long_name + "|")
+
+
+# ------------------------------------------------------------------- tiers
+@pytest.mark.parametrize("module_type", MODULE_TYPES)
+def test_every_controller_carries_a_valid_tier(module_type):
+    """Rule: a tweak has no tier; everything else declares one of TIERS."""
+    from tik.trigger.core import TIERS
+
+    ctx = _solo(module_type)
+    for controller in ctx.controllers:
+        role = controller.transform.meta.get(tags.ROLE, "")
+        tier = controller.transform.meta.get(tags.TIER)
+        if role.endswith("_tweak"):
+            assert tier is None, f"{controller.transform.name} is a tiered tweak"
+        else:
+            assert tier in TIERS, f"{controller.transform.name} has tier {tier!r}"
+
+
+@pytest.mark.parametrize("module_type", _shipped_module_types())
+def test_visibilities_enum_matches_the_control_manifest(module_type):
+    """One enum on visibilities_ctrl iff the module declares controls."""
+    module_cls = get_module(module_type)
+    ctx = _built_with(module_type, {})
+    vis = ctx.scaffold.visibilities.transform
+    expected = bool(module_cls.control_names(ctx.instance.settings))
+    assert (
+        vis[ctx.instance.key].exists() is expected
+    ), f"{module_type}: enum present={not expected}"

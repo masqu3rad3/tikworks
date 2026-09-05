@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -11,6 +12,7 @@ import tik.maya as tm
 from tik.trigger.core import registry
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import AttachError, BuildError
+from tik.trigger.core.manifest import TIERS
 from tik.trigger.core.schemas import (
     AFTERLIFE_MODES,
     ModuleInstance,
@@ -83,9 +85,49 @@ def wire_preferences(rig) -> None:
         prefs[pref] >> group["overrideDisplayType"]
 
 
+TIER_ITEMS = (*TIERS, "all")
+ALL_INDEX = len(TIERS)
+
+
+def tier_attr_name(key: str) -> str:
+    """The visibilities enum for a module: its display key, made attribute-safe."""
+    return re.sub(r"\W", "_", key)
+
+
+def wire_tiers(rig) -> None:
+    """One exclusive-tier enum per module on visibilities_ctrl, driving shapes.
+
+    Tiers are exclusive: ``secondary`` shows secondary controls only, ``all``
+    shows the three tiers. Shapes are driven, not transforms, so an FK chain
+    whose next control hangs under the previous one keeps its hierarchy.
+    Tweaks carry no tier and are left to ``tweakVis`` on their main.
+    """
+    by_tier: dict[str, list] = {}
+    for controller in rig.controllers:
+        tier = controller.transform.meta.get(tags.TIER)
+        if tier is not None:
+            by_tier.setdefault(tier, []).append(controller)
+    if not by_tier:
+        return
+    vis = rig.scaffold.visibilities.transform
+    enum = vis[tier_attr_name(rig.instance.key)]
+    if not enum.exists():
+        enum.create("enum", items=list(TIER_ITEMS), default=ALL_INDEX, keyable=False)
+        enum.visible = True
+    is_all = enum.eq(ALL_INDEX, 1, 0)
+    is_all.node.rename(rig.name("vis", "all", suffix="cond"))
+    for tier, controllers in by_tier.items():
+        shown = enum.eq(TIERS.index(tier), 1, is_all)
+        shown.node.rename(rig.name("vis", tier, suffix="cond"))
+        for controller in controllers:
+            for shape in controller.transform.shapes:
+                shown >> shape["visibility"]
+
+
 def finalize(rig) -> None:
     """Tag a built module's outputs and sockets, and wire it to the scaffold."""
     wire_preferences(rig)
+    wire_tiers(rig)
     for name, node in rig.outputs.items():
         # Every output is a bind joint, so trg_kind must stay "deform" -
         # overwriting it with "output" would erase the classification that

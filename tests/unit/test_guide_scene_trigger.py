@@ -160,10 +160,13 @@ def test_build_is_undoable(scene):
 
 
 def test_visibility_attributes(scene):
+    """Once built into a rig, the preferences own the module's switches."""
     scene.create_guides(get_module("base")(name="body"))
-    Builder().build(document=scene.document, afterlife="keep")
+    report = Builder().build(document=scene.document, afterlife="keep")
+    prefs = report.scaffold.preferences.transform
     limb = tm.Transform("C_body_grp")
-    limb["controlVisibility"].value = False
+    assert limb["controlVisibility"].locked
+    prefs["controls"].value = False
     assert not tm.Transform("C_body_control_grp").visibility
     assert not tm.Transform("C_body_rig_grp").visibility
 
@@ -216,12 +219,12 @@ def test_old_scale_groups_are_gone(scene):
 
 def test_visibility_attributes_drive_the_new_groups(scene):
     ctx = _built(scene)
-    limb = ctx.groups.limb
-    limb["controlVisibility"].value = False
+    prefs = ctx.scaffold.preferences.transform
+    prefs["controls"].value = False
     assert not ctx.groups.control.visibility
-    limb["rigVisibility"].value = True
+    prefs["rig"].value = True
     assert ctx.groups.rig.visibility
-    limb["bindVisibility"].value = False
+    prefs["joints"].value = False
     assert not ctx.groups.bind.visibility
 
 
@@ -450,3 +453,25 @@ def test_deleting_a_module_takes_its_joints(guides):
     handle = guides.add("fkchain", side="L", name="arm")
     guides.remove(handle)
     assert guides.guide_nodes(handle.instance_id) == {}
+
+
+# ---------------------------------------------------------------- tiers
+def test_controller_defaults_to_primary_tier(scene):
+    ctx = _built(scene)
+    control = ctx.controller("hand", mirror="world")
+    assert control.transform.meta[tags.TIER] == "primary"
+
+
+def test_controller_accepts_a_tier_and_rejects_unknown_ones(scene):
+    ctx = _built(scene)
+    control = ctx.controller("hand", mirror="world", tier="secondary")
+    assert control.transform.meta[tags.TIER] == "secondary"
+    with pytest.raises(trigger.TriggerError):
+        ctx.controller("other", mirror="world", tier="quaternary")
+
+
+def test_tweaks_carry_no_tier(scene):
+    ctx = _built(scene)
+    main = ctx.controller("hand", mirror="world")
+    tweak = ctx.tweak_control(main)
+    assert tags.TIER not in tweak.transform.meta
