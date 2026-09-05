@@ -42,6 +42,12 @@ class RibbonModule(Module):
 
     joint_count = IntField(5, min=1, max=40, label="Joint Count")
     mid_count = IntField(1, min=0, max=10, label="Mid Controllers")
+    start_controller = BoolField(
+        False, label="Start Controller", help="An animatable control at the start pin"
+    )
+    end_controller = BoolField(
+        False, label="End Controller", help="An animatable control at the end pin"
+    )
     degree = IntField(3, min=1, max=3, group=DEFORMATION)
     scaleable = BoolField(
         True, help="Stretch-driven scaleX on the deform joints", group=DEFORMATION
@@ -60,6 +66,19 @@ class RibbonModule(Module):
         """One output per ribbon joint."""
         count = int((settings or {}).get("joint_count", cls.joint_count.default))
         return tuple(f"joint{index}" for index in range(count))
+
+    @classmethod
+    def control_names(cls, settings=None):
+        """The end controls, when asked for, around one control per mid."""
+        settings = settings or {}
+        count = int(settings.get("mid_count", cls.mid_count.default))
+        start = settings.get("start_controller", cls.start_controller.default)
+        end = settings.get("end_controller", cls.end_controller.default)
+        return (
+            *(("start",) if start else ()),
+            *(f"mid{index}" for index in range(count)),
+            *(("end",) if end else ()),
+        )
 
     # --------------------------------------------------------------- guides
     def draw_guides(self, guides) -> None:
@@ -85,8 +104,34 @@ class RibbonModule(Module):
             preserve_volume=self.preserve_volume,
             parent=rig.groups.rig,
         )
-        ribbon.pin_start(start_socket)
-        ribbon.pin_end(end_socket)
+        def end_control(role, socket, guide):
+            """A control between the socket and the pin, when asked for.
+
+            Driven through its offset group, never parented under the socket:
+            control_grp holds nothing but controllers and their offsets.
+            """
+            control = rig.controller(
+                role,
+                shape="Circle",
+                size=self.controller_size,
+                match=guide,
+                mirror="behaviour",
+            )
+            tm.MatrixConstraint.create(socket, control.offset, maintain_offset=True)
+            return control.transform
+
+        start_driver = (
+            end_control("start", start_socket, start_guide)
+            if self.start_controller
+            else start_socket
+        )
+        end_driver = (
+            end_control("end", end_socket, end_guide)
+            if self.end_controller
+            else end_socket
+        )
+        ribbon.pin_start(start_driver)
+        ribbon.pin_end(end_driver)
 
         if self.twist:
             # The construct exposes twist as bare float plugs and feeds
@@ -97,13 +142,16 @@ class RibbonModule(Module):
                 if rig.instance.inputs.get("reference")
                 else start_socket.parent
             )
+            # Read the *drivers*, not the sockets: with an end controller in
+            # play the socket no longer carries the pinned frame, and reading
+            # it would move the ribbon end without twisting it.
             if reference is not None:
                 (
-                    twist_plug(start_socket, reference, name=rig.name("startTwist"))
+                    twist_plug(start_driver, reference, name=rig.name("startTwist"))
                     >> ribbon.start_twist
                 )
             (
-                twist_plug(end_socket, start_socket, name=rig.name("endTwist"))
+                twist_plug(end_driver, start_driver, name=rig.name("endTwist"))
                 >> ribbon.end_twist
             )
 

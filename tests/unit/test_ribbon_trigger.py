@@ -33,6 +33,51 @@ def _built(**settings):
     return report.rigs[strip.instance_id]
 
 
+def test_ribbon_declares_its_controls():
+    assert RibbonModule.control_names({"mid_count": 2}) == ("mid0", "mid1")
+    assert RibbonModule.control_names(
+        {"mid_count": 1, "start_controller": True, "end_controller": True}
+    ) == ("start", "mid0", "end")
+
+
+def test_ribbon_end_controllers_are_off_by_default():
+    """No existing ribbon changes shape."""
+    module = RibbonModule()
+    assert module.start_controller is False
+    assert module.end_controller is False
+
+
+def test_ribbon_builds_end_controllers_when_asked():
+    ctx = _built(
+        joint_count=3, mid_count=1, start_controller=True, end_controller=True
+    )
+    assert ctx.controller_by_role("start") is not None
+    assert ctx.controller_by_role("end") is not None
+
+
+def test_ribbon_builds_no_end_controllers_by_default():
+    ctx = _built(joint_count=3, mid_count=1)
+    assert ctx.controller_by_role("start") is None
+    assert ctx.controller_by_role("end") is None
+
+
+def test_an_end_controller_drives_the_pin_and_the_twist():
+    """The twist must read the driver, or the ends and the roll disagree."""
+    ctx = _built(joint_count=3, mid_count=1, start_controller=True)
+    control = ctx.controller_by_role("start")
+    # the socket drives the offset group, never the controller directly
+    assert control.offset.parent.name == ctx.groups.control.name
+    assert cmds.listConnections(
+        control.offset.long_name, source=True, destination=False
+    )
+    # and the twist reads the controller, not the socket it hangs from
+    fed = cmds.listConnections(
+        control.transform.long_name, source=False, destination=True, plugs=True
+    )
+    assert any("startTwist" in plug for plug in fed)
+    assert any("endTwist" in plug for plug in fed)
+
+
 def test_mid_controllers_are_module_owned():
     ctx = _built(joint_count=4, mid_count=2)
     assert len(ctx.controllers) == 2
