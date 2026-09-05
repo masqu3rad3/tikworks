@@ -79,7 +79,7 @@ Referred to below as **`TPUI <path>`**.
 **Interfaces:**
 - Produces: `ModuleDiff.is_stale -> bool` (replaces `needs_regenerate`), `GuideDiff.not_drawn -> list[str]`, `GuideDiff.stale -> list[str]` (together they replace `GuideDiff.structural`). `ModuleDiff.needs_capture` and `GuideDiff.drifted` are unchanged.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/unit/test_reconcile_trigger.py`. The existing helpers `_document` and `_rendered` in that file build a one-module document and its rendering; read the top of the file and reuse them exactly as the existing tests do.
 
@@ -102,12 +102,12 @@ def test_not_drawn_is_not_clean():
     assert reconcile(_document(), []).is_clean is False
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `TP tests/unit/test_reconcile_trigger.py -k "not_drawn or is_stale"`
 Expected: FAIL with `AttributeError: 'GuideDiff' object has no attribute 'not_drawn'`.
 
-- [ ] **Step 3: Rewrite the two dataclasses' properties**
+- [x] **Step 3: Rewrite the two dataclasses' properties**
 
 In `reconcile.py`, replace `ModuleDiff.needs_regenerate` and `ModuleDiff.is_clean`:
 
@@ -157,7 +157,7 @@ Replace `GuideDiff.structural` with two properties:
         )
 ```
 
-- [ ] **Step 4: Update the module docstring**
+- [x] **Step 4: Update the module docstring**
 
 The table at the top of `reconcile.py` still says `absent` is resolved by regenerate. Replace the table and the paragraph under it:
 
@@ -183,7 +183,7 @@ Orphans and duplicates are never acted on automatically: they may be a
 rigger's scratch work, and destroying untracked scene content is not a repair.
 ```
 
-- [ ] **Step 5: Fix the existing tests in this file**
+- [x] **Step 5: Fix the existing tests in this file**
 
 `tests/unit/test_reconcile_trigger.py` references `diff.structural` on lines 43, 50, 59, 68, 81, 109, 118, 136, 156, 163 and `needs_regenerate` on 58, 80, 175. Change each `diff.structural` to `diff.stale` and each `.needs_regenerate` to `.is_stale`, **except** line 50 (`test_absent_module_is_structural`, or whatever the absent case is called) — that test now asserts `not_drawn`, so rewrite it as:
 
@@ -196,12 +196,12 @@ def test_absent_module_is_reported_as_not_drawn():
 
 Line 42's `assert diff.is_clean` and line 179's `test_empty_document_and_empty_scene_is_clean` stay as they are — an empty document has no modules, so nothing is not-drawn.
 
-- [ ] **Step 6: Run the whole file**
+- [x] **Step 6: Run the whole file**
 
 Run: `TP tests/unit/test_reconcile_trigger.py`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/python/tik/trigger/core/reconcile.py tests/unit/test_reconcile_trigger.py
