@@ -118,8 +118,12 @@ non-keyable and shown in the channel box. A separator row (the existing
 | `rigDisplay` | enum normal / template / reference | normal | every module's `rig_grp` override |
 | `joints` | bool | on | every module's `bind_grp` visibility |
 | `jointsDisplay` | enum normal / template / reference | normal | every module's `bind_grp` override |
-| `geometry` | bool | on | `geo_grp` visibility |
-| `geometryDisplay` | enum normal / template / reference | normal | `geo_grp` override |
+| `geo` | bool | on | `geo_grp` visibility |
+| `geoDisplay` | enum normal / template / reference | normal | `geo_grp` override |
+
+The geometry pair is named `geo`, not `geometry`: every Maya transform already
+owns a generic `geometry` attribute, and an ensure that reuses attributes by
+name would silently adopt it.
 
 Wiring. The module limb group keeps its three visibility attributes, because
 they are what makes a module testable on its own. `finalize` connects the
@@ -216,8 +220,8 @@ All new tests run under mayapy, matching the existing split.
   attributes. A second call creates nothing new and leaves changed attribute
   values alone. A scene with a bare untagged `rig_grp` is adopted and tagged
   with a warning. A scene missing only `geo_grp`, or only one attribute, is
-  healed. Transform channels on the groups are locked. `geometry` and
-  `geometryDisplay` drive `geo_grp`.
+  healed. Transform channels on the groups are locked. `geo` and
+  `geoDisplay` drive `geo_grp`.
 - **`tests/integration/trigger/test_builder_trigger.py`** gains the wiring
   cases. Every built module's group lands under `trigger_grp`. Toggling
   `controls`, `rig`, `joints` on preferences changes every module's group

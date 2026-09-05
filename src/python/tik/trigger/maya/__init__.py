@@ -24,16 +24,19 @@ _LAZY = {
     "ModuleRig": ".rig",
     "GuideDraft": ".rig",
     "RigGroups": ".rig",
+    "RigScaffold": ".scaffold",
+    "ensure_rig": ".scaffold",
+    "find_rig": ".scaffold",
 }
 
-__all__ = ["tags", *sorted(_LAZY)]
+__all__ = ["tags", "scaffold", *sorted(_LAZY)]
 
 
 def __getattr__(name: str):
     import importlib
 
-    if name == "tags":
-        return importlib.import_module(".tags", __name__)
+    if name in ("tags", "scaffold"):
+        return importlib.import_module(f".{name}", __name__)
     module = _LAZY.get(name)
     if module is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -172,8 +172,8 @@ PREFERENCE_DEFAULTS = {
     "rigDisplay": 0,
     "joints": 1,
     "jointsDisplay": 0,
-    "geometry": 1,
-    "geometryDisplay": 0,
+    "geo": 1,
+    "geoDisplay": 0,
 }
 
 
@@ -211,13 +211,13 @@ def test_preference_attributes_exist_with_defaults():
 def test_second_call_creates_nothing_and_keeps_values():
     first = scaffold.ensure_rig()
     first.preferences.transform["rig"].value = True
-    first.preferences.transform["geometryDisplay"].value = 2
+    first.preferences.transform["geoDisplay"].value = 2
     before = set(cmds.ls(long=True))
     second = scaffold.ensure_rig()
     assert set(cmds.ls(long=True)) == before
     assert second.root.long_name == first.root.long_name
     assert second.preferences.transform["rig"].value is True
-    assert second.preferences.transform["geometryDisplay"].value == 2
+    assert second.preferences.transform["geoDisplay"].value == 2
 
 
 def test_untagged_rig_grp_is_adopted_with_a_warning():
@@ -253,10 +253,10 @@ def test_geometry_preferences_drive_geo_grp():
     rig = scaffold.ensure_rig()
     prefs = rig.preferences.transform
     assert rig.geo.visibility
-    prefs["geometry"].value = False
+    prefs["geo"].value = False
     assert not rig.geo.visibility
     assert rig.geo["overrideEnabled"].value
-    prefs["geometryDisplay"].value = 2
+    prefs["geoDisplay"].value = 2
     assert rig.geo["overrideDisplayType"].value == 2
 ```
 
@@ -328,8 +328,8 @@ PREFERENCE_ATTRS = (
     ("rigDisplay", "enum", 0, {"items": list(DISPLAY_MODES)}),
     ("joints", "bool", True, {}),
     ("jointsDisplay", "enum", 0, {"items": list(DISPLAY_MODES)}),
-    ("geometry", "bool", True, {}),
-    ("geometryDisplay", "enum", 0, {"items": list(DISPLAY_MODES)}),
+    ("geo", "bool", True, {}),
+    ("geoDisplay", "enum", 0, {"items": list(DISPLAY_MODES)}),
 )
 DISPLAY_SEPARATOR = "display_"
 
@@ -412,13 +412,13 @@ def _ensure_preference_attrs(control: Controller) -> None:
 
 
 def _wire_geo(control: Controller, geo) -> None:
-    """geometry -> geo_grp.visibility, geometryDisplay -> its override type."""
+    """geo -> geo_grp.visibility, geoDisplay -> its override type."""
     prefs = control.transform
     if not geo["visibility"].get_input():
-        prefs["geometry"] >> geo["visibility"]
+        prefs["geo"] >> geo["visibility"]
     geo["overrideEnabled"].value = True
     if not geo["overrideDisplayType"].get_input():
-        prefs["geometryDisplay"] >> geo["overrideDisplayType"]
+        prefs["geoDisplay"] >> geo["overrideDisplayType"]
 
 
 def ensure_rig(events: Optional[Any] = None) -> RigScaffold:
@@ -1271,7 +1271,7 @@ scene, no name:
 rig_grp
 ├── trigger_grp            every <side>_<name>_grp
 │   ├── preferences_ctrl   rig-wide switches: cacheMode, controls, rig/rigDisplay,
-│   │                      joints/jointsDisplay, geometry/geometryDisplay
+│   │                      joints/jointsDisplay, geo/geoDisplay
 │   └── visibilities_ctrl  one enum per module: primary / secondary / tertiary / all
 └── geo_grp                what Import Model brings in
 ```
