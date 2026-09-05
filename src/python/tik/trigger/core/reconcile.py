@@ -8,17 +8,22 @@ The output separates the two kinds of drift, and the separation is the point:
 ===============================  ===========  ==============
 Drift                            Resolved by  Winner
 ===============================  ===========  ==============
-pose / guide attr differs        capture      the scene
-absent, missing, unexpected,     regenerate   the document
+pose / guide attr differs        Sync         the scene
+absent                           Draw         the document
+missing, unexpected,             Draw         the document
   wrong parent
 orphans, duplicates              reported     nothing
 ===============================  ===========  ==============
 
-A regenerate triggered by pose drift would teleport a guide away from where the
-rigger just dragged it, so ``needs_regenerate`` deliberately ignores
-``drifted``. Orphans and duplicates are never acted on automatically: they may
-be a rigger's scratch work, and destroying untracked scene content is not a
-repair.
+``absent`` is reported apart from the rest: a module with no joints is *not
+drawn*, which is the ordinary state of a new module, while ``missing`` and
+``unexpected`` mean a rendering exists and has gone out of date. Neither is
+ever repaired automatically -- only an explicit Draw rebuilds a rendering.
+
+A redraw triggered by pose drift would teleport a guide away from where the
+rigger just dragged it, so ``is_stale`` deliberately ignores ``drifted``.
+Orphans and duplicates are never acted on automatically: they may be a
+rigger's scratch work, and destroying untracked scene content is not a repair.
 """
 
 from __future__ import annotations
@@ -46,6 +51,9 @@ class RenderedGuide:
     attrs: dict = field(default_factory=dict)
     #: ``(instance_id, role, index)`` of the DAG parent guide, or None.
     parent: Optional[tuple] = None
+    #: Display key the joints were drawn under (``L_arm``). Empty when the
+    #: rendering was not made by regenerate and so recorded no key.
+    key: str = ""
 
     @property
     def pair(self) -> tuple:
@@ -63,11 +71,19 @@ class ModuleDiff:
     unexpected: list = field(default_factory=list)
     drifted: list = field(default_factory=list)
     parent_wrong: bool = False
+    #: The joints were drawn under a different display key -- a rename.
+    key_stale: bool = False
 
     @property
-    def needs_regenerate(self) -> bool:
-        """Structural staleness only. Never true merely because a guide moved."""
-        return bool(self.absent or self.missing or self.unexpected or self.parent_wrong)
+    def is_stale(self) -> bool:
+        """The rendering exists but no longer matches the entry.
+
+        Absence is deliberately excluded: a module with no joints is *not
+        drawn*, which is the normal state of a new module, not damage.
+        """
+        return bool(
+            self.missing or self.unexpected or self.parent_wrong or self.key_stale
+        )
 
     @property
     def needs_capture(self) -> bool:
@@ -76,8 +92,8 @@ class ModuleDiff:
 
     @property
     def is_clean(self) -> bool:
-        """True when neither a capture nor a redraw is needed."""
-        return not self.needs_regenerate and not self.needs_capture
+        """True when this module is drawn, current, and captured."""
+        return not (self.absent or self.is_stale or self.needs_capture)
 
 
 @dataclass
@@ -89,9 +105,14 @@ class GuideDiff:
     duplicates: list = field(default_factory=list)
 
     @property
-    def structural(self) -> list:
-        """Instance ids whose rendering must be rebuilt."""
-        return [key for key, diff in self.modules.items() if diff.needs_regenerate]
+    def not_drawn(self) -> list:
+        """Instance ids with no rendering at all. Not an error."""
+        return [key for key, diff in self.modules.items() if diff.absent]
+
+    @property
+    def stale(self) -> list:
+        """Instance ids whose rendering no longer matches the document."""
+        return [key for key, diff in self.modules.items() if diff.is_stale]
 
     @property
     def drifted(self) -> list:
@@ -100,8 +121,14 @@ class GuideDiff:
 
     @property
     def is_clean(self) -> bool:
-        """True when the scene and the document agree."""
-        return not (self.structural or self.drifted or self.orphans or self.duplicates)
+        """True when nothing is pending in either direction."""
+        return not (
+            self.not_drawn
+            or self.stale
+            or self.drifted
+            or self.orphans
+            or self.duplicates
+        )
 
 
 def _same(left, right, tolerance: float) -> bool:
@@ -161,6 +188,13 @@ def reconcile(
         module_diff.unexpected = sorted(pair for pair in seen if pair not in expected)
 
         root_pair = entry.guides[0].pair if entry.guides else None
+        # A rename changes the joints' names, and nothing else here would
+        # notice: guides are matched on the uuid tag. Compared against the key
+        # the rendering recorded, so an untagged guide stays silent.
+        root_guide = seen.get(root_pair) if root_pair else None
+        if root_guide is not None and root_guide.key:
+            module_diff.key_stale = root_guide.key != entry.key
+
         primary_source = None
         if primary_input_of is not None:
             name = primary_input_of(entry)

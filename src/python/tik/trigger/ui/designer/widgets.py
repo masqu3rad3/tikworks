@@ -56,6 +56,11 @@ class GuideTree(QtWidgets.QTreeWidget):
         self.setAlternatingRowColors(True)
         self.setUniformRowHeights(True)
         self.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        # the draw-state dot: which modules are in the scene, and which of
+        # those no longer match the session
+        from .delegates import GuideStateDelegate
+
+        self.setItemDelegateForColumn(0, GuideStateDelegate(self))
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         if event.key() == QtCore.Qt.Key_Tab:

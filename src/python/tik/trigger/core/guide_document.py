@@ -192,9 +192,6 @@ class GuideDocument:
     positions: dict = field(default_factory=dict)
     #: Graph collapse modes, keyed by instance_id or group_id.
     collapse: dict = field(default_factory=dict)
-    #: The guides are deliberately not drawn -- a build took them away. Runtime
-    #: only: it is not serialized, so reopening a file always draws them.
-    dismissed: bool = field(default=False, compare=False)
 
     def module(self, instance_id: str) -> Optional[ModuleEntry]:
         """The entry with ``instance_id``, or None."""

@@ -1,4 +1,4 @@
-"""The Guide Designer's bottom bar: three groups, split by what they act on."""
+"""The Guide Designer's bottom bar: two directions, one at each end."""
 
 import pytest
 
@@ -13,29 +13,56 @@ def bar(qapp):
     widget.deleteLater()
 
 
-def test_nothing_selected_disables_the_selection_group(bar):
-    bar.set_selection([])
-    assert bar.selection_label.text().endswith("none")
+def test_the_two_draw_buttons_emit(bar):
+    seen = []
+    bar.draw_selected_requested.connect(lambda: seen.append("selected"))
+    bar.draw_all_requested.connect(lambda: seen.append("all"))
+    bar.set_selection_enabled(True)
+    bar.draw_selected_button.click()
+    bar.draw_all_button.click()
+    assert seen == ["selected", "all"]
+
+
+def test_nothing_selected_disables_what_acts_on_a_selection(bar):
+    bar.set_selection_enabled(False)
+    assert not bar.draw_selected_button.isEnabled()
     assert not bar.select_button.isEnabled()
     assert not bar.mirror_button.isEnabled()
-    assert not bar.build_selected_button.isEnabled()
 
 
-def test_one_selection_names_it(bar):
-    """The label is the answer to 'what will Mirror mirror?'."""
-    bar.set_selection(["L_arm"])
-    assert bar.selection_label.text().endswith("L_arm")
-    assert bar.select_button.isEnabled()
-
-
-def test_several_selections_are_counted(bar):
-    bar.set_selection(["L_arm", "R_arm"])
-    assert "2 modules" in bar.selection_label.text()
-
-
-def test_build_all_never_depends_on_the_selection(bar):
-    bar.set_selection([])
+def test_draw_all_and_build_all_never_depend_on_the_selection(bar):
+    bar.set_selection_enabled(False)
+    assert bar.draw_all_button.isEnabled()
     assert bar.build_all_button.isEnabled()
+
+
+def test_pending_colours_each_end_independently(bar):
+    """One end says the scene is behind the session, the other says the
+    session is behind the scene. They must never blur together."""
+    bar.set_pending(stale_selected=True, stale_any=True, moved=False)
+    assert bar.draw_selected_button.property("alert") is True
+    assert bar.draw_all_button.property("alert") is True
+    assert bar.sync_button.property("alert") is False
+
+    bar.set_pending(stale_selected=False, stale_any=False, moved=True)
+    assert bar.draw_selected_button.property("alert") is False
+    assert bar.draw_all_button.property("alert") is False
+    assert bar.sync_button.property("alert") is True
+
+
+def test_stale_outside_the_selection_lights_only_draw_all(bar):
+    bar.set_pending(stale_selected=False, stale_any=True, moved=False)
+    assert bar.draw_selected_button.property("alert") is False
+    assert bar.draw_all_button.property("alert") is True
+
+
+def test_not_drawn_never_lights_the_bar(bar):
+    """Orange means out of date, never not-drawn. A freshly opened session is
+    entirely not-drawn, and that is its resting state, not a warning."""
+    bar.set_pending(stale_selected=False, stale_any=False, moved=False)
+    assert bar.draw_selected_button.property("alert") is False
+    assert bar.draw_all_button.property("alert") is False
+    assert bar.sync_button.property("alert") is False
 
 
 def test_the_auto_checkbox_reports_but_does_not_echo(bar):
@@ -48,36 +75,30 @@ def test_the_auto_checkbox_reports_but_does_not_echo(bar):
     assert seen == []
 
 
-def test_drift_shows_a_pill_only_when_there_is_drift(bar):
-    bar.set_drift(0)
-    assert not bar.drift_pill.isVisible()
-    assert bar.drift_pill.text() == ""
-    bar.set_drift(3)
-    assert bar.drift_pill.isVisible()
-    assert "3" in bar.drift_pill.text()
-
-
-def test_up_to_date_shows_only_when_auto_is_off_and_drift_is_clean(bar):
-    """Spec 2.3: a trailing 'up to date' only when Auto cannot say it for us."""
-    # default state: Auto on, no drift -- the label stays hidden
-    assert not bar.up_to_date_label.isVisible()
-
-    bar.set_auto_sync(False)
-    assert bar.up_to_date_label.isVisible()  # Auto off, scene already clean
-
-    bar.set_drift(2)
-    assert not bar.up_to_date_label.isVisible()  # drift trumps "up to date"
-
-    bar.set_drift(0)
-    assert bar.up_to_date_label.isVisible()  # clean again, Auto still off
-
+def test_auto_quietens_the_sync_button(bar):
     bar.set_auto_sync(True)
-    assert not bar.up_to_date_label.isVisible()  # Auto handles it now
+    assert bar.sync_button.property("quiet") is True
+    bar.set_auto_sync(False)
+    assert bar.sync_button.property("quiet") is False
 
 
-def test_the_scope_rule_is_a_hairline_not_a_bar(bar):
-    """A QFrame.VLine renders 5px wide under this theme; the divider that
-    keeps 'Build all' from reading as 'build what I picked' must not.
-    """
+def test_the_captions_name_where_the_data_lands(bar):
+    """The bar's geography is the explanation: a rigger who has read no spec
+    can still answer "which button writes to my scene?"."""
+    from tik.shared.ui.Qt import QtWidgets
+
+    captions = [
+        label.text()
+        for label in bar.findChildren(QtWidgets.QLabel)
+        if label.objectName() == "FieldCaption"
+    ]
+    assert "→ SCENE" in captions
+    assert "→ SESSION" in captions
+
+
+def test_the_scope_rules_are_hairlines_not_bars(bar):
+    """A QFrame.VLine renders 5px wide under this theme; the dividers that
+    separate the two directions must not."""
     bar.layout().activate()
-    assert bar.rule.width() == 1
+    assert bar.selection_rule.width() == 1
+    assert bar.build_rule.width() == 1

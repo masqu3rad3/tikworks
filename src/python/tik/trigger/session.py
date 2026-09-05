@@ -228,7 +228,7 @@ class Session:
             return False
         before = self.document.guides.to_dict()
         # poses only, never a redraw: capturing must not edit the scene
-        self.guides.sync(regenerate_stale=False)
+        self.guides.sync()
         document_store.write_stamp(self.session_id)
         return self.document.guides.to_dict() != before
 
@@ -265,24 +265,31 @@ class Session:
         incoming.checkout_guides(force=captured)
 
     def checkout_guides(self, force: bool = False) -> None:
-        """Project this session's guides into the scene. Document -> scene.
+        """Claim the scene for this session's guides. **Draws nothing.**
 
         The scene holds one checkout at a time. A scene stamped for another
         session is reported rather than silently adopted -- discarding someone
         else's working copy has to be a decision, not a side effect.
+
+        Two things this deliberately does not do. It does not *draw*: opening
+        a session must not put joints in a scene the rigger may have opened
+        for something else, so the modules arrive not-drawn and Draw is theirs
+        to press. And it only clears when the rendering belongs to somebody
+        else -- the Designer sub-tab checks out on every switch, and clearing
+        unconditionally would undraw the guides the rigger is working on.
         """
-        from tik.trigger.guides import document_store, regenerate
+        from tik.trigger.guides import document_store
 
         if not self._scene_available():
-            return  # headless: there is no scene to project into
-        if not force and not self.owns_scene_guides:
+            return  # headless: there is no scene to claim
+        ours = self.owns_scene_guides
+        if not force and not ours:
             raise SessionError(
                 "The guides in this scene belong to another session. Save that "
                 "session first, or check out with force=True."
             )
-        scene = self.guides
-        scene.clear_rendering()
-        regenerate.regenerate_all(scene.document)
+        if not ours:
+            self.guides.clear_rendering()
         document_store.write_stamp(self.session_id)
 
     # -------------------------------------------------------------- tree

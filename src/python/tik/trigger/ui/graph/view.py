@@ -12,6 +12,7 @@ from tik.shared.ui import theme
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.core.schemas import split_source
+from tik.trigger.ui.draw_state import DRAWN
 
 from .constants import (
     COLUMN_GAP,
@@ -42,6 +43,8 @@ class GraphView(QtWidgets.QGraphicsView):
         self.setObjectName("GraphView")
         self.guides = guides
         self.events = events
+        # {instance_id: draw state}; the Designer pushes it, see set_draw_states
+        self.draw_states: dict = {}
         self.graph = GraphScene(self)
         self.setScene(self.graph)
         self.setRenderHint(QtGui.QPainter.Antialiasing)
@@ -73,6 +76,15 @@ class GraphView(QtWidgets.QGraphicsView):
         self.graph.nodes_moved.connect(self.save_positions)
 
     # ------------------------------------------------------------ building
+    def set_draw_states(self, states: dict) -> None:
+        """``{instance_id: draw state}``, pushed in by the Designer.
+
+        Pushed rather than computed here on purpose: the tree and the graph
+        paint from *one* diff, so the graph must never go and scan the scene
+        for a second opinion.
+        """
+        self.draw_states = dict(states or {})
+
     def rebuild(self) -> None:
         """Redraw every node and wire from the document and its layout."""
         layout = self.guides.layout
@@ -168,6 +180,7 @@ class GraphView(QtWidgets.QGraphicsView):
                     primary_input=primary.name if primary else None,
                     mode=collapse.get(handle.key, MODE_FULL),
                     spaces=space_names,
+                    draw_state=self.draw_states.get(handle.instance_id, DRAWN),
                 ),
                 pos=pos,
             )

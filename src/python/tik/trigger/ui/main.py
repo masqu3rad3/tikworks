@@ -296,8 +296,29 @@ class TriggerWindow(MayaToolWindow):
             lambda: self._designer_call("test_build", True),
         )
         guides_menu.addSeparator()
-        # The four verbs that cross the session/scene line, together: pull from
-        # the scene, rebuild from the scene, wipe the scene.
+        # The verbs that cross the session/scene line, grouped by direction:
+        # Draw pushes the session into Maya, Sync and Snapshot pull back.
+        self._action(
+            guides_menu,
+            "Draw Selected Guides",
+            lambda: self._designer_call("draw_selected"),
+        )
+        self._action(
+            guides_menu,
+            "Draw All Guides",
+            lambda: self._designer_call("draw_all"),
+            "F5",
+        )
+        self.draw_on_create_action = self._action(
+            guides_menu,
+            "Draw New Modules",
+            lambda: self._designer_call(
+                "set_draw_on_create", self.draw_on_create_action.isChecked()
+            ),
+            checkable=True,
+        )
+        self.draw_on_create_action.setChecked(True)
+        guides_menu.addSeparator()
         self._action(
             guides_menu,
             "Sync From Scene",
@@ -319,9 +340,12 @@ class TriggerWindow(MayaToolWindow):
             lambda: self._designer_call("snapshot_guides"),
         )
         guides_menu.addSeparator()
+        # Not "Clear Scene Guides": this deletes every module from the
+        # session document, not just the rendering, and under the Draw/Sync
+        # vocabulary the old label read as "undraw everything".
         self._action(
             guides_menu,
-            "Clear Scene Guides",
+            "Delete All Modules",
             lambda: self._designer_call("clear_guides"),
         )
 
@@ -900,20 +924,15 @@ class TriggerWindow(MayaToolWindow):
         self._update_title()
 
     def _on_sub_tab_changed(self, view, index: int) -> None:
-        """The first time a session's Designer opens, its guides get the scene."""
+        """The first time a session's Designer opens, its guides get the scene.
+
+        Claiming the scene is all it does. Opening the Designer used to redraw
+        guides a build had cleared, which is exactly the kind of unasked-for
+        draw this design removes -- the modules are reported not-drawn and
+        Draw is the rigger's to press.
+        """
         if index == DESIGNER_TAB:
             self._hand_over_to(view)
-            # a build may have cleared the guides on purpose; opening the
-            # Designer is the ask to see them again
-            designer = view.designer
-            try:
-                if designer is not None and getattr(
-                    designer.guides, "dismissed", False
-                ):
-                    designer.guides.restore()
-                    designer.refresh()
-            except Exception as error:  # noqa: BLE001 - keep the tool alive
-                self.events.log(f"Could not redraw guides: {error}", level="warning")
         self._sync_menu_state()
         self._update_title()
 

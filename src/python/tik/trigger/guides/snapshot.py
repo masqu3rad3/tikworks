@@ -76,6 +76,7 @@ def snapshot() -> list:
                 rotate_order=int(cmds.getAttr(f"{node.long_name}.rotateOrder")),
                 attrs=_guide_attrs(node),
                 parent=parent_triple,
+                key=data.get(tags.DRAWN_KEY, ""),
             )
         )
     return found

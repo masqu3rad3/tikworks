@@ -37,12 +37,15 @@ from tik.trigger.core.schemas import split_source
 if TYPE_CHECKING:  # the scene layer imports Maya; the UI only needs the name
     from tik.trigger.guides import GuideHandle
 
+from tik.trigger.ui.draw_state import DRAWN, TOOLTIPS, states_from
+
 from ..graph import GraphView
 from ..iconography import icon_for_tile, module_icon
 from ..palette import SearchPalette
 from ..session_view import pane
 from .action_bar import DesignerActionBar
 from .commands import DesignerCommands
+from .delegates import DrawStateRole
 from .properties import DesignerProperties
 from .widgets import MIME_MODULE, GuideTree, InputRow, SceneNodesPanel, module_entries
 
@@ -50,15 +53,21 @@ SIDES = ("L", "R", "C", "Both", "Auto")
 
 
 def diff_summary(diff) -> str:
-    """One-line description of a reconcile result for the status strip.
+    """One line naming everything pending, for the status strip.
 
-    Pose drift is deliberately absent: it is capture's job, and calling it a
-    redraw would tell the rigger their guides are about to move when they are
-    not.
+    This is where the counts live now that the action bar carries none: the
+    bar says there is work in a direction, the tree and graph say which
+    modules, and this says how many. Both directions appear, in the order
+    they are read on the bar -- out of date and not drawn are Draw's, moved
+    is Sync's.
     """
     parts = []
-    if diff.structural:
-        parts.append(f"{len(diff.structural)} module(s) need redraw")
+    if diff.stale:
+        parts.append(f"{len(diff.stale)} out of date")
+    if diff.not_drawn:
+        parts.append(f"{len(diff.not_drawn)} not drawn")
+    if diff.drifted:
+        parts.append(f"{len(diff.drifted)} moved")
     if diff.orphans:
         parts.append(f"{len(diff.orphans)} orphan guide(s)")
     if diff.duplicates:
@@ -144,6 +153,10 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             "designer/auto_sync", True
         )
         self._apply_auto_sync(stored not in (False, "false", "0", 0))
+        drawing = QtCore.QSettings("tikworks", "trigger").value(
+            "designer/draw_on_create", True
+        )
+        self.guides.draw_on_create = drawing not in (False, "false", "0", 0)
         self.refresh()
 
     # ------------------------------------------------------------------ ui
@@ -274,7 +287,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.graph.edited.connect(self.refresh)
         self.action_bar.select_requested.connect(self.select_current)
         self.action_bar.mirror_requested.connect(self.mirror_current)
-        self.action_bar.build_selected_requested.connect(lambda: self.test_build())
+        self.action_bar.draw_selected_requested.connect(self.draw_selected)
+        self.action_bar.draw_all_requested.connect(self.draw_all)
         self.action_bar.build_all_requested.connect(
             lambda: self.test_build(all_modules=True)
         )
@@ -373,7 +387,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
     def _build_status(self) -> None:
         self.status_strip = QtWidgets.QWidget()
         self.status = StatusFields(
-            self.status_strip, ("session", "modules", "connections", "file")
+            self.status_strip,
+            ("session", "modules", "connections", "guides", "file"),
         )
         self.status.set_activity("Ready")
 
@@ -499,8 +514,21 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                         items[handle.instance_id] = item
                     break
                 pending = remaining
+            # One diff, four consumers: the tree's dots, the graph's
+            # stripes, the bar's colours and the status field. Computing it
+            # per pane would let them disagree about the same module.
+            try:
+                diff = self.guides.diff()
+            except Exception:  # noqa: BLE001 - a stub scene has no diff()
+                diff = None
+            states = states_from(diff) if diff is not None else {}
+            for instance_id, item in items.items():
+                state = states.get(instance_id, DRAWN)
+                item.setData(0, DrawStateRole, state)
+                item.setToolTip(0, TOOLTIPS[state])
             self.tree.expandAll()
             self.apply_tree_filter()
+            self.graph.set_draw_states(states)
             self.graph.rebuild()
             connections = self.guides.connections()
             externals = [
@@ -517,18 +545,6 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             notes = [f"{len(connections)} connection(s)"]
             if missing:
                 notes.append(f"{len(missing)} missing scene node(s)")
-            # Computed on every refresh, reported and nothing more: this is the
-            # substrate both lockstep and a checkpointed policy build on.
-            try:
-                if getattr(self.guides, "dismissed", False):
-                    # a build took them away on purpose; do not nag about it
-                    summary = "guides not drawn (cleared by a build)"
-                else:
-                    summary = diff_summary(self.guides.diff())
-            except Exception:  # noqa: BLE001 - a stub scene has no diff()
-                summary = ""
-            if summary:
-                notes.append(summary)
             self.status.set("connections", " · ".join(notes))
             kept = [items[instance_id] for instance_id in keep if instance_id in items]
             if kept:
@@ -547,6 +563,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 self._set_current_external(self._external)
             else:
                 self._set_current(None)
+            if diff is not None:
+                self._show_state(diff)
         finally:
             self._syncing = False
 
@@ -688,12 +706,12 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         if name == "SelectionChanged":
             return  # selection is not synced; structure changes are
         if not self.guides.auto_sync:
-            # Look, do not touch: report the drift and leave the document alone
-            # until the rigger presses Sync.
-            self._show_drift(self.guides.diff())
+            # Look, do not touch: report the state and leave the document
+            # alone until the rigger presses Sync.
+            self._show_state(self.guides.diff())
             return
-        # Muted throughout: sync() deletes and recreates joints, which fires the
-        # removal callback that brought us here and would re-enter.
+        # Sync itself cannot touch the scene any more, but the refresh that
+        # follows repaints from it, and muting keeps that off the watcher.
         with self.watcher.mute():
             try:
                 self.guides.sync()
@@ -701,35 +719,47 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 self.events.log(f"Guide sync failed: {error}", level="warning")
         self.refresh()
 
-    def _show_drift(self, diff) -> None:
-        """Report scene changes the document has not absorbed.
+    def _show_state(self, diff) -> None:
+        """Drive every indicator from one diff.
 
-        Structural staleness *and* pose drift, unlike ``diff_summary``, which
-        deliberately omits drift: that describes a redraw about to happen,
-        this describes the rigger's own work -- dragging a guide fires
-        nothing in Maya -- waiting to be picked up by a sync.
+        One scan, four consumers -- the bar, the tree, the graph and the
+        status field -- which is what stops the panes disagreeing about what
+        is in the scene.
         """
-        self.action_bar.set_drift(len(set(diff.structural) | set(diff.drifted)))
+        if self._torn_down:
+            return
+        selected = {handle.instance_id for handle in self.selected_handles()}
+        stale = set(diff.stale)
+        self.action_bar.set_pending(
+            stale_selected=bool(stale & selected),
+            stale_any=bool(stale),
+            moved=bool(diff.drifted),
+        )
+        self.status.set("guides", diff_summary(diff) or "up to date")
 
     def refresh_drift(self) -> None:
-        """Recompute the drift pill for whatever the scene looks like now.
+        """Recompute every indicator for whatever the scene looks like now.
 
-        With Auto off, ``_on_scene_event`` only ever sees ``SceneWatcher``
-        events (new/removed guides, scene open, undo/redo) -- dragging a
-        guide fires none of those, so the pose-drift half of the pill was
-        otherwise unreachable except by coincidence. The real workflow is
-        "drag guides in the viewport, look back at the Designer", so this is
-        called from ``showEvent`` (and mirrored in ``SessionView`` for the
-        sub-tab switch, since a page hidden behind another tab does not
-        always get a synchronous show event the first time it is built) --
-        one ``diff()`` per look, not a timer and not every ``SelectionChanged``,
-        which would mean a full scene snapshot on every viewport click.
-        With Auto on this is a no-op: the sync path already keeps the pill
-        current there.
+        Dragging a guide fires nothing in Maya, so ``_on_scene_event`` never
+        sees it and the "moved" half of the report is otherwise unreachable
+        except by coincidence. The real workflow is "drag guides in the
+        viewport, look back at the Designer", so this runs from ``showEvent``
+        (and is mirrored in ``SessionView`` for the sub-tab switch, since a
+        page hidden behind another tab does not always get a synchronous show
+        event the first time it is built) -- one ``diff()`` per look, not a
+        timer and not every ``SelectionChanged``, which would mean a full
+        scene snapshot on every viewport click.
+
+        Unlike before, this runs whatever Auto is set to: Auto only governs
+        Sync, and the *Draw* side of the report has to stay current either
+        way.
         """
-        if self._torn_down or self.guides.auto_sync:
+        if self._torn_down:
             return
-        self._show_drift(self.guides.diff())
+        try:
+            self._show_state(self.guides.diff())
+        except Exception:  # noqa: BLE001 - a stub scene has no diff()
+            pass
 
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
@@ -768,7 +798,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.status.set_activity(
                 "Select a module, or add one from the shelf (Tab to search)."
             )
-            self.action_bar.set_selection([])
+            self.action_bar.set_selection_enabled(False)
             return
         entry = handle.entry
         module_cls = handle.module_class
@@ -811,8 +841,19 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             )
         else:
             self.status.set_activity(f"{handle.key} — {module_cls.display_label()}")
-        self.action_bar.set_selection(
-            [handle.key for handle in (self._multi or ([handle] if handle else []))]
+        selected = self._multi or ([handle] if handle else [])
+        self.action_bar.set_selection_enabled(bool(selected))
+        # "Draw selected" lights only when *the selection* is out of date, so
+        # the two Draw buttons answer different questions.
+        try:
+            diff = self.guides.diff()
+        except Exception:  # noqa: BLE001 - a stub scene has no diff()
+            return
+        stale = set(diff.stale)
+        self.action_bar.set_pending(
+            stale_selected=bool(stale & {item.instance_id for item in selected}),
+            stale_any=bool(stale),
+            moved=bool(diff.drifted),
         )
 
     # -------------------------------------------------------------- teardown

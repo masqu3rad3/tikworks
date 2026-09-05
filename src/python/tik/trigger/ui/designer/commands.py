@@ -242,6 +242,63 @@ class DesignerCommands:
         finally:
             self.refresh()
 
+    def draw_selected(self) -> None:
+        """Draw the selected modules' guides into the scene."""
+        self._draw([handle.instance_id for handle in self.selected_handles()])
+
+    def draw_all(self) -> None:
+        """Draw every module's guides into the scene."""
+        self._draw(None)
+
+    def _draw(self, ids) -> None:
+        """Draw ``ids`` (None for all), asking first if posing is at risk.
+
+        The condition is the whole rule: ask if and only if the scoped diff
+        reports drift. Both exemptions fall out of it with no special case --
+        an undrawn module has no rendered guides so it cannot be drifted, and
+        an already-synced one has no drift either.
+        """
+        if ids is not None and not ids:
+            return
+        wanted = None if ids is None else set(ids)
+        diff = self.guides.diff()
+        dirty = [key for key in diff.drifted if wanted is None or key in wanted]
+        poses = "keep"
+        if dirty:
+            answer = Feedback(self).pop_question(
+                title="Redraw guides",
+                text=(
+                    f"{len(dirty)} module(s) have guides that were moved in the "
+                    "scene since the last sync."
+                ),
+                details="Redrawing rebuilds them from the session.",
+                buttons=[
+                    ("yes", "Sync and redraw"),
+                    ("discard", "Discard and redraw"),
+                    "cancel",
+                ],
+            )
+            if answer not in ("yes", "discard"):
+                return
+            poses = "keep" if answer == "yes" else "discard"
+        with self.watcher.mute():
+            try:
+                self.guides.draw(ids, poses=poses)
+            except TriggerError as error:
+                self.events.log(str(error), level="warning")
+        self.refresh()
+
+    def set_draw_on_create(self, on: bool) -> None:
+        """Persist whether creating a module also draws it (spec 2.2).
+
+        No sync or redraw afterwards: the flag only affects the *next* module
+        created, never anything already in the session.
+        """
+        self.guides.draw_on_create = bool(on)
+        QtCore.QSettings("tikworks", "trigger").setValue(
+            "designer/draw_on_create", bool(on)
+        )
+
     def sync_now(self) -> None:
         """Pull the scene into the session, whatever the Auto setting says."""
         diff = None
@@ -251,11 +308,9 @@ class DesignerCommands:
             except Exception as error:  # noqa: BLE001 - keep the tool alive
                 self.events.log(f"Guide sync failed: {error}", level="warning")
         self.refresh()
-        # sync() itself rescans after regenerate when it actually redrew
-        # anything, so its return value already reflects the post-fix scene
-        # -- a second diff() here would just repeat a walk sync() already
-        # did (or, worse, did twice) for the same answer
-        self._show_drift(diff if diff is not None else self.guides.diff())
+        # sync() returns the diff as the scene now stands, so there is nothing
+        # to rescan for: it cannot have changed the scene.
+        self._show_state(diff if diff is not None else self.guides.diff())
 
     def snapshot_guides(self) -> None:
         """Rebuild this session's modules from the guides in the scene.
@@ -275,7 +330,7 @@ class DesignerCommands:
             return
         session.snapshot_guides_from_scene(document)
         self.refresh()
-        self._show_drift(self.guides.diff())
+        self._show_state(self.guides.diff())
         self.events.log(f"Snapshot restored {len(report.modules)} module(s).")
 
     def set_auto_sync(self, on: bool) -> None:

@@ -124,17 +124,15 @@ def connect_space(rig, control, mode, targets, labels) -> None:
     )
 
 
-def apply_afterlife(instances, mode: str, document=None) -> None:
+def apply_afterlife(instances, mode: str) -> None:
     """What happens to the guides once the rig is built.
 
-    Anything but ``keep`` is a deliberate dismissal, and it has to be recorded:
-    the document outlives the rendering now, so without this the next reconcile
-    would helpfully draw every guide straight back.
+    Taking the guides away needs no record. The document outlives the
+    rendering and nothing redraws by itself, so the modules are simply
+    not drawn, and the rigger presses Draw when they want them back.
     """
     if mode == "keep":
         return
-    if document is not None:
-        document.dismissed = True
     if not cmds.objExists(tags.GUIDE_HOLDER):
         return
     holder = guide_nodes.holder()
@@ -226,7 +224,7 @@ class Builder:
                     instance, module_cls, inputs, by_key, report, known_keys
                 )
             self._connect_spaces(instances, report, by_key)
-            apply_afterlife(instances, afterlife, document)
+            apply_afterlife(instances, afterlife)
         self.events.log(f"Built {total} module(s) into '{rig_name}'.")
         return report
 

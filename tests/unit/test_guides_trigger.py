@@ -374,3 +374,16 @@ def test_new_scene_keeps_the_perspective_camera():
     assert cmds.xform(
         "persp", query=True, worldSpace=True, matrix=True
     ) == pytest.approx(matrix)
+
+
+def test_snapshot_records_the_key_the_guides_were_drawn_under(guides):
+    """reconcile compares this against the entry's key to catch a rename."""
+    from tik.trigger.guides.regenerate import regenerate_all
+    from tik.trigger.guides.snapshot import snapshot
+
+    handle = guides.add("fkchain", side="L", name="arm")
+    regenerate_all(guides.document)
+    keys = {
+        guide.key for guide in snapshot() if guide.instance_id == handle.instance_id
+    }
+    assert keys == {"L_arm"}

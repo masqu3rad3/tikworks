@@ -10,13 +10,16 @@ ROLE = "trg_role"  # guide role / output name / input name
 INDEX = "trg_index"  # guide index for multi roles
 SIDE = "trg_side"
 NAME = "trg_name"  # user facing instance name (root guide only)
+DRAWN_KEY = "trg_drawn_key"  # display key this guide was DRAWN under, e.g. "L_arm".
+# A record of the rendering, never of the module: identity is the uuid in INSTANCE
+# and the name is the document's. Written by create_guide_joint, read only by
+# snapshot() so reconcile can notice a rename (guides match on uuid, not on names).
 SETTINGS = "trg_settings"  # settings dict (root guide only)
 DESIGNER = "trg_designer"  # Guide Designer layout dict (guide holder only)
 ENTRY = "trg_entry"  # serialized ModuleEntry, stamped on the root guide joint by
 # regenerate(); read only by Snapshot Guides From Scene (guides/from_scene.py)
 DOCUMENT = "trg_document"  # scene groups / positions / collapse (guide holder only)
 SESSION = "trg_session"  # id of the session whose guides are checked out
-DISMISSED = "trg_dismissed"  # the guides are deliberately not rendered
 MIRROR = "trg_mirror"  # "behaviour" | "world" - how a pose-mirror tool treats it
 OUTPUT_NAME = "trg_output"  # declared output this node fulfils
 
