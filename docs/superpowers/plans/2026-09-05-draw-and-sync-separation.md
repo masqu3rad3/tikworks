@@ -1366,11 +1366,11 @@ already say all three things."
 **Interfaces:**
 - Produces: `DrawStateRole` (a `QtCore.Qt.UserRole + n` int), the string constants `NOT_DRAWN = "not_drawn"`, `DRAWN = "drawn"`, `STALE = "stale"`, and `GuideStateDelegate`. Task 13 sets `DrawStateRole` on each tree item.
 
-- [ ] **Step 1: Check the role number is free**
+- [x] **Step 1: Check the role number is free**
 
 Read `src/python/tik/trigger/ui/model.py` and note the highest `QtCore.Qt.UserRole + N` already used. Use the next free number, in `delegates.py`, not in `model.py` — `model.py` serves the pipeline tree.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `tests/ui/test_guide_state_delegate.py`:
 
@@ -1420,12 +1420,12 @@ def test_the_three_states_paint_differently():
     assert len({_painted(state).name() for state in (NOT_DRAWN, DRAWN, STALE)}) == 3
 ```
 
-- [ ] **Step 3: Run to verify it fails**
+- [x] **Step 3: Run to verify it fails**
 
 Run: `TPUI tests/ui/test_guide_state_delegate.py`
 Expected: FAIL with `ModuleNotFoundError: No module named 'tik.trigger.ui.designer.delegates'`.
 
-- [ ] **Step 4: Write the delegate**
+- [x] **Step 4: Write the delegate**
 
 Create `src/python/tik/trigger/ui/designer/delegates.py`:
 
@@ -1502,7 +1502,7 @@ class GuideStateDelegate(QtWidgets.QStyledItemDelegate):
             painter.restore()
 ```
 
-- [ ] **Step 5: Install it on the tree**
+- [x] **Step 5: Install it on the tree**
 
 In `widgets.py`, at the end of `GuideTree.__init__`:
 
@@ -1512,12 +1512,12 @@ In `widgets.py`, at the end of `GuideTree.__init__`:
         self.setItemDelegateForColumn(0, GuideStateDelegate(self))
 ```
 
-- [ ] **Step 6: Run to verify it passes**
+- [x] **Step 6: Run to verify it passes**
 
 Run: `TPUI tests/ui/test_guide_state_delegate.py`
 Expected: PASS. If `test_the_three_states_paint_differently` fails because the ring's centre pixel is the background, sample at the ring's edge instead — `GuideStateDelegate.GUTTER // 2 - GuideStateDelegate.DOT // 2` — and say so in the test's docstring.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/python/tik/trigger/ui/designer/delegates.py src/python/tik/trigger/ui/designer/widgets.py tests/ui/test_guide_state_delegate.py
