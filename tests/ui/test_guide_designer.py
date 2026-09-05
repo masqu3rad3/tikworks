@@ -972,3 +972,30 @@ def test_activating_the_designer_sub_tab_also_refreshes_drift(qapp):
         assert view.designer.action_bar.sync_button.property("alert") is True
     finally:
         view.teardown()
+
+
+def _control_items(designer):
+    """The options the anim-space table's control combo currently offers."""
+    table = designer.form.widget("anim_spaces")
+    combo = table.cell_widget(0, 0)
+    return tuple(combo.itemText(index) for index in range(combo.count()))
+
+
+def test_changing_segments_repaints_the_control_choices(designer):
+    """The anim-space combo must not offer controls the module stopped building."""
+    designer.set_side("L")
+    designer.create_guides("toy_chain")
+    designer.form.widget("segments").setValue(4)
+    # through add_row, so the row reaches the session the way the rigger's
+    # click does -- setValue only repaints the widget
+    designer.form.widget("anim_spaces").add_row(
+        {"control": "fk3", "mode": "parent", "label": "world"}
+    )
+    assert _control_items(designer) == ("fk0", "fk1", "fk2", "fk3")
+
+    designer.form.widget("segments").setValue(2)
+    # the row survives, marked, and the combo offers only what is built now
+    assert _control_items(designer) == ("fk0", "fk1", "fk3 (missing)")
+    assert designer.form.widget("anim_spaces").value() == [
+        {"control": "fk3", "mode": "parent", "label": "world"}
+    ]
