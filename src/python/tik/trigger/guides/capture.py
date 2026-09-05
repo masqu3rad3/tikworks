@@ -15,7 +15,7 @@ Pure apart from the optional scene read, so it unit-tests without Maya.
 from __future__ import annotations
 
 import contextlib
-from typing import Optional
+from typing import Iterable, Optional
 
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.guide_document import GuideDocument
@@ -39,12 +39,19 @@ def is_regenerating() -> bool:
     return _REGENERATING
 
 
-def capture(document: GuideDocument, rendered: Optional[list] = None) -> bool:
+def capture(
+    document: GuideDocument,
+    rendered: Optional[list] = None,
+    scope: Optional[Iterable[str]] = None,
+) -> bool:
     """Fold the scene's poses and guide attrs into ``document``.
 
     Args:
         document: Mutated in place.
         rendered: A ``RenderedGuide`` list; read from the scene when omitted.
+        scope: Instance ids to capture, or None for every module. Draw uses it
+            to capture exactly the modules it is about to redraw, without
+            quietly pulling the rest of the scene in as a side effect.
 
     Returns:
         True when anything changed.
@@ -62,8 +69,11 @@ def capture(document: GuideDocument, rendered: Optional[list] = None) -> bool:
     for guide in rendered:
         by_instance.setdefault(guide.instance_id, {})[guide.pair] = guide
 
+    wanted = None if scope is None else set(scope)
     changed = False
     for entry in document.modules:
+        if wanted is not None and entry.instance_id not in wanted:
+            continue
         found = by_instance.get(entry.instance_id)
         if not found:
             continue  # additive: nothing rendered, so nothing to say

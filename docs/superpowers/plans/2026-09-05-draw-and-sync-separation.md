@@ -414,7 +414,7 @@ reconcile needs it to notice a rename; nothing else reads it."
 **Interfaces:**
 - Produces: `capture(document, rendered=None, scope=None) -> bool`, where `scope` is an iterable of instance ids or None for every module.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Read `tests/unit/test_capture_trigger.py` for its existing document/rendered helpers and follow them. Append:
 
@@ -436,12 +436,12 @@ def test_scope_none_captures_everything():
 
 If `_two_module_document` / `_moved_rendering` do not exist, write them at the top of the file next to the existing helpers, building two `ModuleEntry` objects with one `GuideRecord` each at the origin, and a `RenderedGuide` per module at `(1.0, 2.0, 3.0)`.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `TP tests/unit/test_capture_trigger.py -k scope`
 Expected: FAIL with `TypeError: capture() got an unexpected keyword argument 'scope'`.
 
-- [ ] **Step 3: Add the parameter**
+- [x] **Step 3: Add the parameter**
 
 Change the signature and the loop in `capture.py`:
 
@@ -476,12 +476,12 @@ Add `from typing import Iterable, Optional` to the imports, and filter at the to
         found = by_instance.get(entry.instance_id)
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `TP tests/unit/test_capture_trigger.py`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/capture.py tests/unit/test_capture_trigger.py

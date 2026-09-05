@@ -149,3 +149,43 @@ def test_first_capture_records_a_rotation_the_document_never_had():
         is True
     )
     assert doc.module("id1").guide("root").rotation == (0.0, 0.0, 0.0)
+
+
+def two_modules():
+    """``id1`` and ``id2``, each with one guide at the origin."""
+    return GuideDocument(
+        modules=[
+            ModuleEntry(
+                instance_id,
+                "fkchain",
+                name,
+                "C",
+                guides=[
+                    GuideRecord(
+                        "root", position=(0.0, 0.0, 0.0), rotation=(0.0, 0.0, 0.0)
+                    )
+                ],
+            )
+            for instance_id, name in (("id1", "tail"), ("id2", "neck"))
+        ]
+    )
+
+
+def both_moved():
+    return [
+        RenderedGuide("id1", "root", 0, "n1", position=(1.0, 2.0, 3.0)),
+        RenderedGuide("id2", "root", 0, "n2", position=(4.0, 5.0, 6.0)),
+    ]
+
+
+def test_scope_limits_which_modules_are_captured():
+    doc = two_modules()
+    assert capture(doc, both_moved(), scope=["id1"]) is True
+    assert doc.module("id1").guide("root", 0).position == (1.0, 2.0, 3.0)
+    assert doc.module("id2").guide("root", 0).position == (0.0, 0.0, 0.0)
+
+
+def test_scope_none_captures_everything():
+    doc = two_modules()
+    assert capture(doc, both_moved()) is True
+    assert doc.module("id2").guide("root", 0).position == (4.0, 5.0, 6.0)
