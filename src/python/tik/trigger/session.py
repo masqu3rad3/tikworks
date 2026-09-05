@@ -228,7 +228,7 @@ class Session:
             return False
         before = self.document.guides.to_dict()
         # poses only, never a redraw: capturing must not edit the scene
-        self.guides.sync(regenerate_stale=False)
+        self.guides.sync()
         document_store.write_stamp(self.session_id)
         return self.document.guides.to_dict() != before
 

@@ -17,6 +17,7 @@ from tik.maya import naming
 from tik.maya.core.decorators import undo_chunk  # noqa: F401 - the guides' undo step
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import GuideError
+from tik.trigger.core.manifest import instance_key
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 from tik.trigger.maya import tags
 
@@ -81,9 +82,9 @@ def create_guide_joint(
             tags.ROLE: role,
             tags.INDEX: index,
             tags.SIDE: module.side.value,
-            # with SIDE, this is the display key the rendering was made
-            # under; reconcile compares it to catch a rename
-            tags.NAME: module.name,
+            # what this rendering was drawn as, so reconcile can notice a
+            # rename -- guides are matched on the uuid, never on names
+            tags.DRAWN_KEY: instance_key(module.name, module.side.value),
         },
     )
     joint.color = SIDE_COLORS.get(module.side.value, 17)

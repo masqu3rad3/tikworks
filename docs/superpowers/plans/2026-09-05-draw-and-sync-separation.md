@@ -510,7 +510,7 @@ by `draw_on_create` (default True). `create_guides()` keeps its name and its wri
 behaviour; `add()` writes the entry through `_write_entry()` and draws only when the flag is
 set. Opening a session, importing a `.trg` and checkout still draw nothing.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/unit/test_guide_scene_trigger.py`, using its existing `guides` fixture:
 
@@ -582,12 +582,12 @@ def test_draw_with_discard_rebuilds_at_the_stored_pose(guides):
 
 Add `import pytest`, `from maya import cmds` and `from tik.trigger.guides.snapshot import snapshot` at the top of the file if they are not already there.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `TP tests/unit/test_guide_scene_trigger.py -k "no_joints or leaves_the_joints or never_creates or keeps_poses or discard"`
 Expected: FAIL with `AttributeError: 'GuideScene' object has no attribute 'draw'`.
 
-- [ ] **Step 3: Split the entry write out of `create_guides`, and add the flag**
+- [x] **Step 3: Split the entry write out of `create_guides`, and add the flag**
 
 In `GuideScene.__init__`, beside `self.auto_sync = True`:
 
@@ -644,7 +644,7 @@ Then in `add()`, replace the `self.create_guides(...)` line:
             self._write_entry(module, parent=parent_ref, inputs=inputs)
 ```
 
-- [ ] **Step 4: Rewrite `_apply`**
+- [x] **Step 4: Rewrite `_apply`**
 
 Replace the whole `_apply` method:
 
@@ -664,7 +664,7 @@ Replace the whole `_apply` method:
 
 `entry` is now unused but every call site passes it; keep the parameter so the call sites are untouched.
 
-- [ ] **Step 5: Delete `dismissed` and `restore`, and rewrite `sync`**
+- [x] **Step 5: Delete `dismissed` and `restore`, and rewrite `sync`**
 
 Remove the `dismissed` property, its setter and `restore()` entirely (`scene.py:100-114`). Remove `self.dismissed = False` from `create_guides` (`scene.py:294`).
 
@@ -701,7 +701,7 @@ Replace `sync`:
 
 Add `Iterable` to the `typing` import at the top of `scene.py`.
 
-- [ ] **Step 6: Add `draw`**
+- [x] **Step 6: Add `draw`**
 
 Immediately after `sync`:
 
@@ -749,7 +749,7 @@ Immediately after `sync`:
         return self.diff()
 ```
 
-- [ ] **Step 7: Fix `test_build`**
+- [x] **Step 7: Fix `test_build`**
 
 `GuideScene.test_build` (`scene.py:676-683`) calls `self.sync(regenerate_stale=False)`. Replace its body's sync line with the full sync-then-draw preamble:
 
@@ -773,12 +773,12 @@ Immediately after `sync`:
         )
 ```
 
-- [ ] **Step 8: Run the tests**
+- [x] **Step 8: Run the tests**
 
 Run: `TP tests/unit/test_guide_scene_trigger.py`
 Expected: PASS. Tests that relied on a write redrawing the scene will fail — fix them by adding an explicit `guides.draw()`, which is the behaviour change this task exists to make.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/scene.py tests/unit/test_guide_scene_trigger.py

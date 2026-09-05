@@ -8,7 +8,9 @@ from tik.trigger.core.exceptions import GuideError
 from tik.trigger.guides import GuideScene
 
 
-def test_reparent_moves_root_guide_and_updates_parent_ref():
+def test_reparent_updates_the_parent_ref_and_the_dag_follows_on_draw():
+    """The joint hierarchy is a *rendering* of the connection, so reparenting
+    writes the document and the DAG catches up at the next Draw -- not before."""
     trigger.load_plugins()
     guides = GuideScene()
     body = guides.add("base", name="body")
@@ -16,9 +18,16 @@ def test_reparent_moves_root_guide_and_updates_parent_ref():
     assert tail.parent is None
     guides.reparent(tail, body)
     assert tail.parent.instance_id == body.instance_id
+    # the scene has not moved yet, and says so
+    assert (
+        cmds.listRelatives(tail.root.long_name, parent=True)[0] == "trigger_guides_grp"
+    )
+    assert tail.instance_id in guides.diff().stale
+    guides.draw([tail.instance_id])
     assert cmds.listRelatives(tail.root.long_name, parent=True)[0] == body.root.name
     guides.reparent(tail, None)
     assert tail.parent is None
+    guides.draw([tail.instance_id])
     assert (
         cmds.listRelatives(tail.root.long_name, parent=True)[0] == "trigger_guides_grp"
     )

@@ -6,7 +6,7 @@ The joint-level primitives it is built on live in :mod:`.nodes`.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from maya import cmds
 
@@ -44,6 +44,11 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         # Nothing in Maya fires when a guide is dragged, so a write that skipped
         # capture would redraw from stale records and discard the posing.
         self.auto_sync = True
+        # Creation is the one automatic draw left: the rigger just asked for
+        # the module and it has no joints yet, so nothing can be moved or
+        # discarded. It governs creation and nothing else -- it can never
+        # bring back the redraw-on-edit this design removed.
+        self.draw_on_create = True
 
     # ------------------------------------------------------- the document
     @property
@@ -62,17 +67,19 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
             self._session.touch()
 
     def _apply(self, entry) -> None:
-        """Persist an edit and redraw the module it touched.
+        """Record a document edit. **The scene is not touched.**
 
-        Capture comes first, and that is the whole point: **nothing in Maya
-        fires when a guide is dragged**, so the document only learns a pose
-        when we go and read it. A redraw that skipped this would rebuild from
-        stale records and throw the rigger's posing away -- which is exactly
-        what changing any property used to do.
+        This used to capture and then redraw the module. Both are gone: a
+        redraw that happens because a field changed is the tool moving the
+        rigger's work without being asked, and the capture only existed to
+        stop that redraw from rebuilding on stale records. With no redraw
+        there is nothing to protect against, and capture goes back to being a
+        deliberate act -- ``sync()``.
+
+        ``entry`` is kept so every call site reads as "apply this entry", and
+        so a future change can scope work to it without touching them all.
         """
-        capture(self.document, snapshot())
         self._touch()
-        regenerate(entry, self.document)
 
     def clear_rendering(self) -> None:
         """Delete every guide joint in the scene without touching the document.
@@ -99,40 +106,20 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         primary = registry.get_module(entry.module_type).primary_input()
         return primary.name if primary else None
 
-    @property
-    def dismissed(self) -> bool:
-        """True when the guides are deliberately not drawn (a build cleared them)."""
-        return self.document.dismissed
+    def sync(self, scope: Optional[Iterable[str]] = None):
+        """Read the scene's poses and guide attrs into the document.
 
-    @dismissed.setter
-    def dismissed(self, value: bool) -> None:
-        self.document.dismissed = bool(value)
-
-    def restore(self):
-        """Draw the guides again after a build took them away."""
-        self.dismissed = False
-        return self.sync()
-
-    def sync(self, regenerate_stale: bool = True):
-        """Capture, reconcile, and redraw whatever is structurally stale.
-
-        The order is the point (spec 5): capture runs first, so pose drift is
-        absorbed *before* reconcile sees it and can never be mistaken for a
-        reason to redraw a guide the rigger has just dragged.
+        One direction, always. Sync can create nothing, delete nothing and
+        move nothing: after this call the scene is what it was. Rebuilding a
+        rendering is :meth:`draw`'s job and only ever happens because
+        somebody pressed a button.
 
         Args:
-            regenerate_stale: False computes and reports without touching the
-                scene -- the checkpointed policy.
+            scope: Instance ids to capture, or None for every module.
 
         Returns:
-            The :class:`~tik.trigger.core.reconcile.GuideDiff`. Reflects the
-            scene as it now stands: if regenerate actually redrew anything,
-            the diff is recomputed afterwards so callers (the drift pill)
-            never see staleness this same call just fixed. When nothing was
-            regenerated -- nothing was stale, or ``dismissed`` forced the
-            redraw off -- the original diff comes back unchanged, which is
-            already accurate (``dismissed`` legitimately still reports its
-            outstanding staleness).
+            The :class:`~tik.trigger.core.reconcile.GuideDiff` as the scene
+            now stands.
         """
         from tik.trigger.core.reconcile import GuideDiff
 
@@ -140,30 +127,55 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
             return GuideDiff()
         self._syncing = True
         try:
-            rendered = snapshot()
-            if capture(self.document, rendered):
+            if capture(self.document, snapshot(), scope=scope):
                 self._touch()
-            diff = self.diff()
-            # a rendering that is *meant* to be absent is not damage
-            if regenerate_stale and self.dismissed:
-                regenerate_stale = False
-            if regenerate_stale and diff.structural:
-                with nodes.undo_chunk("Trigger lockstep redraw"):
-                    stale = [
-                        entry
-                        for entry in regenerate_module.ordered(self.document)
-                        if entry.instance_id in set(diff.structural)
-                    ]
-                    for entry in stale:
-                        regenerate(entry, self.document)
-                # GuideDiff.structural is a property over fixed ModuleDiff
-                # records -- nothing recomputes it just because the loop
-                # above mutated the scene. Rescan once, only here, so the
-                # diff we return matches what regenerate actually did.
-                diff = self.diff()
-            return diff
+            return self.diff()
         finally:
             self._syncing = False
+
+    def draw(self, scope: Optional[Iterable[str]] = None, poses: str = "keep"):
+        """Render modules into the scene, rebuilding what is already there.
+
+        The other direction, and the only thing that ever creates a guide
+        joint. Never automatic once a module exists: every call is a button
+        somebody pressed.
+
+        Args:
+            scope: Instance ids to draw, or None for every module.
+            poses: ``"keep"`` captures the scoped drift first, so a guide the
+                rigger has dragged goes back where they put it.
+                ``"discard"`` skips that capture and rebuilds at the stored
+                poses.
+
+        Returns:
+            The :class:`~tik.trigger.core.reconcile.GuideDiff` afterwards.
+
+        Raises:
+            GuideError: when ``poses`` is neither ``"keep"`` nor ``"discard"``.
+        """
+        if poses not in ("keep", "discard"):
+            raise GuideError(f"draw(poses={poses!r}): expected 'keep' or 'discard'.")
+        wanted = None if scope is None else set(scope)
+        entries = [
+            entry
+            for entry in regenerate_module.ordered(self.document)
+            if wanted is None or entry.instance_id in wanted
+        ]
+        if not entries:
+            return self.diff()
+        if poses == "keep":
+            # Scoped deliberately: drawing one module must not quietly pull
+            # the rest of the scene into the document as a side effect.
+            if capture(
+                self.document,
+                snapshot(),
+                scope=[entry.instance_id for entry in entries],
+            ):
+                self._touch()
+        with nodes.undo_chunk("Trigger draw guides"):
+            for entry in entries:
+                regenerate(entry, self.document)
+        return self.diff()
 
     def diff(self):
         """Reconcile the document against what the scene renders."""
@@ -253,10 +265,13 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         return SceneObserver(callback)
 
     # ---------------------------------------------------------- authoring
-    def create_guides(
-        self, module, parent=None, poses=None, inputs=None
-    ) -> ModuleInstance:
-        """Write a module's document entry, then render its guides."""
+    def _write_entry(self, module, parent=None, poses=None, inputs=None):
+        """Write a module's document entry. **Touches nothing in the scene.**
+
+        Split out of :meth:`create_guides` so ``add()`` can put a module in
+        the session without rendering it -- which is what lets opening a
+        session or importing a ``.trg`` leave the scene alone.
+        """
         from tik.trigger.core.guide_document import ModuleEntry, expand_guides
 
         if self.document.module(module.instance_id) is not None:
@@ -290,16 +305,32 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
                 record.position = tuple(pose.position)
                 record.rotation = tuple(pose.rotation)
                 record.rotate_order = pose.rotate_order
+        self.document.modules.append(entry)
+        self._touch()
+        return entry
+
+    def create_guides(
+        self, module, parent=None, poses=None, inputs=None
+    ) -> ModuleInstance:
+        """Write a module's document entry, draw it, and own the first render.
+
+        The draw is not optional here and the name says so: this is the
+        low-level call scripts and tests use to get guides into the scene.
+        The authoring path is :meth:`add`, which consults ``draw_on_create``.
+
+        The capture at the end is where a module's poses come from at all:
+        ``expand_guides`` writes unposed records and the module's own
+        ``draw_guides`` decides where its guides actually sit, so the
+        document only learns those positions by drawing once and reading
+        them back.
+        """
         with nodes.undo_chunk(f"Trigger guides: {module.name}"):
-            self.dismissed = False  # authoring again means showing them again
-            self.document.modules.append(entry)
+            entry = self._write_entry(module, parent, poses, inputs)
             created = regenerate(entry, self.document)
             if not created:
                 raise GuideError(f"'{module.module_type}' drew no guides.")
             if not poses:
-                # the first render defines the poses the document then owns
-                capture(self.document, snapshot())
-            self._touch()
+                capture(self.document, snapshot(), scope=[entry.instance_id])
         return nodes.instance_from_nodes(module.instance_id, created, entry=entry)
 
     def delete_guides(self, instance_id: str) -> None:
@@ -455,16 +486,22 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         inputs: Optional[dict] = None,
         **settings,
     ) -> GuideHandle:
-        """Draw a module's guides. ``parent`` also hangs the joints under that guide and
-        pre-fills the primary input; ``inputs`` sets connections explicitly without any
-        scene parenting (what the Guide Designer does)."""
+        """Add a module to the session, drawing it when ``draw_on_create`` is set.
+
+        ``parent`` also hangs the joints under that guide and pre-fills the primary
+        input; ``inputs`` sets connections explicitly without any scene parenting
+        (what the Guide Designer does).
+        """
         module_cls = registry.get_module(module_type)
         module = module_cls(name=name, side=side, settings=settings)
         module.name = self.unique_name(module.name, module.side.value)
         parent_ref = parent
         if isinstance(parent, GuideHandle):
             parent_ref = ParentRef(parent.instance_id, parent.module_class.guides.root)
-        self.create_guides(module, parent=parent_ref, inputs=inputs)
+        if self.draw_on_create:
+            self.create_guides(module, parent=parent_ref, inputs=inputs)
+        else:
+            self._write_entry(module, parent=parent_ref, inputs=inputs)
         return GuideHandle(self, module.instance_id)
 
     def unique_name(self, name: str, side: str) -> str:
@@ -673,12 +710,19 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
 
     # ------------------------------------------------------------- build
     def test_build(self, *handles: GuideHandle, rig_name: str = "test") -> Any:
-        """Build the given modules (or every module) into a throwaway rig."""
-        scope = [handle.instance_id for handle in handles] or "scene"
+        """Build the given modules (or every module) into a throwaway rig.
+
+        Draws first, and has to: ``find_instances`` reads tagged joints, so a
+        module nobody has drawn contributes nothing and would be skipped in
+        silence. The sync before it makes that draw lossless, which is why
+        this path never has to ask about discarding poses.
+        """
+        ids = [handle.instance_id for handle in handles]
+        scope = ids or "scene"
         from tik.trigger.maya.build import Builder
 
-        # poses may have been edited by hand since the last sync
-        self.sync(regenerate_stale=False)
+        self.sync()
+        self.draw(ids or None)
         return Builder(self.events).build(
             scope=scope, document=self.document, rig_name=rig_name, afterlife="keep"
         )

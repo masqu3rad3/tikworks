@@ -90,11 +90,16 @@ def test_guides_survive_a_new_scene():
     assert session.guides.get(handle.instance_id).name == "tail"
 
 
-def test_a_new_scene_redraws_the_guides_on_the_next_sync():
+def test_a_new_scene_leaves_the_guides_not_drawn_until_draw():
+    """Sync cannot put a joint back. Losing the scene is not losing the module:
+    the document still has it, reported as not drawn, and Draw renders it."""
     session = Session()
     handle = session.guides.add("fkchain", side="C", name="tail", segments=2)
     cmds.file(new=True, force=True)
     session.guides.sync()
+    assert session.guides.guide_nodes(handle.instance_id) == {}
+    assert session.guides.diff().not_drawn == [handle.instance_id]
+    session.guides.draw()
     assert len(session.guides.guide_nodes(handle.instance_id)) == 3
 
 

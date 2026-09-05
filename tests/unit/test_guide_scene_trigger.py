@@ -374,3 +374,79 @@ def test_connect_space_builds_a_named_switch(scene):
         "parentSwitch", node=main.transform.long_name, listEnum=True
     )[0]
     assert listed.split(":") == ["chest", "head"]
+
+
+# --------------------------------------------------------- Draw and Sync
+# The two directions, and the guarantee that neither does the other's job.
+
+
+def test_adding_a_module_draws_it_by_default(guides):
+    handle = guides.add("fkchain", side="L", name="arm")
+    assert guides.guide_nodes(handle.instance_id) != {}
+    assert guides.diff().not_drawn == []
+
+
+def test_adding_a_module_draws_nothing_when_the_setting_is_off(guides):
+    guides.draw_on_create = False
+    handle = guides.add("fkchain", side="L", name="arm")
+    assert guides.guide_nodes(handle.instance_id) == {}
+    assert guides.diff().not_drawn == [handle.instance_id]
+
+
+def test_a_module_added_undrawn_still_draws_at_its_own_defaults(guides):
+    """expand_guides writes unposed records; draw_guides decides where they go."""
+    guides.draw_on_create = False
+    handle = guides.add("fkchain", side="L", name="arm")
+    guides.draw()
+    root = guides.guide_node(handle.instance_id, "root")
+    assert root.exists()
+
+
+def test_changing_a_setting_leaves_the_joints_alone(guides):
+    handle = guides.add("fkchain", side="L", name="arm", segments=3)
+    before = {
+        node.long_name for node in guides.guide_nodes(handle.instance_id).values()
+    }
+    handle.segments = 5
+    after = {node.long_name for node in guides.guide_nodes(handle.instance_id).values()}
+    assert after == before
+    assert guides.diff().stale == [handle.instance_id]
+
+
+def test_sync_never_creates_or_deletes_a_joint(guides):
+    from tik.trigger.guides.snapshot import snapshot
+
+    handle = guides.add("fkchain", side="L", name="arm", segments=3)
+    handle.segments = 5  # the rendering is now stale; sync must not fix it
+    before = {guide.node for guide in snapshot()}
+    guides.sync()
+    assert {guide.node for guide in snapshot()} == before
+
+
+def test_draw_keeps_poses_by_default(guides):
+    handle = guides.add("fkchain", side="L", name="arm", segments=3)
+    root = guides.guide_node(handle.instance_id, "root")
+    cmds.xform(root.long_name, worldSpace=True, translation=(7.0, 0.0, 0.0))
+    guides.draw([handle.instance_id])
+    moved = guides.guide_node(handle.instance_id, "root")
+    assert cmds.xform(
+        moved.long_name, query=True, worldSpace=True, translation=True
+    )[0] == pytest.approx(7.0)
+
+
+def test_draw_with_discard_rebuilds_at_the_stored_pose(guides):
+    handle = guides.add("fkchain", side="L", name="arm", segments=3)
+    root = guides.guide_node(handle.instance_id, "root")
+    stored = cmds.xform(root.long_name, query=True, worldSpace=True, translation=True)
+    cmds.xform(root.long_name, worldSpace=True, translation=(7.0, 0.0, 0.0))
+    guides.draw([handle.instance_id], poses="discard")
+    moved = guides.guide_node(handle.instance_id, "root")
+    assert cmds.xform(
+        moved.long_name, query=True, worldSpace=True, translation=True
+    )[0] == pytest.approx(stored[0])
+
+
+def test_deleting_a_module_takes_its_joints(guides):
+    handle = guides.add("fkchain", side="L", name="arm")
+    guides.remove(handle)
+    assert guides.guide_nodes(handle.instance_id) == {}

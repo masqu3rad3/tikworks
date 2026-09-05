@@ -12,7 +12,6 @@ from typing import Optional
 from maya import cmds
 
 import tik.maya as tm
-from tik.trigger.core.manifest import instance_key
 from tik.trigger.core.reconcile import RenderedGuide
 from tik.trigger.maya import tags
 
@@ -77,11 +76,7 @@ def snapshot() -> list:
                 rotate_order=int(cmds.getAttr(f"{node.long_name}.rotateOrder")),
                 attrs=_guide_attrs(node),
                 parent=parent_triple,
-                key=(
-                    instance_key(data[tags.NAME], data.get(tags.SIDE, "C"))
-                    if data.get(tags.NAME)
-                    else ""
-                ),
+                key=data.get(tags.DRAWN_KEY, ""),
             )
         )
     return found
