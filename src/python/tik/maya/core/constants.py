@@ -5,7 +5,10 @@ from __future__ import annotations
 from maya import cmds
 
 #: The nine transform channels, in channel-box order.
-TRANSFORM_CHANNELS = ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz")
+TRANSLATE_CHANNELS = ("tx", "ty", "tz")
+ROTATE_CHANNELS = ("rx", "ry", "rz")
+SCALE_CHANNELS = ("sx", "sy", "sz")
+TRANSFORM_CHANNELS = TRANSLATE_CHANNELS + ROTATE_CHANNELS + SCALE_CHANNELS
 
 #: The transform channels plus visibility.
 ALL_CHANNELS = TRANSFORM_CHANNELS + ("v",)

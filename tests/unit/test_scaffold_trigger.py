@@ -99,7 +99,7 @@ def test_missing_pieces_are_healed():
 def test_group_channels_are_locked_and_hidden():
     rig = scaffold.ensure_rig()
     for group in (rig.root, rig.trigger, rig.geo):
-        for channel in tm.TRANSFORM_CHANNELS:
+        for channel in tm.SCALE_CHANNELS:
             assert group[channel].locked, f"{group.name}.{channel}"
             assert not group[channel].visible, f"{group.name}.{channel}"
 

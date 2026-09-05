@@ -60,7 +60,7 @@ def _log(events, message: str, level: str = "warning") -> None:
 
 
 def _lock_channels(node) -> None:
-    for channel in tm.TRANSFORM_CHANNELS:
+    for channel in tm.SCALE_CHANNELS:
         plug = node[channel]
         plug.locked = True
         plug.visible = False
@@ -83,7 +83,7 @@ def _ensure_group(name: str, parent, kind: str, events) -> tm.Transform:
     return node
 
 
-def _ensure_control(name: str, parent, kind: str, shape: str, events) -> Controller:
+def _ensure_control(name: str, parent, kind: str, shape: str, events, size=1.0) -> Controller:
     """The controller ``name`` under ``parent``, tagged ``kind``."""
     path = f"{parent.long_name}|{name}"
     if cmds.objExists(path):
@@ -99,9 +99,12 @@ def _ensure_control(name: str, parent, kind: str, shape: str, events) -> Control
             node.meta[tags.KIND] = kind
         return control
     control = Controller.create(
-        name=name, shape=shape, size=1.0, parent=parent.long_name
+        name=name, shape=shape, size=1.0, parent=parent.long_name, color=(1,1,0)
     )
     control.transform.meta[tags.KIND] = kind
+    control.transform["rotate"].set([90,0,0]) # set to upright
+    control.transform["scale"].set((size,size,size))
+    control.transform.freeze()
     _lock_channels(control.transform)
     return control
 
@@ -139,11 +142,13 @@ def ensure_rig(events: Optional[Any] = None) -> RigScaffold:
     trigger = _ensure_group(TRIGGER_GRP, root, tags.RIG_TRIGGER, events)
     geo = _ensure_group(GEO_GRP, root, tags.RIG_GEO, events)
     preferences = _ensure_control(
-        PREFERENCES_CTRL, trigger, tags.PREFERENCES, "Settings", events
+        PREFERENCES_CTRL, trigger, tags.PREFERENCES, "P", events, size=1.0
     )
     visibilities = _ensure_control(
-        VISIBILITIES_CTRL, trigger, tags.VISIBILITIES, "Cog", events
+        VISIBILITIES_CTRL, trigger, tags.VISIBILITIES, "Cog", events, size=0.5
     )
+    # move the preferences a bit higher
+    visibilities.transform["translateX"].set(1)
     _ensure_preference_attrs(preferences)
     _wire_geo(preferences, geo)
     return RigScaffold(
