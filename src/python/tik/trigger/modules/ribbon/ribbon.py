@@ -104,6 +104,7 @@ class RibbonModule(Module):
             preserve_volume=self.preserve_volume,
             parent=rig.groups.rig,
         )
+
         def end_control(role, socket, guide):
             """A control between the socket and the pin, when asked for.
 

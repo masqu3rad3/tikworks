@@ -23,11 +23,7 @@ from tik.trigger.core import (
     Vector2Field,
     register_module,
 )
-from tik.trigger.systems.limb import (
-    _derive_size,
-    build_ikfk_limb,
-    limb_control_names,
-)
+from tik.trigger.systems.limb import _derive_size, build_ikfk_limb, limb_control_names
 from tik.trigger.systems.limb_lock import build_limb_lock
 from tik.trigger.systems.reach import ReachAxis, build_reach
 

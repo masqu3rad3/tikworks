@@ -48,9 +48,7 @@ def test_ribbon_end_controllers_are_off_by_default():
 
 
 def test_ribbon_builds_end_controllers_when_asked():
-    ctx = _built(
-        joint_count=3, mid_count=1, start_controller=True, end_controller=True
-    )
+    ctx = _built(joint_count=3, mid_count=1, start_controller=True, end_controller=True)
     assert ctx.controller_by_role("start") is not None
     assert ctx.controller_by_role("end") is not None
 

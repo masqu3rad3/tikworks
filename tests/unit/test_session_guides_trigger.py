@@ -224,9 +224,7 @@ def test_validate_reports_a_module_warning():
     """A broken space is caught before Build, not during it."""
     session = Session()
     chain = session.guides.add("fkchain", side="C", name="tail", segments=2)
-    chain.set(
-        anim_spaces=[{"control": "fk5", "mode": "parent", "label": "world"}]
-    )
+    chain.set(anim_spaces=[{"control": "fk5", "mode": "parent", "label": "world"}])
     problems = session.validate()
     assert any("fk5" in item and item.startswith("warning:") for item in problems)
 

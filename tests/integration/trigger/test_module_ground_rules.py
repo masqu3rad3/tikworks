@@ -117,9 +117,9 @@ def test_every_module_declares_exactly_the_controllers_it_builds(module_type):
     for settings in CONTROL_VARIATIONS.get(module_type, [{}]):
         ctx = _built_with(module_type, settings)
         declared = sorted(module_cls.control_names(ctx.instance.settings))
-        assert _built_control_roles(ctx) == declared, (
-            f"{module_type} at {settings or 'defaults'}: manifest and build disagree"
-        )
+        assert (
+            _built_control_roles(ctx) == declared
+        ), f"{module_type} at {settings or 'defaults'}: manifest and build disagree"
 
 
 @pytest.fixture
