@@ -81,6 +81,9 @@ def create_guide_joint(
             tags.ROLE: role,
             tags.INDEX: index,
             tags.SIDE: module.side.value,
+            # with SIDE, this is the display key the rendering was made
+            # under; reconcile compares it to catch a rename
+            tags.NAME: module.name,
         },
     )
     joint.color = SIDE_COLORS.get(module.side.value, 17)

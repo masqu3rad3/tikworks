@@ -314,7 +314,7 @@ matched on their uuid tag, never on their names."
 - Consumes: `RenderedGuide.key` from Task 2.
 - Produces: every guide joint carries `tags.NAME` and `tags.SIDE`; `snapshot()` fills `RenderedGuide.key`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/test_guides_trigger.py`. Read the file's existing fixtures first — it already has a `guides` fixture that builds a `GuideScene` in a fresh scene; use it the way the neighbouring tests do.
 
@@ -337,12 +337,12 @@ def test_snapshot_records_the_key_the_guides_were_drawn_under(guides):
     regenerate_all(guides.document)
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `TP tests/unit/test_guides_trigger.py -k drawn_under`
 Expected: FAIL — `keys == {""}`.
 
-- [ ] **Step 3: Stamp the name**
+- [x] **Step 3: Stamp the name**
 
 In `nodes.create_guide_joint`, add `tags.NAME` to the `tags.tag(...)` call:
 
@@ -369,7 +369,7 @@ Update `tags.py`'s comment on `NAME`, which claims "root guide only":
 NAME = "trg_name"  # user facing instance name; with SIDE, the drawn display key
 ```
 
-- [ ] **Step 4: Read it back in the snapshot**
+- [x] **Step 4: Read it back in the snapshot**
 
 In `snapshot.py`, import the pure key helper at the top:
 
@@ -387,12 +387,12 @@ and add the field to the `RenderedGuide(...)` construction, after `attrs=...`:
                 else "",
 ```
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 Run: `TP tests/unit/test_guides_trigger.py -k drawn_under`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/nodes.py src/python/tik/trigger/guides/snapshot.py src/python/tik/trigger/maya/tags.py tests/unit/test_guides_trigger.py
