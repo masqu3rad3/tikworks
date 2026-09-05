@@ -349,3 +349,24 @@ def test_a_script_can_extend_the_preferences_control():
     )
     Runner().run(doc, "D:/x")
     assert cmds.attributeQuery("exportLod", node="preferences_ctrl", exists=True)
+
+
+def test_the_runner_enters_one_script_space_per_run_and_tears_it_down():
+    import sys
+
+    seen = []
+
+    class Peek(Action):
+        def run(self, ctx):
+            seen.append((ctx.scripts, "trigger_build" in sys.modules))
+            ctx.scripts.add_path(ctx.base_dir + "/scripts")
+
+    register_action("peek", category="build")(Peek)
+    doc = Document()
+    doc.add(ActionNode("a", "peek"))
+    doc.add(ActionNode("b", "peek"))
+    Runner().run(doc, "D:/nowhere")
+    assert len(seen) == 2
+    assert seen[0][0] is seen[1][0]  # one space for the run
+    assert seen[0][1] and seen[1][1]
+    assert "trigger_build" not in sys.modules
