@@ -66,3 +66,23 @@ def test_power_uses_a_supported_node():
     assert abs(result.value - 8.0) < 1e-6
     expected = "power" if NodeNames.uses_native_math_nodes else "multiplyDivide"
     assert result.node.type == expected
+
+
+def test_eq_switches_branches():
+    _node, plugs = _holder(a=2.0)
+    result = plugs["a"].eq(2.0, 1.0, 0.0)
+    assert abs(result.value - 1.0) < 1e-6
+    plugs["a"].value = 3.0
+    assert abs(result.value - 0.0) < 1e-6
+
+
+def test_eq_result_can_be_nested():
+    """The tier network nests: if all -> 1 else (if tier -> 1 else 0)."""
+    _node, plugs = _holder(a=3.0)
+    inner = plugs["a"].eq(1.0, 1.0, 0.0)
+    outer = plugs["a"].eq(3.0, 1.0, inner)
+    assert abs(outer.value - 1.0) < 1e-6
+    plugs["a"].value = 1.0
+    assert abs(outer.value - 1.0) < 1e-6
+    plugs["a"].value = 2.0
+    assert abs(outer.value - 0.0) < 1e-6
