@@ -32,6 +32,7 @@ def rendered(instance_id="id1", pairs=(("root", 0), ("segment", 0)), positions=N
             node=f"{role}{index}_guide",
             position=positions[(role, index)],
             parent=parents.get((role, index)),
+            key="tail",  # entry() names the module "tail" on the centre side
         )
         for role, index in pairs
     ]
@@ -194,3 +195,19 @@ def test_missing_guide_is_stale_not_not_drawn():
 
 def test_not_drawn_is_not_clean():
     assert reconcile(GuideDocument(modules=[entry()]), []).is_clean is False
+
+
+def test_renamed_entry_is_stale_when_the_joints_carry_the_old_key():
+    document = GuideDocument(modules=[entry(name="frontLeg")])
+    diff = reconcile(document, rendered())
+    assert diff.stale == ["id1"]
+    assert diff.modules["id1"].key_stale is True
+
+
+def test_an_untagged_rendering_is_never_key_stale():
+    """A guide with no recorded key says nothing about the name."""
+    scene = rendered()
+    for guide in scene:
+        guide.key = ""
+    diff = reconcile(GuideDocument(modules=[entry()]), scene)
+    assert diff.modules["id1"].key_stale is False

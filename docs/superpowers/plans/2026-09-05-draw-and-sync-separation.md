@@ -225,7 +225,7 @@ Without the auto-redraw, renaming `L_arm` to `L_frontLeg` leaves joints called `
 - Consumes: `ModuleDiff.is_stale` from Task 1.
 - Produces: `RenderedGuide.key: str` (default `""`), `ModuleDiff.key_stale: bool`. Task 3 fills `RenderedGuide.key` from the scene.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_renamed_entry_is_stale_when_the_joints_carry_the_old_key():
@@ -247,12 +247,12 @@ def test_an_untagged_rendering_is_never_key_stale():
 
 For the first test to be meaningful, `_rendered()` must stamp a key. Update the helper at the top of the file so every `RenderedGuide` it builds carries `key="arm"` (matching `_document()`'s module name and centre side). Read the helper before editing — if `_document()` uses a different name or side, use `instance_key(name, side)` for that pair instead of the literal.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `TP tests/unit/test_reconcile_trigger.py -k key_stale`
 Expected: FAIL with `TypeError: RenderedGuide.__init__() got an unexpected keyword argument 'key'`.
 
-- [ ] **Step 3: Add the field, the flag and the check**
+- [x] **Step 3: Add the field, the flag and the check**
 
 In `RenderedGuide`, after `attrs`:
 
@@ -287,12 +287,12 @@ In `reconcile`, inside the `for entry in document.modules:` loop, immediately af
             module_diff.key_stale = root_guide.key != entry.key
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `TP tests/unit/test_reconcile_trigger.py`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/core/reconcile.py tests/unit/test_reconcile_trigger.py

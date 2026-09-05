@@ -51,6 +51,9 @@ class RenderedGuide:
     attrs: dict = field(default_factory=dict)
     #: ``(instance_id, role, index)`` of the DAG parent guide, or None.
     parent: Optional[tuple] = None
+    #: Display key the joints were drawn under (``L_arm``). Empty when the
+    #: rendering was not made by regenerate and so recorded no key.
+    key: str = ""
 
     @property
     def pair(self) -> tuple:
@@ -68,6 +71,8 @@ class ModuleDiff:
     unexpected: list = field(default_factory=list)
     drifted: list = field(default_factory=list)
     parent_wrong: bool = False
+    #: The joints were drawn under a different display key -- a rename.
+    key_stale: bool = False
 
     @property
     def is_stale(self) -> bool:
@@ -76,7 +81,9 @@ class ModuleDiff:
         Absence is deliberately excluded: a module with no joints is *not
         drawn*, which is the normal state of a new module, not damage.
         """
-        return bool(self.missing or self.unexpected or self.parent_wrong)
+        return bool(
+            self.missing or self.unexpected or self.parent_wrong or self.key_stale
+        )
 
     @property
     def needs_capture(self) -> bool:
@@ -181,6 +188,13 @@ def reconcile(
         module_diff.unexpected = sorted(pair for pair in seen if pair not in expected)
 
         root_pair = entry.guides[0].pair if entry.guides else None
+        # A rename changes the joints' names, and nothing else here would
+        # notice: guides are matched on the uuid tag. Compared against the key
+        # the rendering recorded, so an untagged guide stays silent.
+        root_guide = seen.get(root_pair) if root_pair else None
+        if root_guide is not None and root_guide.key:
+            module_diff.key_stale = root_guide.key != entry.key
+
         primary_source = None
         if primary_input_of is not None:
             name = primary_input_of(entry)
