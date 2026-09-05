@@ -24,6 +24,8 @@ from tik.trigger.core.steps import (
     StepResult,
 )
 
+from .scaffold import ensure_rig
+
 
 def new_scene() -> None:
     """Start a build from an empty scene."""
@@ -184,6 +186,7 @@ class Runner:
             )
         try:
             with undo_chunk(f"Trigger: {step.display_chain}"):
+                ctx.rig = ensure_rig(self.events)
                 action.run(ctx)
         except Exception as error:  # noqa: BLE001 - report then wrap
             seconds = time.perf_counter() - started
