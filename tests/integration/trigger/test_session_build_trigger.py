@@ -127,3 +127,54 @@ def test_kinematics_without_guides_or_a_file_reports_clearly():
     session.add("kinematics")
     with pytest.raises(ActionExecutionError, match="no guides"):
         session.build()
+
+
+# ------------------------------------------------------------ import model
+def _model_file(tmp_path):
+    model = tmp_path / "geo" / "hero_model.ma"
+    cmds.file(new=True, force=True)
+    cmds.polySphere(name="hero_geo")
+    cmds.polyCube(name="prop_geo")
+    model.parent.mkdir(exist_ok=True)
+    cmds.file(rename=str(model))
+    cmds.file(save=True, type="mayaAscii", force=True)
+    return model
+
+
+def test_import_model_parents_under_geo_grp(tmp_path):
+    _model_file(tmp_path)
+    rig = trigger.Session()
+    rig.save(tmp_path / "hero.tr")
+    rig.add("import_asset", "import_model", file_path="geo/hero_model.ma")
+    rig.build()
+    assert cmds.ls("hero_geo", long=True) == ["|rig_grp|geo_grp|hero_geo"]
+    assert cmds.ls("prop_geo", long=True) == ["|rig_grp|geo_grp|prop_geo"]
+
+
+def test_import_model_can_leave_geometry_at_world(tmp_path):
+    _model_file(tmp_path)
+    rig = trigger.Session()
+    rig.save(tmp_path / "hero.tr")
+    rig.add(
+        "import_asset",
+        "import_model",
+        file_path="geo/hero_model.ma",
+        parent_to_geo=False,
+    )
+    rig.build()
+    assert cmds.ls("hero_geo", long=True) == ["|hero_geo"]
+
+
+def test_referenced_model_is_parented_too(tmp_path):
+    _model_file(tmp_path)
+    rig = trigger.Session()
+    rig.save(tmp_path / "hero.tr")
+    rig.add(
+        "import_asset",
+        "import_model",
+        file_path="geo/hero_model.ma",
+        reference=True,
+        namespace="model",
+    )
+    rig.build()
+    assert cmds.ls("model:hero_geo", long=True) == ["|rig_grp|geo_grp|model:hero_geo"]
