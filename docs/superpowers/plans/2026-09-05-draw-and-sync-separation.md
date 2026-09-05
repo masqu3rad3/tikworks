@@ -1127,7 +1127,7 @@ Callers still pass and receive keys; only the button text changes."
 **Interfaces:**
 - Produces: `DesignerActionBar` with signals `draw_selected_requested`, `draw_all_requested`, `select_requested`, `mirror_requested`, `sync_requested`, `auto_sync_toggled(bool)`, `build_all_requested`; and methods `set_selection_enabled(on: bool)`, `set_pending(stale_selected: bool, stale_any: bool, moved: bool)`, `set_auto_sync(on: bool)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Rewrite `tests/ui/test_action_bar.py`. Keep its existing `bar` fixture.
 
@@ -1177,12 +1177,12 @@ def test_setting_auto_sync_does_not_report_it_back(bar):
 
 Delete `test_up_to_date_shows_only_when_auto_is_off_and_drift_is_clean` and every other test referencing `set_selection`, `set_drift`, `drift_pill`, `up_to_date_label` or `build_selected_button`.
 
-- [ ] **Step 2: Run to verify they fail**
+- [x] **Step 2: Run to verify they fail**
 
 Run: `TPUI tests/ui/test_action_bar.py`
 Expected: FAIL with `AttributeError: 'DesignerActionBar' object has no attribute 'draw_selected_button'`.
 
-- [ ] **Step 3: Rewrite the bar**
+- [x] **Step 3: Rewrite the bar**
 
 Replace `action_bar.py` entirely:
 
@@ -1338,12 +1338,12 @@ class DesignerActionBar(QtWidgets.QFrame):
         widget.style().polish(widget)
 ```
 
-- [ ] **Step 4: Run to verify they pass**
+- [x] **Step 4: Run to verify they pass**
 
 Run: `TPUI tests/ui/test_action_bar.py`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/ui/designer/action_bar.py tests/ui/test_action_bar.py
