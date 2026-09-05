@@ -7,6 +7,7 @@ from typing import Optional
 
 from tik.shared.ui import theme
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
+from tik.trigger.ui.draw_state import DRAWN, NOT_DRAWN, STALE
 
 from .constants import (
     GLYPH_WIDTH,
@@ -100,6 +101,8 @@ class NodeSpec:
     primary_input: Optional[str] = None
     mode: int = MODE_FULL
     spaces: Optional[list] = None
+    #: NOT_DRAWN / DRAWN / STALE -- the same states the guide tree paints
+    draw_state: str = DRAWN
 
 
 class NodeItem(QtWidgets.QGraphicsItem):
@@ -113,6 +116,10 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.color = spec.color
         self.external = spec.external
         self.mode = spec.mode
+        self.draw_state = spec.draw_state
+        # absent from the scene: the whole node recedes, which is what
+        # "there is nothing here to look at in Maya" should look like
+        self.setOpacity(0.45 if self.draw_state == NOT_DRAWN else 1.0)
         self.inputs: dict[str, Port] = {}
         self.outputs: dict[str, Port] = {}
         self._height = HEADER + 8
@@ -193,6 +200,25 @@ class NodeItem(QtWidgets.QGraphicsItem):
         painter.setPen(pen)
         painter.setBrush(QtGui.QColor("#262626"))
         painter.drawRoundedRect(body, 4, 4)
+        # The left edge is the only free surface on a node: the border is
+        # already selection, the dash is already `external`, and the header
+        # is full of title, subtitle and collapse glyph.
+        if self.draw_state != DRAWN:
+            painter.save()
+            clip = QtGui.QPainterPath()
+            clip.addRoundedRect(body, 4, 4)
+            painter.setClipPath(clip)
+            painter.setPen(QtCore.Qt.NoPen)
+            if self.draw_state == STALE:
+                painter.setBrush(QtGui.QColor(theme.ACCENT))
+                painter.drawRect(QtCore.QRectF(0, 0, 3, self._height))
+            else:
+                painter.setBrush(QtGui.QColor("#5a5a5a"))
+                offset = 0.0
+                while offset < self._height:
+                    painter.drawRect(QtCore.QRectF(0, offset, 3, 3))
+                    offset += 6
+            painter.restore()
         header = QtCore.QRectF(0, 0, NODE_WIDTH, HEADER)
         painter.setPen(QtCore.Qt.NoPen)
         painter.setBrush(QtGui.QColor("#3a4048" if self.external else self.color))

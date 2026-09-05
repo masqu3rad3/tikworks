@@ -1536,7 +1536,7 @@ git commit -m "Paint each module's draw state in the guide tree"
 - Consumes: `NOT_DRAWN` / `DRAWN` / `STALE` from Task 11.
 - Produces: `NodeSpec.draw_state: str = DRAWN`; `GraphScene` sets it from a `GuideDiff`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/ui/test_graph_draw_state.py`:
 
@@ -1562,12 +1562,12 @@ def test_drawn_and_stale_are_fully_opaque(node_item_for):
 
 Write the two fixtures at the top of the file. Read `tests/ui/` for an existing graph test to copy `NodeSpec`'s construction from; if there is none, build the spec by hand from `NodeSpec`'s fields and wrap it with `NodeItem(spec)`.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `TPUI tests/ui/test_graph_draw_state.py`
 Expected: FAIL with `AttributeError: 'NodeSpec' object has no attribute 'draw_state'`.
 
-- [ ] **Step 3: Add the field and the stripe**
+- [x] **Step 3: Add the field and the stripe**
 
 In `items.py`, add to `NodeSpec`:
 
@@ -1613,16 +1613,16 @@ In `NodeItem.paint`, immediately after `painter.drawRoundedRect(body, 4, 4)`:
             painter.restore()
 ```
 
-- [ ] **Step 4: Feed it from the diff**
+- [x] **Step 4: Feed it from the diff**
 
 In `graph/scene.py`, find where `NodeSpec` objects are built (grep for `NodeSpec(`) and give the building method a `states: dict` parameter mapping instance id to one of the three constants, defaulting to `None`. Set `draw_state=states.get(instance_id, DRAWN) if states else DRAWN` on each spec. Task 13 supplies the dict.
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Run: `TPUI tests/ui/test_graph_draw_state.py`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/python/tik/trigger/ui/graph/items.py src/python/tik/trigger/ui/graph/scene.py tests/ui/test_graph_draw_state.py

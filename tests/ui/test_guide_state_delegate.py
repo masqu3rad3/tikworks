@@ -3,13 +3,8 @@
 import pytest
 
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
-from tik.trigger.ui.designer.delegates import (
-    DRAWN,
-    NOT_DRAWN,
-    STALE,
-    DrawStateRole,
-    GuideStateDelegate,
-)
+from tik.trigger.ui.designer.delegates import DrawStateRole, GuideStateDelegate
+from tik.trigger.ui.draw_state import DRAWN, NOT_DRAWN, STALE
 
 ACCENT = "#fe7e00"
 
