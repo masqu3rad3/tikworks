@@ -360,3 +360,27 @@ def test_a_vector_round_trips_through_values_and_apply():
 def test_vector2_rejects_a_size_override():
     with pytest.raises(TypeError):
         Vector2Field((0.0, 0.0), size=3)
+
+
+def test_text_field_normalises_line_breaks_and_none():
+    from tik.core.fields import TextField
+
+    class Note(Schema):
+        body = TextField("", language="python")
+
+    note = Note()
+    note.body = "a\r\nb\rc"
+    assert note.body == "a\nb\nc"
+    note.body = None
+    assert note.body == ""
+    with pytest.raises(FieldValidationError):
+        note.body = 3
+    schema = Note.schema()["body"]
+    assert schema["type"] == "text" and schema["language"] == "python"
+
+
+def test_text_field_is_exported_by_trigger_core():
+    from tik.core.fields import TextField
+    from tik.trigger.core import TextField as exported
+
+    assert exported is TextField

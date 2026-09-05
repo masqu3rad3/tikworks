@@ -189,6 +189,34 @@ class StringField(Field):
         return value
 
 
+class TextField(Field):
+    """Multi-line text, stored as one string with ``\n`` line breaks.
+
+    ``language`` is advisory for editors: ``"python"`` asks for a monospace
+    font and space-inserting Tab; anything else renders as plain text.
+    """
+
+    type_name = "text"
+
+    def __init__(self, default: str = "", *, language: str = "", **kwargs) -> None:
+        self.language = language
+        super().__init__(default, **kwargs)
+
+    def coerce(self, value):
+        """Accept strings (``None`` becomes ``""``); normalise line breaks."""
+        if value is None:
+            return ""
+        if not isinstance(value, str):
+            raise FieldValidationError(self.name, value, "must be a string")
+        return value.replace("\r\n", "\n").replace("\r", "\n")
+
+    def to_schema(self) -> dict:
+        """The base schema plus ``language``."""
+        data = super().to_schema()
+        data["language"] = self.language
+        return data
+
+
 class ChoiceField(Field):
     """A value restricted to ``choices``."""
 
