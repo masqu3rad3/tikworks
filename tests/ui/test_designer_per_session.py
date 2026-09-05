@@ -102,13 +102,15 @@ def test_closing_a_tab_releases_its_designer(window):
     assert designer._torn_down is True
 
 
-def test_opening_the_designer_redraws_guides_a_build_cleared(window):
-    """A Designer with no guides is useless; opening it is the ask to see them."""
+def test_opening_the_designer_never_draws(window):
+    """Reversed deliberately. Opening the Designer used to redraw guides a
+    build had cleared -- an unasked-for draw, which is what this design
+    removes. Switching tabs must not put a joint in the scene: the modules
+    are reported not-drawn and Draw is the rigger's to press."""
     view = window.views[0]
     view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
     calls = []
-    view.designer.guides.dismissed = True
-    view.designer.guides.restore = lambda: calls.append("restore")
+    view.designer.guides.draw = lambda *args, **kwargs: calls.append("draw")
     view.sub_tabs.setCurrentIndex(SESSION_TAB)
     view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
-    assert calls == ["restore"]
+    assert calls == []

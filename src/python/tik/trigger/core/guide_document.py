@@ -192,6 +192,7 @@ class GuideDocument:
     positions: dict = field(default_factory=dict)
     #: Graph collapse modes, keyed by instance_id or group_id.
     collapse: dict = field(default_factory=dict)
+
     def module(self, instance_id: str) -> Optional[ModuleEntry]:
         """The entry with ``instance_id``, or None."""
         for entry in self.modules:

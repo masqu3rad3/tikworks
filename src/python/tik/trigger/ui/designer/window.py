@@ -37,13 +37,13 @@ from tik.trigger.core.schemas import split_source
 if TYPE_CHECKING:  # the scene layer imports Maya; the UI only needs the name
     from tik.trigger.guides import GuideHandle
 
+from tik.trigger.ui.draw_state import DRAWN, TOOLTIPS, states_from
+
 from ..graph import GraphView
 from ..iconography import icon_for_tile, module_icon
 from ..palette import SearchPalette
 from ..session_view import pane
 from .action_bar import DesignerActionBar
-from tik.trigger.ui.draw_state import DRAWN, TOOLTIPS, states_from
-
 from .commands import DesignerCommands
 from .delegates import DrawStateRole
 from .properties import DesignerProperties

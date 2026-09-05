@@ -123,9 +123,7 @@ class DesignerActionBar(QtWidgets.QFrame):
         ):
             button.setEnabled(bool(on))
 
-    def set_pending(
-        self, stale_selected: bool, stale_any: bool, moved: bool
-    ) -> None:
+    def set_pending(self, stale_selected: bool, stale_any: bool, moved: bool) -> None:
         """Colour each end for the work waiting in *its* direction.
 
         Out of date only. Not-drawn deliberately lights nothing: a freshly

@@ -122,7 +122,11 @@ def test_a_labelled_button_still_answers_with_its_key(qapp):
     answer = Feedback().pop_question(
         title="Redraw guides",
         text="The guides have been moved since the last sync.",
-        buttons=[("yes", "Sync and redraw"), ("discard", "Discard and redraw"), "cancel"],
+        buttons=[
+            ("yes", "Sync and redraw"),
+            ("discard", "Discard and redraw"),
+            "cancel",
+        ],
     )
     assert answer == "discard"
     assert seen["buttons"] == ["yes", "discard", "cancel"]

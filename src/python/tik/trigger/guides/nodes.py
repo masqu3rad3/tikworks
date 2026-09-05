@@ -238,9 +238,7 @@ def find_instances(scope: Any = "scene", document=None) -> list[ModuleInstance]:
     # None means "no document to check against", so the guard below would
     # otherwise reject every instance in the scene.
     known = (
-        None
-        if document is None
-        else {entry.instance_id for entry in document.modules}
+        None if document is None else {entry.instance_id for entry in document.modules}
     )
     document = document if document is not None else GuideDocument()
     keys = {entry.instance_id: entry.key for entry in document.modules}

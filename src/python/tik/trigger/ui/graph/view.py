@@ -12,6 +12,7 @@ from tik.shared.ui import theme
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.core.schemas import split_source
+from tik.trigger.ui.draw_state import DRAWN
 
 from .constants import (
     COLUMN_GAP,
@@ -24,8 +25,6 @@ from .constants import (
     ROW_GAP,
     WORLD,
 )
-from tik.trigger.ui.draw_state import DRAWN
-
 from .items import NodeItem, NodeSpec, WireItem
 from .scene import GraphScene
 

@@ -429,9 +429,9 @@ def test_draw_keeps_poses_by_default(guides):
     cmds.xform(root.long_name, worldSpace=True, translation=(7.0, 0.0, 0.0))
     guides.draw([handle.instance_id])
     moved = guides.guide_node(handle.instance_id, "root")
-    assert cmds.xform(
-        moved.long_name, query=True, worldSpace=True, translation=True
-    )[0] == pytest.approx(7.0)
+    assert cmds.xform(moved.long_name, query=True, worldSpace=True, translation=True)[
+        0
+    ] == pytest.approx(7.0)
 
 
 def test_draw_with_discard_rebuilds_at_the_stored_pose(guides):
@@ -441,9 +441,9 @@ def test_draw_with_discard_rebuilds_at_the_stored_pose(guides):
     cmds.xform(root.long_name, worldSpace=True, translation=(7.0, 0.0, 0.0))
     guides.draw([handle.instance_id], poses="discard")
     moved = guides.guide_node(handle.instance_id, "root")
-    assert cmds.xform(
-        moved.long_name, query=True, worldSpace=True, translation=True
-    )[0] == pytest.approx(stored[0])
+    assert cmds.xform(moved.long_name, query=True, worldSpace=True, translation=True)[
+        0
+    ] == pytest.approx(stored[0])
 
 
 def test_deleting_a_module_takes_its_joints(guides):

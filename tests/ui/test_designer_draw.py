@@ -36,7 +36,9 @@ def designer(qapp):
 
 def _drifting(designer, instance_id):
     """Make the scene look like the rigger has dragged that module's guides."""
-    diff = GuideDiff(modules={instance_id: ModuleDiff(instance_id, drifted=[("root", 0)])})
+    diff = GuideDiff(
+        modules={instance_id: ModuleDiff(instance_id, drifted=[("root", 0)])}
+    )
     designer.guides.diff = lambda: diff
     return diff
 

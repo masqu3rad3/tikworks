@@ -16,7 +16,6 @@ direction, the tree says which modules.
 from __future__ import annotations
 
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
-
 from tik.trigger.ui.draw_state import COLORS, DIMMED_TEXT, DRAWN, NOT_DRAWN
 
 #: Item role carrying one of the ``draw_state`` constants.

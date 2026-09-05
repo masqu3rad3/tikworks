@@ -353,3 +353,20 @@ def test_reset_scene_asks_before_wiping_the_scene(window, monkeypatch):
 
     # cancel first, so Enter is the safe answer
     assert [buttons[0] for _title, buttons in asked] == ["cancel", "cancel"]
+
+
+def test_the_guides_menu_offers_both_draw_scopes(window):
+    """Draw has to be reachable without the bar, and the preference that
+    governs drawing on create belongs beside Auto Sync, not on the bar."""
+    entries = items(menu(window, "&Guides"))
+    for expected in ("Draw Selected Guides", "Draw All Guides", "Draw New Modules"):
+        assert expected in entries
+
+
+def test_the_destructive_entry_says_what_it_destroys(window):
+    """It deletes every module from the *session*, not just the rendering.
+    Under the Draw/Sync vocabulary "Clear Scene Guides" reads as "undraw
+    everything", which would cost a rigger their whole session."""
+    entries = items(menu(window, "&Guides"))
+    assert "Delete All Modules" in entries
+    assert "Clear Scene Guides" not in entries

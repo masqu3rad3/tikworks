@@ -1903,7 +1903,7 @@ Draw asks before it discards posing, and the condition is exactly
 - Modify: `src/python/tik/trigger/ui/main.py:286-325` (Guides menu), `902-917` (`_on_sub_tab_changed`)
 - Test: `tests/ui/test_main_menus.py` (or the existing menu test file — find it with `grep -rln "guides_menu\|Sync From Scene" tests/ui`)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In the menu test file, following its existing style:
 
@@ -1919,12 +1919,12 @@ def test_the_guides_menu_offers_both_draw_scopes(window):
 
 If the window does not keep `guides_menu` as an attribute, store it in `_build_guides_menu` as `self.guides_menu = guides_menu` and say so in the test's docstring.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `TPUI <the menu test file>`
 Expected: FAIL — `"Draw Selected Guides" not in labels`.
 
-- [ ] **Step 3: Add the draw actions and fix the misleading label**
+- [x] **Step 3: Add the draw actions and fix the misleading label**
 
 In `main.py`'s Guides menu, above the `Sync From Scene` group:
 
@@ -1983,7 +1983,7 @@ Rename the last entry — the action deletes every module from the session docum
         )
 ```
 
-- [ ] **Step 4: Delete the restore-on-tab-change block**
+- [x] **Step 4: Delete the restore-on-tab-change block**
 
 In `_on_sub_tab_changed`, the whole `try:` block that calls `designer.guides.restore()` goes, leaving:
 
@@ -1996,17 +1996,17 @@ In `_on_sub_tab_changed`, the whole `try:` block that calls `designer.guides.res
         self._update_title()
 ```
 
-- [ ] **Step 5: Run to verify it passes**
+- [x] **Step 5: Run to verify it passes**
 
 Run: `TPUI tests/ui`
 Expected: PASS.
 
-- [ ] **Step 6: Run everything**
+- [x] **Step 6: Run everything**
 
 Run: `make tests-unit`, then `make tests-integration`, then `make tests-ui`, then `make lint`.
 Expected: all PASS. `make lint` was clean before this work and must stay clean.
 
-- [ ] **Step 7: Update `CLAUDE.md`**
+- [x] **Step 7: Update `CLAUDE.md`**
 
 In the `tik.trigger` status paragraph, replace the sentence describing lockstep with the new model:
 
@@ -2020,7 +2020,7 @@ do the other's job.
 
 Update the design-spec list to name `2026-09-05-draw-and-sync-separation-design.md` as authoritative for guides, and change the `tests/integration/trigger/test_lockstep_trigger.py` entry to `test_draw_sync_trigger.py`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/python/tik/trigger/ui/main.py CLAUDE.md tests/ui
