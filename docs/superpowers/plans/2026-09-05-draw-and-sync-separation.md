@@ -959,11 +959,11 @@ settings and no connections."
 **Interfaces:**
 - Consumes: `GuideScene.sync()` from Task 5.
 
-- [ ] **Step 1: Read how the run reaches `kinematics`**
+- [x] **Step 1: Read how the run reaches `kinematics`**
 
 Before writing code, read `src/python/tik/trigger/actions/kinematics/kinematics.py` in full and find where the scene reset happens relative to it (`grep -rn "new_scene\|reset" src/python/tik/trigger/maya/runner.py src/python/tik/trigger/session.py`). The capture must run **before** the reset, not inside the action — an action that runs after the reset has nothing left to capture.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `tests/integration/trigger/test_draw_sync_trigger.py` with the header and this test. Model the fixtures on the file it replaces, `test_lockstep_trigger.py`.
 
@@ -990,12 +990,12 @@ def test_a_build_captures_before_it_resets_the_scene(session):
     assert record.position[0] == pytest.approx(7.0)
 ```
 
-- [ ] **Step 3: Run it to verify it fails**
+- [x] **Step 3: Run it to verify it fails**
 
 Run: `TP tests/integration/trigger/test_draw_sync_trigger.py -k resets_the_scene`
 Expected: FAIL — the stored position is still the drawn one; the drag was lost at the reset.
 
-- [ ] **Step 4: Capture before the reset**
+- [x] **Step 4: Capture before the reset**
 
 At the point identified in Step 1, immediately before the scene is reset, add:
 
@@ -1009,12 +1009,12 @@ At the point identified in Step 1, immediately before the scene is reset, add:
 
 Use the receiver the surrounding code already has for the session — read it rather than assuming the name.
 
-- [ ] **Step 5: Run it to verify it passes**
+- [x] **Step 5: Run it to verify it passes**
 
 Run: `TP tests/integration/trigger/test_draw_sync_trigger.py`
 Expected: PASS.
 
-- [ ] **Step 6: Delete the file this one replaces**
+- [x] **Step 6: Delete the file this one replaces**
 
 ```bash
 git rm tests/integration/trigger/test_lockstep_trigger.py
@@ -1022,7 +1022,7 @@ git rm tests/integration/trigger/test_lockstep_trigger.py
 
 Before deleting, read it once and carry over any test that is still meaningful — the pose-drift-wins and structural-redraw cases become `draw`/`sync` tests. Its `dismissed` and `restore` tests (lines 163, 291, 307, 323, 331) have nothing to test any more and go.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/python/tik/trigger/actions/kinematics/kinematics.py tests/integration/trigger/test_draw_sync_trigger.py
