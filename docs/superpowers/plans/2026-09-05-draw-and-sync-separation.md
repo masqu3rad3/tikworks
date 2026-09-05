@@ -1644,7 +1644,7 @@ never disagree about what is in the scene."
 - Consumes: everything from Tasks 1, 5, 9, 10, 11, 12.
 - Produces: `DesignerCommands.draw_selected()`, `draw_all()`, `_draw(ids)`; `GuideDesigner._show_state(diff)`; `StubScene.draw(scope=None, poses="keep")`.
 
-- [ ] **Step 1: Add `draw` to the UI stub**
+- [x] **Step 1: Add `draw` to the UI stub**
 
 In `tests/ui/stub.py`, next to the other recorded calls:
 
@@ -1655,7 +1655,7 @@ In `tests/ui/stub.py`, next to the other recorded calls:
         return GuideDiff()
 ```
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 Create `tests/ui/test_designer_draw.py`. Copy the `designer` fixture from an existing file in `tests/ui/` that builds a `GuideDesigner` over a `StubScene`.
 
@@ -1717,12 +1717,12 @@ def test_cancel_draws_nothing(designer, monkeypatch, one_module):
     assert not [call for call in designer.guides.calls if call[0] == "draw"]
 ```
 
-- [ ] **Step 3: Run to verify they fail**
+- [x] **Step 3: Run to verify they fail**
 
 Run: `TPUI tests/ui/test_designer_draw.py`
 Expected: FAIL with `AttributeError: 'GuideDesigner' object has no attribute 'draw_all'`.
 
-- [ ] **Step 4: Write the commands**
+- [x] **Step 4: Write the commands**
 
 In `commands.py`, replacing nothing, add next to `sync_now`:
 
@@ -1780,7 +1780,7 @@ In `commands.py`, replacing nothing, add next to `sync_now`:
 
 Change `sync_now`'s tail from `self._show_drift(...)` to `self._show_state(...)`, and change `test_build` so `all_modules` no longer needs its own draw — `GuideScene.test_build` already syncs and draws (Task 5).
 
-- [ ] **Step 5: Rewrite the window's indicator plumbing**
+- [x] **Step 5: Rewrite the window's indicator plumbing**
 
 In `window.py`, replace `diff_summary` (line 52) so it speaks the new vocabulary:
 
@@ -1867,7 +1867,7 @@ In `showEvent` (line ~730), drop the `if ... or self.guides.auto_sync: return` e
 
 Import `DRAWN`, `NOT_DRAWN`, `STALE`, `DrawStateRole` from `.delegates` at the top of `window.py`.
 
-- [ ] **Step 6: Update the status tests**
+- [x] **Step 6: Update the status tests**
 
 `tests/ui/test_designer_status.py` asserts the old `diff_summary` strings. Rewrite each expectation against the new wording, e.g.:
 
@@ -1880,12 +1880,12 @@ def test_stale_reads_as_out_of_date():
     assert diff_summary(diff) == "1 out of date"
 ```
 
-- [ ] **Step 7: Run the UI suite**
+- [x] **Step 7: Run the UI suite**
 
 Run: `TPUI tests/ui`
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/python/tik/trigger/ui/designer/window.py src/python/tik/trigger/ui/designer/commands.py tests/ui

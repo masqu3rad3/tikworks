@@ -94,11 +94,17 @@ def test_the_action_buttons_left_the_properties_panel(designer):
     assert designer.action_bar.parent() is not designer.properties
 
 
-def test_selecting_a_module_names_it_in_the_bar(designer):
+def test_selecting_a_module_enables_what_acts_on_it(designer):
+    """The bar no longer names the selection -- the tree and graph show it --
+    so all that is left to assert is that the controls wake up."""
     handle = designer.guides.add("toy_chain", name="tail", side="L")
     designer.refresh()
+    designer._set_current(None)
+    assert not designer.action_bar.draw_selected_button.isEnabled()
     designer._set_current(handle)
-    assert designer.action_bar.selection_label.text().endswith("L_tail")
+    assert designer.action_bar.draw_selected_button.isEnabled()
+    assert designer.action_bar.select_button.isEnabled()
+    assert designer.action_bar.mirror_button.isEnabled()
 
 
 def test_the_bar_spans_the_window_not_a_pane(designer):
@@ -672,10 +678,7 @@ def test_export_import_and_test_build(designer, tmp_path, monkeypatch):
     report = designer.test_build(all_modules=True)
     assert calls[-1] == ("build", 0) and report.count == 1
     designer.action_bar.build_all_button.click()
-    assert (
-        designer.action_bar.build_all_button.text() == "▶  Build all"
-        and designer.action_bar.build_selected_button.text() == "Build selected"
-    )
+    assert designer.action_bar.build_all_button.text() == "▶  Build all"
 
 
 def test_grid_snap_default_and_free_placement(designer):
@@ -866,22 +869,25 @@ def test_delete_in_the_graph_still_cuts_a_selected_wire(designer):
     assert designer.graph.graph.delete_selected() is True
 
 
-def test_drift_counts_structure_and_pose_together(designer):
-    """The pill reports work the document has not been told about -- posing included."""
+def test_the_two_directions_light_their_own_end(designer):
+    """One count used to cover both directions, which is exactly the
+    conflation this design removes. Out of date is Draw's; moved is Sync's."""
     from tik.trigger.core.reconcile import GuideDiff, ModuleDiff
 
     diff = GuideDiff(
         modules={
-            "a": ModuleDiff("a", missing=[("root", 0)]),  # structural
-            "b": ModuleDiff("b", drifted=[("root", 0)]),  # pose only
+            "a": ModuleDiff("a", missing=[("root", 0)]),  # out of date
+            "b": ModuleDiff("b", drifted=[("root", 0)]),  # moved
         }
     )
-    designer._show_drift(diff)
-    assert "2" in designer.action_bar.drift_pill.text()
+    designer._show_state(diff)
+    assert designer.action_bar.draw_all_button.property("alert") is True
+    assert designer.action_bar.sync_button.property("alert") is True
 
 
-def test_drift_deduplicates_a_module_that_is_both(designer):
-    """A module both structurally stale and drifted counts once, not twice."""
+def test_a_module_that_is_both_lights_both_ends(designer):
+    """One module can owe work in both directions at once, and the bar has
+    to say so twice -- Draw will not capture it, Sync will not redraw it."""
     from tik.trigger.core.reconcile import GuideDiff, ModuleDiff
 
     diff = GuideDiff(
@@ -889,8 +895,21 @@ def test_drift_deduplicates_a_module_that_is_both(designer):
             "a": ModuleDiff("a", missing=[("root", 0)], drifted=[("root", 0)]),
         }
     )
-    designer._show_drift(diff)
-    assert "1" in designer.action_bar.drift_pill.text()
+    designer._show_state(diff)
+    assert designer.action_bar.draw_all_button.property("alert") is True
+    assert designer.action_bar.sync_button.property("alert") is True
+
+
+def test_not_drawn_lights_nothing(designer):
+    """A freshly opened session is entirely not-drawn; that is its resting
+    state, and colouring it would make the accent mean nothing."""
+    from tik.trigger.core.reconcile import GuideDiff, ModuleDiff
+
+    diff = GuideDiff(modules={"a": ModuleDiff("a", absent=True)})
+    designer._show_state(diff)
+    assert designer.action_bar.draw_all_button.property("alert") is False
+    assert designer.action_bar.sync_button.property("alert") is False
+    assert designer.status.text("guides") == "1 not drawn"
 
 
 def test_becoming_visible_again_picks_up_pose_drift_with_auto_off(designer):
@@ -907,24 +926,28 @@ def test_becoming_visible_again_picks_up_pose_drift_with_auto_off(designer):
 
     designer.showEvent(QtGui.QShowEvent())
 
-    assert "1" in designer.action_bar.drift_pill.text()
+    assert designer.action_bar.sync_button.property("alert") is True
 
 
-def test_becoming_visible_again_is_a_no_op_with_auto_on(designer):
-    """Auto on: the sync path already keeps the pill current, so a show
-    event must not run a scan of its own."""
+def test_becoming_visible_again_still_scans_with_auto_on(designer):
+    """Changed deliberately. This used to skip the scan when Auto was on,
+    because the only thing it reported was drift and the sync path kept that
+    current. It now also reports the *Draw* side, which Auto has nothing to
+    do with, so the scan has to run whatever Auto is set to.
+    """
     from tik.trigger.core.reconcile import GuideDiff, ModuleDiff
 
     calls = []
 
     def _spy_diff():
         calls.append(1)
-        return GuideDiff(modules={"a": ModuleDiff("a", drifted=[("root", 0)])})
+        return GuideDiff(modules={"a": ModuleDiff("a", missing=[("root", 0)])})
 
+    designer.set_auto_sync(True)
     designer.guides.diff = _spy_diff
     designer.showEvent(QtGui.QShowEvent())
-    assert calls == []
-    assert designer.action_bar.drift_pill.text() == ""
+    assert calls  # it looked
+    assert designer.action_bar.draw_all_button.property("alert") is True
 
 
 def test_activating_the_designer_sub_tab_also_refreshes_drift(qapp):
@@ -946,6 +969,6 @@ def test_activating_the_designer_sub_tab_also_refreshes_drift(qapp):
     view = SessionView(session, designer_factory=designer_factory)
     try:
         view.sub_tabs.setCurrentIndex(DESIGNER_TAB)
-        assert "1" in view.designer.action_bar.drift_pill.text()
+        assert view.designer.action_bar.sync_button.property("alert") is True
     finally:
         view.teardown()

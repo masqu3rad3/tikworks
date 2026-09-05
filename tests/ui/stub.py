@@ -45,6 +45,8 @@ class StubScene:
         # matches GuideScene's default (spec 3.1): governs whether a scene
         # event may start a sync, nothing else
         self.auto_sync = True
+        # mirrors GuideScene: creating a module draws it, opening does not
+        self.draw_on_create = True
         # mirrors GuideScene.session: None for a free-standing double, or set
         # by a test to the Session that owns it -- snapshot_guides reads this
         self.session = None
@@ -411,7 +413,12 @@ class StubScene:
     def selected_node_names(self) -> list[str]:
         return list(getattr(self, "selected_names", []))
 
-    def sync(self, regenerate_stale: bool = True):
+    def draw(self, scope=None, poses: str = "keep"):
+        """Record the call; there is no scene to draw into."""
+        self.calls.append(("draw", None if scope is None else list(scope), poses))
+        return GuideDiff()
+
+    def sync(self, scope=None):
         """No scene to reconcile against; the double just records the call.
 
         Matches ``GuideScene.sync()``'s contract -- callers now use this
