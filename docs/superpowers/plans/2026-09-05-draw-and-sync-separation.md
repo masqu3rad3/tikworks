@@ -1043,7 +1043,7 @@ went out with the reset."
 **Interfaces:**
 - Produces: `pop_question(..., buttons=[("key", "Label"), "plainkey", ...])`. Plain string keys behave exactly as before; the returned value is always the key, never the label.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/ui/test_feedback.py`, following its existing `set_handler` style:
 
@@ -1066,12 +1066,12 @@ def test_a_labelled_button_still_answers_with_its_key():
     assert seen["buttons"] == ["yes", "discard", "cancel"]
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `TPUI tests/ui/test_feedback.py -k labelled_button`
 Expected: FAIL — the handler receives the raw tuple, so `seen["buttons"]` is `[("yes", "Sync and redraw"), ...]`.
 
-- [ ] **Step 3: Normalise in `_pop`**
+- [x] **Step 3: Normalise in `_pop`**
 
 At the top of `_pop`, before the handler call, split keys from labels:
 
@@ -1102,12 +1102,12 @@ Then, after `message_box.setDefaultButton(...)`, apply the labels:
 
 Everything downstream already works on `buttons` as a key list, including the validation loop and the result mapping.
 
-- [ ] **Step 4: Run it to verify it passes**
+- [x] **Step 4: Run it to verify it passes**
 
 Run: `TPUI tests/ui/test_feedback.py`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/shared/ui/feedback.py tests/ui/test_feedback.py

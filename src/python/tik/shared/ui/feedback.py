@@ -23,6 +23,8 @@ from tik.shared.ui.qtmaya import get_main_window
 #: Button key -> ``QMessageBox`` standard button. Keys are what callers pass
 #: and what ``pop_question`` gives back, so a call site never touches a Qt
 #: enum: ``buttons=["save", "discard", "cancel"]`` in, ``"discard"`` out.
+#: An entry may also be ``(key, label)`` -- ``("yes", "Sync and redraw")`` --
+#: to say what the button reads without changing the key it answers with.
 BUTTONS = {
     "yes": QtWidgets.QMessageBox.Yes,
     "yes_to_all": QtWidgets.QMessageBox.YesToAll,
@@ -109,6 +111,21 @@ class Feedback:
         on_close: Optional[Callable] = None,
     ) -> Optional[str]:
         """Build, show and decode one message box. The single Qt entry point."""
+        # A button may carry a custom label: ("yes", "Sync and redraw"). The
+        # key is what callers pass and what comes back, so a three-way
+        # question can read in the caller's own words without any call site
+        # -- or the handler seam -- learning a Qt enum.
+        labels: dict = {}
+        keys: list = []
+        for item in buttons:
+            if isinstance(item, tuple):
+                key, label = item
+                labels[key] = label
+            else:
+                key = item
+            keys.append(key)
+        buttons = keys
+
         if _handler is not None:
             answered = _handler(kind, title, text, details, list(buttons))
             if answered is not None:
@@ -136,6 +153,10 @@ class Feedback:
         message_box.setStandardButtons(standard)
         # the first button offered is the safe one -- Save, not Discard
         message_box.setDefaultButton(BUTTONS[buttons[0]])
+        for key, label in labels.items():
+            button = message_box.button(BUTTONS[key])
+            if button is not None:
+                button.setText(label)
 
         code = message_box.exec()
         if on_close:

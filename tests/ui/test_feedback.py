@@ -104,3 +104,48 @@ def test_parent_falls_back_to_the_maya_main_window_lazily(qapp, monkeypatch):
     assert box._host() == "main-window"
     explicit = Feedback("mine")
     assert explicit._host() == "mine"
+
+
+def test_a_labelled_button_still_answers_with_its_key(qapp):
+    """``("yes", "Sync and redraw")`` in, ``"yes"`` out.
+
+    Callers pass and receive keys; a label only changes what the button says,
+    so no call site has to learn a Qt enum to ask a three-way question.
+    """
+    seen = {}
+
+    def handler(kind, title, text, details, buttons):
+        seen["buttons"] = buttons
+        return "discard"
+
+    feedback.set_handler(handler)
+    answer = Feedback().pop_question(
+        title="Redraw guides",
+        text="The guides have been moved since the last sync.",
+        buttons=[("yes", "Sync and redraw"), ("discard", "Discard and redraw"), "cancel"],
+    )
+    assert answer == "discard"
+    assert seen["buttons"] == ["yes", "discard", "cancel"]
+
+
+def test_a_labelled_button_reaches_a_real_dialog_as_its_label(qapp):
+    """No handler installed: the label must land on the actual QMessageBox."""
+    from tik.shared.ui.Qt import QtWidgets
+
+    captured = {}
+
+    def fake_exec(self):
+        captured["texts"] = [button.text() for button in self.buttons()]
+        return QtWidgets.QMessageBox.Cancel
+
+    original = QtWidgets.QMessageBox.exec
+    QtWidgets.QMessageBox.exec = fake_exec
+    try:
+        Feedback().pop_question(
+            title="Redraw guides",
+            text="moved",
+            buttons=[("yes", "Sync and redraw"), "cancel"],
+        )
+    finally:
+        QtWidgets.QMessageBox.exec = original
+    assert "Sync and redraw" in captured["texts"]
