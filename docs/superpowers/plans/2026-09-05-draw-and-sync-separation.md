@@ -890,7 +890,7 @@ taken away. With no automatic redraw there is nothing to suppress."
 **Interfaces:**
 - Produces: `find_instances(scope, document)` skips instance ids absent from `document` when `document is not None`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/integration/trigger/test_builder_trigger.py`, following its existing fixtures:
 
@@ -907,12 +907,12 @@ def test_a_guide_with_no_document_entry_is_not_built(guides):
     assert guides.find_instances("scene") == []
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `TP tests/integration/trigger/test_builder_trigger.py -k no_document_entry`
 Expected: FAIL — one phantom instance named `fkchain` comes back.
 
-- [ ] **Step 3: Add the guard**
+- [x] **Step 3: Add the guard**
 
 In `find_instances`, replace the document defaulting and the loop head:
 
@@ -933,12 +933,12 @@ In `find_instances`, replace the document defaulting and the loop head:
         entry = document.module(instance_id)
 ```
 
-- [ ] **Step 4: Run it to verify it passes**
+- [x] **Step 4: Run it to verify it passes**
 
 Run: `TP tests/integration/trigger/test_builder_trigger.py`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/nodes.py tests/integration/trigger/test_builder_trigger.py

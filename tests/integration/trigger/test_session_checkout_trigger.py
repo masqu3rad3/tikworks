@@ -27,6 +27,10 @@ def test_switching_sessions_swaps_the_guides_in_the_scene():
     assert drawn_names() == {body.instance_id}
 
     Session.hand_over(second, first)
+    # the hand-over clears the outgoing session's rendering and draws nothing:
+    # what the incoming session puts in the scene is its rigger's call
+    assert drawn_names() == set()
+    first.guides.draw()
     assert drawn_names() == {tail.instance_id}
 
 
@@ -40,6 +44,7 @@ def test_a_checkout_round_trips_poses_between_two_sessions():
 
     Session().checkout_guides(force=True)  # somebody else takes the scene
     first.checkout_guides(force=True)  # and we take it back
+    first.guides.draw()  # the poses are in the document; Draw renders them
 
     restored = first.guides.guide_nodes(handle.instance_id)[("segment", 0)]
     placed = cmds.xform(
@@ -87,6 +92,7 @@ def test_handing_back_restores_the_first_sessions_guides():
     Session.hand_over(first, second)
     second.guides.add("base", side="C", name="body")
     Session.hand_over(second, first)
+    first.guides.draw()
 
     assert drawn_names() == {tail.instance_id}
     assert [entry.name for entry in second.document.guides.modules] == ["body"]

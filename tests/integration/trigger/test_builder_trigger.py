@@ -318,3 +318,18 @@ def test_an_unconnected_space_row_is_skipped(toys):
     control = report.rigs[arm.instance_id].controller_by_role("root")
     assert not control.transform.has_attr("parentSwitch")
     assert report.spaces == []
+
+
+def test_a_guide_with_no_document_entry_is_not_built(toys):
+    """An orphan used to build as a phantom module named after its type, with
+    default settings and no connections. Orphans are reported, never built."""
+    handle = toys.add("toy_root", name="body")
+    assert toys.guide_nodes(handle.instance_id) != {}
+    # the joints stay, the entry goes: exactly what an orphan is
+    toys.document.modules = [
+        entry
+        for entry in toys.document.modules
+        if entry.instance_id != handle.instance_id
+    ]
+    assert toys.find_instances("scene") == []
+    assert toys.diff().orphans
