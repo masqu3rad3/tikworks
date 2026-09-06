@@ -27,6 +27,9 @@ from tik.trigger.core.document import EXTENSION
 from tik.trigger.core.exceptions import SessionError
 from tik.trigger.session import Session
 
+from .autosave import AutosaveTimer
+from .autosave import clear as clear_autosave
+from .autosave import recoverable
 from .designer.widgets import SCENE_NODE
 from .script_dock import ScriptViewer
 from .session_view import DESIGNER_TAB, SessionView
@@ -79,6 +82,8 @@ class TriggerWindow(MayaToolWindow):
         self.log.setMaximumBlockCount(prefs_value("interface", "log_max_lines"))
         self.restore_window_state()
         self._load_recent()
+        self.autosave = AutosaveTimer(self, prefs_value("files", "autosave_interval"))
+        self.autosave.reconfigure()
 
     # ------------------------------------------------------------------ ui
     def _build_shell(self) -> None:
@@ -609,6 +614,7 @@ class TriggerWindow(MayaToolWindow):
             if view.session.file_path and Path(view.session.file_path) == Path(path):
                 self.tabs.setCurrentWidget(view)
                 return view
+        path = self._offer_recovery(path)
         session = Session.open(path, events=self.events)
         view = self.add_session(session)
         untouched = [
@@ -622,6 +628,24 @@ class TriggerWindow(MayaToolWindow):
             self.tabs.removeTab(self.tabs.indexOf(item))
         self._remember(path)
         return view
+
+    def _offer_recovery(self, path: str) -> str:
+        """Offer a newer autosave in place of ``path``, returning what to open.
+
+        A sidecar newer than the session means Trigger stopped between an
+        autosave and a save. The rigger decides which one is the real work --
+        we never substitute it silently.
+        """
+        found = recoverable(path)
+        if found is None:
+            return path
+        answer = Feedback(self).pop_question(
+            title="Recover autosave",
+            text=f"A newer autosave exists for {Path(path).name}.",
+            details=(f"{found}\n\nOpen the autosave instead of the saved session?"),
+            buttons=["open autosave", "open session"],
+        )
+        return str(found) if answer == "open autosave" else path
 
     def save_session(self) -> None:
         """Save the current session, asking for a path if it has none."""
@@ -720,7 +744,7 @@ class TriggerWindow(MayaToolWindow):
         session = view.session
         if not path and session.file_path is None:
             path = Feedback(self).browse_save(
-                "Save session", "", (EXTENSION,), FILE_FILTER
+                "Save session", self.browse_folder(), (EXTENSION,), FILE_FILTER
             )
             if not path:
                 return False
@@ -729,6 +753,7 @@ class TriggerWindow(MayaToolWindow):
         except Exception as error:  # noqa: BLE001 - report, never trap
             self.events.log(f"Could not save {session.name}: {error}", level="warning")
             return False
+        clear_autosave(str(session.file_path))
         self._remember(str(session.file_path))
         self._update_title()
         return not session.is_modified
@@ -898,6 +923,8 @@ class TriggerWindow(MayaToolWindow):
             self.log.setMaximumBlockCount(prefs_value("interface", "log_max_lines"))
         if "interface.log_verbosity" in changed:
             self.log.set_level(prefs_value("interface", "log_verbosity"))
+        if any(key.startswith("files.autosave") for key in changed):
+            self.autosave.reconfigure()
         if "files.max_recent" in changed:
             del self.recent_files[prefs_value("files", "max_recent") :]
             self._save_recent()
@@ -1083,6 +1110,30 @@ class TriggerWindow(MayaToolWindow):
         if prefs_value("interface", "log_open_on_error"):
             self.log_dock.show()
             self.log_action.setChecked(True)
+
+    # ------------------------------------------------------------ autosave
+    def autosave_target(self) -> str:
+        """The active session's file path, or ``""`` when it has none."""
+        session = self.session
+        if session is None or session.file_path is None:
+            return ""
+        return str(session.file_path)
+
+    def is_modified(self) -> bool:
+        """True when the active session has unsaved changes."""
+        session = self.session
+        return bool(session is not None and session.is_modified)
+
+    def write_autosave(self, target) -> None:
+        """Write the active session to ``target`` without changing its path.
+
+        Goes through ``Document.save`` rather than ``Session.save``: the
+        latter reassigns ``Session.file_path``, which would quietly rename the
+        open session to its own recovery file.
+        """
+        session = self.session
+        if session is not None:
+            session.document.save(str(target))
 
     # -------------------------------------------------------- window state
     #: Opaque Qt blobs, kept out of the readable JSON file on purpose.
