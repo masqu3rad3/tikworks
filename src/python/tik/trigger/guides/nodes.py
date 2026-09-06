@@ -41,6 +41,29 @@ def scene_node(name: str):
     return tm.resolve(name)
 
 
+def find_output(instance_id: str, output_name: str):
+    """The built node fulfilling ``instance_id``'s ``output_name``, or None.
+
+    How a later build pass reaches a module an earlier one produced. Outputs
+    are looked up by their *output* tag, never by their role tag: ``finalize``
+    writes ``trg_role`` on a module's inputs as well as its outputs, so one
+    instance can legitimately carry the same role name twice.
+
+    Guides are irrelevant here -- an earlier pass may well have deleted its
+    own -- so this scans the built rig, not the guide holder.
+    """
+    pattern = f"*.{tm.META_PREFIX}{tags.OUTPUT_NAME}"
+    for name in cmds.ls(pattern, long=True, objectsOnly=True) or []:
+        node = tm.resolve(name)
+        data = node.meta.as_dict()
+        if (
+            data.get(tags.INSTANCE) == instance_id
+            and data.get(tags.OUTPUT_NAME) == output_name
+        ):
+            return node
+    return None
+
+
 def holder() -> tm.Transform:
     """The group every unparented guide hangs under."""
     if cmds.objExists(tags.GUIDE_HOLDER):
