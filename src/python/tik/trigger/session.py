@@ -474,6 +474,104 @@ class Session:
             )
         return problems
 
+    # ------------------------------------------------- cross-action checks
+    KINEMATICS = "kinematics"
+
+    def _kinematics_scopes(self) -> list:
+        """``[(path, [instance ids])]`` for every enabled kinematics, in order."""
+        return [
+            (path, list(node.settings.get("modules") or []))
+            for path, node, _parent in self.document.walk(BUILD)
+            if node.type == self.KINEMATICS and node.enabled
+        ]
+
+    def _scope_problems(self) -> list:
+        """Problems spanning several actions, which no single action can see.
+
+        Explicit build scope is what makes these statable: until an action said
+        which modules it built, "built twice", "built by nobody" and "needs
+        something built later" had no way of being expressed, let alone
+        checked.
+        """
+        from tik.trigger.core.schemas import split_source
+
+        problems: list[str] = []
+        entries = list(self.document.guides.modules)
+        by_id = {entry.instance_id: entry for entry in entries}
+        scopes = self._kinematics_scopes()
+
+        def label(instance_id: str) -> str:
+            entry = by_id.get(instance_id)
+            return entry.key if entry is not None else instance_id
+
+        # which pass builds what, and what is built more than once
+        pass_of: dict = {}
+        for index, (path, scope) in enumerate(scopes):
+            for instance_id in scope:
+                if instance_id in pass_of:
+                    problems.append(
+                        f"{label(instance_id)} is built by more than one "
+                        f"kinematics action ({pass_of[instance_id][1]} and {path})."
+                    )
+                    continue
+                pass_of[instance_id] = (index, path)
+
+        # Only worth saying once a pipeline exists to be missing from: a
+        # session still being authored in the Designer has no kinematics
+        # action yet, and warning about every module would be pure noise.
+        if scopes:
+            for entry in entries:
+                if entry.instance_id not in pass_of:
+                    problems.append(
+                        f"warning: {entry.key} is built by no kinematics action."
+                    )
+
+        # only modules that actually build can collide in the rig
+        keys: dict = {}
+        for instance_id in pass_of:
+            entry = by_id.get(instance_id)
+            if entry is None:
+                continue
+            if entry.key in keys:
+                problems.append(
+                    f"two modules that build share the display key "
+                    f"'{entry.key}'. Rename one."
+                )
+            keys[entry.key] = instance_id
+
+        # a producer must build before its consumer, and must build at all
+        for entry in entries:
+            here = pass_of.get(entry.instance_id)
+            if here is None:
+                continue
+            for source in entry.inputs.values():
+                source_id, _output = split_source(source)
+                if source_id is None or source_id not in by_id:
+                    continue
+                there = pass_of.get(source_id)
+                if there is None:
+                    problems.append(
+                        f"{entry.key} needs {label(source_id)}, but no "
+                        "kinematics action builds it."
+                    )
+                elif there[0] > here[0]:
+                    problems.append(
+                        f"{entry.key} needs {label(source_id)}, which builds "
+                        "in a later kinematics action."
+                    )
+
+        # what the migration could not translate
+        for path, node, _parent in self.document.walk(BUILD):
+            if node.type != self.KINEMATICS:
+                continue
+            if node.settings.get("legacy_roots"):
+                problems.append(
+                    f"{path}: guide roots {node.settings['legacy_roots']} could "
+                    "not be migrated to module ids; open the session and list "
+                    "its modules."
+                )
+        return problems
+
     def validate(self) -> list[str]:
         """Pre-flight problems for every runnable step, in both lists."""
         from tik.trigger.core.action import ActionContext
@@ -502,6 +600,7 @@ class Session:
                     f"{prefix}{step.path}: {item}" for item in action.validate(ctx)
                 )
         problems.extend(self._module_problems())
+        problems.extend(self._scope_problems())
         return problems
 
     def build(
@@ -521,6 +620,11 @@ class Session:
                 "'until' cannot be combined with publish: "
                 "a partial build must not publish."
             )
+        blocking = [
+            item for item in self._scope_problems() if not item.startswith("warning:")
+        ]
+        if blocking:
+            raise SessionError("; ".join(blocking))
         self.events.log(f"Building{' and publishing' if publish else ''} {self.name}")
         # The runner resets the scene, so the guides have to be in the document
         # before it does. Saving already captures; building must too, or a rig

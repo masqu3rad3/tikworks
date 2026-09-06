@@ -26,9 +26,7 @@ def _socket_drivers(pattern: str) -> list:
     """Incoming connections of every socket transform matching ``pattern``."""
     found = []
     for name in cmds.ls(pattern, long=True, type="transform") or []:
-        found.extend(
-            cmds.listConnections(name, source=True, destination=False) or []
-        )
+        found.extend(cmds.listConnections(name, source=True, destination=False) or [])
     return found
 
 
@@ -77,7 +75,7 @@ def test_a_single_pass_still_builds_the_whole_rig():
 
 def test_duplicate_display_key_raises():
     """Two modules resolving to one key would silently overwrite by_key."""
-    from tik.trigger.core.exceptions import ActionExecutionError
+    from tik.trigger.core.exceptions import SessionError
 
     cmds.file(new=True, force=True)
     session = Session()
@@ -89,7 +87,7 @@ def test_duplicate_display_key_raises():
     session.document.guides.module(two.instance_id).name = "body"
 
     session.add("kinematics", modules=[one.instance_id, two.instance_id])
-    # the runner wraps a BuildError on its way out, which is what the rigger
-    # sees; the message is the part that has to survive
-    with pytest.raises(ActionExecutionError, match="display key"):
+    # caught before the scene is touched at all; the Builder keeps its own
+    # guard for anyone driving it directly
+    with pytest.raises(SessionError, match="display key"):
         session.build()

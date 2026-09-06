@@ -1,13 +1,13 @@
 """The kinematics action builds exactly the modules it names."""
 
 import pytest
+from toy_modules import ToyChain, ToyRoot
 
 from tik.trigger.actions.kinematics.kinematics import Kinematics
 from tik.trigger.core import clear_registries, register_module, registry
 from tik.trigger.core.exceptions import ActionExecutionError
 from tik.trigger.core.guide_document import GuideDocument, ModuleEntry
 from tik.trigger.session import Session
-from toy_modules import ToyChain, ToyRoot
 
 
 @pytest.fixture(autouse=True)
@@ -138,3 +138,83 @@ def test_migration_does_not_rerun_on_current_schema():
     again = Document.from_dict(document.to_dict())
     assert again.actions[0].settings["modules"] == ["aaa"]
     assert "legacy_roots" not in again.actions[0].settings
+
+
+# ------------------------------------------------------- cross-action checks
+def _scoped(entries, scopes) -> Session:
+    """A session with ``entries`` and one kinematics action per scope list."""
+    session = _session_with(*entries)
+    for index, scope in enumerate(scopes):
+        session.add("kinematics", name=f"pass{index}", modules=list(scope))
+    return session
+
+
+def test_double_build_is_an_error():
+    session = _scoped([_entry("aaa", name="spine")], [["aaa"], ["aaa"]])
+    assert any("more than one" in item for item in session.validate())
+
+
+def test_module_in_no_pass_is_a_warning():
+    entries = [_entry("aaa", name="spine"), _entry("bbb", name="wing")]
+    session = _scoped(entries, [["aaa"]])
+    reported = [item for item in session.validate() if "wing" in item]
+    assert reported and all(item.startswith("warning:") for item in reported)
+    assert any("built by no kinematics action" in item for item in reported)
+
+
+def test_source_built_in_a_later_pass_is_an_error():
+    spine = _entry("aaa", name="spine")
+    wing = _entry("bbb", "toy_chain", name="wing")
+    wing.inputs = {"root": "aaa.root"}
+    session = _scoped([spine, wing], [["bbb"], ["aaa"]])
+    assert any("later kinematics action" in item for item in session.validate())
+
+
+def test_source_in_no_pass_is_an_error():
+    spine = _entry("aaa", name="spine")
+    wing = _entry("bbb", "toy_chain", name="wing")
+    wing.inputs = {"root": "aaa.root"}
+    session = _scoped([spine, wing], [["bbb"]])
+    assert any("no kinematics action builds" in item for item in session.validate())
+
+
+def test_key_collision_among_built_modules_is_an_error():
+    entries = [_entry("aaa", name="spine"), _entry("bbb", name="spine")]
+    session = _scoped(entries, [["aaa", "bbb"]])
+    assert any("display key" in item for item in session.validate())
+
+
+def test_a_collision_outside_the_build_is_not_reported():
+    """Only modules that actually build can collide in the rig."""
+    entries = [_entry("aaa", name="spine"), _entry("bbb", name="spine")]
+    session = _scoped(entries, [["aaa"]])
+    assert not any("display key" in item for item in session.validate())
+
+
+def test_legacy_roots_are_reported():
+    session = _scoped([_entry("aaa", name="spine")], [["aaa"]])
+    session.document.actions[0].settings["legacy_roots"] = ["base_c"]
+    assert any("could not be migrated" in item for item in session.validate())
+
+
+def test_build_runs_the_cross_action_checks():
+    """Nothing calls validate() before a build, so build must check itself."""
+    from tik.trigger.core.exceptions import SessionError
+
+    session = _scoped([_entry("aaa", name="spine")], [["aaa"], ["aaa"]])
+    with pytest.raises(SessionError, match="more than one"):
+        session.build()
+
+
+def test_a_warning_alone_does_not_block_a_build():
+    """An unbuilt module is worth saying, not worth refusing to build over."""
+    entries = [_entry("aaa", name="spine"), _entry("bbb", name="wing")]
+    session = _scoped(entries, [["aaa"]])
+    assert any("warning:" in item for item in session.validate())
+    session._scope_problems()  # must not raise
+
+
+def test_no_pipeline_yet_means_no_unbuilt_warnings():
+    """A session still being authored has no kinematics action to be absent from."""
+    session = _session_with(_entry("aaa", name="spine"), _entry("bbb", name="wing"))
+    assert not any("no kinematics action" in item for item in session.validate())
