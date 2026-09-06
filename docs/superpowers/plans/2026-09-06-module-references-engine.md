@@ -59,7 +59,7 @@ Storage only — no resolution yet. Establishes the schema so later tasks have s
 **Interfaces:**
 - Produces: `ModuleReference(ref_id, file, version="latest", overrides={})` with `to_dict()` / `from_dict()`. `GuideDocument.references: list`, `GuideDocument.frames: dict`, `GuideDocument.reference(ref_id)`. `ModuleEntry.origin: Optional[str]`, `.source: Optional[ModuleEntry]`, `.enabled: bool` — all three **runtime-only**, never serialized on the entry. `SCHEMA_VERSION = 2`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/unit/test_guide_reference_trigger.py`:
 
@@ -139,7 +139,7 @@ def test_schema_2_rejects_a_newer_document():
         GuideDocument.from_dict({"schema": 99})
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_guide_reference_trigger.py -q
@@ -147,7 +147,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: FAIL — `ModuleReference` does not exist.
 
-- [ ] **Step 3: Add the dataclass and the fields**
+- [x] **Step 3: Add the dataclass and the fields**
 
 In `src/python/tik/trigger/core/guide_document.py`, set `SCHEMA_VERSION = 2`, then add to `ModuleEntry` (after `guides`):
 
@@ -246,7 +246,7 @@ and `from_dict` to read them:
             frames=copy.deepcopy(data.get("frames") or {}),
 ```
 
-- [ ] **Step 4: Run it to verify it passes**
+- [x] **Step 4: Run it to verify it passes**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_guide_reference_trigger.py tests/unit/test_guide_document_trigger.py -q
@@ -254,7 +254,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: PASS.
 
-- [ ] **Step 5: Run the full unit suite**
+- [x] **Step 5: Run the full unit suite**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit -q
@@ -262,7 +262,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Any test asserting `GuideDocument.from_dict` output shape may need the two new keys. Update those; do not remove the keys to keep an old assertion happy.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -288,7 +288,7 @@ Claude-Session: https://claude.ai/code/session_015xVfPaN3fdKbLNYdVWYS5n"
 - Consumes: `Document.load` (`tik/trigger/core/document.py`), `versioning.resolve` (`tik/trigger/core/versioning.py`), `SessionError` (`tik/trigger/core/exceptions.py`).
 - Produces: `resolve(document, base_dir, loader=None) -> list[str]` — mutates `document.modules` in place, returns problem strings. `apply_overrides(entry, override) -> None`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/test_guide_reference_trigger.py`:
 
@@ -450,7 +450,7 @@ def test_nested_references_are_owned_by_the_top_link():
     assert {item.origin for item in host.modules} == {"r1"}
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_guide_reference_trigger.py -q
@@ -458,7 +458,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: FAIL — no `guide_reference` module.
 
-- [ ] **Step 3: Write the resolver**
+- [x] **Step 3: Write the resolver**
 
 Create `src/python/tik/trigger/core/guide_reference.py`:
 
@@ -613,7 +613,7 @@ def resolve(
     return problems
 ```
 
-- [ ] **Step 4: Run it to verify it passes**
+- [x] **Step 4: Run it to verify it passes**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_guide_reference_trigger.py -q
@@ -621,7 +621,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add -A
@@ -652,7 +652,7 @@ The other direction. This is the task that makes every existing write path work 
 - Consumes: `reconcile.POSE_TOLERANCE`; `registry.get_module` for settings normalization (both in `core`).
 - Produces: `overrides_for(entry) -> dict` (empty when nothing differs); `serialize_references(document) -> list`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/unit/test_guide_reference_trigger.py`:
 
@@ -738,11 +738,11 @@ def test_overrides_survive_a_document_round_trip():
     assert reloaded.module("bbb").source.name == "arm"
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Expected: FAIL — `overrides_for` does not exist and `to_dict` writes the stored overrides untouched.
 
-- [ ] **Step 3: Implement the diff**
+- [x] **Step 3: Implement the diff**
 
 Append to `src/python/tik/trigger/core/guide_reference.py`:
 
@@ -878,7 +878,7 @@ def _serialize_references(document) -> list:
     return serialize_references(document)
 ```
 
-- [ ] **Step 4: Run it to verify it passes**
+- [x] **Step 4: Run it to verify it passes**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_guide_reference_trigger.py -q
@@ -886,7 +886,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: PASS.
 
-- [ ] **Step 5: Run the whole unit suite, then commit**
+- [x] **Step 5: Run the whole unit suite, then commit**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit -q
@@ -915,7 +915,7 @@ Claude-Session: https://claude.ai/code/session_015xVfPaN3fdKbLNYdVWYS5n"
 **Interfaces:**
 - Produces: `Session.resolve_references() -> list[str]`, `Session.reference_problems` (the last resolution's problems), `Session.link_modules(file, version="latest") -> ModuleReference`, `Session.unlink_modules(ref_id, bake=False) -> None`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_session_references_trigger.py` covering:
 
@@ -935,9 +935,9 @@ Create `tests/integration/trigger/test_reference_build_trigger.py` covering:
 - a **local** module whose input names a referenced module's output builds and attaches;
 - a pose override on a referenced guide moves the built rig.
 
-- [ ] **Step 2: Run them to verify they fail**
+- [x] **Step 2: Run them to verify they fail**
 
-- [ ] **Step 3: Wire the session**
+- [x] **Step 3: Wire the session**
 
 Add to `Session`:
 
@@ -965,9 +965,9 @@ and `unlink_modules(ref_id, bake=False)`, which either drops the entries or re-c
 
 Extend `_scope_problems` with the reference-specific rows: a listed uuid that is `enabled: False` is an error, and `self.reference_problems` are appended by `validate()`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
-- [ ] **Step 5: Run everything, then commit**
+- [x] **Step 5: Run everything, then commit**
 
 ---
 
@@ -982,13 +982,13 @@ Referenced entries now live in the real `modules` list, so the operations that *
 **Interfaces:**
 - Consumes: `GuideError` / `SessionError` from `tik/trigger/core/exceptions.py`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Assert: `remove()` on a referenced module raises and names `enabled: False` as the alternative; `clear()` removes local modules and **keeps** referenced ones; `snapshot_from_scene()` raises while the document holds references, naming unlinking as the way out.
 
-- [ ] **Step 2: Run them to verify they fail** — today `clear()` reassigns `document.modules = []` and drops referenced entries silently.
+- [x] **Step 2: Run them to verify they fail** — today `clear()` reassigns `document.modules = []` and drops referenced entries silently.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `remove()`, before deleting: raise when `entry.origin is not None`. In `clear()`, keep referenced entries:
 
@@ -1000,7 +1000,7 @@ In `remove()`, before deleting: raise when `entry.origin is not None`. In `clear
 
 and only delete the guides of the local ones. In `snapshot_from_scene()`, raise when `self.document.references` is non-empty — recovery builds a fresh document with no links, so every referenced module would become a local entry carrying upstream's uuid, and re-linking would then collide.
 
-- [ ] **Step 4: Check that a `.trg` export writes referenced modules as plain ones**
+- [x] **Step 4: Check that a `.trg` export writes referenced modules as plain ones**
 
 Referenced entries live in ``document.modules``, so ``exchange.export`` already
 treats them as ordinary modules -- which is what spec §8 asks for, since a link
@@ -1016,26 +1016,28 @@ Small, and it locks in the rule Task 2 relies on.
 **Files:**
 - Modify: `tests/unit/test_import_boundaries.py`
 
-- [ ] **Step 1: Add `tik.trigger.actions` to the `trigger/core` forbidden tuple**
+- [x] **Step 1: Add `tik.trigger.actions` to the `trigger/core` forbidden tuple**
 
 ```python
     "trigger/core": ("maya", "tik.maya", "tik.trigger.actions") + QT + PREFS,
 ```
 
-- [ ] **Step 2: Run it** — it must pass, since `core/guide_reference.py` writes its own cycle check.
+- [x] **Step 2: Run it** — it must pass, since `core/guide_reference.py` writes its own cycle check.
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_import_boundaries.py -q
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ---
 
 ## Done when
 
-- [ ] `tests/unit`, `tests/integration` and `tests/ui` are green.
-- [ ] `make lint` is clean.
-- [ ] A session can link a `.tr`, build one of its modules by naming its uuid, override a guide pose, save, reopen, and still have that override.
-- [ ] `GuideScene.document` was **not** changed — the seam holds.
+**Status: complete.** 1700 unit+integration and 494 UI tests pass, lint clean.
+
+- [x] `tests/unit`, `tests/integration` and `tests/ui` are green.
+- [x] `make lint` is clean.
+- [x] A session can link a `.tr`, build one of its modules by naming its uuid, override a guide pose, save, reopen, and still have that override.
+- [x] `GuideScene.document` was **not** changed — the seam holds.
 - [ ] Phase 3 (tree badges, graph frames, properties, gestures, the kinematics module picker — spec §7.1–7.4) has its own plan and is not started here.
