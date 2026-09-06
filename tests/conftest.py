@@ -159,3 +159,32 @@ def new_scene():
     cmds.file(new=True, force=True)
     cmds.select(clear=True)
     set_default_factory(Node)
+
+
+@pytest.fixture(autouse=True)
+def _prefs_sandbox(tmp_path_factory):
+    """Keep every test off the developer's real ``~/TikWorks/trigger.json``.
+
+    ``tik.trigger.config.prefs`` is a process-wide singleton pointed at the
+    user's home folder. Left alone, a test that writes a preference edits the
+    live tool's settings, and a test that reads one passes or fails depending
+    on how the developer happens to have configured Trigger. Same reasoning as
+    the ``QSettings`` sandbox in ``tests/ui/conftest.py``, for the other store.
+    """
+    try:
+        from tik.shared.prefs import Preferences, PrefStore, registry
+        from tik.trigger import config
+        from tik.trigger.config import pages  # noqa: F401 - importing registers
+    except ImportError:  # a suite that does not reach tik.trigger
+        yield
+        return
+
+    folder = tmp_path_factory.mktemp("prefs")
+    saved = config.prefs._wrapped
+    config.prefs._wrapped = Preferences(
+        PrefStore(config.STORE_NAME, folder=folder), registry.pages()
+    )
+    try:
+        yield config.prefs
+    finally:
+        config.prefs._wrapped = saved
