@@ -115,6 +115,29 @@ nodes -> types -> roles -> constructs -> systems -> modules
   `guides`, `inputs`, `outputs` and `Field`s are class attributes read by the
   registry and the UI `FormBuilder`. Shared behaviour goes in `systems/`.
 
+### Preferences never reach the rig
+
+A user preference is a quality-of-life choice. It may change what you *see*
+and what you *author*, never what a build makes from an already-saved session.
+The rule is build determinism: **given the same `.tr`, two artists build an
+identical rig, whatever their settings say.**
+
+This is enforced structurally rather than by review. `tik/trigger/core`,
+`modules`, `systems`, `maya`, `actions` and `guides` may not import
+`tik.trigger.config` or `tik.shared.prefs` *at all* --
+`tests/unit/test_import_boundaries.py` fails if they do. Only
+`tik/trigger/ui` reads preferences, and the build API takes no settings
+argument.
+
+So a value that changes the rig is not a preference. It belongs in the `.tr`
+session document, where it is visible, reviewable and version-controlled. If
+you find yourself wanting a preference read from inside a module or an action,
+that is the signal you are reaching for the wrong home.
+
+Adding a preference is one `Field` line on a page in
+`tik/trigger/config/pages/`; the dialog is generated. Every field must declare
+`help=` -- it is both the tooltip and the text the settings search matches on.
+
 ---
 
 ## Module Ground Rules (all tik.trigger modules)

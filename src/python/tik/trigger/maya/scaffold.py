@@ -83,7 +83,9 @@ def _ensure_group(name: str, parent, kind: str, events) -> tm.Transform:
     return node
 
 
-def _ensure_control(name: str, parent, kind: str, shape: str, events, size=1.0) -> Controller:
+def _ensure_control(
+    name: str, parent, kind: str, shape: str, events, size=1.0
+) -> Controller:
     """The controller ``name`` under ``parent``, tagged ``kind``."""
     path = f"{parent.long_name}|{name}"
     if cmds.objExists(path):
@@ -99,11 +101,11 @@ def _ensure_control(name: str, parent, kind: str, shape: str, events, size=1.0) 
             node.meta[tags.KIND] = kind
         return control
     control = Controller.create(
-        name=name, shape=shape, size=1.0, parent=parent.long_name, color=(1,1,0)
+        name=name, shape=shape, size=1.0, parent=parent.long_name, color=(1, 1, 0)
     )
     control.transform.meta[tags.KIND] = kind
-    control.transform["rotate"].set([90,0,0]) # set to upright
-    control.transform["scale"].set((size,size,size))
+    control.transform["rotate"].set([90, 0, 0])  # set to upright
+    control.transform["scale"].set((size, size, size))
     control.transform.freeze()
     _lock_channels(control.transform)
     return control

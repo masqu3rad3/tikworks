@@ -21,10 +21,10 @@ from .constructs import (
 from .core import naming
 from .core.constants import (
     ALL_CHANNELS,
-    TRANSFORM_CHANNELS,
-    TRANSLATE_CHANNELS,
     ROTATE_CHANNELS,
     SCALE_CHANNELS,
+    TRANSFORM_CHANNELS,
+    TRANSLATE_CHANNELS,
 )
 from .core.dagnode import DagNode
 from .core.meta import META_PREFIX, find_by_meta
