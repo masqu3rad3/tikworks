@@ -895,8 +895,14 @@ class TriggerWindow(MayaToolWindow):
             view.clear_statuses()
         self.status.set_activity("Scene reset")
 
-    def open_settings(self, exec_: bool = True):
+    def open_settings(self, *, exec_: bool = True):
         """Open the preferences dialog.
+
+        ``exec_`` is keyword-only on purpose. ``QAction.triggered`` emits a
+        ``checked`` boolean, and PySide hands it to any slot whose signature
+        accepts a positional argument -- so as a positional parameter this
+        bound ``exec_=False`` on every menu click, building the dialog,
+        skipping the modal loop and discarding it without a word.
 
         Args:
             exec_: Run the modal loop. Tests pass False to inspect the dialog.
@@ -907,11 +913,13 @@ class TriggerWindow(MayaToolWindow):
         from tik.shared.ui.prefs_dialog import PrefsDialog
         from tik.trigger.config import prefs
 
-        dialog = PrefsDialog(prefs, self)
-        dialog.applied.connect(self._on_prefs_applied)
+        # Held on self: a modeless dialog assigned to a local is garbage
+        # collected the moment this returns.
+        self._prefs_dialog = PrefsDialog(prefs, self)
+        self._prefs_dialog.applied.connect(self._on_prefs_applied)
         if exec_:
-            dialog.exec_()
-        return dialog
+            self._prefs_dialog.exec()
+        return self._prefs_dialog
 
     def _on_prefs_applied(self, changed: list) -> None:
         """Push applied preferences into the widgets that cache them.
