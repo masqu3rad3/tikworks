@@ -521,6 +521,69 @@ class DesignerCommands:
         with mute():
             draw(scope=[instance_id])
 
+    SESSION_EXTENSION = ".tr"
+
+    def reference_modules(self) -> None:
+        """Link another session's modules into this rig.
+
+        The link is a session-level fact, not a scene one -- the guides that
+        arrive are a rendering of somebody else's document -- so this needs a
+        session and says so rather than half-working without one.
+        """
+        session = self.guides.session
+        if session is None:
+            self.events.log("Referencing modules needs a session.", level="warning")
+            return
+        path = self._pick_session()
+        if not path:
+            return
+        try:
+            session.link_modules(path)
+        except TriggerError as error:
+            # Already linked, or unreadable. A message, not a traceback into Qt.
+            self.events.log(str(error), level="warning")
+            Feedback(self).pop_warning(title="Reference modules", text=str(error))
+            return
+        self.refresh()
+
+    def unlink_reference(self, ref_id: str) -> None:
+        """Drop a link, after asking what to do with its modules.
+
+        Three answers, and the order matters: discarding authored overrides is
+        the one destructive act in this feature, so it is never the default
+        button.
+        """
+        session = self.guides.session
+        if session is None:
+            return
+        reference = self.guides.document.reference(ref_id)
+        name = Path(reference.file).name if reference is not None else "this reference"
+        answer = Feedback(self).pop_question(
+            title="Unlink modules",
+            text=f"Stop referencing {name}?",
+            details=(
+                "Bake in keeps its modules here as copies of your own, with "
+                "your overrides applied. Discard removes them, and the local "
+                "changes you made to them go with it."
+            ),
+            buttons=["Bake in", "Discard", "Cancel"],
+        )
+        if answer not in ("Bake in", "Discard"):
+            return
+        session.unlink_modules(ref_id, bake=answer == "Bake in")
+        self.refresh()
+
+    def _pick_session(self) -> str:
+        """Browse for a ``.tr``, through the injected browser when there is one."""
+        if self.file_browser is not None:
+            return self.file_browser("open", [self.SESSION_EXTENSION], "") or ""
+        return Feedback(self).browse_open(
+            "Reference modules",
+            "",
+            (self.SESSION_EXTENSION,),
+            f"Trigger session (*{self.SESSION_EXTENSION})",
+        )
+
     def set_module_enabled(self, enabled: bool) -> None:
         """Keep a borrowed module in the session but out of the rig."""
         handle = self._current

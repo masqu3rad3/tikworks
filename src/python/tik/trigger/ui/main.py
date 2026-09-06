@@ -185,6 +185,14 @@ class TriggerWindow(MayaToolWindow):
             lambda: self._designer_call("export_file", ask=True),
         )
         file_menu.addSeparator()
+        # A .trg import copies modules in; this links them, so upstream
+        # changes keep arriving. Two different acts, deliberately apart.
+        self._action(
+            file_menu,
+            "Reference Modules…",
+            lambda: self._designer_call("reference_modules"),
+        )
+        file_menu.addSeparator()
         # no shortcut: it throws the scene away, and there is nothing to undo
         self._action(file_menu, "Reset Scene", self.reset_scene)
         file_menu.addSeparator()

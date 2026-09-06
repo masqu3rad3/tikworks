@@ -245,3 +245,111 @@ def test_the_enabled_toggle_leaves_a_module_out(designer):
 
     designer.set_module_enabled(False)
     assert designer.guides.document.module(handle.instance_id).enabled is False
+
+
+# ------------------------------------------------------- link and unlink
+class FakeSession:
+    """Only the two verbs the designer's gestures call."""
+
+    def __init__(self, guides):
+        self.document = _Doc(guides)
+        self.linked: list = []
+        self.unlinked: list = []
+        self.raises: Exception = None
+
+    def link_modules(self, file_path, version="latest"):
+        if self.raises is not None:
+            raise self.raises
+        self.linked.append((file_path, version))
+        return object()
+
+    def unlink_modules(self, ref_id, bake=False):
+        self.unlinked.append((ref_id, bake))
+
+
+class _Doc:
+    def __init__(self, guides):
+        self.guides = guides
+
+
+@pytest.fixture
+def linked(designer):
+    """A designer whose scene reports a session, with one borrowed module."""
+    handle = designer.guides.add("toy_root", name="arm")
+    designer.guides.borrow(handle.instance_id, ref_id="r1", file="baseRig.tr")
+    designer.guides.session = FakeSession(designer.guides.document)
+    designer.refresh()
+    return designer, handle
+
+
+def test_reference_modules_links_what_the_browser_returns(designer):
+    designer.file_browser = lambda mode, extensions, current: "/rigs/base.tr"
+    designer.guides.session = FakeSession(designer.guides.document)
+    designer.reference_modules()
+    assert designer.guides.session.linked == [("/rigs/base.tr", "latest")]
+
+
+def test_a_cancelled_browse_links_nothing(designer):
+    designer.file_browser = lambda mode, extensions, current: ""
+    designer.guides.session = FakeSession(designer.guides.document)
+    designer.reference_modules()
+    assert designer.guides.session.linked == []
+
+
+def test_linking_an_already_linked_file_is_reported_not_raised(designer):
+    from tik.trigger.core.exceptions import SessionError
+
+    designer.file_browser = lambda mode, extensions, current: "/rigs/base.tr"
+    session = FakeSession(designer.guides.document)
+    session.raises = SessionError("'base.tr' is already linked to this session.")
+    designer.guides._session = session
+    designer.reference_modules()  # must not raise into Qt
+    assert session.linked == []
+
+
+def test_unlink_bakes_when_asked(linked):
+    designer, _handle = linked
+    feedback.set_handler(lambda *_args: "Bake in")
+    try:
+        designer.unlink_reference("r1")
+    finally:
+        feedback.set_handler(None)
+    assert designer.guides.session.unlinked == [("r1", True)]
+
+
+def test_unlink_discards_when_asked(linked):
+    designer, _handle = linked
+    feedback.set_handler(lambda *_args: "Discard")
+    try:
+        designer.unlink_reference("r1")
+    finally:
+        feedback.set_handler(None)
+    assert designer.guides.session.unlinked == [("r1", False)]
+
+
+def test_a_cancelled_unlink_does_nothing(linked):
+    designer, _handle = linked
+    feedback.set_handler(lambda *_args: "Cancel")
+    try:
+        designer.unlink_reference("r1")
+    finally:
+        feedback.set_handler(None)
+    assert designer.guides.session.unlinked == []
+
+
+def test_unlinking_offers_bake_before_discard(linked):
+    """Discarding authored overrides must never be the default button."""
+    designer, _handle = linked
+    seen = {}
+
+    def _handler(kind, title, text, details, buttons):
+        seen["buttons"] = list(buttons)
+        return "Cancel"
+
+    feedback.set_handler(_handler)
+    try:
+        designer.unlink_reference("r1")
+    finally:
+        feedback.set_handler(None)
+    assert seen["buttons"][0] == "Bake in"
+    assert seen["buttons"].index("Discard") > 0
