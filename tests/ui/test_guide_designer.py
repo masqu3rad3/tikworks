@@ -115,9 +115,12 @@ def test_the_bar_spans_the_window_not_a_pane(designer):
 
 def test_auto_sync_survives_a_relaunch(designer, qapp):
     """A working habit, not rig data: it belongs to the user, not the .tr."""
+    from tik.trigger.config import prefs
+
     designer.set_auto_sync(False)
-    stored = QtCore.QSettings("tikworks", "trigger").value("designer/auto_sync")
-    assert stored in (False, "false")
+    # Stored in the preferences file now, not QSettings.
+    assert prefs.guides.auto_sync is False
+    assert prefs.store.read()["guides.auto_sync"] is False
 
     # "Survives a relaunch" means a *second*, independently-constructed
     # Designer picks the setting back up -- not just that the raw value was
@@ -571,6 +574,11 @@ def test_unique_names_layout_persistence_and_slice(designer, tmp_path):
         data["designer"]["positions"]["L_tail"] == [40.0, 40.0]
         and data["designer"]["collapse"]["L_tail"] == 0
     )
+    # Clearing is setup here, not the thing under test, so skip the
+    # confirmation rather than answering a modal dialog.
+    from tik.trigger.config import prefs
+
+    prefs.guides.confirm_delete_all = False
     designer.clear_guides()
     assert designer.guides.layout == {}
     designer.import_file(str(path))

@@ -142,21 +142,18 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         # in a closure so nothing touches self during destruction.
         watcher = self.watcher
         self.destroyed.connect(lambda *_args: watcher.uninstall())
-        # QSettings hands back a string on some platforms, so normalise rather
-        # than trusting the type. Restored via _apply_auto_sync, not
-        # set_auto_sync: the latter runs a full sync(), which captures,
-        # can regenerate, and calls session.touch() -- opening a Designer
-        # would then mark a freshly loaded, untouched session "modified"
-        # before the rigger did anything. refresh() below is enough to paint
-        # the document that is already there.
-        stored = QtCore.QSettings("tikworks", "trigger").value(
-            "designer/auto_sync", True
-        )
-        self._apply_auto_sync(stored not in (False, "false", "0", 0))
-        drawing = QtCore.QSettings("tikworks", "trigger").value(
-            "designer/draw_on_create", True
-        )
-        self.guides.draw_on_create = drawing not in (False, "false", "0", 0)
+        # Restored via _apply_auto_sync, not set_auto_sync: the latter runs a
+        # full sync(), which captures, can regenerate, and calls
+        # session.touch() -- opening a Designer would then mark a freshly
+        # loaded, untouched session "modified" before the rigger did anything.
+        # refresh() below is enough to paint the document that is already there.
+        from tik.trigger.config import prefs
+
+        from .commands import migrate_designer_settings
+
+        migrate_designer_settings()
+        self._apply_auto_sync(bool(prefs.guides.auto_sync))
+        self.guides.draw_on_create = bool(prefs.guides.draw_on_create)
         self.refresh()
 
     # ------------------------------------------------------------------ ui

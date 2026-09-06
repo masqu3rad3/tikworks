@@ -875,17 +875,18 @@ class TriggerWindow(MayaToolWindow):
         they asked for. The run statuses go with it -- the build they described
         no longer exists.
         """
-        answer = Feedback(self).pop_question(
-            title="Reset Scene",
-            text="Delete everything in the Maya scene?",
-            details=(
-                "Your session and its guides are kept. Anything built or "
-                "imported into the scene is lost."
-            ),
-            buttons=["cancel", "reset"],
-        )
-        if answer != "reset":
-            return
+        if prefs_value("guides", "confirm_reset_scene"):
+            answer = Feedback(self).pop_question(
+                title="Reset Scene",
+                text="Delete everything in the Maya scene?",
+                details=(
+                    "Your session and its guides are kept. Anything built or "
+                    "imported into the scene is lost."
+                ),
+                buttons=["cancel", "reset"],
+            )
+            if answer != "reset":
+                return
         from tik.trigger.guides import nodes
 
         nodes.new_scene()

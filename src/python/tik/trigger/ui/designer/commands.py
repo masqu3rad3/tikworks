@@ -19,6 +19,41 @@ from tik.trigger.guides import EXTENSION as GUIDE_EXTENSION
 
 from .widgets import SCENE_NODE
 
+
+def _as_bool(value, fallback: bool) -> bool:
+    """QSettings hands back strings on some platforms; normalise, do not cast."""
+    if value is None:
+        return fallback
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return bool(value)
+    return str(value).strip().lower() not in ("false", "0", "")
+
+
+def migrate_designer_settings() -> None:
+    """Import the old ``QSettings`` designer toggles, once.
+
+    The Designer used to persist Auto Sync and Draw New Modules under
+    ``QSettings("tikworks", "trigger")``. Both are preferences now. A rigger
+    who turned Auto Sync off would be annoyed to find it back on, so the old
+    values are read once and written into the preferences file.
+    """
+    from tik.trigger.config import prefs
+
+    if prefs.guides.migrated_from_qsettings:
+        return
+    settings = QtCore.QSettings("tikworks", "trigger")
+    prefs.guides.auto_sync = _as_bool(
+        settings.value("designer/auto_sync"), prefs.guides.auto_sync
+    )
+    prefs.guides.draw_on_create = _as_bool(
+        settings.value("designer/draw_on_create"), prefs.guides.draw_on_create
+    )
+    prefs.guides.migrated_from_qsettings = True
+    prefs.save()
+
+
 if TYPE_CHECKING:
     from tik.trigger.guides import GuideHandle
 
@@ -214,8 +249,33 @@ class DesignerCommands:
         self._multi = []
         self.refresh()
 
+    def _delete_all_dialog(self) -> bool:
+        """The Delete All Modules question itself, split out so it can be skipped."""
+        answer = Feedback(self).pop_question(
+            title="Delete all modules",
+            text="Delete every module from this session?",
+            details=(
+                "This empties the session document, not just the guides drawn "
+                "in the scene. Undo with Ctrl+Z."
+            ),
+            # Feedback restricts button keys to a fixed vocabulary; the
+            # (key, label) form is how this codebase gives one custom text.
+            buttons=["cancel", ("discard", "Delete all")],
+        )
+        return answer == "discard"
+
+    def _confirm_delete_all(self) -> bool:
+        """True when Delete All Modules may proceed."""
+        from tik.trigger.config import prefs
+
+        if not prefs.guides.confirm_delete_all:
+            return True
+        return self._delete_all_dialog()
+
     def clear_guides(self) -> None:
-        """Remove every module, group and layout entry."""
+        """Remove every module, group and layout entry, after asking."""
+        if not self._confirm_delete_all():
+            return
         with self.watcher.mute():
             self.guides.clear()
             self.guides.set_layout({})
@@ -294,10 +354,11 @@ class DesignerCommands:
         No sync or redraw afterwards: the flag only affects the *next* module
         created, never anything already in the session.
         """
+        from tik.trigger.config import prefs
+
         self.guides.draw_on_create = bool(on)
-        QtCore.QSettings("tikworks", "trigger").setValue(
-            "designer/draw_on_create", bool(on)
-        )
+        prefs.guides.draw_on_create = bool(on)
+        prefs.save()
 
     def sync_now(self) -> None:
         """Pull the scene into the session, whatever the Auto setting says."""
@@ -354,10 +415,13 @@ class DesignerCommands:
         flip a freshly opened, untouched session to "modified" before the
         rigger had done anything, and prompted "discard changes?" on close.
         """
+        from tik.trigger.config import prefs
+
         self.guides.auto_sync = bool(on)
         self.action_bar.set_auto_sync(on)
         self.auto_sync_changed.emit(bool(on))
-        QtCore.QSettings("tikworks", "trigger").setValue("designer/auto_sync", bool(on))
+        prefs.guides.auto_sync = bool(on)
+        prefs.save()
 
     def export_file(
         self, path: Optional[str] = None, ask: bool = False, selected: bool = False
