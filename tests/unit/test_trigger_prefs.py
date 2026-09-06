@@ -43,7 +43,7 @@ class TestDefaults:
         [
             ("interface.restore_geometry", True),
             ("interface.restore_dock_layout", True),
-            ("interface.log_open_on_error", False),
+            ("interface.log_open_on_error", True),
             ("interface.log_max_lines", 2000),
             ("interface.log_verbosity", "Info"),
             ("interface.graph_snap", True),

@@ -76,6 +76,9 @@ class TriggerWindow(MayaToolWindow):
         self.events.subscribe(ERROR, self._on_error)
         self.new_session()
         self._sync_menu_state()
+        self.log.set_level(prefs_value("interface", "log_verbosity"))
+        self.log.setMaximumBlockCount(prefs_value("interface", "log_max_lines"))
+        self.restore_window_state()
 
     # ------------------------------------------------------------------ ui
     def _build_shell(self) -> None:
@@ -883,6 +886,8 @@ class TriggerWindow(MayaToolWindow):
         """
         if "interface.log_max_lines" in changed:
             self.log.setMaximumBlockCount(prefs_value("interface", "log_max_lines"))
+        if "interface.log_verbosity" in changed:
+            self.log.set_level(prefs_value("interface", "log_verbosity"))
 
     def open_docs(self) -> None:
         """Open the project page in the browser."""
@@ -1022,8 +1027,48 @@ class TriggerWindow(MayaToolWindow):
 
     def _on_error(self, exception=None, context: str = "", **_kw) -> None:
         self.log.append_message(f"{context}: {exception}", "error")
-        self.log_dock.show()
-        self.log_action.setChecked(True)
+        if prefs_value("interface", "log_open_on_error"):
+            self.log_dock.show()
+            self.log_action.setChecked(True)
+
+    # -------------------------------------------------------- window state
+    #: Opaque Qt blobs, kept out of the readable JSON file on purpose.
+    STATE_ORG, STATE_APP = "tikworks", "trigger"
+
+    def save_window_state(self) -> None:
+        """Store geometry and dock layout as Qt blobs."""
+        settings = QtCore.QSettings(self.STATE_ORG, self.STATE_APP)
+        settings.setValue("window/geometry", self.saveGeometry())
+        settings.setValue("window/state", self.saveState())
+
+    def restore_window_state(self) -> None:
+        """Put back whatever the preferences allow, tolerating missing blobs.
+
+        Geometry and dock layout are opaque Qt byte blobs that vary by Qt
+        version and monitor arrangement, so they live in ``QSettings`` rather
+        than polluting the hand-editable preferences file. The two booleans
+        that gate them are ordinary preferences.
+        """
+        settings = QtCore.QSettings(self.STATE_ORG, self.STATE_APP)
+        if prefs_value("interface", "restore_geometry"):
+            blob = settings.value("window/geometry")
+            if blob:
+                self.restoreGeometry(blob)
+        if prefs_value("interface", "restore_dock_layout"):
+            blob = settings.value("window/state")
+            if blob:
+                self.restoreState(blob)
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt style
+        """Remember the layout, then let the base class decide about closing.
+
+        The unsaved-changes question lives in ``MayaToolWindow.closeEvent`` and
+        must be asked exactly once, so this override must not repeat it. Saving
+        the layout unconditionally is harmless: if the user cancels the close,
+        the window keeps the geometry that was just stored.
+        """
+        self.save_window_state()
+        super().closeEvent(event)
 
     def confirm_close(self) -> bool:
         """Ask about every dirty tab in order; the first Cancel stops the close.

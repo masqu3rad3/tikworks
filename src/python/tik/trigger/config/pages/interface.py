@@ -35,7 +35,7 @@ class InterfacePrefs(PrefPage):
         help="Reopen the Log and Script docks where and as they were.",
     )
     log_open_on_error = BoolField(
-        False,
+        True,
         group=LOG,
         label="Open log on error",
         help="Raise the Log dock automatically when a build reports an error.",
