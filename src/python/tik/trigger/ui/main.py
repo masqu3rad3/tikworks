@@ -46,6 +46,13 @@ def _holder() -> QtWidgets.QWidget:
     return widget
 
 
+def prefs_value(page: str, field: str):
+    """One preference value, read lazily so imports stay cheap."""
+    from tik.trigger.config import prefs
+
+    return getattr(prefs.page(page), field)
+
+
 class TriggerWindow(MayaToolWindow):
     """The Trigger main window: session tabs, menus, log dock and status bar."""
 
@@ -172,6 +179,8 @@ class TriggerWindow(MayaToolWindow):
         file_menu.addSeparator()
         # no shortcut: it throws the scene away, and there is nothing to undo
         self._action(file_menu, "Reset Scene", self.reset_scene)
+        file_menu.addSeparator()
+        self._action(file_menu, "Settings…", self.open_settings, "Ctrl+,")
         file_menu.addSeparator()
         self._action(
             file_menu,
@@ -421,8 +430,6 @@ class TriggerWindow(MayaToolWindow):
             "Ctrl+Shift+L",
             checkable=True,
         )
-        tools_menu.addSeparator()
-        self._action(tools_menu, "Settings…", self.open_settings)
 
     def _build_help_menu(self, help_menu) -> None:
         self._action(help_menu, "Documentation", self.open_docs)
@@ -849,9 +856,33 @@ class TriggerWindow(MayaToolWindow):
             view.clear_statuses()
         self.status.set_activity("Scene reset")
 
-    def open_settings(self) -> None:
-        """Placeholder until the settings dialog exists."""
-        Feedback(self).pop_info("Settings", "Settings are not available yet.")
+    def open_settings(self, exec_: bool = True):
+        """Open the preferences dialog.
+
+        Args:
+            exec_: Run the modal loop. Tests pass False to inspect the dialog.
+
+        Returns:
+            The dialog, so a caller can inspect it.
+        """
+        from tik.shared.ui.prefs_dialog import PrefsDialog
+        from tik.trigger.config import prefs
+
+        dialog = PrefsDialog(prefs, self)
+        dialog.applied.connect(self._on_prefs_applied)
+        if exec_:
+            dialog.exec_()
+        return dialog
+
+    def _on_prefs_applied(self, changed: list) -> None:
+        """Push applied preferences into the widgets that cache them.
+
+        Only settings that a *live* widget holds a copy of need pushing.
+        Everything else is read at the point of use and picks the new value
+        up on its own, which is why this table stays short.
+        """
+        if "interface.log_max_lines" in changed:
+            self.log.setMaximumBlockCount(prefs_value("interface", "log_max_lines"))
 
     def open_docs(self) -> None:
         """Open the project page in the browser."""

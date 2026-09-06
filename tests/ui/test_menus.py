@@ -370,3 +370,32 @@ def test_the_destructive_entry_says_what_it_destroys(window):
     entries = items(menu(window, "&Guides"))
     assert "Delete All Modules" in entries
     assert "Clear Scene Guides" not in entries
+
+
+class TestSettingsMenuEntry:
+    """Settings lives under File, not Tools."""
+
+    def test_settings_is_in_the_file_menu(self, window):
+        assert "Settings…" in items(menu(window, "&File"))
+
+    def test_settings_is_not_in_the_tools_menu(self, window):
+        assert "Settings…" not in items(menu(window, "&Tools"))
+
+    def test_settings_has_the_standard_shortcut(self, window):
+        action = next(
+            entry
+            for entry in menu(window, "&File").actions()
+            if entry.text() == "Settings…"
+        )
+        assert action.shortcut().toString() == "Ctrl+,"
+
+    def test_opening_settings_builds_a_dialog(self, window):
+        dialog = window.open_settings(exec_=False)
+        assert dialog.categories.count() == 4
+        dialog.close()
+
+    def test_the_dialog_shows_every_trigger_page(self, window):
+        dialog = window.open_settings(exec_=False)
+        labels = [dialog.categories.item(i).text() for i in range(4)]
+        assert labels == ["Interface", "Guides", "Files & Sessions", "External Tools"]
+        dialog.close()
