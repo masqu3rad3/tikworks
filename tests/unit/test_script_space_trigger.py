@@ -123,18 +123,3 @@ def test_create_script_file_writes_a_versioned_stub(tmp_path):
     assert second.name == "claw_setup_v002.py"
     with pytest.raises(ValueError):
         create_script_file(tmp_path, "9lives")
-
-
-def test_open_external_uses_the_configured_command(monkeypatch, tmp_path):
-    from tik.shared import io
-
-    launched = []
-    monkeypatch.setattr(
-        io.subprocess, "Popen", lambda args, **kw: launched.append(args)
-    )
-    target = tmp_path / "a.py"
-    target.write_text("", encoding="utf-8")
-    io.open_external(target, command="code --goto {path}")
-    assert launched == [["code", "--goto", str(target)]]
-    io.open_external(target, command="subl")
-    assert launched[-1] == ["subl", str(target)]

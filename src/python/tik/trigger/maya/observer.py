@@ -31,17 +31,26 @@ class SceneObserver:
             job = cmds.scriptJob(
                 event=[event, lambda name=event: self._fire(name)], protected=False
             )
-            self._jobs.append(job)
+            # Batch Maya hands back None instead of a job number (there is no
+            # idle loop to run the job on). Recording that would only give
+            # ``stop`` an id it can never kill, and claim an ``active``
+            # observer that is watching nothing.
+            if job:
+                self._jobs.append(job)
 
     def stop(self) -> None:
         """Remove the installed scriptJobs."""
-        for job in self._jobs:
+        # Emptied up front, and every id tried on its own: one job that cannot
+        # be killed must not strand the ones after it. A callback outliving the
+        # widget it fires into crashes Maya on shutdown, so a half-done stop is
+        # the failure this class exists to prevent.
+        jobs, self._jobs = self._jobs, []
+        for job in jobs:
             try:
                 if cmds.scriptJob(exists=job):
                     cmds.scriptJob(kill=job, force=True)
-            except RuntimeError:
+            except (RuntimeError, TypeError):
                 pass
-        self._jobs = []
 
     def _fire(self, name: str) -> None:
         if not self.muted:
