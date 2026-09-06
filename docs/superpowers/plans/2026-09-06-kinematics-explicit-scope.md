@@ -69,7 +69,7 @@ Replaces the action's three settings with one, and scopes every scene effect to 
 - Consumes: `GuideScene.draw(scope=None, poses="keep")` and `GuideScene.clear_rendering()` from `tik/trigger/guides/scene.py`; `Builder(events).build(scope, document, afterlife)` from `tik/trigger/maya/build.py`; `ActionExecutionError` from `tik/trigger/core/exceptions.py`.
 - Produces: `Kinematics.modules` — a `ListField(item_type=str)` of instance uuids. `Kinematics.validate(ctx)` returning `list[str]`. Task 2 writes into `settings["modules"]`; Task 5 reads it to find every built uuid.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/unit/test_kinematics_scope_trigger.py`:
 
@@ -139,7 +139,7 @@ def test_guides_file_and_guide_roots_are_gone():
     assert "modules" in fields
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_kinematics_scope_trigger.py -q
@@ -147,7 +147,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: FAIL. `test_guides_file_and_guide_roots_are_gone` fails because both fields still exist; `test_empty_modules_raises` fails because there is no `modules` field.
 
-- [ ] **Step 3: Rewrite the action**
+- [x] **Step 3: Rewrite the action**
 
 Replace the whole of `src/python/tik/trigger/actions/kinematics/kinematics.py`:
 
@@ -247,7 +247,7 @@ class Kinematics(Action):
         return f"{count} module{'' if count == 1 else 's'}"
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_kinematics_scope_trigger.py -q
@@ -255,7 +255,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Run the whole unit suite and fix the fallout**
+- [x] **Step 5: Run the whole unit suite and fix the fallout**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit -q
@@ -269,7 +269,7 @@ grep -rn "guides_file\|guide_roots\|\"kinematics\"\|'kinematics'" tests/ --inclu
 
 Update each to pass explicit uuids. Do **not** reintroduce a default-to-all shortcut to keep an old test passing — that is the behaviour this task removes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/python/tik/trigger/actions/kinematics/kinematics.py tests/
@@ -298,7 +298,7 @@ Old sessions must keep building exactly as they do today. The per-action `migrat
 - Consumes: `GuideDocument.modules` (each `ModuleEntry` has `.instance_id`, `.name`, `.side`, `.key`, `.inputs`), `ModuleEntry` from `tik/trigger/core/guide_document.py`.
 - Produces: `migrate_kinematics(actions, guides) -> None`, mutating `ActionNode.settings` in place. Sets `settings["modules"]` and, for anything unresolvable, `settings["legacy_roots"]`; removes `guide_roots`. Task 5 reads `legacy_roots` and `guides_file` to report them.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/unit/test_kinematics_scope_trigger.py`:
 
@@ -383,7 +383,7 @@ def test_migration_does_not_rerun_on_current_schema():
     assert "legacy_roots" not in again.actions[0].settings
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_kinematics_scope_trigger.py -q
@@ -391,7 +391,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: FAIL — `settings["modules"]` is absent; `guide_roots` is still there.
 
-- [ ] **Step 3: Write the migration module**
+- [x] **Step 3: Write the migration module**
 
 Create `src/python/tik/trigger/core/kinematics_migration.py`:
 
@@ -485,7 +485,7 @@ def migrate_kinematics(actions: list, guides) -> None:
 
 Note: `split_source` is already exported from `tik/trigger/core/schemas.py` and splits `"<id>.<output>"`, returning `(None, source)` for a bare scene node name.
 
-- [ ] **Step 4: Wire it into `Document.from_dict`**
+- [x] **Step 4: Wire it into `Document.from_dict`**
 
 In `src/python/tik/trigger/core/document.py`, change `SCHEMA_VERSION` from `6` to `7`, then in `Document.from_dict` build the document first and run the migration before returning:
 
@@ -509,7 +509,7 @@ In `src/python/tik/trigger/core/document.py`, change `SCHEMA_VERSION` from `6` t
         return document
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_kinematics_scope_trigger.py tests/unit/test_document_trigger.py -q
@@ -517,7 +517,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: PASS.
 
-- [ ] **Step 6: Verify the real legacy session in test data migrates without crashing**
+- [x] **Step 6: Verify the real legacy session in test data migrates without crashing**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -c "
@@ -531,7 +531,7 @@ for path, node, _p in d.walk():
 
 Expected: prints the action with `modules == []` and `legacy_roots == ['base_c']` — preserved, not silently emptied.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/python/tik/trigger/core/kinematics_migration.py src/python/tik/trigger/core/document.py tests/unit/test_kinematics_scope_trigger.py
@@ -560,7 +560,7 @@ Today a source outside the current pass produces a warning and an unattached lim
 - Consumes: `tags.INSTANCE` (`"trg_instance"`), `tags.OUTPUT_NAME` (`"trg_output"`) from `tik/trigger/maya/tags.py`; `tm.META_PREFIX` and `tm.resolve` from `tik.maya`.
 - Produces: `guide_nodes.find_output(instance_id: str, output_name: str)` returning a `tm` node or `None`. `Builder.resolve` keeps its signature; it gains an internal `keys_to_ids` map built from the document.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `tests/integration/trigger/test_multipass_build_trigger.py`:
 
@@ -627,7 +627,7 @@ def test_first_pass_guides_survive_a_second_pass_with_keep():
 
 The exact socket name comes from the `rig` object's naming; if it differs, read it from the build report instead of guessing — but keep the assertion on a *connection existing*, which is the behaviour under test.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/integration/trigger/test_multipass_build_trigger.py -q
@@ -635,7 +635,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: FAIL. `test_second_pass_attaches_to_first_pass_output` fails with the socket unconnected, and the log carries "outside the build scope; left unattached".
 
-- [ ] **Step 3: Add the scene lookup**
+- [x] **Step 3: Add the scene lookup**
 
 In `src/python/tik/trigger/guides/nodes.py`, after `scene_node`:
 
@@ -660,7 +660,7 @@ def find_output(instance_id: str, output_name: str):
     return None
 ```
 
-- [ ] **Step 4: Use it in the Builder**
+- [x] **Step 4: Use it in the Builder**
 
 In `src/python/tik/trigger/maya/build.py`:
 
@@ -698,7 +698,7 @@ In `_bind_parent_for`, after the existing `by_key` lookup returns nothing, fall 
 
 Replace the `known_keys` computation in `build()` with `known_keys = set(self._keys_to_ids)`.
 
-- [ ] **Step 5: Run the test to verify it passes**
+- [x] **Step 5: Run the test to verify it passes**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/integration/trigger/test_multipass_build_trigger.py -q
@@ -706,7 +706,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: PASS (2 tests).
 
-- [ ] **Step 6: Run the full integration suite**
+- [x] **Step 6: Run the full integration suite**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/integration -q
@@ -714,7 +714,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/python/tik/trigger/guides/nodes.py src/python/tik/trigger/maya/build.py tests/integration/trigger/test_multipass_build_trigger.py
@@ -742,7 +742,7 @@ Claude-Session: https://claude.ai/code/session_015xVfPaN3fdKbLNYdVWYS5n"
 - Consumes: `BuildError` from `tik/trigger/core/exceptions.py`.
 - Produces: nothing new; `Builder.build` raises `BuildError` earlier than before.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/integration/trigger/test_multipass_build_trigger.py`:
 
@@ -760,7 +760,7 @@ def test_duplicate_display_key_raises():
         session.build()
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/integration/trigger/test_multipass_build_trigger.py::test_duplicate_display_key_raises -q
@@ -768,7 +768,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: FAIL — the build succeeds, or fails for an unrelated reason (duplicate Maya node names), not with a `BuildError` naming the key.
 
-- [ ] **Step 3: Raise on the collision**
+- [x] **Step 3: Raise on the collision**
 
 In `Builder.build`, immediately after `self._keys_to_ids` is built:
 
@@ -785,7 +785,7 @@ In `Builder.build`, immediately after `self._keys_to_ids` is built:
             seen[entry.key] = entry.instance_id
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/integration/trigger/test_multipass_build_trigger.py -q
@@ -793,7 +793,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/python/tik/trigger/maya/build.py tests/integration/trigger/test_multipass_build_trigger.py
@@ -818,7 +818,7 @@ Claude-Session: https://claude.ai/code/session_015xVfPaN3fdKbLNYdVWYS5n"
 - Consumes: `Document.walk(phase)` yielding `(path, node, parent)`; `BUILD` from `tik/trigger/core/document.py`; `split_source` from `tik/trigger/core/schemas.py`.
 - Produces: `Session._scope_problems() -> list[str]`, called by both `validate()` and `build()`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/unit/test_session_trigger.py` (it already imports `Session` and `pytest`; add `GuideDocument`, `ModuleEntry` and the toy modules to its imports):
 
@@ -905,7 +905,7 @@ def _kinematics_registered():
 
 If `load_builtin_actions` is not the discovery entry point in this codebase, import the action module directly — `import tik.trigger.actions.kinematics.kinematics  # noqa: F401` — which registers it as a side effect. Check `tik/trigger/core/discovery.py` first and use whichever exists.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_session_trigger.py -q -k "pass or double or collision or later"
@@ -913,7 +913,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: FAIL — none of the messages exist yet.
 
-- [ ] **Step 3: Implement the checks**
+- [x] **Step 3: Implement the checks**
 
 In `src/python/tik/trigger/session.py`, add:
 
@@ -997,7 +997,7 @@ Call it from `validate()` — append `problems.extend(self._scope_problems())` n
             raise SessionError("; ".join(blocking))
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit/test_session_trigger.py -q
@@ -1005,7 +1005,7 @@ PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/M
 
 Expected: PASS.
 
-- [ ] **Step 5: Report `legacy_roots` and `guides_file` too**
+- [x] **Step 5: Report `legacy_roots` and `guides_file` too**
 
 Add to `_scope_problems`, iterating the same walk:
 
@@ -1028,7 +1028,7 @@ Add to `_scope_problems`, iterating the same walk:
 
 Add a test for each alongside the others, following the same shape as `test_double_build_is_an_error`.
 
-- [ ] **Step 6: Run the whole suite and lint**
+- [x] **Step 6: Run the whole suite and lint**
 
 ```bash
 PYTHONPATH="D:/dev/tikworks/src/python;$PYTHONPATH" "/c/Program Files/Autodesk/Maya2026/bin/mayapy" -m pytest tests/unit tests/integration -q
@@ -1037,7 +1037,7 @@ make lint
 
 Expected: all green.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/python/tik/trigger/session.py tests/unit/test_session_trigger.py
@@ -1055,8 +1055,10 @@ Claude-Session: https://claude.ai/code/session_015xVfPaN3fdKbLNYdVWYS5n"
 
 ## Done when
 
-- [ ] `tests/unit` and `tests/integration` are green, and the count has grown by the new tests rather than shrunk by deleted ones.
-- [ ] `make lint` is clean.
-- [ ] `grep -rn "guide_roots\|guides_file" src/` returns only the migration module and the `validate()` report.
-- [ ] `tests/data/crabMonster_main_session_v002.tr` loads and reports its unresolved root rather than silently building nothing.
+**Status: complete.** All five tasks landed; 1659 unit+integration and 494 UI tests pass, lint clean.
+
+- [x] `tests/unit` and `tests/integration` are green, and the count has grown by the new tests rather than shrunk by deleted ones.
+- [x] `make lint` is clean.
+- [x] `grep -rn "guide_roots\|guides_file" src/` returns only the migration module and the `validate()` report.
+- [x] `tests/data/crabMonster_main_session_v002.tr` loads and reports its unresolved root rather than silently building nothing.
 - [ ] Phase 2 (the `ModuleReference` itself, resolution, and the views — spec §3, §4, §7) has its own plan and has not been started here.
