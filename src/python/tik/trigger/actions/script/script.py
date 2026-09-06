@@ -157,22 +157,6 @@ class Script(Action):
         return f"{error}. {hint}" if hint else str(error)
 
 
-def editor_command() -> str:
-    """The user's ``external_editor`` command, or ``""`` for the OS default.
-
-    Read lazily: ``tik.trigger.config`` builds its settings singleton at
-    import time and writes a file into the process's working directory, which
-    under Maya is not writable. A settings store that cannot be reached must
-    not stop a script from opening.
-    """
-    try:
-        from tik.trigger.config import trigger_settings
-
-        return str(trigger_settings.get("external_editor") or "")
-    except Exception:  # noqa: BLE001 - any store failure means "OS default"
-        return ""
-
-
 def create_script_file(session_dir, name: str) -> Path:
     """Write a versioned stub into ``<session_dir>/scripts`` and return it.
 

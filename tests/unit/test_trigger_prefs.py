@@ -101,3 +101,21 @@ class TestRejectedKeys:
 
         for page in prefs.pages():
             assert banned not in type(page).fields()
+
+
+class TestEditorCommand:
+    """The editor command reads the preference, from the UI layer."""
+
+    def test_reads_the_preference(self, monkeypatch):
+        from tik.trigger.config import prefs
+        from tik.trigger.ui import prefs_access
+
+        monkeypatch.setattr(prefs.tools, "external_editor", "code -g {path}")
+        assert prefs_access.editor_command() == "code -g {path}"
+
+    def test_empty_by_default(self, monkeypatch):
+        from tik.trigger.config import prefs
+        from tik.trigger.ui import prefs_access
+
+        monkeypatch.setattr(prefs.tools, "external_editor", "")
+        assert prefs_access.editor_command() == ""

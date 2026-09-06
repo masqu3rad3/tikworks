@@ -26,9 +26,7 @@ def demo_pages(clean_registry):
     class Beta(PrefPage):
         name, label, order = "beta", "Beta", 20
 
-        mode = ChoiceField(
-            "fast", ["fast", "slow"], help="How hard to think about it."
-        )
+        mode = ChoiceField("fast", ["fast", "slow"], help="How hard to think about it.")
 
     @register_page
     class Alpha(PrefPage):
