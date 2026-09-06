@@ -145,3 +145,22 @@ class TestSearch:
         dialog.search("count")
         dialog.search("")
         assert preferences.alpha.count == 3
+
+
+class TestDefaultButton:
+    """Enter accepts the dialog; it must never reset the page.
+
+    Every button in a QDialog is autoDefault, so the first one added -- Restore
+    Defaults -- otherwise claims Enter and the accent styling meant for OK.
+    """
+
+    def test_ok_is_the_default_button(self, dialog):
+        assert dialog.ok_button.isDefault()
+
+    def test_restore_defaults_is_not_default(self, dialog):
+        assert not dialog.defaults_button.isDefault()
+        assert not dialog.defaults_button.autoDefault()
+
+    def test_cancel_and_apply_are_not_default(self, dialog):
+        assert not dialog.cancel_button.autoDefault()
+        assert not dialog.apply_button.autoDefault()

@@ -131,18 +131,27 @@ class PrefsDialog(QtWidgets.QDialog):
         row.addWidget(self.defaults_button)
         row.addStretch(1)
 
-        cancel = QtWidgets.QPushButton("Cancel")
-        cancel.clicked.connect(self.reject)
-        row.addWidget(cancel)
+        self.cancel_button = QtWidgets.QPushButton("Cancel")
+        self.cancel_button.clicked.connect(self.reject)
+        row.addWidget(self.cancel_button)
 
         self.apply_button = QtWidgets.QPushButton("Apply")
         self.apply_button.clicked.connect(self.apply_changes)
         row.addWidget(self.apply_button)
 
-        ok = QtWidgets.QPushButton("OK")
-        ok.setDefault(True)
-        ok.clicked.connect(self.accept)
-        row.addWidget(ok)
+        self.ok_button = QtWidgets.QPushButton("OK")
+        self.ok_button.clicked.connect(self.accept)
+        row.addWidget(self.ok_button)
+
+        # Every button in a QDialog is autoDefault by default, so the first one
+        # added -- Restore Defaults -- would claim Enter and the accent styling
+        # meant for OK. Enter in a settings dialog must accept it, never reset
+        # the page.
+        for button in (self.defaults_button, self.cancel_button, self.apply_button):
+            button.setAutoDefault(False)
+            button.setDefault(False)
+        self.ok_button.setAutoDefault(True)
+        self.ok_button.setDefault(True)
         return holder
 
     # ----------------------------------------------------------- page view
