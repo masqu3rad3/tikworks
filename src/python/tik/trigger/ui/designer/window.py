@@ -275,6 +275,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.multi_label.setObjectName("LinkedNote")
         self.multi_label.setVisible(False)
         props.addWidget(self.multi_label)
+        props.addWidget(self._build_reference_strip())
         self.inputs_caption = QtWidgets.QLabel("INPUTS")
         self.inputs_caption.setObjectName("FieldCaption")
         props.addWidget(self.inputs_caption)
@@ -294,6 +295,62 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.scene_panel.setVisible(False)
         props.addWidget(self.scene_panel, 1)
         return self.properties
+
+    def _build_reference_strip(self) -> QtWidgets.QWidget:
+        """Where a borrowed module came from, and what is local about it.
+
+        An override is what quietly stops an upstream fix from arriving, so
+        the panel has to say there is one and offer to give it back.
+        """
+        self.reference_strip = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout(self.reference_strip)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        self.reference_label = QtWidgets.QLabel("")
+        self.reference_label.setObjectName("LinkedNote")
+        self.enabled_box = QtWidgets.QCheckBox("Build in this rig")
+        self.enabled_box.setToolTip(
+            "Unticked, this module stays in the session but is left out of "
+            "the rig -- and stops being offered to a kinematics action."
+        )
+        self.enabled_box.toggled.connect(self.set_module_enabled)
+        self.revert_button = QtWidgets.QPushButton("Revert to source")
+        self.revert_button.setToolTip(
+            "Discard every local change to this module and take what the "
+            "referenced session says."
+        )
+        self.revert_button.clicked.connect(self.revert_module)
+        row.addWidget(self.reference_label, 1)
+        row.addWidget(self.enabled_box)
+        row.addWidget(self.revert_button)
+        self.reference_strip.setVisible(False)
+        return self.reference_strip
+
+    def _show_reference_strip(self, handle) -> None:
+        """Fill the strip for ``handle``, or hide it for a local module."""
+        entry = (
+            self.guides.document.module(handle.instance_id)
+            if handle is not None
+            else None
+        )
+        if entry is None or entry.origin is None:
+            self.reference_strip.setVisible(False)
+            return
+        files = {
+            item.ref_id: Path(item.file).name
+            for item in self.guides.document.references
+        }
+        overrides = _override_count(entry)
+        text = f"from {files.get(entry.origin, 'another session')}"
+        if overrides:
+            plural = "" if overrides == 1 else "s"
+            text += f" · {overrides} local override{plural}"
+        self.reference_label.setText(text)
+        self.revert_button.setEnabled(bool(overrides))
+        self.enabled_box.blockSignals(True)
+        self.enabled_box.setChecked(entry.enabled)
+        self.enabled_box.blockSignals(False)
+        self.reference_strip.setVisible(True)
 
     def _connect_signals(self) -> None:
         self.tree_filter.filter_changed.connect(self.apply_tree_filter)
@@ -826,6 +883,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.name_edit.setPlaceholderText("instance name")
         if handle is None:
             self._module_obj = None
+            self.reference_strip.setVisible(False)
             self.form.set_target(None)
             self.name_edit.setText("")
             self.type_label.setText("")
@@ -871,6 +929,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 self._input_rows[declared.name] = row
             self.inputs_caption.setVisible(bool(declared_inputs))
         self.form.set_target(self._module_obj)
+        self._show_reference_strip(handle)
         if multi:
             self.status.set_activity(
                 f"{len(self._multi)} × {module_cls.display_label()} selected"

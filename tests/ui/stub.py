@@ -65,6 +65,32 @@ class StubScene:
         self._borrowed[instance_id] = (ref_id, file, dict(source or {}))
         self._document_cache = None
 
+    def set_enabled(self, instance_id, enabled) -> None:
+        """Mirror ``GuideScene.set_enabled``."""
+        if enabled:
+            self._disabled.discard(instance_id)
+        else:
+            self._disabled.add(instance_id)
+        self._document_cache = None
+        self.calls.append(("set_enabled", instance_id, bool(enabled)))
+
+    def revert_to_source(self, instance_id) -> bool:
+        """Mirror ``GuideScene.revert_to_source``: take upstream's word back."""
+        borrowed = self._borrowed.get(instance_id)
+        if borrowed is None:
+            return False
+        _ref_id, _file, upstream = borrowed
+        instance = self._instances[instance_id]
+        for key, value in upstream.items():
+            if key == "position":
+                instance.guides[0].position = tuple(value)
+            else:
+                setattr(instance, key, value)
+        self._borrowed[instance_id] = (_ref_id, _file, dict(upstream))
+        self._document_cache = None
+        self.calls.append(("revert_to_source", instance_id))
+        return True
+
     def disable(self, instance_id) -> None:
         """Leave a referenced module out of this rig."""
         self._disabled.add(instance_id)

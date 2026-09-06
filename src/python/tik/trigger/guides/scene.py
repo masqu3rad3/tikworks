@@ -412,6 +412,53 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
                 entry.inputs.pop(input_name, None)
             self._apply(entry)
 
+    def set_enabled(self, instance_id: str, enabled: bool) -> None:
+        """Keep a referenced module in the session but out of the rig.
+
+        Only meaningful for a borrowed module: which modules exist is
+        upstream's word, so leaving one out is the local decision available
+        instead of deleting it. Recorded as an override, and undone by
+        ticking it back on.
+        """
+        entry = self.document.module(instance_id)
+        if entry is None or entry.origin is None:
+            raise GuideError(
+                "Only a referenced module can be left out of a rig; a local "
+                "one is simply removed."
+            )
+        if entry.enabled == bool(enabled):
+            return
+        entry.enabled = bool(enabled)
+        self._apply(entry)
+
+    def revert_to_source(self, instance_id: str) -> bool:
+        """Give a referenced module back to its source. **Draws nothing.**
+
+        Overrides are derived, so this is not an unwind: copying the source's
+        authored values back leaves nothing for serialization to find a
+        difference in, and the override disappears with it.
+
+        Returns True when something was reverted. Drawing afterwards is the
+        caller's, because the joints are still where the rigger left them and
+        only an explicit Draw may move them.
+        """
+        from tik.trigger.core.guide_document import GuideRecord
+
+        entry = self.document.module(instance_id)
+        if entry is None or entry.source is None:
+            return False
+        source = entry.source
+        entry.name = source.name
+        entry.side = source.side
+        entry.settings = dict(source.settings)
+        entry.inputs = dict(source.inputs)
+        entry.guides = [
+            GuideRecord.from_dict(record.to_dict()) for record in source.guides
+        ]
+        entry.enabled = True
+        self._apply(entry)
+        return True
+
     def read_settings(self, instance_id: str) -> dict:
         """A copy of the settings stored for an instance (empty when unknown)."""
         entry = self.document.module(instance_id)

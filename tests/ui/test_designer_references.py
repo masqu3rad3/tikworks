@@ -4,6 +4,7 @@ import pytest
 from stub import StubScene
 from toy_modules import ToyChain, ToyRoot
 
+from tik.shared.ui import feedback
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.trigger.core import clear_registries, register_module
 from tik.trigger.ui.designer import GuideDesigner
@@ -160,3 +161,87 @@ def test_an_origin_paints_a_chip(qapp):
 def test_painting_an_unmarked_row_still_works(qapp):
     """The delegate must survive rows that carry none of the new roles."""
     assert _paint()
+
+
+# ------------------------------------------------------- properties strip
+def _select(designer, handle):
+    """Show one module in the properties panel."""
+    designer._set_current(designer.guides.get(handle.instance_id))
+
+
+def test_a_local_module_shows_no_reference_strip(designer):
+    handle = designer.guides.add("toy_root", name="spine")
+    designer.refresh()
+    _select(designer, handle)
+    assert designer.reference_strip.isVisibleTo(designer.properties) is False
+
+
+def test_a_referenced_module_names_its_source(designer):
+    handle = designer.guides.add("toy_root", name="arm")
+    designer.guides.borrow(handle.instance_id, file="baseRig.tr")
+    designer.refresh()
+    _select(designer, handle)
+    assert designer.reference_strip.isVisibleTo(designer.properties) is True
+    assert "baseRig.tr" in designer.reference_label.text()
+
+
+def test_the_strip_counts_the_overrides(designer):
+    handle = designer.guides.add("toy_root", name="wing")
+    designer.guides.borrow(handle.instance_id, source={"name": "arm"})
+    designer.refresh()
+    _select(designer, handle)
+    assert "1" in designer.reference_label.text()
+    assert designer.revert_button.isEnabled()
+
+
+def test_revert_is_disabled_without_overrides(designer):
+    handle = designer.guides.add("toy_root", name="arm")
+    designer.guides.borrow(handle.instance_id, source={"name": "arm"})
+    designer.refresh()
+    _select(designer, handle)
+    assert not designer.revert_button.isEnabled()
+
+
+def test_reverting_restores_what_upstream_says(designer):
+    handle = designer.guides.add("toy_root", name="wing")
+    designer.guides.borrow(handle.instance_id, source={"name": "arm"})
+    designer.refresh()
+    _select(designer, handle)
+
+    answered = []
+    feedback.set_handler(
+        lambda kind, title, text, details, buttons: answered.append(title) or "Revert"
+    )
+    try:
+        designer.revert_module()
+    finally:
+        feedback.set_handler(None)
+
+    assert answered, "reverting discards local work; it has to ask"
+    entry = designer.guides.document.module(handle.instance_id)
+    assert entry.name == "arm"
+
+
+def test_a_cancelled_revert_changes_nothing(designer):
+    handle = designer.guides.add("toy_root", name="wing")
+    designer.guides.borrow(handle.instance_id, source={"name": "arm"})
+    designer.refresh()
+    _select(designer, handle)
+
+    feedback.set_handler(lambda *_args: "Cancel")
+    try:
+        designer.revert_module()
+    finally:
+        feedback.set_handler(None)
+    assert designer.guides.document.module(handle.instance_id).name == "wing"
+
+
+def test_the_enabled_toggle_leaves_a_module_out(designer):
+    handle = designer.guides.add("toy_root", name="arm")
+    designer.guides.borrow(handle.instance_id)
+    designer.refresh()
+    _select(designer, handle)
+    assert designer.enabled_box.isChecked()
+
+    designer.set_module_enabled(False)
+    assert designer.guides.document.module(handle.instance_id).enabled is False

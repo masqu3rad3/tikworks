@@ -469,3 +469,65 @@ class DesignerCommands:
             (GUIDE_EXTENSION,),
             guide_filter,
         )
+
+    # -------------------------------------------------- module references
+    def revert_module(self) -> None:
+        """Give a borrowed module back to its source, wholly.
+
+        Overrides are *derived*, so reverting is not an unwind: copying the
+        source's authored values back leaves nothing for ``to_dict`` to find a
+        difference in, and the override disappears on its own.
+        """
+        handle = self._current
+        if handle is None:
+            return
+        entry = self.guides.document.module(handle.instance_id)
+        if entry is None or entry.source is None:
+            return
+        from tik.trigger.core.guide_reference import overrides_for
+
+        if not overrides_for(entry):
+            return
+        answer = Feedback(self).pop_question(
+            title="Revert to source",
+            text=f"Discard every local change to '{entry.key}'?",
+            details=(
+                "Its name, settings, connections and guide poses go back to "
+                "what the referenced session says. This cannot be undone from "
+                "the referenced file's side."
+            ),
+            buttons=["Revert", "Cancel"],
+        )
+        if answer != "Revert":
+            return
+        if not self.guides.revert_to_source(entry.instance_id):
+            return
+        # Redraw before anything syncs: the joints are still where the rigger
+        # left them, and a sync arriving first would read the reverted pose
+        # straight back out of the scene as a fresh override.
+        self._muted_draw(entry.instance_id)
+        self.refresh()
+
+    def _muted_draw(self, instance_id: str) -> None:
+        """Draw one module without letting the watcher start a sync."""
+        watcher = getattr(self, "watcher", None)
+        mute = getattr(watcher, "mute", None)
+        draw = getattr(self.guides, "draw", None)
+        if draw is None:
+            return
+        if mute is None:
+            draw(scope=[instance_id])
+            return
+        with mute():
+            draw(scope=[instance_id])
+
+    def set_module_enabled(self, enabled: bool) -> None:
+        """Keep a borrowed module in the session but out of the rig."""
+        handle = self._current
+        if handle is None:
+            return
+        entry = self.guides.document.module(handle.instance_id)
+        if entry is None or entry.origin is None or entry.enabled == bool(enabled):
+            return
+        self.guides.set_enabled(entry.instance_id, bool(enabled))
+        self.refresh()
