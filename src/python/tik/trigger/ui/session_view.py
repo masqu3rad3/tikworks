@@ -113,6 +113,8 @@ class SessionView(QtWidgets.QWidget):
         self.designer_factory = designer_factory
         self.events = events or session.events
         self.designer = None
+        #: Structure of the guide document the Designer last drew.
+        self._guides_signature: tuple = ()
         self._build_ui(file_browser)
         self._connect_events()
 
@@ -136,9 +138,44 @@ class SessionView(QtWidgets.QWidget):
         self._designer_page.layout().addWidget(designer)
         return designer
 
+    def guides_signature(self) -> tuple:
+        """A cheap stamp of the guide document's *structure*.
+
+        Which modules exist, where each came from, and which files are linked.
+        Poses are deliberately absent: they change constantly and a redraw is
+        not what they need.
+        """
+        guides = self.session.document.guides
+        return (
+            tuple(
+                (entry.instance_id, entry.origin, entry.key, entry.enabled)
+                for entry in guides.modules
+            ),
+            tuple(item.ref_id for item in guides.references),
+        )
+
+    def sync_designer(self) -> None:
+        """Rebuild the Designer when the document moved under it.
+
+        A reference added or removed in *this* pane changes which modules
+        exist, and nothing in Maya fires for that -- so without this the
+        modules only appear after some unrelated act happens to trigger a
+        rebuild, which is exactly as confusing as it sounds.
+        """
+        if self.designer is None:
+            return
+        signature = self.guides_signature()
+        if signature == self._guides_signature:
+            return
+        self._guides_signature = signature
+        self.designer.refresh()
+
     def _on_sub_tab_changed(self, index: int) -> None:
         if index == DESIGNER_TAB:
             designer = self.ensure_designer()
+            # The other pane may have changed which modules exist while this
+            # one was hidden; drift alone would only repaint the indicators.
+            self.sync_designer()
             # Belt-and-suspenders alongside GuideDesigner.showEvent: on the
             # very first activation the page is already the current tab when
             # the widget gets built and added to it, so Qt may never deliver
@@ -459,11 +496,13 @@ class SessionView(QtWidgets.QWidget):
         self._rebuild_all()
         self.select_path(keep, phase)
         self.settings.set_handle(self.current_handle())
+        self.sync_designer()
         self.title_changed.emit()
 
     def _after_edit(self) -> None:
         for tree in self.trees.values():
             tree.expandAll()
+        self.sync_designer()
         self.title_changed.emit()
 
     def _on_settings_edited(self, path: str) -> None:
