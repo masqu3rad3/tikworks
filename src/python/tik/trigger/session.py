@@ -570,6 +570,12 @@ class Session:
                     "not be migrated to module ids; open the session and list "
                     "its modules."
                 )
+            if node.settings.get("guides_file"):
+                problems.append(
+                    f"{path}: '{node.settings['guides_file']}' is no longer "
+                    "built at build time; import the .trg into this session "
+                    "and list its modules."
+                )
         return problems
 
     def validate(self) -> list[str]:

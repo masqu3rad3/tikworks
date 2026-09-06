@@ -218,3 +218,14 @@ def test_no_pipeline_yet_means_no_unbuilt_warnings():
     """A session still being authored has no kinematics action to be absent from."""
     session = _session_with(_entry("aaa", name="spine"), _entry("bbb", name="wing"))
     assert not any("no kinematics action" in item for item in session.validate())
+
+
+def test_a_legacy_guides_file_is_reported():
+    """Its modules were never in the session, so the scope migrated to nothing."""
+    from tik.trigger.core.document import Document
+
+    data = _legacy_document([], [], guides_file="guides/hero.trg")
+    session = Session()
+    session.document = Document.from_dict(data)
+    reported = [item for item in session.validate() if "hero.trg" in item]
+    assert reported and "import the .trg" in reported[0]
