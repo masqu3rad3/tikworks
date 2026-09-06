@@ -44,7 +44,11 @@ def test_empty_modules_raises():
 def test_unknown_uuid_is_a_validation_problem():
     session = _session_with(_entry("aaa"))
     session.add("kinematics", modules=["nope"])
-    assert any("nope" in item for item in session.validate())
+    reported = [item for item in session.validate() if "nope" in item]
+    assert reported
+    # the common cause is a pipeline reference whose modules were never
+    # linked, so the message has to name the remedy, not just the absence
+    assert "Reference Modules" in reported[0]
 
 
 def test_modules_field_stores_uuids():

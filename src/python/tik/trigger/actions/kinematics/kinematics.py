@@ -48,10 +48,21 @@ class Kinematics(Action):
         if document is None:
             return []
         known = {entry.instance_id for entry in document.modules}
+        missing = [item for item in self.modules if item not in known]
+        if not missing:
+            return []
+        # The overwhelmingly common cause: this action came from a session
+        # referenced in the pipeline, whose *modules* were never linked. The
+        # ids are real -- they just belong to a rig this session does not
+        # contain yet -- so say where to get them rather than only that they
+        # are absent.
+        remedy = (
+            " If they belong to a session referenced in this pipeline, add its "
+            "modules with File > Reference Modules…"
+        )
         return [
-            f"kinematics names a module that is not in this session: '{item}'."
-            for item in self.modules
-            if item not in known
+            f"kinematics names {len(missing)} module(s) that are not in this "
+            f"session: {', '.join(missing)}.{remedy}"
         ]
 
     def run(self, ctx) -> None:
