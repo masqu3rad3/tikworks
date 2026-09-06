@@ -17,6 +17,11 @@ FORBIDDEN = {
     "core": ("maya", "tik.maya", "tik.trigger", "tik.shared") + QT,
     "maya": ("tik.trigger", "tik.shared") + QT,
     "trigger/core": ("maya", "tik.maya") + QT,
+    # ``tik.trigger.config`` builds a settings singleton at import time that
+    # writes a file into the process's working directory. Importing it at
+    # module level in the UI made ``tik.trigger.ui.show()`` fail under Maya
+    # with a permission error; the UI reads settings lazily instead.
+    "trigger/ui": ("tik.trigger.config",),
 }
 
 

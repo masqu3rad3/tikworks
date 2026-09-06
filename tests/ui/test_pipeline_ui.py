@@ -610,3 +610,51 @@ def test_reset_scene_clears_the_run_statuses(qapp, monkeypatch):
     window.close()
 
     assert view.model.status("mark") == ""
+
+
+# ---------------------------------------------------------------- scripts
+
+
+def test_py_file_field_gets_a_pencil_and_new_script_writes_a_stub(
+    view, tmp_path, monkeypatch
+):
+    from tik.trigger.actions.script.script import Script
+    from tik.trigger.ui import settings_panel
+
+    register_action("script", category="structure", scope="both")(Script)
+    opened = []
+    monkeypatch.setattr(
+        settings_panel,
+        "open_external",
+        lambda path, command="": opened.append(str(path)),
+    )
+    view.add_action("script")
+    panel = view.settings
+    assert panel.new_script_button.isVisible()
+    # unsaved session: disabled with a reason
+    assert not panel.new_script_button.isEnabled()
+    assert "save" in panel.new_script_button.toolTip().lower()
+    view.session.file_path = tmp_path / "hero_v001.tr"
+    panel.set_handle(panel.handle)
+    assert panel.new_script_button.isEnabled()
+    created = panel.new_script("claw setup")
+    assert created == tmp_path / "scripts" / "claw_setup_v001.py"
+    assert view.session["script"].file_path == "scripts/claw_setup_v001.py"
+    assert panel.form.widget("file_path").value() == "scripts/claw_setup_v001.py"
+    assert opened == [str(created)]
+    # the pencil on the file field opens the same way
+    field = panel.form.widget("file_path")
+    assert field.extra_button is not None
+    field.extra_button.click()
+    assert opened[-1] == str(created)
+
+
+def test_the_panel_announces_its_handle(view):
+    seen = []
+    view.handle_changed.connect(
+        lambda handle: seen.append(handle.path if handle else None)
+    )
+    view.add_action("mark")
+    assert seen[-1] == "mark"
+    view.settings.set_handle(None)
+    assert seen[-1] is None

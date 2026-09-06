@@ -20,6 +20,7 @@ class ActionContext:
     path: str = ""  # action path in the running document (for logs)
     depth: int = 0
     rig: Any = None  # the RigScaffold, set by the Maya runner; core never reads it
+    scripts: Any = None  # the run's ScriptSpace, set by the Maya runner; core ignores
 
     def resolve(self, file_path: str) -> Path:
         """Return an absolute path; relative paths are resolved from ``base_dir``."""
@@ -57,6 +58,15 @@ class Action(Schema):
     def description(cls) -> str:
         """The help text shown in the UI (falls back to the class docstring)."""
         return cls.info or (cls.__doc__ or "").strip()
+
+    @classmethod
+    def migrate_settings(cls, settings: dict) -> dict:
+        """Translate settings written by an older version of this action.
+
+        Called when a document is loaded. Must be idempotent. The default
+        keeps the settings as they are.
+        """
+        return settings
 
     def summary(self) -> str:
         """Short text shown next to the action name in the pipeline."""

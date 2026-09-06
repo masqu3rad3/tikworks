@@ -109,6 +109,30 @@ def test_old_flat_session_converts():
     ).actions[0].settings == {"x": 1}
 
 
+def test_legacy_script_settings_migrate_on_load():
+    from tik.trigger.actions.script.script import Script
+    from tik.trigger.core.registry import (
+        is_action_registered,
+        register_action,
+        unregister_action,
+    )
+
+    was_registered = is_action_registered("script")
+    if not was_registered:
+        register_action("script", category="structure", scope="both")(Script)
+    try:
+        doc = Document.load(DATA / "crabMonster_main_session_v002.tr")
+        node = next(node for node in doc.actions if node.type == "script")
+        assert node.settings["file_path"].endswith("claw_setup_v001.py")
+        assert "script_file_path" not in node.settings
+        assert "commands" not in node.settings
+        # idempotent: a second pass through from_dict changes nothing
+        assert ActionNode.from_dict(node.to_dict()).settings == node.settings
+    finally:
+        if not was_registered:
+            unregister_action("script")
+
+
 def test_versioning(tmp_path):
     assert versioning.parse("hero_v012.tr") == ("hero", 12, ".tr")
     assert versioning.parse("hero.tr") == ("hero", None, ".tr")

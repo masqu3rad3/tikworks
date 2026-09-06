@@ -5,6 +5,7 @@ import pytest
 from tik.core.fields import FileField
 from tik.trigger.core import (
     Action,
+    ActionContext,
     EventBus,
     IntField,
     StringField,
@@ -349,3 +350,176 @@ def test_a_script_can_extend_the_preferences_control():
     )
     Runner().run(doc, "D:/x")
     assert cmds.attributeQuery("exportLod", node="preferences_ctrl", exists=True)
+
+
+def test_the_runner_enters_one_script_space_per_run_and_tears_it_down():
+    import sys
+
+    seen = []
+
+    class Peek(Action):
+        def run(self, ctx):
+            seen.append((ctx.scripts, "trigger_build" in sys.modules))
+            ctx.scripts.add_path(ctx.base_dir + "/scripts")
+
+    register_action("peek", category="build")(Peek)
+    doc = Document()
+    doc.add(ActionNode("a", "peek"))
+    doc.add(ActionNode("b", "peek"))
+    Runner().run(doc, "D:/nowhere")
+    assert len(seen) == 2
+    assert seen[0][0] is seen[1][0]  # one space for the run
+    assert seen[0][1] and seen[1][1]
+    assert "trigger_build" not in sys.modules
+
+
+# ------------------------------------------------------------ script action
+def _script_session(tmp_path):
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "general_rig_utils_v001.py").write_text(
+        "def tag():\n    return 'gen'\n", encoding="utf-8"
+    )
+    (scripts / "cfx_utils_v001.py").write_text(
+        "import gen_rig\n\ndef tag():\n    return 'cfx+' + gen_rig.tag()\n",
+        encoding="utf-8",
+    )
+    (scripts / "hero_build_v001.py").write_text(
+        "import cfx_utils\n\n"
+        "def finalize(ctx):\n"
+        "    from maya import cmds\n"
+        "    cmds.createNode('transform', "
+        "name='mark_' + cfx_utils.tag().replace('+', '_'))\n",
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def _register_script():
+    from tik.trigger.actions.script.script import Script
+
+    register_action("script", category="structure", scope="both")(Script)
+
+
+def test_script_actions_load_libraries_that_call_each_other(tmp_path):
+    import sys
+
+    from maya import cmds
+
+    _register_script()
+    base = _script_session(tmp_path)
+    doc = Document()
+    doc.add(
+        ActionNode(
+            "gen",
+            "script",
+            settings={
+                "file_path": "scripts/general_rig_utils_v001.py",
+                "import_as": "gen_rig",
+            },
+        )
+    )
+    doc.add(
+        ActionNode("cfx", "script", settings={"file_path": "scripts/cfx_utils_v001.py"})
+    )
+    doc.add(
+        ActionNode(
+            "hero", "script", settings={"file_path": "scripts/hero_build_v001.py"}
+        )
+    )
+    doc.add(
+        ActionNode("finalize", "script", settings={"code": "hero_build.finalize(ctx)"})
+    )
+    Runner().run(doc, str(base))
+    assert cmds.objExists("mark_cfx_gen")
+    # build lifetime: nothing survives the run
+    assert not {"gen_rig", "cfx_utils", "hero_build", "trigger_build"} & set(
+        sys.modules
+    )
+    assert str(base / "scripts") not in sys.path
+
+
+def test_maya_lifetime_keeps_the_module_until_the_next_run(tmp_path):
+    import sys
+
+    _register_script()
+    base = _script_session(tmp_path)
+    doc = Document()
+    doc.add(
+        ActionNode(
+            "gen",
+            "script",
+            settings={
+                "file_path": "scripts/general_rig_utils_v001.py",
+                "import_as": "gen_rig",
+                "lifetime": "maya",
+            },
+        )
+    )
+    Runner().run(doc, str(base))
+    import trigger_build  # noqa: E402 - the point of the test
+
+    assert trigger_build.gen_rig.tag() == "gen"
+    assert trigger_build.ctx is None
+    assert sys.modules["gen_rig"] is trigger_build.gen_rig
+    # a second run with build lifetime replaces and then drops it
+    doc.find("gen").settings["lifetime"] = "build"
+    Runner().run(doc, str(base))
+    assert "gen_rig" not in sys.modules and "trigger_build" not in sys.modules
+
+
+def test_a_missing_alias_fails_with_an_ordering_hint(tmp_path):
+    _register_script()
+    base = _script_session(tmp_path)
+    doc = Document()
+    doc.add(
+        ActionNode("cfx", "script", settings={"file_path": "scripts/cfx_utils_v001.py"})
+    )
+    with pytest.raises(ActionExecutionError) as info:
+        Runner().run(doc, str(base))
+    assert "gen_rig is not loaded yet" in str(info.value)
+
+
+def test_script_validation_rejects_bad_aliases_and_missing_files(tmp_path):
+    from tik.trigger.actions.script.script import Script
+
+    ctx = ActionContext(base_dir=str(tmp_path))
+    assert "file not found" in Script({"file_path": "nope.py"}).validate(ctx)[0]
+    (tmp_path / "x.py").write_text("", encoding="utf-8")
+    bad = Script({"file_path": "x.py", "import_as": "my alias"}).validate(ctx)
+    assert "not a valid module name" in bad[0]
+    assert Script({"file_path": "x.py", "import_as": "sys"}).validate(ctx)
+    assert Script({"file_path": "x.py"}).validate(ctx) == []
+    assert Script({}).validate(ctx) == []
+    assert Script({"file_path": "scripts/hero_build_v001.py"}).alias() == "hero_build"
+    assert (
+        Script({"file_path": "a_v002.py", "import_as": "b"}).summary()
+        == "a_v002.py as b"
+    )
+    assert Script({"file_path": "a_v002.py"}).summary() == "a_v002.py"
+
+
+def test_a_referenced_session_loads_scripts_from_its_own_folder(tmp_path):
+    from maya import cmds
+
+    _register_script()
+    ref_dir = tmp_path / "base"
+    (ref_dir / "scripts").mkdir(parents=True)
+    (ref_dir / "scripts" / "base_lib_v001.py").write_text(
+        "def mark():\n"
+        "    from maya import cmds\n"
+        "    cmds.createNode('transform', name='from_ref')\n",
+        encoding="utf-8",
+    )
+    base = Document()
+    base.add(
+        ActionNode("lib", "script", settings={"file_path": "scripts/base_lib_v001.py"})
+    )
+    base.add(ActionNode("call", "script", settings={"code": "base_lib.mark()"}))
+    base.save(ref_dir / "base_v001.tr")
+    hero_dir = tmp_path / "hero"
+    hero_dir.mkdir()
+    hero = Document()
+    hero.add(ActionNode("base", "reference", settings={"file": "../base/base_v001.tr"}))
+    Runner().run(hero, str(hero_dir))
+    assert cmds.objExists("from_ref")

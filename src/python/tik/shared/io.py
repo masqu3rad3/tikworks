@@ -7,6 +7,10 @@ Delegates to tik.core.jsonio for actual I/O operations.
 from __future__ import annotations
 
 import logging
+import os
+import shlex
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -174,3 +178,26 @@ def ensure_extension(file_path: Path, extension: str) -> Path:
     if file_path.suffix != extension:
         return file_path.with_suffix(extension)
     return file_path
+
+
+def open_external(path, command: str = "") -> None:
+    """Open ``path`` in an external application.
+
+    ``command`` is a user-configured launcher: ``{path}`` is substituted when
+    present, otherwise the path is appended. Without one the OS default
+    handler opens the file. Raises ``OSError`` when the launch fails.
+    """
+    target = str(Path(path))
+    if command.strip():
+        if "{path}" in command:
+            args = [part.replace("{path}", target) for part in shlex.split(command)]
+        else:
+            args = shlex.split(command) + [target]
+        subprocess.Popen(args)
+        return
+    if sys.platform.startswith("win"):
+        os.startfile(target)  # noqa: S606 - the OS handler is the point
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", target])
+    else:
+        subprocess.Popen(["xdg-open", target])

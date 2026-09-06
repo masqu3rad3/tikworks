@@ -5,15 +5,21 @@ Header, generated form, override marks and the step buttons.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable, Optional
 
+from tik.shared.io import open_external
 from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.Qt import QtCore, QtWidgets
+from tik.trigger.actions.script.script import editor_command
 from tik.trigger.core import registry
 from tik.trigger.core.document import BUILD
 from tik.trigger.session import ActionHandle
 from tik.trigger.ui.iconography import action_icon
+
+NEW_SCRIPT_TIP = "Write a versioned stub into the session's scripts folder"
+UNSAVED_TIP = "Save the session first: scripts live beside the .tr file"
 
 
 class ActionSettingsPanel(QtWidgets.QWidget):
@@ -23,6 +29,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
     save_requested = QtCore.Signal(str)
     edited = QtCore.Signal(str)  # path
     open_file_requested = QtCore.Signal(str, str)  # path, extension
+    handle_changed = QtCore.Signal(object)  # the ActionHandle shown, or None
 
     def __init__(
         self,
@@ -33,6 +40,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self._handle: Optional[ActionHandle] = None
         self._action = None
+        self._base_dir = base_dir
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(12, 10, 12, 10)
         layout.setSpacing(8)
@@ -60,7 +68,8 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.form = FormBuilder(
             file_browser=file_browser,
             file_extras={
-                ".trg": ("✎", lambda path: self.open_file_requested.emit(path, ".trg"))
+                ".trg": ("✎", lambda path: self.open_file_requested.emit(path, ".trg")),
+                ".py": ("✎", self.open_externally),
             },
             base_dir=base_dir,
         )
@@ -76,6 +85,10 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         )
         self.guides_button.setVisible(False)
         buttons.addWidget(self.guides_button)
+        self.new_script_button = QtWidgets.QPushButton("New Script…")
+        self.new_script_button.setToolTip(NEW_SCRIPT_TIP)
+        self.new_script_button.setVisible(False)
+        buttons.addWidget(self.new_script_button)
         self.save_button = QtWidgets.QPushButton("Save from scene")
         self.reset_button = QtWidgets.QPushButton("Reset overrides")
         self.run_button = QtWidgets.QPushButton("Run step")
@@ -88,6 +101,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.save_button.clicked.connect(lambda: self._emit(self.save_requested))
         self.reset_button.clicked.connect(self._reset_overrides)
         self.guides_button.clicked.connect(self._open_guides)
+        self.new_script_button.clicked.connect(lambda: self.new_script())
         self.info_button.clicked.connect(self._show_info)
         self.set_handle(None)
 
@@ -118,6 +132,8 @@ class ActionSettingsPanel(QtWidgets.QWidget):
             self.save_button.setVisible(False)
             self.reset_button.setVisible(False)
             self.guides_button.setVisible(False)
+            self.new_script_button.setVisible(False)
+            self.handle_changed.emit(None)
             return
         action_cls = registry.get_action(handle.type)
         self._action = action_cls(settings=handle.settings)
@@ -128,6 +144,8 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.linked_note.setVisible(handle.is_linked)
         self.reset_button.setVisible(handle.is_linked)
         self.guides_button.setVisible(self._guides_field_name() is not None)
+        self.new_script_button.setVisible(self._py_field_name() is not None)
+        self._refresh_new_script_state()
         self.save_button.setVisible(self._has_save(action_cls))
         if handle.is_linked:
             self.linked_note.setText(
@@ -137,6 +155,65 @@ class ActionSettingsPanel(QtWidgets.QWidget):
             self._refresh_override_marks()
         else:
             self.form.mark_overrides(())
+        self.handle_changed.emit(handle)
+
+    def _py_field_name(self) -> Optional[str]:
+        """Name of the first ``.py`` FileField on the current action, if any."""
+        if self._action is None:
+            return None
+        for name, field in type(self._action).fields().items():
+            if ".py" in (getattr(field, "extensions", None) or ()):
+                return name
+        return None
+
+    def _session_dir(self) -> str:
+        return (self._base_dir() if self._base_dir else "") or ""
+
+    def _refresh_new_script_state(self) -> None:
+        saved = bool(self._session_dir())
+        self.new_script_button.setEnabled(saved)
+        self.new_script_button.setToolTip(NEW_SCRIPT_TIP if saved else UNSAVED_TIP)
+
+    def open_externally(self, path: str) -> None:
+        """Open ``path`` (relative to the session) in the external editor."""
+        if not path:
+            return
+        target = Path(path)
+        base = self._session_dir()
+        if not target.is_absolute() and base:
+            target = Path(base) / target
+        try:
+            open_external(target, editor_command())
+        except OSError as error:
+            Feedback(self).pop_warning(
+                "Open script", f"Could not open {target}", str(error)
+            )
+
+    def new_script(self, name: Optional[str] = None) -> Optional[Path]:
+        """Write a stub into ``scripts/``, point the file field at it, open it."""
+        from tik.trigger.actions.script.script import create_script_file
+
+        field_name = self._py_field_name()
+        base = self._session_dir()
+        if self._handle is None or field_name is None or not base:
+            return None
+        if name is None:
+            name = Feedback(self).ask_text("New Script", "Script name", "")
+            if not name:
+                return None
+        try:
+            created = create_script_file(base, name)
+        except (ValueError, OSError) as error:
+            Feedback(self).pop_warning("New Script", str(error))
+            return None
+        relative = created.relative_to(Path(base)).as_posix()
+        setattr(self._handle, field_name, relative)
+        setattr(self._action, field_name, relative)
+        self.form.refresh()
+        self.title.setText(self._handle.name)
+        self.edited.emit(self._handle.path)
+        self.open_externally(relative)
+        return created
 
     def _guides_field_name(self) -> Optional[str]:
         """Name of the first ``.trg`` FileField on the current action, if any."""

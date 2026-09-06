@@ -6,6 +6,7 @@
     "angular": "deg",
     "linear": "cm"
   },
+  "external_editor": "",
   "guide_display": {
     "color": [
       255,

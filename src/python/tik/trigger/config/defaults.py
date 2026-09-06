@@ -10,6 +10,7 @@ from __future__ import annotations
 
 FACTORY_DEFAULTS: dict = {
     "debug_mode": False,
+    "external_editor": "",
     "mirror_mapping": {
         "L_*": "R_*",
         "*_L": "*_R",

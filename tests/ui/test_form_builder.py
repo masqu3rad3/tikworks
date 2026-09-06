@@ -282,3 +282,35 @@ def test_a_string_group_renders_as_a_real_fold(qapp):
     assert form.group_widget("Geometry").is_expanded() is True
     assert form.widget("segments").value() == 3
     assert form.widget("local").isChecked() is False
+
+
+def test_text_field_renders_full_row_and_commits_on_focus_out(qapp):
+    from tik.core.fields import TextField
+    from tik.shared.ui.fields import _TextEditor
+
+    class Snippet(Schema):
+        title = StringField("x")
+        code = TextField("print(1)", language="python")
+
+    form = FormBuilder(Snippet())
+    editor = form.widget("code")
+    assert isinstance(editor, _TextEditor)
+    assert editor.value() == "print(1)"
+    # offscreen cannot resolve a real font, so check the request, not QFontInfo
+    assert editor.edit.font().fixedPitch()
+    seen = []
+    form.changed.connect(lambda name, value: seen.append((name, value)))
+    editor.edit.setPlainText("a = 1\nb = 2")
+    editor.commit()
+    assert seen == [("code", "a = 1\nb = 2")]
+    assert form.target.code == "a = 1\nb = 2"
+    # committing again without a change is silent
+    editor.commit()
+    assert len(seen) == 1
+    # full row: the label sits above the editor as its own spanning row
+    _row, role = form._plain.getWidgetPosition(editor)
+    assert role == QtWidgets.QFormLayout.SpanningRole
+    # the form pushes values back into the editor
+    form.target.code = "z = 3"
+    form.refresh()
+    assert editor.value() == "z = 3"

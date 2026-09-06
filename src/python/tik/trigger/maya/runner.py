@@ -7,6 +7,7 @@ chunk, which is why this lives in the Maya layer rather than in ``core``.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 from tik.trigger.core import registry
@@ -23,6 +24,8 @@ from tik.trigger.core.steps import (
     Step,
     StepResult,
 )
+
+from .scripts import ScriptSpace
 
 
 def new_scene() -> None:
@@ -162,12 +165,15 @@ class Runner:
             new_scene()
         results: list[StepResult] = []
         total = len(steps)
-        for number, step in enumerate(steps, start=1):
-            self.events.progress(number, total, step.path)
-            results.append(self._run_step(step, session))
+        # One module namespace for the whole run; ``build``-lifetime script
+        # aliases vanish when it exits, success or failure.
+        with ScriptSpace() as space:
+            for number, step in enumerate(steps, start=1):
+                self.events.progress(number, total, step.path)
+                results.append(self._run_step(step, session, space))
         return results
 
-    def _run_step(self, step: Step, session) -> StepResult:
+    def _run_step(self, step: Step, session, space: ScriptSpace) -> StepResult:
         action_cls = registry.get_action(step.node.type)
         action = action_cls(settings=step.node.settings)
         ctx = ActionContext(
@@ -177,7 +183,11 @@ class Runner:
             base_dir=step.base_dir,
             path=step.path,
             depth=step.depth,
+            scripts=space,
         )
+        # a referenced session's scripts resolve against its own folder;
+        # paths stay for the run so later callers still find their siblings
+        space.add_path(Path(step.base_dir) / "scripts")
         self.events.emit(STEP_STARTED, path=step.path, phase=step.phase)
         started = time.perf_counter()
         problems = action.validate(ctx)

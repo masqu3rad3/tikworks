@@ -28,6 +28,7 @@ from tik.trigger.core.exceptions import SessionError
 from tik.trigger.session import Session
 
 from .designer.widgets import SCENE_NODE
+from .script_dock import ScriptViewer
 from .session_view import DESIGNER_TAB, SessionView
 from .widgets import LogWidget
 
@@ -89,6 +90,14 @@ class TriggerWindow(MayaToolWindow):
         self.log_dock.setWidget(self.log)
         self.addDockWidget(QtCore.Qt.BottomDockWidgetArea, self.log_dock)
         self.log_dock.hide()
+        self.script_viewer = ScriptViewer()
+        self.script_dock = QtWidgets.QDockWidget("Script", self)
+        self.script_dock.setObjectName("TriggerScriptDock")
+        self.script_dock.setWidget(self.script_viewer)
+        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.script_dock)
+        self.script_dock.hide()
+        # closing the dock from its title bar must un-tick the menu entry
+        self.script_dock.visibilityChanged.connect(self.script_action.setChecked)
 
     @property
     def menu_bar(self) -> QtWidgets.QMenuBar:
@@ -405,6 +414,13 @@ class TriggerWindow(MayaToolWindow):
         self.log_action = self._action(
             tools_menu, "Show Log", self.toggle_log, "Ctrl+L", checkable=True
         )
+        self.script_action = self._action(
+            tools_menu,
+            "Show Script Viewer",
+            self.toggle_script_viewer,
+            "Ctrl+Shift+L",
+            checkable=True,
+        )
         tools_menu.addSeparator()
         self._action(tools_menu, "Settings…", self.open_settings)
 
@@ -557,6 +573,11 @@ class TriggerWindow(MayaToolWindow):
         view.title_changed.connect(self._update_title)
         view.open_guides_requested.connect(self.open_guide_designer)
         view.activity.connect(self.status.set_activity)
+        view.handle_changed.connect(
+            lambda handle, session_view=view: self._on_handle_changed(
+                session_view, handle
+            )
+        )
         index = self.tabs.addTab(view, session.name)
         self.tabs.setCurrentIndex(index)
         self._update_title()
@@ -782,6 +803,25 @@ class TriggerWindow(MayaToolWindow):
         self.log_dock.setVisible(not self.log_dock.isVisible())
         self.log_action.setChecked(self.log_dock.isVisible())
 
+    def toggle_script_viewer(self) -> None:
+        """Show or hide the Script viewer dock."""
+        self.script_dock.setVisible(not self.script_dock.isVisible())
+        self.script_action.setChecked(self.script_dock.isVisible())
+        if self.script_dock.isVisible():
+            self._refresh_script_viewer()
+
+    def _refresh_script_viewer(self) -> None:
+        view = self.current_view
+        if view is None:
+            self.script_viewer.clear()
+            return
+        self.script_viewer.show_handle(view.current_handle(), view.session.directory)
+
+    def _on_handle_changed(self, view, handle) -> None:
+        # only the active tab drives the viewer; background tabs keep quiet
+        if view is self.current_view:
+            self.script_viewer.show_handle(handle, view.session.directory)
+
     def reset_scene(self) -> None:
         """Wipe the Maya scene, after asking.
 
@@ -922,6 +962,8 @@ class TriggerWindow(MayaToolWindow):
             self._hand_over_to(view)
         self._sync_menu_state()
         self._update_title()
+        if self.script_dock.isVisible():
+            self._refresh_script_viewer()
 
     def _on_sub_tab_changed(self, view, index: int) -> None:
         """The first time a session's Designer opens, its guides get the scene.

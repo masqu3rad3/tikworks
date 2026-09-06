@@ -89,6 +89,7 @@ class SessionView(QtWidgets.QWidget):
 
     title_changed = QtCore.Signal()
     open_guides_requested = QtCore.Signal(str)
+    handle_changed = QtCore.Signal(object)  # the selected ActionHandle, or None
     activity = QtCore.Signal(str)
     sub_tab_changed = QtCore.Signal(int)
 
@@ -206,6 +207,7 @@ class SessionView(QtWidgets.QWidget):
         self.settings = ActionSettingsPanel(
             file_browser=file_browser, base_dir=lambda: self.session.directory
         )
+        self.settings.handle_changed.connect(self.handle_changed)
         self.splitter.addWidget(self.settings)
         self.splitter.setStretchFactor(0, 0)
         self.splitter.setStretchFactor(1, 1)
@@ -314,9 +316,7 @@ class SessionView(QtWidgets.QWidget):
         self.settings.edited.connect(self._on_settings_edited)
         self.settings.run_requested.connect(self.run_step)
         self.settings.save_requested.connect(self.save_from_scene)
-        self.settings.open_file_requested.connect(
-            lambda path, _ext: self.open_guides_requested.emit(path)
-        )
+        self.settings.open_file_requested.connect(self._on_open_file_requested)
         self.build_button.clicked.connect(self.build)
         self.publish_button.clicked.connect(self.build_and_publish)
 
@@ -459,6 +459,13 @@ class SessionView(QtWidgets.QWidget):
             index = self.models[phase].index_for_path(path)
             self.models[phase].dataChanged.emit(index, index)
             self.title_changed.emit()
+
+    def _on_open_file_requested(self, path: str, extension: str) -> None:
+        # guide files open in the Designer; anything else goes to the editor
+        if extension == ".trg":
+            self.open_guides_requested.emit(path)
+        else:
+            self.settings.open_externally(path)
 
     def _on_current_changed(self, phase: str, current) -> None:
         self._point_at(phase)
