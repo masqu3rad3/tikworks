@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from tik.core.fields import BoolField, FieldGroup, FileField, IntField
+from tik.core.fields import (
+    BoolField,
+    FieldGroup,
+    FileField,
+    IntField,
+    ListField,
+    StringField,
+)
 from tik.shared.prefs import PrefPage, register_page
 
 
@@ -68,5 +75,23 @@ class FilesPrefs(PrefPage):
         True,
         group=CONFIRMATIONS,
         label="Warn on unsaved close",
-        help="Ask before closing a tab that has unsaved changes.",
+        help=(
+            "Ask before closing a tab that has unsaved changes. Turn this off "
+            "and closing discards them without asking."
+        ),
+    )
+
+    # Stored state rather than settings: they live in the same file but never
+    # appear in the dialog, which is what ``hidden`` means here.
+    recent_sessions = ListField(
+        [],
+        hidden=True,
+        label="Recent sessions",
+        help="Session files opened recently. Managed by the window, not edited here.",
+    )
+    last_folder = StringField(
+        "",
+        hidden=True,
+        label="Last folder",
+        help="The folder a file browser last used. Managed by the window.",
     )

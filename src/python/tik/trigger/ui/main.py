@@ -34,7 +34,6 @@ from .widgets import LogWidget
 
 FILE_FILTER = f"Trigger session (*{EXTENSION})"
 VERSION = "0.2.0"
-MAX_RECENT = 8
 
 
 def _holder() -> QtWidgets.QWidget:
@@ -79,6 +78,7 @@ class TriggerWindow(MayaToolWindow):
         self.log.set_level(prefs_value("interface", "log_verbosity"))
         self.log.setMaximumBlockCount(prefs_value("interface", "log_max_lines"))
         self.restore_window_state()
+        self._load_recent()
 
     # ------------------------------------------------------------------ ui
     def _build_shell(self) -> None:
@@ -601,7 +601,7 @@ class TriggerWindow(MayaToolWindow):
         """Open a ``.tr`` file (asking for one when ``path`` is empty)."""
         if not path:
             path = Feedback(self).browse_open(
-                "Open session", "", (EXTENSION,), FILE_FILTER
+                "Open session", self.browse_folder(), (EXTENSION,), FILE_FILTER
             )
         if not path:
             return None
@@ -636,7 +636,7 @@ class TriggerWindow(MayaToolWindow):
             return
         if not path:
             path = Feedback(self).browse_save(
-                "Save session", "", (EXTENSION,), FILE_FILTER
+                "Save session", self.browse_folder(), (EXTENSION,), FILE_FILTER
             )
         if not path:
             return
@@ -692,7 +692,17 @@ class TriggerWindow(MayaToolWindow):
 
         Returns ``"save"``, ``"discard"`` or ``"cancel"`` -- never a Qt enum,
         so the callers stay readable and a test can answer with a string.
+
+        With ``files.confirm_unsaved_close`` turned off the question is not
+        asked and the changes are discarded, which is what turning the warning
+        off means.
         """
+        if not prefs_value("files", "confirm_unsaved_close"):
+            return "discard"
+        return self._ask_save_discard_dialog(session)
+
+    def _ask_save_discard_dialog(self, session: Session) -> str:
+        """The unsaved-changes question itself, split out so it can be skipped."""
         answer = Feedback(self).pop_question(
             title="Unsaved changes",
             text=f"Save changes to {session.name} before closing?",
@@ -888,6 +898,10 @@ class TriggerWindow(MayaToolWindow):
             self.log.setMaximumBlockCount(prefs_value("interface", "log_max_lines"))
         if "interface.log_verbosity" in changed:
             self.log.set_level(prefs_value("interface", "log_verbosity"))
+        if "files.max_recent" in changed:
+            del self.recent_files[prefs_value("files", "max_recent") :]
+            self._save_recent()
+            self._update_recent_menu()
 
     def open_docs(self) -> None:
         """Open the project page in the browser."""
@@ -903,12 +917,51 @@ class TriggerWindow(MayaToolWindow):
 
     # -------------------------------------------------------------- recent
     def _remember(self, path: str) -> None:
+        """Put ``path`` at the top of the recent list and persist it."""
         path = str(Path(path))
         if path in self.recent_files:
             self.recent_files.remove(path)
         self.recent_files.insert(0, path)
-        del self.recent_files[MAX_RECENT:]
+        del self.recent_files[prefs_value("files", "max_recent") :]
+        self._remember_folder(path)
+        self._save_recent()
         self._update_recent_menu()
+
+    def _load_recent(self) -> None:
+        """Fill the recent list from the preferences file."""
+        if not prefs_value("files", "remember_recent"):
+            self.recent_files = []
+        else:
+            stored = prefs_value("files", "recent_sessions") or []
+            self.recent_files = [str(item) for item in stored]
+            del self.recent_files[prefs_value("files", "max_recent") :]
+        self._update_recent_menu()
+
+    def _save_recent(self) -> None:
+        """Persist the recent list, unless the user asked us not to."""
+        from tik.trigger.config import prefs
+
+        prefs.files.recent_sessions = (
+            list(self.recent_files) if prefs_value("files", "remember_recent") else []
+        )
+        prefs.save()
+
+    def browse_folder(self) -> str:
+        """Where a file browser should open."""
+        if prefs_value("files", "remember_last_folder"):
+            last = prefs_value("files", "last_folder")
+            if last:
+                return str(last)
+        return str(prefs_value("files", "default_folder") or "")
+
+    def _remember_folder(self, path: str) -> None:
+        """Store ``path``'s folder as the one browsers reopen in."""
+        if not prefs_value("files", "remember_last_folder"):
+            return
+        from tik.trigger.config import prefs
+
+        prefs.files.last_folder = str(Path(path).parent)
+        prefs.save()
 
     def _update_recent_menu(self) -> None:
         self.recent_menu.clear()
