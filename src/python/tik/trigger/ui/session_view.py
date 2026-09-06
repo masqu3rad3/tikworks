@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Optional
 
-from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.tile_grid import TileEntry, TileGrid
 from tik.trigger.core import registry
-from tik.trigger.core.document import BUILD, PHASES, PUBLISH, Document
+from tik.trigger.core.document import BUILD, PHASES, PUBLISH
 from tik.trigger.core.exceptions import ActionExecutionError, SessionError, TriggerError
 from tik.trigger.core.steps import STEP_FAILED, STEP_FINISHED, STEP_STARTED
 from tik.trigger.session import ActionHandle, Session
@@ -476,7 +474,6 @@ class SessionView(QtWidgets.QWidget):
         # current row -- the two normally agree, but the path is the fact.
         edited = self.session.view(phase).find(path)
         if edited is not None and edited.type == "reference":
-            self._offer_to_link_modules(edited)
             self.refresh(path)
         elif handle is not None and handle.type == "reference":
             self.refresh(path)
@@ -484,57 +481,6 @@ class SessionView(QtWidgets.QWidget):
             index = self.models[phase].index_for_path(path)
             self.models[phase].dataChanged.emit(index, index)
             self.title_changed.emit()
-
-    def _offer_to_link_modules(self, handle) -> None:
-        """Offer to link the referenced session's modules, once.
-
-        A pipeline reference and a module link are two different dependencies
-        that happen to share a file -- "I run their steps" and "my rig
-        contains their modules" -- and they diverge often enough to stay
-        separate objects. But a rigger pointing at a rig usually wants both,
-        and never being asked leaves a session whose kinematics names ids
-        nothing in it can resolve.
-        """
-        from tik.trigger.core.guide_reference import resolved_path
-
-        file_path = handle.node.settings.get("file", "")
-        if not file_path:
-            return
-        version = handle.node.settings.get("version", "latest")
-        guides = self.session.document.guides
-        try:
-            wanted = resolved_path(file_path, self.session.directory, version)
-            if any(
-                resolved_path(item.file, self.session.directory, item.version) == wanted
-                for item in guides.references
-            ):
-                return  # already linked: a second reference adds no rig
-            referenced = Document.load(wanted)
-        except Exception:  # noqa: BLE001 - unreadable is the runner's report
-            return
-        if not referenced.guides.modules:
-            return  # nothing to link, so nothing to interrupt anybody about
-        count = len(referenced.guides.modules)
-        plural = "" if count == 1 else "s"
-        answer = Feedback(self).pop_question(
-            title="Reference modules",
-            text=(
-                f"{Path(file_path).name} has {count} module{plural}. "
-                "Add them to this rig as well?"
-            ),
-            details=(
-                "Running its actions and containing its modules are separate "
-                "things. Link them to build its rig here, connect your own "
-                "modules to it, and override its guides locally."
-            ),
-            buttons=["Link", "Not now"],
-        )
-        if answer != "Link":
-            return
-        try:
-            self.session.link_modules(file_path, version)
-        except TriggerError as error:
-            self.events.log(str(error), level="warning")
 
     def _on_open_file_requested(self, path: str, extension: str) -> None:
         # guide files open in the Designer; anything else goes to the editor

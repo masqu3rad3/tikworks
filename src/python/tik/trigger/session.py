@@ -72,6 +72,13 @@ class Session:
         kind of coupling that rots.
         """
         self._reference_cache.clear()
+        # Cheap: this only resolves paths. The expensive part -- reading the
+        # referenced files -- runs only when the set of links actually moved,
+        # so an ordinary guide drag costs nothing.
+        if self._sync_pipeline_links():
+            from tik.trigger.core.guide_reference import resolve
+
+            self.reference_problems = resolve(self.document.guides, self.directory)
         state = self.document.to_dict()
         if state != self._last_state:
             self._undo.append(self._last_state)
@@ -307,6 +314,76 @@ class Session:
     # why ``to_dict`` -- not any write path -- is what turns an edit into an
     # override.
 
+    def _sync_pipeline_links(self) -> bool:
+        """Give every pipeline reference that wants one a module link.
+
+        Referencing a session and containing its modules stay two objects --
+        the same file can be referenced twice for a split pipeline run, while
+        a module exists once -- but wanting both is the ordinary case, so the
+        reference action carries the decision and this keeps the link in step
+        with it. Running here rather than at the moment of editing means a
+        session saved before any of this existed picks its modules up on open.
+        """
+        from tik.trigger.core.guide_document import ModuleReference
+        from tik.trigger.core.guide_reference import resolved_path
+
+        guides = self.document.guides
+        wanted: dict = {}
+        for _path, node, _parent in self.document.walk(BUILD):
+            if node.type != "reference" or not node.enabled:
+                continue
+            file_path = node.settings.get("file", "")
+            if not file_path or not node.settings.get("link_modules", True):
+                continue
+            try:
+                key = resolved_path(
+                    file_path, self.directory, node.settings.get("version", "latest")
+                )
+            except (OSError, ValueError):
+                continue
+            wanted.setdefault(str(key), (file_path, node.settings.get("version")))
+
+        linked = {}
+        for reference in list(guides.references):
+            try:
+                key = str(
+                    resolved_path(reference.file, self.directory, reference.version)
+                )
+            except (OSError, ValueError):
+                continue
+            linked[key] = reference
+        changed = False
+        for key, (file_path, version) in wanted.items():
+            if key in linked:
+                continue
+            changed = True
+            guides.references.append(
+                ModuleReference(
+                    ref_id=uuid.uuid4().hex,
+                    file=str(file_path),
+                    version=version or "latest",
+                )
+            )
+        # A reference whose modules are no longer wanted loses its link. Only
+        # links a pipeline reference created are dropped: one made by hand
+        # through File > Reference Modules... answers to nobody.
+        pipeline_files = {
+            str(
+                resolved_path(
+                    node.settings.get("file", ""),
+                    self.directory,
+                    node.settings.get("version", "latest"),
+                )
+            )
+            for _p, node, _parent in self.document.walk(BUILD)
+            if node.type == "reference" and node.settings.get("file")
+        }
+        for key, reference in linked.items():
+            if key in pipeline_files and key not in wanted:
+                guides.references.remove(reference)
+                changed = True
+        return changed
+
     def resolve_references(self) -> list:
         """Pull every linked module into this session's guides. Idempotent.
 
@@ -317,6 +394,7 @@ class Session:
         """
         from tik.trigger.core.guide_reference import resolve
 
+        self._sync_pipeline_links()
         self.reference_problems = resolve(self.document.guides, self.directory)
         return self.reference_problems
 
