@@ -348,6 +348,76 @@ class _TextEditor(QtWidgets.QWidget):
         self.edit.setPlainText(text)
 
 
+class _CheckListEditor(QtWidgets.QWidget):
+    """A tick list for a ``ListField`` that declares ``choices_from``.
+
+    Shows each option by its label and stores its *value*, which is what makes
+    a list of ids editable at all. Options are re-read on every ``set_value``,
+    because the thing being offered -- the session's modules -- changes while
+    the panel is open.
+
+    A stored value nothing offers any more is kept, ticked, and marked with
+    ``MISSING_SUFFIX``. Dropping it would silently shrink whatever the list
+    governs the moment somebody opened the panel.
+    """
+
+    valueChanged = QtCore.Signal(list)  # noqa: N815 - Qt signal naming
+
+    def __init__(self, options: Callable[[], list], parent=None) -> None:
+        super().__init__(parent)
+        self._options = options
+        self._value: list = []
+        self._loading = False
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.list = QtWidgets.QListWidget()
+        self.list.setObjectName("CheckList")
+        self.list.setUniformItemSizes(True)
+        self.list.setMaximumHeight(160)
+        self.list.itemChanged.connect(self._on_item_changed)
+        layout.addWidget(self.list)
+
+    def value(self) -> list:
+        """The ticked values, in the order the options offer them."""
+        return list(self._value)
+
+    def set_value(self, value) -> None:
+        """Show ``value`` as ticks, re-reading the options first."""
+        self._value = [str(item) for item in (value or [])]
+        self._loading = True
+        try:
+            self.list.clear()
+            offered = []
+            for label, item_value in self._options() or []:
+                offered.append(str(item_value))
+                self._add(str(label), str(item_value))
+            for stored in self._value:
+                if stored not in offered:
+                    self._add(f"{stored}{MISSING_SUFFIX}", stored)
+        finally:
+            self._loading = False
+
+    def _add(self, label: str, value: str) -> None:
+        item = QtWidgets.QListWidgetItem(label)
+        item.setData(QtCore.Qt.UserRole, value)
+        item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+        item.setCheckState(
+            QtCore.Qt.Checked if value in self._value else QtCore.Qt.Unchecked
+        )
+        self.list.addItem(item)
+
+    def _on_item_changed(self, _item) -> None:
+        if self._loading:
+            return
+        ticked = []
+        for row in range(self.list.count()):
+            item = self.list.item(row)
+            if item.checkState() == QtCore.Qt.Checked:
+                ticked.append(item.data(QtCore.Qt.UserRole))
+        self._value = ticked
+        self.valueChanged.emit(list(ticked))
+
+
 class FormBuilder(QtWidgets.QWidget):
     """Form generated from a ``Schema`` object.
 
@@ -367,11 +437,15 @@ class FormBuilder(QtWidgets.QWidget):
         file_browser: Optional[Callable] = None,
         file_extras: Optional[dict] = None,
         base_dir: Optional[Callable[[], str]] = None,
+        list_choices: Optional[Callable[[str], list]] = None,
     ) -> None:
         """
         Args:
             target: The Schema instance to edit.
             node_picker: Callable returning a node name for NodeRefField pickers.
+            list_choices: ``(choices_from key) -> [(label, value)]``. Supplying
+                it is what turns a ``ListField`` that declares ``choices_from``
+                into a tick list rather than a comma-separated box.
             file_browser: Optional ``(mode, extensions, current) -> path``
                 replacing the dialogs.
             file_extras: ``{extension: (label, callback(path))}``: an extra
@@ -393,6 +467,7 @@ class FormBuilder(QtWidgets.QWidget):
         self.file_browser = file_browser
         self.file_extras = file_extras or {}
         self.base_dir = base_dir
+        self.list_choices = list_choices
         self._overridden: set[str] = set()
         self._reference: dict = {}
         if target is not None:
@@ -585,6 +660,14 @@ class FormBuilder(QtWidgets.QWidget):
             widget.valueChanged.connect(
                 lambda value, field_name=name: self._on_change(field_name, value)
             )
+        elif (
+            kind == "list" and getattr(field, "choices_from", "") and self.list_choices
+        ):
+            source = field.choices_from
+            widget = _CheckListEditor(lambda key=source: self.list_choices(key))
+            widget.valueChanged.connect(
+                lambda value, field_name=name: self._on_change(field_name, value)
+            )
         elif kind == "list":
             widget = QtWidgets.QLineEdit()
             widget.setPlaceholderText("comma separated")
@@ -674,7 +757,9 @@ class FormBuilder(QtWidgets.QWidget):
 
     @staticmethod
     def _set_widget_value(widget, value) -> None:
-        if isinstance(widget, QtWidgets.QCheckBox):
+        if isinstance(widget, _CheckListEditor):
+            widget.set_value(value)
+        elif isinstance(widget, QtWidgets.QCheckBox):
             widget.setChecked(bool(value))
         elif isinstance(widget, QtWidgets.QComboBox):
             index = widget.findData(value)

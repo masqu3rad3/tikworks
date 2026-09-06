@@ -205,7 +205,9 @@ class SessionView(QtWidgets.QWidget):
         self.splitter.addWidget(self._build_shelf_pane())
         self.splitter.addWidget(self._build_pipeline_pane())
         self.settings = ActionSettingsPanel(
-            file_browser=file_browser, base_dir=lambda: self.session.directory
+            file_browser=file_browser,
+            base_dir=lambda: self.session.directory,
+            list_choices=self._list_choices,
         )
         self.settings.handle_changed.connect(self.handle_changed)
         self.splitter.addWidget(self.settings)
@@ -252,6 +254,21 @@ class SessionView(QtWidgets.QWidget):
         self.shelf = self.shelves[BUILD]  # menus and tests reach for the focused one
         self.shelf_pane = pane("Actions", self.shelf_stack)
         return self.shelf_pane
+
+    def _list_choices(self, key: str) -> list:
+        """Options for a ``ListField`` that declares ``choices_from``.
+
+        ``modules`` is the only source so far: the session's modules, offered
+        by display key and stored by id. A module deliberately left out of the
+        rig is not offered -- listing one is already a validation error.
+        """
+        if key != "modules":
+            return []
+        return [
+            (entry.key, entry.instance_id)
+            for entry in self.session.document.guides.modules
+            if entry.enabled
+        ]
 
     def _build_pipeline_pane(self) -> QtWidgets.QWidget:
         self.tree = self._make_tree(self.model)

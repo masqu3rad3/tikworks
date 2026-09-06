@@ -36,6 +36,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         parent=None,
         file_browser: Optional[Callable] = None,
         base_dir: Optional[Callable[[], str]] = None,
+        list_choices: Optional[Callable[[str], list]] = None,
     ) -> None:
         super().__init__(parent)
         self._handle: Optional[ActionHandle] = None
@@ -72,6 +73,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
                 ".py": ("✎", self.open_externally),
             },
             base_dir=base_dir,
+            list_choices=list_choices,
         )
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)

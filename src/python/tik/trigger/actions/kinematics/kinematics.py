@@ -30,6 +30,7 @@ class Kinematics(Action):
     modules = ListField(
         item_type=str,
         label="Modules",
+        choices_from="modules",
         help="Instance ids of the modules to build. Never empty.",
     )
     after_build = ChoiceField(

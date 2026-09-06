@@ -305,9 +305,19 @@ class ListField(Field):
     type_name = "list"
 
     def __init__(
-        self, default=None, *, item_type: Optional[type] = None, **kwargs
+        self,
+        default=None,
+        *,
+        item_type: Optional[type] = None,
+        choices_from: str = "",
+        **kwargs,
     ) -> None:
         self.item_type = item_type
+        #: Names the option source a UI resolves to render this as a picker
+        #: instead of a comma-separated box -- for a list of ids nobody would
+        #: type by hand. A declaration only: ``tik.core`` never imports Qt,
+        #: and a list without it behaves exactly as it always has.
+        self.choices_from = choices_from
         super().__init__(list(default) if default else [], **kwargs)
 
     def coerce(self, value):
