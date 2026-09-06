@@ -54,13 +54,13 @@ Baseline entering this phase: **1700 unit+integration, 526 UI, lint clean.**
 **Interfaces:**
 - Produces: `GuideScene.frames -> dict` (`{ref_id: {"position": [x, y], "collapsed": bool}}`) and `GuideScene.set_frame(ref_id, position=None, collapsed=None)`, which touches the session so a collapse lands on the undo stack like any other document edit.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Assert: `frames` starts empty; `set_frame` stores a position and a collapsed flag; setting one leaves the other alone; the values survive a `GuideDocument` round trip; and — the reason this section exists at all — a `set_layout` call (what every node drag performs) **does not** clear them.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
     @property
@@ -85,7 +85,7 @@ Assert: `frames` starts empty; `set_frame` stores a position and a collapsed fla
 
 Mirror both on `StubScene`.
 
-- [ ] **Step 4: Run it, lint, commit**
+- [x] **Step 4: Run it, lint, commit**
 
 ---
 
@@ -98,17 +98,17 @@ Mirror both on `StubScene`.
 **Interfaces:**
 - Produces: `FrameSpec(ref_id, title, collapsed)` and `FrameItem(spec)` with `set_extent(QRectF)` and a `glyph_rect()` for the collapse toggle; `GraphScene.add_frame(spec, rect) -> FrameItem` and a `frame_toggle_requested = QtCore.Signal(str)`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Assert: a frame's bounding rect encloses the rect it was given plus its padding; its title reads the reference's name; it sits **behind** the nodes (`zValue()` below every `NodeItem`); it is not selectable or movable when expanded (it is a backdrop, and dragging it would fight the nodes inside); clicking its glyph emits `frame_toggle_requested` with the `ref_id`.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `FrameItem` is a plain `QGraphicsItem` with `setZValue(-10)`, a rounded rect stroked in a muted ink (same `ORIGIN_INK` family the tree chip uses, so provenance reads the same in both panes), a title in the top-left, and a glyph rect in the top-right. `PADDING = 16` and `TITLE_HEIGHT = 20` go in `constants.py` beside the other geometry.
 
-- [ ] **Step 4: Run it, lint, commit**
+- [x] **Step 4: Run it, lint, commit**
 
 ---
 
@@ -124,7 +124,7 @@ The task that makes it useful.
 - Consumes: `entry.origin` per handle (through `guides.document`), `GuideScene.frames`, `GraphScene.add_frame`.
 - Produces: a collapsed frame node keyed `@<ref_id>`, whose port names are the member keys they belong to (`L_arm.hand`), so a wire to it still names its real producer.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Assert, with two referenced modules and one local module wired to one of them:
 
@@ -134,9 +134,9 @@ Assert, with two referenced modules and one local module wired to one of them:
 - toggling back to expanded restores the member nodes and the original wire;
 - a reference with no crossing connections still collapses to a node with no ports rather than vanishing.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `rebuild`, before placing nodes, partition the handles:
 
@@ -161,17 +161,19 @@ Wire rewriting is one substitution at the point wires are added: if a key belong
 
 For each *expanded* reference, add a `FrameItem` after its members are placed, sized to their union rect.
 
-- [ ] **Step 4: Wire the toggle**
+- [x] **Step 4: Wire the toggle**
 
 `frame_toggle_requested` reaches the Designer, which calls `guides.set_frame(ref_id, collapsed=not collapsed)` and refreshes. The collapsed node's position is stored through `set_frame` when it is dragged, in the same place `nodes_moved` already persists node positions.
 
-- [ ] **Step 5: Run everything, lint, commit**
+- [x] **Step 5: Run everything, lint, commit**
 
 ---
 
 ## Done when
 
-- [ ] `tests/unit`, `tests/integration` and `tests/ui` are green; `make lint` clean.
-- [ ] A reference collapses to one node and expands back, with crossing wires preserved both ways.
-- [ ] A node drag does not delete a frame (the bug that `frames` exists to prevent).
-- [ ] The spec has no unbuilt sections left.
+**Status: complete.** 1700 unit+integration and 547 UI tests pass, lint clean.
+
+- [x] `tests/unit`, `tests/integration` and `tests/ui` are green; `make lint` clean.
+- [x] A reference collapses to one node and expands back, with crossing wires preserved both ways.
+- [x] A node drag does not delete a frame (the bug that `frames` exists to prevent).
+- [x] The spec has no unbuilt sections left.
