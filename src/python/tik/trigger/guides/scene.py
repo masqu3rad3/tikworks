@@ -190,9 +190,20 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
 
         The caller shows the report first: replacing the module list is
         destructive, so it never happens as a side effect of looking.
+
+        Refused while this session holds module references. Recovery builds a
+        document with no links in it, so every referenced module would come
+        back as a *local* entry still carrying upstream's uuid -- and
+        re-linking that file afterwards would then be the same module twice.
         """
         from .from_scene import read
 
+        if self.document.references:
+            raise GuideError(
+                "This session references another session's modules, which "
+                "Snapshot cannot rebuild. Unlink the reference first, baking "
+                "its modules in if you want to keep them."
+            )
         return read()
 
     def inputs_as_keys(self, entry) -> dict:
@@ -469,11 +480,19 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         return handle
 
     def clear(self) -> None:
-        """Remove every module and its guide joints (one undo step)."""
+        """Remove every *local* module and its guide joints (one undo step).
+
+        Referenced modules survive: they are not this session's to delete, and
+        dropping them here would silently unlink a rig. Removing them is
+        ``Session.unlink_modules``, which asks what to do with the overrides.
+        """
         with nodes.undo_chunk("Trigger clear guides"):
-            for entry in list(self.document.modules):
+            local = [item for item in self.document.modules if item.origin is None]
+            for entry in local:
                 self.delete_guides(entry.instance_id)
-            self.document.modules = []
+            self.document.modules = [
+                item for item in self.document.modules if item.origin is not None
+            ]
             self._touch()
 
     # ---------------------------------------------------------- authoring
@@ -517,8 +536,20 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         return candidate
 
     def remove(self, handle: GuideHandle) -> None:
-        """Delete a module: its entry, its guides and its layout."""
+        """Delete a module: its entry, its guides and its layout.
+
+        Refused for a referenced module. Which modules exist is upstream's
+        word; leaving one out of *this* rig is ``enabled = False``, recorded as
+        an override and undone by re-enabling it.
+        """
         instance_id = handle.instance_id
+        entry = self.document.module(instance_id)
+        if entry is not None and entry.origin is not None:
+            raise GuideError(
+                f"'{entry.key}' is referenced from another session and cannot be "
+                "deleted here. Leave it out of this rig by disabling it, or "
+                "unlink the reference."
+            )
         with nodes.undo_chunk("Trigger remove module"):
             self.delete_guides(instance_id)
             document = self.document

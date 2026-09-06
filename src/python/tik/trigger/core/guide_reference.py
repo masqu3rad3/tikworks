@@ -27,12 +27,17 @@ from . import versioning
 from .guide_document import GuideDocument, ModuleEntry
 
 
-def _resolve_path(reference, base_dir: str) -> Path:
-    """The referenced file, made absolute and version-resolved."""
-    path = Path(reference.file)
+def resolved_path(file_path: str, base_dir: str, version: str = "latest") -> Path:
+    """A link's file, made absolute and version-resolved.
+
+    Public because ``Session.link_modules`` compares links by what they
+    actually resolve to: two entries naming the same rig by different paths,
+    or by ``latest`` and a pinned version, are still the same rig.
+    """
+    path = Path(file_path)
     if not path.is_absolute() and base_dir:
         path = Path(base_dir) / path
-    return versioning.resolve(path, reference.version or "latest")
+    return versioning.resolve(path, version or "latest")
 
 
 def apply_overrides(entry: ModuleEntry, override: dict) -> None:
@@ -78,7 +83,7 @@ def _entries_from(
 def _borrowed(reference, base_dir: str, loader: Callable, chain: tuple, problems):
     """The entries one link contributes: overrides applied, sources attached."""
     try:
-        path = _resolve_path(reference, base_dir)
+        path = resolved_path(reference.file, base_dir, reference.version)
     except (OSError, ValueError) as error:
         problems.append(f"reference '{reference.file}': {error}")
         return []

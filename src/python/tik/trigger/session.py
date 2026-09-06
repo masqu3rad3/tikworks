@@ -51,6 +51,8 @@ class Session:
         self._undo: list[dict] = []
         self._redo: list[dict] = []
         self._last_state = self.document.to_dict()
+        #: Problems from the last reference resolution, reported by validate().
+        self.reference_problems: list = []
         if file_path:
             self.load(file_path)
 
@@ -83,6 +85,7 @@ class Session:
             return False
         self._redo.append(self.document.to_dict())
         self.document = Document.from_dict(self._undo.pop())
+        self.resolve_references()
         self._last_state = self.document.to_dict()
         self._reference_cache.clear()
         return True
@@ -93,6 +96,7 @@ class Session:
             return False
         self._undo.append(self.document.to_dict())
         self.document = Document.from_dict(self._redo.pop())
+        self.resolve_references()
         self._last_state = self.document.to_dict()
         self._reference_cache.clear()
         return True
@@ -126,6 +130,7 @@ class Session:
         self._undo.clear()
         self._redo.clear()
         self._reference_cache.clear()
+        self.resolve_references()
 
     def load(self, file_path: str) -> None:
         """Replace the document with the contents of ``file_path``."""
@@ -137,6 +142,7 @@ class Session:
         self._undo.clear()
         self._redo.clear()
         self._reference_cache.clear()
+        self.resolve_references()
         self.events.log(f"Session loaded: {path}")
 
     def save(self, file_path: Optional[str] = None, increment: bool = False) -> Path:
@@ -241,6 +247,7 @@ class Session:
         guides that are exactly where the rigger left them.
         """
         self.document.guides = document
+        self.resolve_references()
         self.touch()
 
     @staticmethod
@@ -291,6 +298,86 @@ class Session:
         if not ours:
             self.guides.clear_rendering()
         document_store.write_stamp(self.session_id)
+
+    # ------------------------------------------------------- module links
+    #
+    # Referenced modules live in ``document.guides.modules`` like any other,
+    # carrying ``origin`` and an untouched ``source``. That is what lets every
+    # existing read and write in the guide layer work on them unchanged, and
+    # why ``to_dict`` -- not any write path -- is what turns an edit into an
+    # override.
+
+    def resolve_references(self) -> list:
+        """Pull every linked module into this session's guides. Idempotent.
+
+        Runs wherever the document is *replaced* -- open, new, undo, redo,
+        snapshot -- and never from ``touch()``: an edit does not change what a
+        referenced file says, and re-reading every one of them on each guide
+        drag would be a disk hit per nudge.
+        """
+        from tik.trigger.core.guide_reference import resolve
+
+        self.reference_problems = resolve(self.document.guides, self.directory)
+        return self.reference_problems
+
+    def link_modules(self, file_path: str, version: str = "latest"):
+        """Link another session's modules into this rig.
+
+        Refused when the same file is already linked: the modules arrive with
+        their own uuids, so a second link would be the same rig twice.
+        """
+        import uuid as _uuid
+
+        from tik.trigger.core.guide_document import ModuleReference
+        from tik.trigger.core.guide_reference import resolved_path
+
+        wanted = resolved_path(file_path, self.directory, version)
+        for existing in self.document.guides.references:
+            if resolved_path(existing.file, self.directory, existing.version) == wanted:
+                raise SessionError(
+                    f"'{Path(file_path).name}' is already linked to this session."
+                )
+        reference = ModuleReference(
+            ref_id=_uuid.uuid4().hex, file=str(file_path), version=version
+        )
+        self.document.guides.references.append(reference)
+        self.resolve_references()
+        self.touch()
+        return reference
+
+    def unlink_modules(self, ref_id: str, bake: bool = False) -> None:
+        """Remove a link. ``bake`` keeps its modules as local copies.
+
+        Baking mints **new** uuids, so a later re-link of the same file cannot
+        collide with what was baked. Discarding is the other choice, and it
+        takes the authored overrides with it -- which is why the UI has to ask.
+        """
+        import uuid as _uuid
+
+        guides = self.document.guides
+        reference = guides.reference(ref_id)
+        if reference is None:
+            raise SessionError(f"No module reference '{ref_id}'.")
+        borrowed = [item for item in guides.modules if item.origin == ref_id]
+        guides.references = [
+            item for item in guides.references if item.ref_id != ref_id
+        ]
+        if not bake:
+            guides.modules = [item for item in guides.modules if item.origin != ref_id]
+            self.touch()
+            return
+        renamed = {item.instance_id: _uuid.uuid4().hex for item in borrowed}
+        for entry in borrowed:
+            entry.instance_id = renamed[entry.instance_id]
+            entry.origin = None
+            entry.source = None
+        # inputs that named a baked module must follow it to its new id
+        for entry in guides.modules:
+            for name, source in list(entry.inputs.items()):
+                instance_id, _dot, output = source.rpartition(".")
+                if instance_id in renamed:
+                    entry.inputs[name] = f"{renamed[instance_id]}.{output}"
+        self.touch()
 
     # -------------------------------------------------------------- tree
     def view(self, phase: str = BUILD) -> PhaseView:
@@ -519,8 +606,21 @@ class Session:
         # Only worth saying once a pipeline exists to be missing from: a
         # session still being authored in the Designer has no kinematics
         # action yet, and warning about every module would be pure noise.
+        # A referenced module the host deliberately left out is not a rig
+        # member at all: it cannot be built, and its absence is a decision
+        # rather than the oversight the warning below exists to catch.
+        for instance_id, (_index, path) in pass_of.items():
+            entry = by_id.get(instance_id)
+            if entry is not None and not entry.enabled:
+                problems.append(
+                    f"{path}: {entry.key} is deliberately left out of this rig "
+                    "and cannot be built. Re-enable it or drop it from the list."
+                )
+
         if scopes:
             for entry in entries:
+                if not entry.enabled:
+                    continue
                 if entry.instance_id not in pass_of:
                     problems.append(
                         f"warning: {entry.key} is built by no kinematics action."
@@ -607,6 +707,7 @@ class Session:
                 )
         problems.extend(self._module_problems())
         problems.extend(self._scope_problems())
+        problems.extend(self.reference_problems)
         return problems
 
     def build(
