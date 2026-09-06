@@ -6,7 +6,7 @@ field, grouped by ``field.group``, with validation errors surfaced inline.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from tik.core.fields import Field, FieldValidationError, Schema
 from tik.shared.ui.collapsible import CollapsibleGroup
@@ -508,6 +508,33 @@ class FormBuilder(QtWidgets.QWidget):
             else:
                 label.setStyleSheet("")
                 label.setToolTip("")
+
+    def set_visible_fields(self, names: Optional[Iterable[str]] = None) -> None:
+        """Show only ``names``; ``None`` shows every field again.
+
+        A group whose fields are all hidden hides too, so a filtered form has
+        no empty folds. Visibility only -- values are untouched, so restoring
+        the full form loses nothing the user typed.
+        """
+        target = None if names is None else set(names)
+        if self._target is None:
+            return
+        fields = type(self._target).fields()
+        for name in self._widgets:
+            visible = target is None or name in target
+            self._widgets[name].setVisible(visible)
+            label = self._labels.get(name)
+            if label is not None:
+                label.setVisible(visible)
+        for group_label, group in self._groups.items():
+            group.setVisible(
+                target is None
+                or any(
+                    name in target
+                    for name, field in fields.items()
+                    if field.group and field.group.label == group_label
+                )
+            )
 
     def widget(self, name: str) -> QtWidgets.QWidget:
         """The editor widget for field ``name``."""
