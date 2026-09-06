@@ -6,6 +6,16 @@ source =
     src/python/tik/tools
     src/python/tik/trigger
 
+# Parked areas, the same set pyproject.toml holds back from black and isort.
+# They are not maintained right now, so leaving them in the denominator only
+# buries the number for the code that *is* live. Drop these lines when a
+# parked area resumes -- `coverage report --include=...` still reaches them.
+omit =
+    src/python/tik/maya/utils/converter/*
+    src/python/tik/tools/polish/*
+    src/python/tik/shared/user_settings.py
+    src/python/tik/shared/scene_data.py
+
 [report]
 exclude_lines =
     pragma: no cover

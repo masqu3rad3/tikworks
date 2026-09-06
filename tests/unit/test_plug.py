@@ -2,7 +2,9 @@
 
 import pytest
 from maya import cmds
+from maya.api import OpenMaya
 
+import tik.maya as tm
 from tik.maya.core.constants import NodeNames
 from tik.maya.core.node import Node, Plug
 
@@ -1223,3 +1225,111 @@ class TestFloatMathFallbackPaths:
         assert "floatMath" in result._node.type
         assert cmds.getAttr(f"{result._node.name}.operation") == 3
         assert pytest.approx(result.value, rel=1e-5) == 4.0
+
+
+class TestExpressionComposition:
+    """Whole expressions, not single operators.
+
+    Every operator in isolation is covered above. What is only testable by
+    composing them is that the *graph* evaluates: precedence survives the
+    node network, an intermediate result can feed the next operator, and a
+    compound operand connects as one plug rather than child by child.
+    """
+
+    def test_precedence_survives_the_node_graph(self):
+        """``a + b * 2`` must build mult-then-add, not add-then-mult."""
+        node = Node.create("transform", name="precedence")
+        node.add_attr("a", attributeType="double", defaultValue=10.0)
+        node.add_attr("b", attributeType="double", defaultValue=5.0)
+
+        assert (node["a"] + node["b"] * 2.0).get() == 20.0
+        assert (node["a"] - node["b"] / 2.5).get() == 8.0
+
+    def test_a_nested_expression_evaluates(self):
+        """``(a + b) * 3 - 6 / b`` == ``(4 + 2) * 3 - 6 / 2`` == 15."""
+        node = Node.create("transform", name="nested")
+        node.add_attr("a", attributeType="double", defaultValue=4.0)
+        node.add_attr("b", attributeType="double", defaultValue=2.0)
+
+        result = (node["a"] + node["b"]) * 3 - 6 / node["b"]
+
+        assert result.get() == 15.0
+
+    def test_an_expression_can_be_connected_onward(self):
+        """The plug an expression returns drives a target through ``>>``."""
+        node = Node.create("transform", name="exprSource")
+        target = Node.create("transform", name="exprTarget")
+        node.add_attr("a", attributeType="double", defaultValue=10.0)
+        node.add_attr("b", attributeType="double", defaultValue=5.0)
+
+        node["a"] + node["b"] * 2.5 >> target["tz"]
+
+        assert target["tz"].get() == 22.5
+
+    def test_a_compound_operand_connects_as_one_plug(self):
+        """``translate`` feeds ``input3D[n]`` whole, not as three child plugs."""
+        left = Node.create("transform", name="compoundLeft")
+        right = Node.create("transform", name="compoundRight")
+        left["translate"].set((1.0, 2.0, 3.0))
+        right["translate"].set((4.0, 5.0, 6.0))
+
+        result = left["translate"] + right["translate"]
+
+        for index, source in enumerate((left, right)):
+            incoming = cmds.listConnections(
+                f"{result.node.name}.input3D[{index}]", plugs=True, source=True
+            )
+            assert incoming == [f"{source.name}.translate"]
+
+    def test_an_expression_reacts_to_its_inputs(self):
+        """The network is live: changing an operand moves the result."""
+        node = Node.create("transform", name="liveExpr")
+        node.add_attr("a", attributeType="double", defaultValue=4.0)
+        node.add_attr("b", attributeType="double", defaultValue=2.0)
+
+        result = (node["a"] + node["b"]) * 2
+
+        assert result.get() == 12.0
+        node["a"].set(10.0)
+        assert result.get() == 24.0
+
+
+class TestAmbiguousPaths:
+    """A plug path has to stay valid when short names are not unique."""
+
+    def test_a_duplicate_short_name_is_disambiguated(self):
+        """Two ``limb`` transforms under different parents address separately."""
+        first = tm.Transform.create(
+            name="limb", parent=tm.Transform.create(name="rig_a").long_name
+        )
+        second = tm.Transform.create(
+            name="tmp", parent=tm.Transform.create(name="rig_b").long_name
+        )
+        OpenMaya.MFnDependencyNode(second.m_obj).setName("limb")  # no uniquifying
+
+        assert second.name == "limb"
+        assert first.partial_name == "rig_a|limb"
+        assert first["tx"].path == "rig_a|limb.tx"
+
+    def test_each_ambiguous_plug_addresses_its_own_node(self):
+        first = tm.Transform.create(
+            name="limb", parent=tm.Transform.create(name="rig_a").long_name
+        )
+        second = tm.Transform.create(
+            name="tmp", parent=tm.Transform.create(name="rig_b").long_name
+        )
+        OpenMaya.MFnDependencyNode(second.m_obj).setName("limb")
+
+        first["tx"].value = 3.0
+        second["tx"].value = 5.0
+
+        assert cmds.getAttr("rig_a|limb.tx") == 3.0
+        assert cmds.getAttr("rig_b|limb.tx") == 5.0
+
+    def test_a_unique_dag_name_stays_short(self):
+        assert tm.Transform.create(name="unique")["tx"].path == "unique.tx"
+
+    def test_a_dg_node_path_stays_short(self):
+        node = tm.create_node("multiplyDivide", name="mult")
+
+        assert node["input1X"].path == "mult.input1X"

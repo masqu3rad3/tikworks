@@ -55,12 +55,20 @@ class SceneGroupsMixin:
             return
         if new in groups or self.by_key(new) is not None:
             raise GuideError(f"'{new}' is already used.")
-        groups[new] = groups.pop(old)
-        document = self.document
-        for table in (document.positions, document.collapse):
+        # Rename inside one display-key layout and write it back in a single
+        # pass. Renaming the document tables directly does not work: they are
+        # id-keyed, and ``update_layout`` re-projects them through the *current*
+        # group names, so an entry already moved to ``new`` fails to project and
+        # the group silently loses its graph position.
+        layout = self.layout
+        layout["scene_nodes"] = {
+            new if name == old else name: nodes for name, nodes in groups.items()
+        }
+        for section in ("positions", "collapse"):
+            table = layout.get(section) or {}
             if old in table:
                 table[new] = table.pop(old)
-        self.update_layout(scene_nodes=groups)
+        self.set_layout(layout)
 
     def remove_scene_group(self, name: str) -> None:
         """Delete a scene-nodes group and the connections that used its nodes."""
