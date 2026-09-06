@@ -229,7 +229,12 @@ as making the readable file unreadable for no functional gain.
 | Group | Setting | Today |
 |---|---|---|
 | Editor | External editor command | The one live setting. Empty means "OS default handler" |
-| Editor | Arguments template | New. A format string passed to the editor, `{file}` substituted with the path (e.g. `-g {file}`). Empty means the path is passed as the sole argument, which is today's behaviour |
+
+`shared/io.py:open_external(path, command)` already substitutes `{path}` into
+the command string and otherwise appends the path, so a launcher with arguments
+(`code -g {path}`) is expressible in the single command field. A separate
+arguments-template setting was considered and dropped: it would invent a second
+convention alongside a working one.
 
 Confirmations sit on their domain page rather than in a shared page; search
 makes the split cheap to live with.
