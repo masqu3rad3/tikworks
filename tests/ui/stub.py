@@ -42,6 +42,10 @@ class StubScene:
         self._scene_jobs: dict = {}
         self._cache: Optional[list] = None
         self._document_cache = None
+        # {instance_id: (ref_id, file, what upstream says)} -- what makes an
+        # instance *borrowed* for the designer's reference surfaces
+        self._borrowed: dict = {}
+        self._disabled: set = set()
         # matches GuideScene's default (spec 3.1): governs whether a scene
         # event may start a sync, nothing else
         self.auto_sync = True
@@ -50,6 +54,21 @@ class StubScene:
         # mirrors GuideScene.session: None for a free-standing double, or set
         # by a test to the Session that owns it -- snapshot_guides reads this
         self.session = None
+
+    def borrow(self, instance_id, ref_id="r1", file="base.tr", source=None) -> None:
+        """Mark an instance as referenced from ``file``.
+
+        ``source`` is what *upstream* says about it, so a test can make the
+        resolved entry differ and get a real override count. An empty one
+        means the entry matches its source exactly.
+        """
+        self._borrowed[instance_id] = (ref_id, file, dict(source or {}))
+        self._document_cache = None
+
+    def disable(self, instance_id) -> None:
+        """Leave a referenced module out of this rig."""
+        self._disabled.add(instance_id)
+        self._document_cache = None
 
     # ------------------------------------------------------------ document
     @property
@@ -64,6 +83,7 @@ class StubScene:
             GuideDocument,
             GuideRecord,
             ModuleEntry,
+            ModuleReference,
             SceneGroup,
         )
 
@@ -90,6 +110,22 @@ class StubScene:
                     for pose in instance.guides
                 ],
             )
+            borrowed = self._borrowed.get(instance.instance_id)
+            if borrowed is not None:
+                ref_id, file_name, upstream = borrowed
+                source = ModuleEntry.from_dict(entry.to_dict())
+                for key, value in upstream.items():
+                    if key == "position":
+                        source.guides[0].position = tuple(value)
+                    else:
+                        setattr(source, key, value)
+                entry.origin = ref_id
+                entry.source = source
+                entry.enabled = instance.instance_id not in self._disabled
+                if document.reference(ref_id) is None:
+                    document.references.append(
+                        ModuleReference(ref_id=ref_id, file=file_name)
+                    )
             document.modules.append(entry)
         document.scene_groups = [
             SceneGroup(group_id=name, name=name, nodes=list(group_nodes))

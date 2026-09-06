@@ -45,11 +45,37 @@ from ..palette import SearchPalette
 from ..session_view import pane
 from .action_bar import DesignerActionBar
 from .commands import DesignerCommands
-from .delegates import DrawStateRole
+from .delegates import DisabledRole, DrawStateRole, OriginRole, OverrideRole
 from .properties import DesignerProperties
 from .widgets import MIME_MODULE, GuideTree, InputRow, SceneNodesPanel, module_entries
 
 SIDES = ("L", "R", "C", "Both", "Auto")
+
+
+def _override_count(entry) -> int:
+    """How many things ``entry`` differs from its source by. 0 when local."""
+    if entry is None or entry.origin is None or entry.source is None:
+        return 0
+    from tik.trigger.core.guide_reference import overrides_for
+
+    return len(overrides_for(entry))
+
+
+def _row_tooltip(state: str, origin, overrides: int, entry) -> str:
+    """Draw state, provenance and overrides -- all three, never one instead
+    of another."""
+    lines = [TOOLTIPS[state]]
+    if origin:
+        lines.append(f"Referenced from {origin}.")
+    if overrides:
+        plural = "" if overrides == 1 else "s"
+        lines.append(
+            f"{overrides} local override{plural} — upstream changes to "
+            "these will not arrive."
+        )
+    if entry is not None and not entry.enabled:
+        lines.append("Left out of this rig; it will not build.")
+    return "\n".join(lines)
 
 
 def diff_summary(diff) -> str:
@@ -519,10 +545,23 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             except Exception:  # noqa: BLE001 - a stub scene has no diff()
                 diff = None
             states = states_from(diff) if diff is not None else {}
+            # Provenance is a *document* fact, not a scene one, so it is read
+            # here rather than folded into the diff: a borrowed module can be
+            # not-drawn and overridden at once, and the two must not compete
+            # for the same slot.
+            document = self.guides.document
+            entries = {entry.instance_id: entry for entry in document.modules}
+            files = {item.ref_id: Path(item.file).name for item in document.references}
             for instance_id, item in items.items():
                 state = states.get(instance_id, DRAWN)
+                entry = entries.get(instance_id)
+                origin = files.get(entry.origin) if entry is not None else None
+                overrides = _override_count(entry)
                 item.setData(0, DrawStateRole, state)
-                item.setToolTip(0, TOOLTIPS[state])
+                item.setData(0, OriginRole, origin)
+                item.setData(0, OverrideRole, overrides)
+                item.setData(0, DisabledRole, entry is not None and not entry.enabled)
+                item.setToolTip(0, _row_tooltip(state, origin, overrides, entry))
             self.tree.expandAll()
             self.apply_tree_filter()
             self.graph.set_draw_states(states)
