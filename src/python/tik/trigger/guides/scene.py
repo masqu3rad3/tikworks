@@ -190,9 +190,20 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
 
         The caller shows the report first: replacing the module list is
         destructive, so it never happens as a side effect of looking.
+
+        Refused while this session holds module references. Recovery builds a
+        document with no links in it, so every referenced module would come
+        back as a *local* entry still carrying upstream's uuid -- and
+        re-linking that file afterwards would then be the same module twice.
         """
         from .from_scene import read
 
+        if self.document.references:
+            raise GuideError(
+                "This session references another session's modules, which "
+                "Snapshot cannot rebuild. Unlink the reference first, baking "
+                "its modules in if you want to keep them."
+            )
         return read()
 
     def inputs_as_keys(self, entry) -> dict:
@@ -401,6 +412,53 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
                 entry.inputs.pop(input_name, None)
             self._apply(entry)
 
+    def set_enabled(self, instance_id: str, enabled: bool) -> None:
+        """Keep a referenced module in the session but out of the rig.
+
+        Only meaningful for a borrowed module: which modules exist is
+        upstream's word, so leaving one out is the local decision available
+        instead of deleting it. Recorded as an override, and undone by
+        ticking it back on.
+        """
+        entry = self.document.module(instance_id)
+        if entry is None or entry.origin is None:
+            raise GuideError(
+                "Only a referenced module can be left out of a rig; a local "
+                "one is simply removed."
+            )
+        if entry.enabled == bool(enabled):
+            return
+        entry.enabled = bool(enabled)
+        self._apply(entry)
+
+    def revert_to_source(self, instance_id: str) -> bool:
+        """Give a referenced module back to its source. **Draws nothing.**
+
+        Overrides are derived, so this is not an unwind: copying the source's
+        authored values back leaves nothing for serialization to find a
+        difference in, and the override disappears with it.
+
+        Returns True when something was reverted. Drawing afterwards is the
+        caller's, because the joints are still where the rigger left them and
+        only an explicit Draw may move them.
+        """
+        from tik.trigger.core.guide_document import GuideRecord
+
+        entry = self.document.module(instance_id)
+        if entry is None or entry.source is None:
+            return False
+        source = entry.source
+        entry.name = source.name
+        entry.side = source.side
+        entry.settings = dict(source.settings)
+        entry.inputs = dict(source.inputs)
+        entry.guides = [
+            GuideRecord.from_dict(record.to_dict()) for record in source.guides
+        ]
+        entry.enabled = True
+        self._apply(entry)
+        return True
+
     def read_settings(self, instance_id: str) -> dict:
         """A copy of the settings stored for an instance (empty when unknown)."""
         entry = self.document.module(instance_id)
@@ -469,11 +527,19 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         return handle
 
     def clear(self) -> None:
-        """Remove every module and its guide joints (one undo step)."""
+        """Remove every *local* module and its guide joints (one undo step).
+
+        Referenced modules survive: they are not this session's to delete, and
+        dropping them here would silently unlink a rig. Removing them is
+        ``Session.unlink_modules``, which asks what to do with the overrides.
+        """
         with nodes.undo_chunk("Trigger clear guides"):
-            for entry in list(self.document.modules):
+            local = [item for item in self.document.modules if item.origin is None]
+            for entry in local:
                 self.delete_guides(entry.instance_id)
-            self.document.modules = []
+            self.document.modules = [
+                item for item in self.document.modules if item.origin is not None
+            ]
             self._touch()
 
     # ---------------------------------------------------------- authoring
@@ -517,8 +583,20 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         return candidate
 
     def remove(self, handle: GuideHandle) -> None:
-        """Delete a module: its entry, its guides and its layout."""
+        """Delete a module: its entry, its guides and its layout.
+
+        Refused for a referenced module. Which modules exist is upstream's
+        word; leaving one out of *this* rig is ``enabled = False``, recorded as
+        an override and undone by re-enabling it.
+        """
         instance_id = handle.instance_id
+        entry = self.document.module(instance_id)
+        if entry is not None and entry.origin is not None:
+            raise GuideError(
+                f"'{entry.key}' is referenced from another session and cannot be "
+                "deleted here. Leave it out of this rig by disabling it, or "
+                "unlink the reference."
+            )
         with nodes.undo_chunk("Trigger remove module"):
             self.delete_guides(instance_id)
             document = self.document
@@ -550,6 +628,26 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         self.document.layout_from_keys(dict(layout))
         with nodes.undo_chunk("Trigger designer layout"):
             self._touch()
+
+    @property
+    def frames(self) -> dict:
+        """Graph frame placement per reference, ``{ref_id: {...}}``.
+
+        Its own section rather than part of ``layout``: that one is projected
+        through display keys and replaced wholesale on every node drag, so a
+        frame stored there would be deleted the first time anybody moved a
+        node.
+        """
+        return {key: dict(value) for key, value in self.document.frames.items()}
+
+    def set_frame(self, ref_id: str, position=None, collapsed=None) -> None:
+        """Store a frame's position and/or collapsed state. Partial updates."""
+        frame = self.document.frames.setdefault(ref_id, {})
+        if position is not None:
+            frame["position"] = [float(position[0]), float(position[1])]
+        if collapsed is not None:
+            frame["collapsed"] = bool(collapsed)
+        self._touch()
 
     def update_layout(self, **sections) -> dict:
         """Replace whole sections (``positions=``, ``scene_nodes=``, ``collapse=``)."""

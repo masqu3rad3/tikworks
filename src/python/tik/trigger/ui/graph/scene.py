@@ -8,7 +8,7 @@ from tik.shared.ui import theme
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 
 from .constants import GRID
-from .items import NodeItem, NodeSpec, Port, WireItem
+from .items import FrameItem, FrameSpec, NodeItem, NodeSpec, Port, WireItem
 
 
 class GraphScene(QtWidgets.QGraphicsScene):
@@ -21,11 +21,14 @@ class GraphScene(QtWidgets.QGraphicsScene):
     external_selected = QtCore.Signal(str)  # scene-nodes group name
     mode_change_requested = QtCore.Signal(str, int)  # node key, mode
     nodes_moved = QtCore.Signal()  # a drag finished and at least one node moved
+    frame_toggle_requested = QtCore.Signal(str)  # reference id
+    frame_selected = QtCore.Signal(str)  # reference id
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setBackgroundBrush(QtGui.QColor("#151515"))
         self.nodes: dict[str, NodeItem] = {}
+        self.frames: dict[str, FrameItem] = {}
         self.wires: list[WireItem] = []
         self.moved: set[str] = set()
         self.show_grid = True
@@ -45,6 +48,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         finally:
             self.blockSignals(False)
         self.nodes = {}
+        self.frames = {}
         self.wires = []
         self.moved = set()
         self._drag_from = None
@@ -60,6 +64,14 @@ class GraphScene(QtWidgets.QGraphicsScene):
         self.nodes[spec.key] = node
         self.moved.discard(spec.key)
         return node
+
+    def add_frame(self, spec: FrameSpec, rect) -> FrameItem:
+        """Add the backdrop for one reference, sized to enclose ``rect``."""
+        frame = FrameItem(spec)
+        frame.set_extent(rect)
+        self.addItem(frame)
+        self.frames[spec.ref_id] = frame
+        return frame
 
     def add_wire(
         self, source_key: str, target_key: str, primary: bool
@@ -241,6 +253,9 @@ class GraphScene(QtWidgets.QGraphicsScene):
 
     def _on_selection(self) -> None:
         for item in self.selectedItems():
+            if isinstance(item, NodeItem) and item.reference:
+                self.frame_selected.emit(item.key.lstrip("@"))
+                return
             if isinstance(item, NodeItem):
                 (self.external_selected if item.external else self.node_selected).emit(
                     item.key

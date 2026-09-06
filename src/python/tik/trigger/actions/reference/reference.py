@@ -5,7 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from tik.core.fields import DictField, FieldGroup, FileField, ListField, StringField
+from tik.core.fields import (
+    BoolField,
+    DictField,
+    FieldGroup,
+    FileField,
+    ListField,
+    StringField,
+)
 from tik.trigger.core import Action, register_action, versioning
 from tik.trigger.core.document import ActionNode, Document
 from tik.trigger.core.exceptions import SessionError
@@ -25,6 +32,15 @@ class Reference(Action):
 
     file = FileField("", extensions=[".tr"], label="Session file")
     version = StringField("latest", help="'latest', 'pinned' or an explicit v###")
+    link_modules = BoolField(
+        True,
+        label="Also add its modules",
+        help=(
+            "Bring the referenced session's modules into this rig, so they "
+            "build here, your own modules can connect to them, and their "
+            "guides can be overridden locally. Untick for its actions alone."
+        ),
+    )
     include = ListField(
         item_type=str, help="Action paths to include; empty = all", group=SCOPE
     )

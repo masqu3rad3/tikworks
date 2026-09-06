@@ -1,4 +1,4 @@
-"""Build the rig from a guides file (``.trg``)."""
+"""Build the modules this action names. Nothing implicit, nothing else."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from tik.trigger.core import (
     Action,
     ChoiceField,
     FieldGroup,
-    FileField,
     ListField,
     register_action,
 )
@@ -18,21 +17,21 @@ BUILD_OPTIONS = FieldGroup("Build Options", collapsed=True)
 
 @register_action("kinematics", category="build", icon="kinematics")
 class Kinematics(Action):
-    """Import a guides file and build every module in it (or only the given roots)."""
+    """Build the listed modules into the scene's one rig.
+
+    The list is the whole scope: it does not matter whether a module is local
+    to this session, referenced from another, or was imported from a guide
+    library. If it is named here it builds, and if it is not, this action does
+    not touch it -- not its guides, and not its afterlife.
+    """
 
     label = "Kinematics"
 
-    guides_file = FileField(
-        "",
-        extensions=[".trg"],
-        label="GuideLayout file",
-        help="Leave empty to build this session's own guides; set a path to "
-        "build a shared guide library instead.",
-    )
-    guide_roots = ListField(
+    modules = ListField(
         item_type=str,
-        help="Root guide names to build; empty = all",
-        group=BUILD_OPTIONS,
+        label="Modules",
+        choices_from="modules",
+        help="Instance ids of the modules to build. Never empty.",
     )
     after_build = ChoiceField(
         "delete",
@@ -41,77 +40,65 @@ class Kinematics(Action):
         group=BUILD_OPTIONS,
     )
 
+    def validate(self, ctx) -> list:
+        """Report an empty scope, and any id this session does not hold."""
+        if not self.modules:
+            return ["kinematics names no modules; nothing would build."]
+        document = self._document(ctx)
+        if document is None:
+            return []
+        known = {entry.instance_id for entry in document.modules}
+        missing = [item for item in self.modules if item not in known]
+        if not missing:
+            return []
+        # The overwhelmingly common cause: this action came from a session
+        # referenced in the pipeline, whose *modules* were never linked. The
+        # ids are real -- they just belong to a rig this session does not
+        # contain yet -- so say where to get them rather than only that they
+        # are absent.
+        remedy = (
+            " If they belong to a session referenced in this pipeline, add its "
+            "modules with File > Reference Modules…"
+        )
+        return [
+            f"kinematics names {len(missing)} module(s) that are not in this "
+            f"session: {', '.join(missing)}.{remedy}"
+        ]
+
     def run(self, ctx) -> None:
-        """Build the rig from the guides file, or from the session's own guides."""
+        """Draw this action's modules, build them, then apply the afterlife."""
         from tik.trigger.guides import GuideScene
         from tik.trigger.maya.build import Builder
 
-        guides = GuideScene(ctx.events)
-        if self.guides_file:
-            handles = guides.import_(ctx.resolve(self.guides_file))
-            document = guides.document
-        else:
-            handles = self._checkout_session_guides(guides, ctx)
-            document = ctx.session.document.guides
-        if self.guide_roots:
-            wanted = set(self.guide_roots)
-            roots = [
-                handle
-                for handle in handles
-                if handle.name in wanted or handle.root.name in wanted
-            ]
-            if not roots:
-                raise ActionExecutionError(
-                    f"kinematics: none of the roots {self.guide_roots} "
-                    "found in the guides."
-                )
-            scope = _descendants(guides, roots)
-        else:
-            scope = [handle.instance_id for handle in handles]
+        if not self.modules:
+            raise ActionExecutionError("kinematics names no modules; nothing to build.")
+        document = self._document(ctx)
+        if document is None:
+            raise ActionExecutionError("kinematics has no session to build from.")
+        scope = list(self.modules)
+        known = {entry.instance_id for entry in document.modules}
+        missing = [item for item in scope if item not in known]
+        if missing:
+            raise ActionExecutionError(
+                f"kinematics names module(s) not in this session: {missing}."
+            )
+        guides = GuideScene(ctx.events, session=ctx.session)
+        # Scoped, and only scoped. An earlier pass's guides are none of our
+        # business whatever its afterlife was, so nothing here clears the scene.
+        guides.draw(scope=scope)
         report = Builder(ctx.events).build(
-            scope=scope,
-            document=document,
-            afterlife=self.after_build,
+            scope=scope, document=document, afterlife=self.after_build
         )
-        source = self.guides_file or "this session"
-        ctx.log(f"Kinematics built {report.count} module(s) from {source}.")
+        ctx.log(f"Kinematics built {report.count} module(s).")
 
     @staticmethod
-    def _checkout_session_guides(guides, ctx):
-        """Render the guides stored in this session, with no file involved.
+    def _document(ctx):
+        """The guide document of the session being built, or None."""
+        session = getattr(ctx, "session", None)
+        document = getattr(session, "document", None)
+        return getattr(document, "guides", None)
 
-        The session is a self-contained rig description, so there is no version
-        skew between it and a separate guides file to get wrong.
-        """
-        from tik.trigger.guides import regenerate
-
-        document = getattr(ctx.session, "document", None)
-        stored = getattr(document, "guides", None)
-        if stored is None or not stored.modules:
-            raise ActionExecutionError(
-                "kinematics: no guides in this session and no guides file set."
-            )
-        session_guides = ctx.session.guides
-        session_guides.clear_rendering()
-        regenerate.regenerate_all(stored)
-        return session_guides.instances()
-
-
-def _descendants(guides, roots) -> list[str]:
-    """Instance ids of ``roots`` and everything parented under them."""
-    all_instances = {
-        handle.instance_id: handle.instance for handle in guides.instances()
-    }
-    wanted = {handle.instance_id for handle in roots}
-    changed = True
-    while changed:
-        changed = False
-        for instance_id, instance in all_instances.items():
-            if (
-                instance_id not in wanted
-                and instance.parent
-                and instance.parent.instance_id in wanted
-            ):
-                wanted.add(instance_id)
-                changed = True
-    return list(wanted)
+    def summary(self) -> str:
+        """How many modules this action builds, for the pipeline list."""
+        count = len(self.modules)
+        return f"{count} module{'' if count == 1 else 's'}"

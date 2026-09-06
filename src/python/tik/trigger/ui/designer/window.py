@@ -45,11 +45,37 @@ from ..palette import SearchPalette
 from ..session_view import pane
 from .action_bar import DesignerActionBar
 from .commands import DesignerCommands
-from .delegates import DrawStateRole
+from .delegates import DisabledRole, DrawStateRole, OriginRole, OverrideRole
 from .properties import DesignerProperties
 from .widgets import MIME_MODULE, GuideTree, InputRow, SceneNodesPanel, module_entries
 
 SIDES = ("L", "R", "C", "Both", "Auto")
+
+
+def _override_count(entry) -> int:
+    """How many things ``entry`` differs from its source by. 0 when local."""
+    if entry is None or entry.origin is None or entry.source is None:
+        return 0
+    from tik.trigger.core.guide_reference import overrides_for
+
+    return len(overrides_for(entry))
+
+
+def _row_tooltip(state: str, origin, overrides: int, entry) -> str:
+    """Draw state, provenance and overrides -- all three, never one instead
+    of another."""
+    lines = [TOOLTIPS[state]]
+    if origin:
+        lines.append(f"Referenced from {origin}.")
+    if overrides:
+        plural = "" if overrides == 1 else "s"
+        lines.append(
+            f"{overrides} local override{plural} — upstream changes to "
+            "these will not arrive."
+        )
+    if entry is not None and not entry.enabled:
+        lines.append("Left out of this rig; it will not build.")
+    return "\n".join(lines)
 
 
 def diff_summary(diff) -> str:
@@ -249,6 +275,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.multi_label.setObjectName("LinkedNote")
         self.multi_label.setVisible(False)
         props.addWidget(self.multi_label)
+        props.addWidget(self._build_reference_strip())
         self.inputs_caption = QtWidgets.QLabel("INPUTS")
         self.inputs_caption.setObjectName("FieldCaption")
         props.addWidget(self.inputs_caption)
@@ -269,6 +296,62 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         props.addWidget(self.scene_panel, 1)
         return self.properties
 
+    def _build_reference_strip(self) -> QtWidgets.QWidget:
+        """Where a borrowed module came from, and what is local about it.
+
+        An override is what quietly stops an upstream fix from arriving, so
+        the panel has to say there is one and offer to give it back.
+        """
+        self.reference_strip = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout(self.reference_strip)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        self.reference_label = QtWidgets.QLabel("")
+        self.reference_label.setObjectName("LinkedNote")
+        self.enabled_box = QtWidgets.QCheckBox("Build in this rig")
+        self.enabled_box.setToolTip(
+            "Unticked, this module stays in the session but is left out of "
+            "the rig -- and stops being offered to a kinematics action."
+        )
+        self.enabled_box.toggled.connect(self.set_module_enabled)
+        self.revert_button = QtWidgets.QPushButton("Revert to source")
+        self.revert_button.setToolTip(
+            "Discard every local change to this module and take what the "
+            "referenced session says."
+        )
+        self.revert_button.clicked.connect(self.revert_module)
+        row.addWidget(self.reference_label, 1)
+        row.addWidget(self.enabled_box)
+        row.addWidget(self.revert_button)
+        self.reference_strip.setVisible(False)
+        return self.reference_strip
+
+    def _show_reference_strip(self, handle) -> None:
+        """Fill the strip for ``handle``, or hide it for a local module."""
+        entry = (
+            self.guides.document.module(handle.instance_id)
+            if handle is not None
+            else None
+        )
+        if entry is None or entry.origin is None:
+            self.reference_strip.setVisible(False)
+            return
+        files = {
+            item.ref_id: Path(item.file).name
+            for item in self.guides.document.references
+        }
+        overrides = _override_count(entry)
+        text = f"from {files.get(entry.origin, 'another session')}"
+        if overrides:
+            plural = "" if overrides == 1 else "s"
+            text += f" · {overrides} local override{plural}"
+        self.reference_label.setText(text)
+        self.revert_button.setEnabled(bool(overrides))
+        self.enabled_box.blockSignals(True)
+        self.enabled_box.setChecked(entry.enabled)
+        self.enabled_box.blockSignals(False)
+        self.reference_strip.setVisible(True)
+
     def _connect_signals(self) -> None:
         self.tree_filter.filter_changed.connect(self.apply_tree_filter)
         self.tree.itemSelectionChanged.connect(self._on_tree_selection)
@@ -278,6 +361,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.graph.palette_requested.connect(self.show_palette)
         self.graph.selection_changed.connect(self._on_graph_selection)
         self.graph.external_selection_changed.connect(self._on_external_selection)
+        self.graph.frame_selection_changed.connect(self._on_frame_selection)
         self.graph.node_menu_requested.connect(
             lambda _key, pos: self.module_menu().exec(pos)
         )
@@ -519,10 +603,23 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             except Exception:  # noqa: BLE001 - a stub scene has no diff()
                 diff = None
             states = states_from(diff) if diff is not None else {}
+            # Provenance is a *document* fact, not a scene one, so it is read
+            # here rather than folded into the diff: a borrowed module can be
+            # not-drawn and overridden at once, and the two must not compete
+            # for the same slot.
+            document = self.guides.document
+            entries = {entry.instance_id: entry for entry in document.modules}
+            files = {item.ref_id: Path(item.file).name for item in document.references}
             for instance_id, item in items.items():
                 state = states.get(instance_id, DRAWN)
+                entry = entries.get(instance_id)
+                origin = files.get(entry.origin) if entry is not None else None
+                overrides = _override_count(entry)
                 item.setData(0, DrawStateRole, state)
-                item.setToolTip(0, TOOLTIPS[state])
+                item.setData(0, OriginRole, origin)
+                item.setData(0, OverrideRole, overrides)
+                item.setData(0, DisabledRole, entry is not None and not entry.enabled)
+                item.setToolTip(0, _row_tooltip(state, origin, overrides, entry))
             self.tree.expandAll()
             self.apply_tree_filter()
             self.graph.set_draw_states(states)
@@ -647,6 +744,15 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         if self._syncing:
             return
         self._select_handles(self.selected_handles())
+
+    def _on_frame_selection(self, ref_id: str) -> None:
+        """A collapsed reference is not a module and has no properties.
+
+        Clearing beats leaving the previous module's panel up, which would
+        read as though the selection had not changed at all.
+        """
+        self._set_current(None)
+        self.status.set_activity("Collapsed reference — click its glyph to expand it.")
 
     def _on_external_selection(self, name: str) -> None:
         self._syncing = True
@@ -787,6 +893,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.name_edit.setPlaceholderText("instance name")
         if handle is None:
             self._module_obj = None
+            self.reference_strip.setVisible(False)
             self.form.set_target(None)
             self.name_edit.setText("")
             self.type_label.setText("")
@@ -832,6 +939,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 self._input_rows[declared.name] = row
             self.inputs_caption.setVisible(bool(declared_inputs))
         self.form.set_target(self._module_obj)
+        self._show_reference_strip(handle)
         if multi:
             self.status.set_activity(
                 f"{len(self._multi)} × {module_cls.display_label()} selected"

@@ -102,7 +102,12 @@ def test_old_flat_session_converts():
         "kinematics",
     ]
     kin = doc.find("kinematics1")
-    assert kin.settings["guide_roots"] == ["base_c"]
+    # schema 7 translates the old root names into explicit ids; this session
+    # has no guides, so the name resolves to nothing and is preserved rather
+    # than silently becoming "build nothing".
+    assert kin.settings["modules"] == []
+    assert kin.settings["legacy_roots"] == ["base_c"]
+    assert "guide_roots" not in kin.settings
     assert kin.children == [] and kin.enabled is True
     assert Document.from_dict(
         [{"name": "a", "type": "script", "data": {"x": 1}}]
@@ -266,11 +271,11 @@ def test_an_action_is_invisible_from_the_other_phase():
         doc.rename("export_fbx", "x")  # build phase, where it does not exist
 
 
-def test_schema_6_round_trip(tmp_path):
+def test_schema_7_round_trip(tmp_path):
     doc = _mixed()
     loaded = Document.load(doc.save(tmp_path / "s.tr"))
-    assert SCHEMA_VERSION == 6
-    assert loaded.schema == 6
+    assert SCHEMA_VERSION == 7
+    assert loaded.schema == 7
     assert loaded.paths() == ["import_model", "kinematics"]
     assert loaded.paths(phase=PUBLISH) == ["export_fbx", "export_maya"]
 

@@ -22,7 +22,10 @@ PREFS = ("tik.trigger.config", "tik.shared.prefs")
 FORBIDDEN = {
     "core": ("maya", "tik.maya", "tik.trigger", "tik.shared") + QT,
     "maya": ("tik.trigger", "tik.shared") + QT,
-    "trigger/core": ("maya", "tik.maya") + QT + PREFS,
+    # ``tik.trigger.actions`` too: core/guide_reference.py writes its own
+    # cycle check rather than reusing the reference action's, because an
+    # action package sits above core and importing one would invert the layer.
+    "trigger/core": ("maya", "tik.maya", "tik.trigger.actions") + QT + PREFS,
     "trigger/modules": PREFS,
     "trigger/systems": PREFS,
     "trigger/maya": PREFS,

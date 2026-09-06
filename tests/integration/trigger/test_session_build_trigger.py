@@ -12,6 +12,11 @@ def scene():
     return GuideScene()
 
 
+def _all_modules(session) -> list:
+    """Every module id in ``session``: the scope a whole-rig build names."""
+    return [entry.instance_id for entry in session.document.guides.modules]
+
+
 def _author(scene, tmp_path):
     guides = GuideScene()
     body = guides.add("base", name="body")
@@ -33,10 +38,11 @@ def test_session_builds_from_files_and_rebuilds(scene, tmp_path):
 
     rig = trigger.Session()
     rig.save(tmp_path / "hero.tr")
+    rig.guides.import_(tmp_path / "guides" / "hero_guides.trg")
     rig.add("import_asset", "import_model", file_path="geo/hero_model.ma")
     rig.add(
         "kinematics",
-        guides_file="guides/hero_guides.trg",
+        modules=_all_modules(rig),
         after_build="delete",
     )
     rig.add(
@@ -72,36 +78,29 @@ def test_session_builds_from_files_and_rebuilds(scene, tmp_path):
     assert [item.path for item in results] == ["import_model", "kinematics"]
 
 
-def test_kinematics_roots_filter(scene, tmp_path):
+def test_kinematics_builds_only_what_it_names(scene, tmp_path):
+    """The scope is the list. Everything else stays out of the rig."""
     guides_path = _author(scene, tmp_path)
-    rig = trigger.Session()
-    rig.add(
-        "kinematics",
-        guides_file=str(guides_path),
-        guide_roots=["body"],
-    )
-    rig.build()
-    assert cmds.objExists("C_body_grp") and cmds.objExists(
-        "L_arm_grp"
-    )  # descendants included
 
     rig = trigger.Session()
-    rig.add(
-        "kinematics",
-        guides_file=str(guides_path),
-        guide_roots=["tail"],
-    )
+    rig.guides.import_(guides_path)
+    body = rig.guides.find("body")
+    arm = rig.guides.find("arm", side="L")
+    rig.add("kinematics", modules=[body.instance_id, arm.instance_id])
+    rig.build()
+    assert cmds.objExists("C_body_grp") and cmds.objExists("L_arm_grp")
+    assert not cmds.objExists("C_tail_grp")
+
+    # a different subset: the tail needs its producer, so name that too --
+    # naming a consumer without its source is an error, not a silent skip
+    cmds.file(new=True, force=True)
+    rig = trigger.Session()
+    rig.guides.import_(guides_path)
+    body = rig.guides.find("body")
+    tail = rig.guides.find("tail")
+    rig.add("kinematics", modules=[body.instance_id, tail.instance_id])
     rig.build()
     assert cmds.objExists("C_tail_grp") and not cmds.objExists("L_arm_grp")
-    assert (
-        any(
-            "not found" in problem
-            for problem in trigger.Session().add("kinematics", guides_file="nope.trg")
-            and []
-            or []
-        )
-        or True
-    )
 
 
 def test_kinematics_builds_from_the_sessions_own_guides():
@@ -112,12 +111,12 @@ def test_kinematics_builds_from_the_sessions_own_guides():
     cmds.file(new=True, force=True)
     session = Session()
     session.guides.add("base", side="C", name="body")
-    session.add("kinematics")
+    session.add("kinematics", modules=_all_modules(session))
     session.build()
     assert cmds.objExists("rig_grp")
 
 
-def test_kinematics_without_guides_or_a_file_reports_clearly():
+def test_kinematics_naming_nothing_reports_clearly():
     from tik.trigger.core.exceptions import ActionExecutionError
     from tik.trigger.session import Session
 
@@ -125,7 +124,7 @@ def test_kinematics_without_guides_or_a_file_reports_clearly():
     cmds.file(new=True, force=True)
     session = Session()
     session.add("kinematics")
-    with pytest.raises(ActionExecutionError, match="no guides"):
+    with pytest.raises(ActionExecutionError, match="names no modules"):
         session.build()
 
 

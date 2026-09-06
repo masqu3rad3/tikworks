@@ -469,3 +469,128 @@ class DesignerCommands:
             (GUIDE_EXTENSION,),
             guide_filter,
         )
+
+    # -------------------------------------------------- module references
+    def revert_module(self) -> None:
+        """Give a borrowed module back to its source, wholly.
+
+        Overrides are *derived*, so reverting is not an unwind: copying the
+        source's authored values back leaves nothing for ``to_dict`` to find a
+        difference in, and the override disappears on its own.
+        """
+        handle = self._current
+        if handle is None:
+            return
+        entry = self.guides.document.module(handle.instance_id)
+        if entry is None or entry.source is None:
+            return
+        from tik.trigger.core.guide_reference import overrides_for
+
+        if not overrides_for(entry):
+            return
+        answer = Feedback(self).pop_question(
+            title="Revert to source",
+            text=f"Discard every local change to '{entry.key}'?",
+            details=(
+                "Its name, settings, connections and guide poses go back to "
+                "what the referenced session says. This cannot be undone from "
+                "the referenced file's side."
+            ),
+            buttons=["Revert", "Cancel"],
+        )
+        if answer != "Revert":
+            return
+        if not self.guides.revert_to_source(entry.instance_id):
+            return
+        # Redraw before anything syncs: the joints are still where the rigger
+        # left them, and a sync arriving first would read the reverted pose
+        # straight back out of the scene as a fresh override.
+        self._muted_draw(entry.instance_id)
+        self.refresh()
+
+    def _muted_draw(self, instance_id: str) -> None:
+        """Draw one module without letting the watcher start a sync."""
+        watcher = getattr(self, "watcher", None)
+        mute = getattr(watcher, "mute", None)
+        draw = getattr(self.guides, "draw", None)
+        if draw is None:
+            return
+        if mute is None:
+            draw(scope=[instance_id])
+            return
+        with mute():
+            draw(scope=[instance_id])
+
+    SESSION_EXTENSION = ".tr"
+
+    def reference_modules(self) -> None:
+        """Link another session's modules into this rig.
+
+        The link is a session-level fact, not a scene one -- the guides that
+        arrive are a rendering of somebody else's document -- so this needs a
+        session and says so rather than half-working without one.
+        """
+        session = self.guides.session
+        if session is None:
+            self.events.log("Referencing modules needs a session.", level="warning")
+            return
+        path = self._pick_session()
+        if not path:
+            return
+        try:
+            session.link_modules(path)
+        except TriggerError as error:
+            # Already linked, or unreadable. A message, not a traceback into Qt.
+            self.events.log(str(error), level="warning")
+            Feedback(self).pop_warning(title="Reference modules", text=str(error))
+            return
+        self.refresh()
+
+    def unlink_reference(self, ref_id: str) -> None:
+        """Drop a link, after asking what to do with its modules.
+
+        Three answers, and the order matters: discarding authored overrides is
+        the one destructive act in this feature, so it is never the default
+        button.
+        """
+        session = self.guides.session
+        if session is None:
+            return
+        reference = self.guides.document.reference(ref_id)
+        name = Path(reference.file).name if reference is not None else "this reference"
+        answer = Feedback(self).pop_question(
+            title="Unlink modules",
+            text=f"Stop referencing {name}?",
+            details=(
+                "Bake in keeps its modules here as copies of your own, with "
+                "your overrides applied. Discard removes them, and the local "
+                "changes you made to them go with it."
+            ),
+            buttons=["Bake in", "Discard", "Cancel"],
+        )
+        if answer not in ("Bake in", "Discard"):
+            return
+        session.unlink_modules(ref_id, bake=answer == "Bake in")
+        self.refresh()
+
+    def _pick_session(self) -> str:
+        """Browse for a ``.tr``, through the injected browser when there is one."""
+        if self.file_browser is not None:
+            return self.file_browser("open", [self.SESSION_EXTENSION], "") or ""
+        return Feedback(self).browse_open(
+            "Reference modules",
+            "",
+            (self.SESSION_EXTENSION,),
+            f"Trigger session (*{self.SESSION_EXTENSION})",
+        )
+
+    def set_module_enabled(self, enabled: bool) -> None:
+        """Keep a borrowed module in the session but out of the rig."""
+        handle = self._current
+        if handle is None:
+            return
+        entry = self.guides.document.module(handle.instance_id)
+        if entry is None or entry.origin is None or entry.enabled == bool(enabled):
+            return
+        self.guides.set_enabled(entry.instance_id, bool(enabled))
+        self.refresh()

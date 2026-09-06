@@ -217,6 +217,9 @@ class Builder:
 
     def __init__(self, events: Optional[EventBus] = None) -> None:
         self.events = events or EventBus()
+        #: Display key -> instance id for every module in the document, so a
+        #: pass can name a producer an earlier pass built. Filled by ``build``.
+        self._keys_to_ids: dict = {}
 
     @staticmethod
     def order(instances: list[ModuleInstance]) -> list[ModuleInstance]:
@@ -230,14 +233,19 @@ class Builder:
         if afterlife not in AFTERLIFE_MODES:
             raise ValueError(f"afterlife must be one of {AFTERLIFE_MODES}.")
         instances = self.order(guide_nodes.find_instances(scope, document))
-        known_keys = {
-            item.key
-            for item in (
-                instances
-                if scope == "scene"
-                else guide_nodes.find_instances("scene", document)
-            )
-        }
+        # From the *document*: a pass that deleted its guides is invisible to a
+        # scene scan, which is exactly when a later pass needs its outputs.
+        self._keys_to_ids = {}
+        for entry in document.modules if document is not None else []:
+            if entry.key in self._keys_to_ids:
+                raise BuildError(
+                    f"two modules share the display key '{entry.key}': "
+                    f"{self._keys_to_ids[entry.key]} and {entry.instance_id}. "
+                    "Rename one.",
+                    instance_id=entry.instance_id,
+                    module_type=entry.module_type,
+                )
+            self._keys_to_ids[entry.key] = entry.instance_id
         report = BuildReport()
         total = len(instances)
         if not total:
@@ -275,9 +283,7 @@ class Builder:
                 report.rigs[instance.instance_id] = ctx
                 report.built.append(instance.instance_id)
                 by_key[instance.key] = instance
-                self._connect_one(
-                    instance, module_cls, inputs, by_key, report, known_keys
-                )
+                self._connect_one(instance, module_cls, inputs, by_key, report)
             self._connect_spaces(instances, report, by_key)
             apply_afterlife(instances, afterlife)
         self.events.log(f"Built {total} module(s).")
@@ -297,16 +303,18 @@ class Builder:
         if not source:
             return None
         key, output = split_source(source)
-        if key is None or key not in by_key:
+        if key is None:
             return None
+        if key not in by_key:
+            # Built in an earlier pass: found in the scene so this module's
+            # bind joints are still created in their final position.
+            return self._earlier_pass_output(key, output)
         producer_ctx = report.rigs.get(by_key[key].instance_id)
         if producer_ctx is None:
             return None
         return producer_ctx.outputs.get(output)
 
-    def _connect_one(
-        self, instance, module_cls, inputs, by_key, report, known_keys
-    ) -> None:
+    def _connect_one(self, instance, module_cls, inputs, by_key, report) -> None:
         """Attach every declared input of one already-built instance."""
         rig = report.rigs[instance.instance_id]
         for declared in module_cls.inputs:
@@ -319,14 +327,6 @@ class Builder:
                     instance_id=instance.instance_id,
                     module_type=instance.module_type,
                 )
-            key, _output = split_source(source)
-            if key is not None and key in known_keys and key not in by_key:
-                self.events.log(
-                    f"{instance.key}.{declared.name}: source '{source}' is "
-                    "outside the build scope; left unattached.",
-                    level="warning",
-                )
-                continue
             node = self.resolve(
                 source,
                 by_key,
@@ -384,6 +384,15 @@ class Builder:
                         level="warning",
                     )
 
+    def _earlier_pass_output(self, key: Optional[str], output: str):
+        """The scene node for ``key``.``output`` when an earlier pass built it."""
+        if not key:
+            return None
+        instance_id = self._keys_to_ids.get(key)
+        if instance_id is None:
+            return None
+        return guide_nodes.find_output(instance_id, output)
+
     def resolve(
         self,
         source: str,
@@ -414,6 +423,9 @@ class Builder:
                     module_type=instance.module_type if instance else None,
                 )
             return node
+        earlier = self._earlier_pass_output(key, output)
+        if earlier is not None:
+            return earlier
         node = guide_nodes.scene_node(source)
         if node is None and strict:
             raise AttachError(

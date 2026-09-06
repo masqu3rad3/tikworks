@@ -113,6 +113,8 @@ class SessionView(QtWidgets.QWidget):
         self.designer_factory = designer_factory
         self.events = events or session.events
         self.designer = None
+        #: Structure of the guide document the Designer last drew.
+        self._guides_signature: tuple = ()
         self._build_ui(file_browser)
         self._connect_events()
 
@@ -136,9 +138,44 @@ class SessionView(QtWidgets.QWidget):
         self._designer_page.layout().addWidget(designer)
         return designer
 
+    def guides_signature(self) -> tuple:
+        """A cheap stamp of the guide document's *structure*.
+
+        Which modules exist, where each came from, and which files are linked.
+        Poses are deliberately absent: they change constantly and a redraw is
+        not what they need.
+        """
+        guides = self.session.document.guides
+        return (
+            tuple(
+                (entry.instance_id, entry.origin, entry.key, entry.enabled)
+                for entry in guides.modules
+            ),
+            tuple(item.ref_id for item in guides.references),
+        )
+
+    def sync_designer(self) -> None:
+        """Rebuild the Designer when the document moved under it.
+
+        A reference added or removed in *this* pane changes which modules
+        exist, and nothing in Maya fires for that -- so without this the
+        modules only appear after some unrelated act happens to trigger a
+        rebuild, which is exactly as confusing as it sounds.
+        """
+        if self.designer is None:
+            return
+        signature = self.guides_signature()
+        if signature == self._guides_signature:
+            return
+        self._guides_signature = signature
+        self.designer.refresh()
+
     def _on_sub_tab_changed(self, index: int) -> None:
         if index == DESIGNER_TAB:
             designer = self.ensure_designer()
+            # The other pane may have changed which modules exist while this
+            # one was hidden; drift alone would only repaint the indicators.
+            self.sync_designer()
             # Belt-and-suspenders alongside GuideDesigner.showEvent: on the
             # very first activation the page is already the current tab when
             # the widget gets built and added to it, so Qt may never deliver
@@ -205,7 +242,9 @@ class SessionView(QtWidgets.QWidget):
         self.splitter.addWidget(self._build_shelf_pane())
         self.splitter.addWidget(self._build_pipeline_pane())
         self.settings = ActionSettingsPanel(
-            file_browser=file_browser, base_dir=lambda: self.session.directory
+            file_browser=file_browser,
+            base_dir=lambda: self.session.directory,
+            list_choices=self._list_choices,
         )
         self.settings.handle_changed.connect(self.handle_changed)
         self.splitter.addWidget(self.settings)
@@ -252,6 +291,21 @@ class SessionView(QtWidgets.QWidget):
         self.shelf = self.shelves[BUILD]  # menus and tests reach for the focused one
         self.shelf_pane = pane("Actions", self.shelf_stack)
         return self.shelf_pane
+
+    def _list_choices(self, key: str) -> list:
+        """Options for a ``ListField`` that declares ``choices_from``.
+
+        ``modules`` is the only source so far: the session's modules, offered
+        by display key and stored by id. A module deliberately left out of the
+        rig is not offered -- listing one is already a validation error.
+        """
+        if key != "modules":
+            return []
+        return [
+            (entry.key, entry.instance_id)
+            for entry in self.session.document.guides.modules
+            if entry.enabled
+        ]
 
     def _build_pipeline_pane(self) -> QtWidgets.QWidget:
         self.tree = self._make_tree(self.model)
@@ -442,18 +496,25 @@ class SessionView(QtWidgets.QWidget):
         self._rebuild_all()
         self.select_path(keep, phase)
         self.settings.set_handle(self.current_handle())
+        self.sync_designer()
         self.title_changed.emit()
 
     def _after_edit(self) -> None:
         for tree in self.trees.values():
             tree.expandAll()
+        self.sync_designer()
         self.title_changed.emit()
 
     def _on_settings_edited(self, path: str) -> None:
         phase = self._focus_phase
         handle = self.models[phase].handle(self.trees[phase].currentIndex())
-        # a reference gained/changed its file: its children changed too
-        if handle is not None and handle.type == "reference":
+        # a reference gained/changed its file: its children changed too.
+        # Resolved from the path the signal carries rather than the tree's
+        # current row -- the two normally agree, but the path is the fact.
+        edited = self.session.view(phase).find(path)
+        if edited is not None and edited.type == "reference":
+            self.refresh(path)
+        elif handle is not None and handle.type == "reference":
             self.refresh(path)
         else:
             index = self.models[phase].index_for_path(path)
