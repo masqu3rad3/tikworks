@@ -19,10 +19,18 @@ included -- rather than stamping a default over it.
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from typing import Optional
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+
+def _serialize_references(document) -> list:
+    """Links carrying freshly diffed overrides. Local import: avoids a cycle."""
+    from .guide_reference import serialize_references
+
+    return serialize_references(document)
 
 
 def _triple(value, default=(0.0, 0.0, 0.0)) -> tuple:
@@ -115,6 +123,19 @@ class ModuleEntry:
     #: ``{input name: "<instance_id>.<output>" | "<scene node>"}``
     inputs: dict = field(default_factory=dict)
     guides: list = field(default_factory=list)
+    #: Resolution state, never serialized on the entry itself. ``origin`` is
+    #: the ``ref_id`` of the link this entry arrived through (None when it is
+    #: this session's own); ``source`` is a deep copy of it before overrides,
+    #: so the difference between the two *is* the override set. ``enabled`` is
+    #: False only for a referenced module the host left out of its rig
+    #: deliberately -- which is what tells an unbuilt-module warning apart
+    #: from a decision.
+    #:
+    #: ``compare=False`` matters: these would otherwise join the generated
+    #: ``__eq__`` and make comparing two entries recurse through ``source``.
+    origin: Optional[str] = field(default=None, compare=False, repr=False)
+    source: Optional["ModuleEntry"] = field(default=None, compare=False, repr=False)
+    enabled: bool = field(default=True, compare=False)
 
     @property
     def key(self) -> str:
@@ -160,6 +181,50 @@ class ModuleEntry:
 
 
 @dataclass
+class ModuleReference:
+    """A link to another session's modules.
+
+    The link and its overrides are the only things stored. The modules
+    themselves are resolved out of the referenced file every time the document
+    is loaded, so an upstream change arrives without anything here being
+    touched -- which is the whole difference between referencing and copying.
+    """
+
+    ref_id: str
+    file: str
+    version: str = "latest"
+    #: True when a pipeline ``reference`` action created this link. Such a
+    #: link lives and dies with that action; one made by hand through
+    #: *Reference Modules...* answers to nobody and is never auto-removed.
+    auto: bool = False
+    #: ``{instance_id: {enabled, name, side, settings, inputs, guides}}``, where
+    #: a guide key is ``"<role>:<index>"``. Produced by diffing, never written
+    #: by hand -- see ``core.guide_reference.overrides_for``.
+    overrides: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        """The JSON form stored in the document."""
+        return {
+            "ref_id": self.ref_id,
+            "file": self.file,
+            "version": self.version,
+            "auto": self.auto,
+            "overrides": copy.deepcopy(self.overrides),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ModuleReference":
+        """Rebuild a reference from its JSON form."""
+        return cls(
+            ref_id=data["ref_id"],
+            file=data.get("file", ""),
+            version=data.get("version", "latest"),
+            auto=bool(data.get("auto", False)),
+            overrides=copy.deepcopy(data.get("overrides") or {}),
+        )
+
+
+@dataclass
 class SceneGroup:
     """A named bag of arbitrary Maya nodes modules can connect to."""
 
@@ -188,6 +253,13 @@ class GuideDocument:
     schema: int = SCHEMA_VERSION
     modules: list = field(default_factory=list)
     scene_groups: list = field(default_factory=list)
+    #: Links to other sessions' modules.
+    references: list = field(default_factory=list)
+    #: Graph frame placement per reference: ``{ref_id: {position, collapsed}}``.
+    #: Deliberately *not* ``positions``/``collapse``: those are projected
+    #: through ``node_ids()`` and replaced wholesale by ``layout_from_keys``,
+    #: so a frame stored there would be deleted by the first node drag.
+    frames: dict = field(default_factory=dict)
     #: Graph node positions, keyed by instance_id or group_id.
     positions: dict = field(default_factory=dict)
     #: Graph collapse modes, keyed by instance_id or group_id.
@@ -204,6 +276,13 @@ class GuideDocument:
         """Look up by display key. For UI convenience only -- never for storage."""
         for entry in self.modules:
             if entry.key == key:
+                return entry
+        return None
+
+    def reference(self, ref_id: str) -> Optional[ModuleReference]:
+        """The link with ``ref_id``, or None."""
+        for entry in self.references:
+            if entry.ref_id == ref_id:
                 return entry
         return None
 
@@ -275,8 +354,14 @@ class GuideDocument:
         """The JSON form stored in the ``.tr`` file."""
         return {
             "schema": self.schema,
-            "modules": [entry.to_dict() for entry in self.modules],
+            # Referenced entries are derived, not content: the link and its
+            # overrides are what this file stores.
+            "modules": [
+                entry.to_dict() for entry in self.modules if entry.origin is None
+            ],
             "scene_groups": [entry.to_dict() for entry in self.scene_groups],
+            "references": _serialize_references(self),
+            "frames": copy.deepcopy(self.frames),
             "positions": {key: list(value) for key, value in self.positions.items()},
             "collapse": dict(self.collapse),
         }
@@ -296,6 +381,11 @@ class GuideDocument:
             scene_groups=[
                 SceneGroup.from_dict(item) for item in data.get("scene_groups", [])
             ],
+            references=[
+                ModuleReference.from_dict(item)
+                for item in (data.get("references") or [])
+            ],
+            frames=copy.deepcopy(data.get("frames") or {}),
             positions={
                 key: list(value) for key, value in (data.get("positions") or {}).items()
             },

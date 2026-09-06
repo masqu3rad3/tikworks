@@ -1,4 +1,4 @@
-"""The session document: build + publish actions and guides (``.tr`` schema 6)."""
+"""The session document: build + publish actions and guides (``.tr`` schema 7)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Iterator, Optional
 from .exceptions import SessionError, SessionLoadError, SessionSaveError
 from .guide_document import GuideDocument
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 EXTENSION = ".tr"
 SEPARATOR = "/"
 
@@ -118,13 +118,24 @@ class Document:
             raise SessionLoadError(
                 f"Session schema {schema} is newer than supported {SCHEMA_VERSION}."
             )
-        return cls(
+        document = cls(
             schema=SCHEMA_VERSION,
             meta=dict(data.get("meta", {})),
             actions=[ActionNode.from_dict(item) for item in data.get("actions", [])],
             publish=[ActionNode.from_dict(item) for item in data.get("publish", [])],
             guides=GuideDocument.from_dict(data.get("guides") or {}),
         )
+        if schema < 7:
+            # A kinematics scope can only be translated with the guides in
+            # hand, which the per-action ``migrate_settings`` hook cannot see.
+            # Gated on the *stored* schema, so undo, redo and copy -- which all
+            # round-trip through here with the schema already current -- never
+            # re-run it.
+            from .kinematics_migration import migrate_kinematics
+
+            migrate_kinematics(document.actions, document.guides)
+            migrate_kinematics(document.publish, document.guides)
+        return document
 
     @classmethod
     def load(cls, file_path) -> "Document":

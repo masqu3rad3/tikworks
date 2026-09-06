@@ -51,6 +51,8 @@ class Session:
         self._undo: list[dict] = []
         self._redo: list[dict] = []
         self._last_state = self.document.to_dict()
+        #: Problems from the last reference resolution, reported by validate().
+        self.reference_problems: list = []
         if file_path:
             self.load(file_path)
 
@@ -70,6 +72,13 @@ class Session:
         kind of coupling that rots.
         """
         self._reference_cache.clear()
+        # Cheap: this only resolves paths. The expensive part -- reading the
+        # referenced files -- runs only when the set of links actually moved,
+        # so an ordinary guide drag costs nothing.
+        if self._sync_pipeline_links():
+            from tik.trigger.core.guide_reference import resolve
+
+            self.reference_problems = resolve(self.document.guides, self.directory)
         state = self.document.to_dict()
         if state != self._last_state:
             self._undo.append(self._last_state)
@@ -83,6 +92,7 @@ class Session:
             return False
         self._redo.append(self.document.to_dict())
         self.document = Document.from_dict(self._undo.pop())
+        self.resolve_references()
         self._last_state = self.document.to_dict()
         self._reference_cache.clear()
         return True
@@ -93,6 +103,7 @@ class Session:
             return False
         self._undo.append(self.document.to_dict())
         self.document = Document.from_dict(self._redo.pop())
+        self.resolve_references()
         self._last_state = self.document.to_dict()
         self._reference_cache.clear()
         return True
@@ -126,6 +137,7 @@ class Session:
         self._undo.clear()
         self._redo.clear()
         self._reference_cache.clear()
+        self.resolve_references()
 
     def load(self, file_path: str) -> None:
         """Replace the document with the contents of ``file_path``."""
@@ -137,6 +149,7 @@ class Session:
         self._undo.clear()
         self._redo.clear()
         self._reference_cache.clear()
+        self.resolve_references()
         self.events.log(f"Session loaded: {path}")
 
     def save(self, file_path: Optional[str] = None, increment: bool = False) -> Path:
@@ -241,6 +254,7 @@ class Session:
         guides that are exactly where the rigger left them.
         """
         self.document.guides = document
+        self.resolve_references()
         self.touch()
 
     @staticmethod
@@ -291,6 +305,147 @@ class Session:
         if not ours:
             self.guides.clear_rendering()
         document_store.write_stamp(self.session_id)
+
+    # ------------------------------------------------------- module links
+    #
+    # Referenced modules live in ``document.guides.modules`` like any other,
+    # carrying ``origin`` and an untouched ``source``. That is what lets every
+    # existing read and write in the guide layer work on them unchanged, and
+    # why ``to_dict`` -- not any write path -- is what turns an edit into an
+    # override.
+
+    def _sync_pipeline_links(self) -> bool:
+        """Give every pipeline reference that wants one a module link.
+
+        Referencing a session and containing its modules stay two objects --
+        the same file can be referenced twice for a split pipeline run, while
+        a module exists once -- but wanting both is the ordinary case, so the
+        reference action carries the decision and this keeps the link in step
+        with it. Running here rather than at the moment of editing means a
+        session saved before any of this existed picks its modules up on open.
+        """
+        from tik.trigger.core.guide_document import ModuleReference
+        from tik.trigger.core.guide_reference import resolved_path
+
+        guides = self.document.guides
+        wanted: dict = {}
+        for _path, node, _parent in self.document.walk(BUILD):
+            if node.type != "reference" or not node.enabled:
+                continue
+            file_path = node.settings.get("file", "")
+            if not file_path or not node.settings.get("link_modules", True):
+                continue
+            try:
+                key = resolved_path(
+                    file_path, self.directory, node.settings.get("version", "latest")
+                )
+            except (OSError, ValueError):
+                continue
+            wanted.setdefault(str(key), (file_path, node.settings.get("version")))
+
+        linked = {}
+        for reference in list(guides.references):
+            try:
+                key = str(
+                    resolved_path(reference.file, self.directory, reference.version)
+                )
+            except (OSError, ValueError):
+                continue
+            linked[key] = reference
+        changed = False
+        for key, (file_path, version) in wanted.items():
+            if key in linked:
+                continue
+            changed = True
+            guides.references.append(
+                ModuleReference(
+                    ref_id=uuid.uuid4().hex,
+                    file=str(file_path),
+                    version=version or "latest",
+                    auto=True,
+                )
+            )
+        # A link a pipeline reference created lives and dies with it: unticking
+        # the box, disabling the action or deleting it outright all take the
+        # modules with them. Anything made by hand is left alone.
+        for key, reference in linked.items():
+            if reference.auto and key not in wanted:
+                guides.references.remove(reference)
+                changed = True
+        return changed
+
+    def resolve_references(self) -> list:
+        """Pull every linked module into this session's guides. Idempotent.
+
+        Runs wherever the document is *replaced* -- open, new, undo, redo,
+        snapshot -- and never from ``touch()``: an edit does not change what a
+        referenced file says, and re-reading every one of them on each guide
+        drag would be a disk hit per nudge.
+        """
+        from tik.trigger.core.guide_reference import resolve
+
+        self._sync_pipeline_links()
+        self.reference_problems = resolve(self.document.guides, self.directory)
+        return self.reference_problems
+
+    def link_modules(self, file_path: str, version: str = "latest"):
+        """Link another session's modules into this rig.
+
+        Refused when the same file is already linked: the modules arrive with
+        their own uuids, so a second link would be the same rig twice.
+        """
+        import uuid as _uuid
+
+        from tik.trigger.core.guide_document import ModuleReference
+        from tik.trigger.core.guide_reference import resolved_path
+
+        wanted = resolved_path(file_path, self.directory, version)
+        for existing in self.document.guides.references:
+            if resolved_path(existing.file, self.directory, existing.version) == wanted:
+                raise SessionError(
+                    f"'{Path(file_path).name}' is already linked to this session."
+                )
+        reference = ModuleReference(
+            ref_id=_uuid.uuid4().hex, file=str(file_path), version=version
+        )
+        self.document.guides.references.append(reference)
+        self.resolve_references()
+        self.touch()
+        return reference
+
+    def unlink_modules(self, ref_id: str, bake: bool = False) -> None:
+        """Remove a link. ``bake`` keeps its modules as local copies.
+
+        Baking mints **new** uuids, so a later re-link of the same file cannot
+        collide with what was baked. Discarding is the other choice, and it
+        takes the authored overrides with it -- which is why the UI has to ask.
+        """
+        import uuid as _uuid
+
+        guides = self.document.guides
+        reference = guides.reference(ref_id)
+        if reference is None:
+            raise SessionError(f"No module reference '{ref_id}'.")
+        borrowed = [item for item in guides.modules if item.origin == ref_id]
+        guides.references = [
+            item for item in guides.references if item.ref_id != ref_id
+        ]
+        if not bake:
+            guides.modules = [item for item in guides.modules if item.origin != ref_id]
+            self.touch()
+            return
+        renamed = {item.instance_id: _uuid.uuid4().hex for item in borrowed}
+        for entry in borrowed:
+            entry.instance_id = renamed[entry.instance_id]
+            entry.origin = None
+            entry.source = None
+        # inputs that named a baked module must follow it to its new id
+        for entry in guides.modules:
+            for name, source in list(entry.inputs.items()):
+                instance_id, _dot, output = source.rpartition(".")
+                if instance_id in renamed:
+                    entry.inputs[name] = f"{renamed[instance_id]}.{output}"
+        self.touch()
 
     # -------------------------------------------------------------- tree
     def view(self, phase: str = BUILD) -> PhaseView:
@@ -474,6 +629,123 @@ class Session:
             )
         return problems
 
+    # ------------------------------------------------- cross-action checks
+    KINEMATICS = "kinematics"
+
+    def _kinematics_scopes(self) -> list:
+        """``[(path, [instance ids])]`` for every enabled kinematics, in order."""
+        return [
+            (path, list(node.settings.get("modules") or []))
+            for path, node, _parent in self.document.walk(BUILD)
+            if node.type == self.KINEMATICS and node.enabled
+        ]
+
+    def _scope_problems(self) -> list:
+        """Problems spanning several actions, which no single action can see.
+
+        Explicit build scope is what makes these statable: until an action said
+        which modules it built, "built twice", "built by nobody" and "needs
+        something built later" had no way of being expressed, let alone
+        checked.
+        """
+        from tik.trigger.core.schemas import split_source
+
+        problems: list[str] = []
+        entries = list(self.document.guides.modules)
+        by_id = {entry.instance_id: entry for entry in entries}
+        scopes = self._kinematics_scopes()
+
+        def label(instance_id: str) -> str:
+            entry = by_id.get(instance_id)
+            return entry.key if entry is not None else instance_id
+
+        # which pass builds what, and what is built more than once
+        pass_of: dict = {}
+        for index, (path, scope) in enumerate(scopes):
+            for instance_id in scope:
+                if instance_id in pass_of:
+                    problems.append(
+                        f"{label(instance_id)} is built by more than one "
+                        f"kinematics action ({pass_of[instance_id][1]} and {path})."
+                    )
+                    continue
+                pass_of[instance_id] = (index, path)
+
+        # Only worth saying once a pipeline exists to be missing from: a
+        # session still being authored in the Designer has no kinematics
+        # action yet, and warning about every module would be pure noise.
+        # A referenced module the host deliberately left out is not a rig
+        # member at all: it cannot be built, and its absence is a decision
+        # rather than the oversight the warning below exists to catch.
+        for instance_id, (_index, path) in pass_of.items():
+            entry = by_id.get(instance_id)
+            if entry is not None and not entry.enabled:
+                problems.append(
+                    f"{path}: {entry.key} is deliberately left out of this rig "
+                    "and cannot be built. Re-enable it or drop it from the list."
+                )
+
+        if scopes:
+            for entry in entries:
+                if not entry.enabled:
+                    continue
+                if entry.instance_id not in pass_of:
+                    problems.append(
+                        f"warning: {entry.key} is built by no kinematics action."
+                    )
+
+        # only modules that actually build can collide in the rig
+        keys: dict = {}
+        for instance_id in pass_of:
+            entry = by_id.get(instance_id)
+            if entry is None:
+                continue
+            if entry.key in keys:
+                problems.append(
+                    f"two modules that build share the display key "
+                    f"'{entry.key}'. Rename one."
+                )
+            keys[entry.key] = instance_id
+
+        # a producer must build before its consumer, and must build at all
+        for entry in entries:
+            here = pass_of.get(entry.instance_id)
+            if here is None:
+                continue
+            for source in entry.inputs.values():
+                source_id, _output = split_source(source)
+                if source_id is None or source_id not in by_id:
+                    continue
+                there = pass_of.get(source_id)
+                if there is None:
+                    problems.append(
+                        f"{entry.key} needs {label(source_id)}, but no "
+                        "kinematics action builds it."
+                    )
+                elif there[0] > here[0]:
+                    problems.append(
+                        f"{entry.key} needs {label(source_id)}, which builds "
+                        "in a later kinematics action."
+                    )
+
+        # what the migration could not translate
+        for path, node, _parent in self.document.walk(BUILD):
+            if node.type != self.KINEMATICS:
+                continue
+            if node.settings.get("legacy_roots"):
+                problems.append(
+                    f"{path}: guide roots {node.settings['legacy_roots']} could "
+                    "not be migrated to module ids; open the session and list "
+                    "its modules."
+                )
+            if node.settings.get("guides_file"):
+                problems.append(
+                    f"{path}: '{node.settings['guides_file']}' is no longer "
+                    "built at build time; import the .trg into this session "
+                    "and list its modules."
+                )
+        return problems
+
     def validate(self) -> list[str]:
         """Pre-flight problems for every runnable step, in both lists."""
         from tik.trigger.core.action import ActionContext
@@ -502,6 +774,8 @@ class Session:
                     f"{prefix}{step.path}: {item}" for item in action.validate(ctx)
                 )
         problems.extend(self._module_problems())
+        problems.extend(self._scope_problems())
+        problems.extend(self.reference_problems)
         return problems
 
     def build(
@@ -521,6 +795,11 @@ class Session:
                 "'until' cannot be combined with publish: "
                 "a partial build must not publish."
             )
+        blocking = [
+            item for item in self._scope_problems() if not item.startswith("warning:")
+        ]
+        if blocking:
+            raise SessionError("; ".join(blocking))
         self.events.log(f"Building{' and publishing' if publish else ''} {self.name}")
         # The runner resets the scene, so the guides have to be in the document
         # before it does. Saving already captures; building must too, or a rig

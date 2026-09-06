@@ -6,6 +6,7 @@ around the point you pressed, the wheel zooms under the pointer, F fits.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
 from tik.shared.ui import theme
@@ -25,8 +26,12 @@ from .constants import (
     ROW_GAP,
     WORLD,
 )
-from .items import NodeItem, NodeSpec, WireItem
+from .items import FrameSpec, NodeItem, NodeSpec, WireItem
 from .scene import GraphScene
+
+#: Separates a member's key from its port on a collapsed reference node.
+#: Deliberately not a dot -- ``add_wire`` splits a port key on the last one.
+MEMBER_SEPARATOR = ":"
 
 
 class GraphView(QtWidgets.QGraphicsView):
@@ -34,6 +39,7 @@ class GraphView(QtWidgets.QGraphicsView):
 
     selection_changed = QtCore.Signal(str)
     external_selection_changed = QtCore.Signal(str)
+    frame_selection_changed = QtCore.Signal(str)  # reference id
     node_menu_requested = QtCore.Signal(str, object)  # module key, global QPoint
     palette_requested = QtCore.Signal()
     edited = QtCore.Signal()
@@ -72,8 +78,10 @@ class GraphView(QtWidgets.QGraphicsView):
         self.graph.remove_group_requested.connect(self.remove_scene_group)
         self.graph.node_selected.connect(self.selection_changed)
         self.graph.external_selected.connect(self.external_selection_changed)
+        self.graph.frame_selected.connect(self.frame_selection_changed)
         self.graph.mode_change_requested.connect(self.set_mode)
         self.graph.nodes_moved.connect(self.save_positions)
+        self.graph.frame_toggle_requested.connect(self.toggle_frame)
 
     # ------------------------------------------------------------ building
     def set_draw_states(self, states: dict) -> None:
@@ -96,6 +104,12 @@ class GraphView(QtWidgets.QGraphicsView):
         self.graph.clear_graph()
         handles = self.guides.instances()
         by_key = {handle.key: handle for handle in handles}
+        origin_of, collapsed, files = self._reference_state(handles)
+        # A collapsed reference is not *hidden*: its members are simply not
+        # built, and one node is built in their place. Two builds rather than
+        # a hide-and-reroute means there is no second wire path to keep right.
+        hidden = {key for key, origin in origin_of.items() if origin in collapsed}
+        drawn = [handle for handle in handles if handle.key not in hidden]
         # scene sources nobody grouped yet -> implicit "scene" group (shown, not
         # written)
         grouped = {node for nodes in groups.values() for node in nodes}
@@ -119,7 +133,8 @@ class GraphView(QtWidgets.QGraphicsView):
             if stored:
                 placed.append(rect_at(stored, height))
                 return stored
-            pos = list(auto[key])
+            # a collapsed reference has no auto slot: it is not a module
+            pos = list(auto.get(key, (20.0, 30.0)))
             candidate = rect_at(pos, height)
             for _ in range(200):
                 hit = next(
@@ -157,8 +172,32 @@ class GraphView(QtWidgets.QGraphicsView):
             exists = getattr(self.guides, "scene_node", lambda _n: True)
             missing = [item for item in groups[name] if exists(item) is None]
             node.subtitle = "scene ✗ missing" if missing else "scene ✓"
+        crossings = self._crossings(handles, by_key, origin_of, collapsed)
+        for ref_id in sorted(collapsed):
+            ports = crossings.get(ref_id, {"inputs": [], "outputs": []})
+            rows = max(len(ports["inputs"]), len(ports["outputs"]), 1)
+            frame_key = "@" + ref_id
+            stored = self.guides.frames.get(ref_id, {}).get("position")
+            pos = (
+                tuple(stored)
+                if stored
+                else free_pos(frame_key, HEADER + rows * ROW + 8)
+            )
+            self.graph.add_node(
+                NodeSpec(
+                    key=frame_key,
+                    title=files.get(ref_id, "reference"),
+                    subtitle="reference",
+                    inputs=list(ports["inputs"]),
+                    outputs=list(ports["outputs"]),
+                    color="",
+                    reference=True,
+                    mode=MODE_FULL,
+                ),
+                pos=pos,
+            )
         for handle in sorted(
-            handles, key=lambda item: (depth.get(item.key, 1), item.key)
+            drawn, key=lambda item: (depth.get(item.key, 1), item.key)
         ):
             module_cls = handle.module_class
             space_names = [
@@ -184,6 +223,7 @@ class GraphView(QtWidgets.QGraphicsView):
                 ),
                 pos=pos,
             )
+        self._add_frames(origin_of, collapsed, files)
         node_group = {node: name for name, nodes in groups.items() for node in nodes}
         for handle in handles:
             primary = handle.module_class.primary_input()
@@ -193,9 +233,14 @@ class GraphView(QtWidgets.QGraphicsView):
                     source_key = f"{key}.{output}"
                 else:
                     source_key = f"{node_group.get(source, 'scene')}.{source}"
+                target_key = f"{handle.key}.{input_name}"
+                source_key = self._through_frame(source_key, origin_of, collapsed)
+                target_key = self._through_frame(target_key, origin_of, collapsed)
+                if source_key.split(".")[0] == target_key.split(".")[0]:
+                    continue  # both ends inside one collapsed reference
                 self.graph.add_wire(
                     source_key,
-                    f"{handle.key}.{input_name}",
+                    target_key,
                     primary is not None and input_name == primary.name,
                 )
         self.graph.finish_build()
@@ -240,10 +285,24 @@ class GraphView(QtWidgets.QGraphicsView):
         self.rebuild()
         self.fit()
 
+    def toggle_frame(self, ref_id: str) -> None:
+        """Collapse an expanded reference, or expand a collapsed one."""
+        frames = getattr(self.guides, "frames", {}) or {}
+        collapsed = bool(frames.get(ref_id, {}).get("collapsed"))
+        self.guides.set_frame(ref_id, collapsed=not collapsed)
+        self.rebuild()
+
     def save_positions(self) -> None:
         """Persist node positions after a drag (undoable in Maya)."""
         positions = self.guides.layout.get("positions", {})
         for key, node in self.graph.nodes.items():
+            if key.startswith("@"):
+                # a collapsed reference is not a module: its position lives in
+                # the frames section, which a layout write does not replace
+                self.guides.set_frame(
+                    key[1:], position=(node.pos().x(), node.pos().y())
+                )
+                continue
             positions[key] = [node.pos().x(), node.pos().y()]
         self.guides.update_layout(positions=positions)
         self.graph.moved = set()
@@ -278,6 +337,88 @@ class GraphView(QtWidgets.QGraphicsView):
         self.scale(max(scale, 0.3), max(scale, 0.3))
         self.centerOn(rect.center())
         self._fitted = True
+
+    # ---------------------------------------------------------- references
+    def _reference_state(self, handles) -> tuple:
+        """``({module key: ref_id}, {collapsed ref ids}, {ref id: file name})``."""
+        document = getattr(self.guides, "document", None)
+        if document is None:
+            return {}, set(), {}
+        entries = {entry.instance_id: entry for entry in document.modules}
+        origin_of = {}
+        for handle in handles:
+            entry = entries.get(handle.instance_id)
+            if entry is not None and entry.origin is not None:
+                origin_of[handle.key] = entry.origin
+        frames = getattr(self.guides, "frames", {}) or {}
+        borrowed = set(origin_of.values())
+        collapsed = {
+            ref_id
+            for ref_id, frame in frames.items()
+            if frame.get("collapsed") and ref_id in borrowed
+        }
+        files = {item.ref_id: Path(item.file).name for item in document.references}
+        return origin_of, collapsed, files
+
+    @staticmethod
+    def _through_frame(port_key: str, origin_of: dict, collapsed: set) -> str:
+        """Re-address a port that now sits inside a collapsed reference.
+
+        The port keeps its member's own key (``L_arm.end``), so a wire still
+        names its real producer and expanding restores the same connection
+        with no translation table to keep in step.
+        """
+        node, _dot, port = port_key.rpartition(".")
+        ref_id = origin_of.get(node)
+        if ref_id is None or ref_id not in collapsed:
+            return port_key
+        # ``:`` and not ``.``: the port name carries its member's key, and a
+        # dot inside it would be read as the node/port split by ``add_wire``.
+        return f"@{ref_id}.{node}{MEMBER_SEPARATOR}{port}"
+
+    def _crossings(self, handles, by_key, origin_of: dict, collapsed: set) -> dict:
+        """Which ports a collapsed reference has to expose.
+
+        Only the connections that *cross* its boundary: hiding what is
+        internal is the entire reason to collapse one.
+        """
+        found = {ref_id: {"inputs": [], "outputs": []} for ref_id in collapsed}
+        for handle in handles:
+            inside = origin_of.get(handle.key)
+            consumer_in = inside if inside in collapsed else None
+            for input_name, source in handle.inputs.items():
+                key, output = split_source(source)
+                producer = origin_of.get(key) if key in by_key else None
+                producer_in = producer if producer in collapsed else None
+                if producer_in == consumer_in:
+                    continue  # both ends in the same place: nothing crosses
+                if producer_in is not None:
+                    port = f"{key}{MEMBER_SEPARATOR}{output}"
+                    if port not in found[producer_in]["outputs"]:
+                        found[producer_in]["outputs"].append(port)
+                if consumer_in is not None:
+                    port = f"{handle.key}{MEMBER_SEPARATOR}{input_name}"
+                    if port not in found[consumer_in]["inputs"]:
+                        found[consumer_in]["inputs"].append(port)
+        return found
+
+    def _add_frames(self, origin_of: dict, collapsed: set, files: dict) -> None:
+        """A backdrop behind each expanded reference, sized to its members."""
+        members: dict = {}
+        for key, ref_id in origin_of.items():
+            if ref_id in collapsed:
+                continue
+            node = self.graph.nodes.get(key)
+            if node is not None:
+                members.setdefault(ref_id, []).append(node)
+        for ref_id, nodes in members.items():
+            extent = nodes[0].sceneBoundingRect()
+            for node in nodes[1:]:
+                extent = extent.united(node.sceneBoundingRect())
+            self.graph.add_frame(
+                FrameSpec(ref_id=ref_id, title=files.get(ref_id, "reference")),
+                extent,
+            )
 
     @staticmethod
     def _depths(handles, by_key) -> dict[str, int]:

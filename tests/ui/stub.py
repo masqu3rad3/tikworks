@@ -42,6 +42,13 @@ class StubScene:
         self._scene_jobs: dict = {}
         self._cache: Optional[list] = None
         self._document_cache = None
+        # {instance_id: (ref_id, file, what upstream says)} -- what makes an
+        # instance *borrowed* for the designer's reference surfaces
+        self._borrowed: dict = {}
+        self._disabled: set = set()
+        # kept apart from _positions/_collapse for the same reason the real
+        # document does: set_layout replaces those wholesale
+        self._frames: dict = {}
         # matches GuideScene's default (spec 3.1): governs whether a scene
         # event may start a sync, nothing else
         self.auto_sync = True
@@ -50,6 +57,61 @@ class StubScene:
         # mirrors GuideScene.session: None for a free-standing double, or set
         # by a test to the Session that owns it -- snapshot_guides reads this
         self.session = None
+
+    def borrow(self, instance_id, ref_id="r1", file="base.tr", source=None) -> None:
+        """Mark an instance as referenced from ``file``.
+
+        ``source`` is what *upstream* says about it, so a test can make the
+        resolved entry differ and get a real override count. An empty one
+        means the entry matches its source exactly.
+        """
+        self._borrowed[instance_id] = (ref_id, file, dict(source or {}))
+        self._document_cache = None
+
+    @property
+    def frames(self) -> dict:
+        """Mirror ``GuideScene.frames``."""
+        return {key: dict(value) for key, value in self._frames.items()}
+
+    def set_frame(self, ref_id, position=None, collapsed=None) -> None:
+        """Mirror ``GuideScene.set_frame``: partial updates, never a replace."""
+        frame = self._frames.setdefault(ref_id, {})
+        if position is not None:
+            frame["position"] = [float(position[0]), float(position[1])]
+        if collapsed is not None:
+            frame["collapsed"] = bool(collapsed)
+        self.calls.append(("set_frame", ref_id, position, collapsed))
+
+    def set_enabled(self, instance_id, enabled) -> None:
+        """Mirror ``GuideScene.set_enabled``."""
+        if enabled:
+            self._disabled.discard(instance_id)
+        else:
+            self._disabled.add(instance_id)
+        self._document_cache = None
+        self.calls.append(("set_enabled", instance_id, bool(enabled)))
+
+    def revert_to_source(self, instance_id) -> bool:
+        """Mirror ``GuideScene.revert_to_source``: take upstream's word back."""
+        borrowed = self._borrowed.get(instance_id)
+        if borrowed is None:
+            return False
+        _ref_id, _file, upstream = borrowed
+        instance = self._instances[instance_id]
+        for key, value in upstream.items():
+            if key == "position":
+                instance.guides[0].position = tuple(value)
+            else:
+                setattr(instance, key, value)
+        self._borrowed[instance_id] = (_ref_id, _file, dict(upstream))
+        self._document_cache = None
+        self.calls.append(("revert_to_source", instance_id))
+        return True
+
+    def disable(self, instance_id) -> None:
+        """Leave a referenced module out of this rig."""
+        self._disabled.add(instance_id)
+        self._document_cache = None
 
     # ------------------------------------------------------------ document
     @property
@@ -64,6 +126,7 @@ class StubScene:
             GuideDocument,
             GuideRecord,
             ModuleEntry,
+            ModuleReference,
             SceneGroup,
         )
 
@@ -90,6 +153,22 @@ class StubScene:
                     for pose in instance.guides
                 ],
             )
+            borrowed = self._borrowed.get(instance.instance_id)
+            if borrowed is not None:
+                ref_id, file_name, upstream = borrowed
+                source = ModuleEntry.from_dict(entry.to_dict())
+                for key, value in upstream.items():
+                    if key == "position":
+                        source.guides[0].position = tuple(value)
+                    else:
+                        setattr(source, key, value)
+                entry.origin = ref_id
+                entry.source = source
+                entry.enabled = instance.instance_id not in self._disabled
+                if document.reference(ref_id) is None:
+                    document.references.append(
+                        ModuleReference(ref_id=ref_id, file=file_name)
+                    )
             document.modules.append(entry)
         document.scene_groups = [
             SceneGroup(group_id=name, name=name, nodes=list(group_nodes))

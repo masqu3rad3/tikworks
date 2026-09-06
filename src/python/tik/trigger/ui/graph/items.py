@@ -10,6 +10,9 @@ from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.trigger.ui.draw_state import DRAWN, NOT_DRAWN, STALE
 
 from .constants import (
+    FRAME_INK,
+    FRAME_PADDING,
+    FRAME_TITLE,
     GLYPH_WIDTH,
     GRID,
     HEADER,
@@ -97,12 +100,103 @@ class NodeSpec:
     inputs: list
     outputs: list
     color: str
+    #: A scene-nodes group: dashed, and its properties are the group's.
     external: bool = False
+    #: A collapsed reference. Drawn like a group but emphatically not one --
+    #: ``external`` carries the scene-nodes *meaning*, and borrowing it gave
+    #: a collapsed reference that panel and its Add buttons.
+    reference: bool = False
     primary_input: Optional[str] = None
     mode: int = MODE_FULL
     spaces: Optional[list] = None
     #: NOT_DRAWN / DRAWN / STALE -- the same states the guide tree paints
     draw_state: str = DRAWN
+
+
+#: Re-exported under the name the graph package uses for geometry.
+FramePadding = FRAME_PADDING
+
+
+@dataclass
+class FrameSpec:
+    """Everything a reference frame is drawn from."""
+
+    ref_id: str
+    title: str
+    collapsed: bool = False
+
+
+class FrameItem(QtWidgets.QGraphicsItem):
+    """The backdrop behind one reference's modules.
+
+    A backdrop and nothing more: it is neither movable nor selectable, because
+    it sits under the nodes it encloses and dragging it would fight them. Its
+    only interactive part is the glyph that collapses the reference, and
+    collapsing is not a hide -- the view builds a single node instead, so
+    there is no second wire path to keep correct.
+    """
+
+    def __init__(self, spec: FrameSpec) -> None:
+        super().__init__()
+        self.ref_id = spec.ref_id
+        self.title = spec.title
+        self.collapsed = spec.collapsed
+        self._extent = QtCore.QRectF(0, 0, 0, 0)
+        self.setZValue(-10)  # behind every node
+        self.setAcceptedMouseButtons(QtCore.Qt.LeftButton)
+
+    def set_extent(self, rect: QtCore.QRectF) -> None:
+        """Size the frame to enclose ``rect``, in item coordinates."""
+        self.prepareGeometryChange()
+        self._extent = QtCore.QRectF(rect)
+
+    def boundingRect(self) -> QtCore.QRectF:  # noqa: N802
+        return self._extent.adjusted(
+            -FRAME_PADDING,
+            -FRAME_PADDING - FRAME_TITLE,
+            FRAME_PADDING,
+            FRAME_PADDING,
+        )
+
+    def glyph_rect(self) -> QtCore.QRectF:
+        """Where the collapse glyph is drawn, in item coordinates."""
+        bounds = self.boundingRect()
+        return QtCore.QRectF(
+            bounds.right() - GLYPH_WIDTH - 6, bounds.top() + 3, GLYPH_WIDTH, FRAME_TITLE
+        )
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == QtCore.Qt.LeftButton and self.glyph_rect().contains(
+            event.pos()
+        ):
+            scene = self.scene()
+            if scene is not None:
+                scene.frame_toggle_requested.emit(self.ref_id)
+            event.accept()
+            return
+        event.ignore()
+
+    def paint(self, painter, option, widget=None) -> None:
+        painter.setRenderHint(QtGui.QPainter.Antialiasing)
+        bounds = self.boundingRect()
+        ink = QtGui.QColor(FRAME_INK)
+        fill = QtGui.QColor(ink)
+        fill.setAlpha(18)
+        pen = QtGui.QPen(ink, 1.0)
+        pen.setStyle(QtCore.Qt.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(fill)
+        painter.drawRoundedRect(bounds, 6, 6)
+        title = QtCore.QRectF(
+            bounds.left() + 8, bounds.top() + 2, bounds.width() - 24, FRAME_TITLE
+        )
+        painter.setPen(ink)
+        painter.drawText(
+            title, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, self.title
+        )
+        painter.drawText(
+            self.glyph_rect(), QtCore.Qt.AlignCenter, "-" if not self.collapsed else "+"
+        )
 
 
 class NodeItem(QtWidgets.QGraphicsItem):
@@ -115,6 +209,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.subtitle = spec.subtitle
         self.color = spec.color
         self.external = spec.external
+        self.reference = spec.reference
         self.mode = spec.mode
         self.draw_state = spec.draw_state
         # absent from the scene: the whole node recedes, which is what
@@ -195,7 +290,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         pen = QtGui.QPen(
             QtGui.QColor(theme.ACCENT if self.isSelected() else "#3a3a3a"), 1.2
         )
-        if self.external:
+        if self.external or self.reference:
             pen.setStyle(QtCore.Qt.DashLine)
         painter.setPen(pen)
         painter.setBrush(QtGui.QColor("#262626"))
@@ -221,7 +316,12 @@ class NodeItem(QtWidgets.QGraphicsItem):
             painter.restore()
         header = QtCore.QRectF(0, 0, NODE_WIDTH, HEADER)
         painter.setPen(QtCore.Qt.NoPen)
-        painter.setBrush(QtGui.QColor("#3a4048" if self.external else self.color))
+        header_ink = self.color
+        if self.reference:
+            header_ink = FRAME_INK
+        elif self.external:
+            header_ink = "#3a4048"
+        painter.setBrush(QtGui.QColor(header_ink))
         path = QtGui.QPainterPath()
         path.setFillRule(QtCore.Qt.WindingFill)
         path.addRoundedRect(header, 4, 4)
@@ -299,7 +399,13 @@ class NodeItem(QtWidgets.QGraphicsItem):
         if event.button() == QtCore.Qt.LeftButton and self.glyph_rect().contains(
             event.pos()
         ):
-            self.scene().mode_change_requested.emit(self.key, (self.mode + 1) % 3)
+            if self.reference:
+                # A collapsed reference has exactly one toggle, and it is not
+                # the 1/2/3 display mode: while collapsed there is no backdrop
+                # to click, so this glyph is the only way back.
+                self.scene().frame_toggle_requested.emit(self.key.lstrip("@"))
+            else:
+                self.scene().mode_change_requested.emit(self.key, (self.mode + 1) % 3)
             event.accept()
             return
         super().mousePressEvent(event)
