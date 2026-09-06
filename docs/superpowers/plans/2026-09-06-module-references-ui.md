@@ -68,7 +68,7 @@ Baseline entering this phase: **1700 unit+integration, 494 UI, lint clean.**
 - Produces: `ListField(..., choices_from="modules")`; `FormBuilder(list_choices=callable)` where the callable takes the `choices_from` key and returns `[(label, value)]`; `_CheckListEditor` with `value()` / `set_value(list)` and a `valueChanged` signal, matching the other editors in that module.
 - Consumes: `ActionSettingsPanel(module_choices=callable)`, wired in `main.py` to `[(entry.key, entry.instance_id) for entry in session.document.guides.modules if entry.enabled]`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/ui/test_kinematics_picker.py`, following the conventions already in `tests/ui/`:
 
@@ -79,9 +79,9 @@ Baseline entering this phase: **1700 unit+integration, 494 UI, lint clean.**
 - a stored id that is no longer offered still shows, ticked, marked missing — so a stale entry is visible rather than silently dropped;
 - a `ListField` **without** `choices_from` still renders the comma-separated line edit (no regression).
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
-- [ ] **Step 3: Declare `choices_from` on the field**
+- [x] **Step 3: Declare `choices_from` on the field**
 
 In `tik/core/fields.py`:
 
@@ -102,7 +102,7 @@ In `tik/core/fields.py`:
         super().__init__(list(default) if default else [], **kwargs)
 ```
 
-- [ ] **Step 4: Render the picker**
+- [x] **Step 4: Render the picker**
 
 In `shared/ui/fields.py`, accept `list_choices` in `FormBuilder.__init__` (default `None`) and branch in `_make_widget`:
 
@@ -121,11 +121,11 @@ In `shared/ui/fields.py`, accept `list_choices` in `FormBuilder.__init__` (defau
 
 `_CheckListEditor` is a `QListWidget` with checkable items. It refreshes its options every time `set_value` runs, because the module list changes while the panel is open. An id in the value that no option offers is appended as a ticked row labelled `"<id> (missing)"` and disabled for editing — never dropped, or saving would quietly shrink somebody's build scope.
 
-- [ ] **Step 5: Wire it through**
+- [x] **Step 5: Wire it through**
 
 `kinematics.modules` declares `choices_from="modules"`. `ActionSettingsPanel` takes `module_choices` and passes `list_choices=` to its `FormBuilder`. `main.py` supplies the current session's modules as `(key, instance_id)` pairs, skipping `enabled is False` ones — a module deliberately left out of the rig should not be offered for building (§6.2 already makes listing one an error).
 
-- [ ] **Step 6: Run the UI suite, lint, commit**
+- [x] **Step 6: Run the UI suite, lint, commit**
 
 ---
 
@@ -140,7 +140,7 @@ In `shared/ui/fields.py`, accept `list_choices` in `FormBuilder.__init__` (defau
 - Produces: `OriginRole = QtCore.Qt.UserRole + 21`, `OverrideRole = QtCore.Qt.UserRole + 22`, `DisabledRole = QtCore.Qt.UserRole + 23` in `designer/delegates.py`.
 - Consumes: `entry.origin`, `entry.enabled`, and `core.guide_reference.overrides_for(entry)` for the count.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Assert, against the stub scene extended with referenced entries:
 
@@ -151,9 +151,9 @@ Assert, against the stub scene extended with referenced entries:
 - a disabled referenced module's row carries `DisabledRole` True;
 - the existing `DrawStateRole` is unaffected — a referenced module can be *not drawn* **and** overridden at once, and both must survive.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
-- [ ] **Step 3: Fill the roles**
+- [x] **Step 3: Fill the roles**
 
 In `window.py`, in the same loop that sets `DrawStateRole` (so there is still one pass, and no second diff):
 
@@ -180,7 +180,7 @@ In `window.py`, in the same loop that sets `DrawStateRole` (so there is still on
 
 `_row_tooltip` composes the existing `TOOLTIPS[state]` with a provenance line and an override line, so the two facts stay legible together rather than one replacing the other.
 
-- [ ] **Step 4: Paint them**
+- [x] **Step 4: Paint them**
 
 Extend `GuideStateDelegate.paint`. After the existing dot:
 
@@ -190,7 +190,7 @@ Extend `GuideStateDelegate.paint`. After the existing dot:
 
 Reuse `draw_state.COLORS` and `DIMMED_TEXT` rather than inventing a palette; add only the two new inks the chip and diamond need, defined beside them.
 
-- [ ] **Step 5: Run the UI suite, lint, commit**
+- [x] **Step 5: Run the UI suite, lint, commit**
 
 ---
 
@@ -205,19 +205,19 @@ Reuse `draw_state.COLORS` and `DIMMED_TEXT` rather than inventing a palette; add
 - Produces: `DesignerProperties._reference_strip()` returning the widget, `revert_module()` and `set_module_enabled(bool)` commands.
 - Consumes: `Session.document.guides`, `core.guide_reference.overrides_for`, `Feedback.pop_question`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Assert: selecting a local module hides the strip; selecting a referenced one shows it naming the file; *Revert all* clears the overrides and the tree's `OverrideRole` returns to 0; the enable toggle writes `entry.enabled` and the row picks up `DisabledRole`; reverting asks for confirmation through the `Feedback` handler seam (`feedback.set_handler`) rather than a raw dialog.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
-- [ ] **Step 3: Build the strip**
+- [x] **Step 3: Build the strip**
 
 A one-line header above the form: *from `baseRig.tr`* plus, when there are overrides, *n overridden* and a **Revert all** button, and a **Build in this rig** checkbox bound to `entry.enabled`.
 
 Revert is a delete, not an unwind: copy the source's authored values back onto the entry (`name`, `side`, `settings`, `inputs`, and each guide record), then `touch()`. Because overrides are derived, the next `to_dict` simply finds no difference. Follow the revert with a **draw** of that module so the scene stops showing the reverted pose — and do it with the scene watcher muted and *before* any sync, or the sync re-derives the override from the joints that have not moved yet.
 
-- [ ] **Step 4: Run the UI suite, lint, commit**
+- [x] **Step 4: Run the UI suite, lint, commit**
 
 ---
 
@@ -230,23 +230,25 @@ Revert is a delete, not an unwind: copy the source's authored values back onto t
 **Interfaces:**
 - Consumes: `Session.link_modules(file, version)`, `Session.unlink_modules(ref_id, bake)`, `Feedback.browse_open`, `Feedback.pop_question`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Assert: *Reference Modules…* browses through the injected `file_browser` (never a raw `QFileDialog`) and calls `link_modules` with what it returns; a cancelled browse does nothing; linking an already-linked file surfaces the `SessionError` message rather than raising into Qt; *Unlink* asks the discard-or-bake question through `Feedback` and passes the answer to `unlink_modules`; the tree refreshes afterwards.
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Both live where the Designer's other file gestures live, and both go through `self.file_browser` / `Feedback` so the boundary test stays green. Unlink's question is three-way — *Bake in*, *Discard*, *Cancel* — because discarding authored overrides is the one destructive act in this feature and must not be the default button.
 
-- [ ] **Step 4: Run everything, lint, commit**
+- [x] **Step 4: Run everything, lint, commit**
 
 ---
 
 ## Done when
 
-- [ ] `tests/unit`, `tests/integration` and `tests/ui` are green.
-- [ ] `make lint` is clean; `tests/unit/test_dialog_boundaries.py` still passes (no raw dialogs added).
-- [ ] A rigger can, with no Python: link a `.tr`, see its modules badged in the tree, tick them into a `kinematics` action, move one of its guides, see the override count appear, revert it, and unlink.
+**Status: complete.** 1700 unit+integration and 526 UI tests pass, lint clean.
+
+- [x] `tests/unit`, `tests/integration` and `tests/ui` are green.
+- [x] `make lint` is clean; `tests/unit/test_dialog_boundaries.py` still passes (no raw dialogs added).
+- [x] A rigger can, with no Python: link a `.tr`, see its modules badged in the tree, tick them into a `kinematics` action, move one of its guides, see the override count appear, revert it, and unlink.
 - [ ] Phase 4 (the graph frame, spec §7.2) has its own plan and is not started here.
