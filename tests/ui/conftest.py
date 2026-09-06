@@ -23,11 +23,14 @@ def pytest_collection_modifyitems(config, items):
 def _qsettings_sandbox(tmp_path_factory):
     """Keep ``QSettings("tikworks", "trigger")`` off the developer's real machine.
 
-    That is the same org/app the running Trigger tool persists its designer
-    preferences under (spec 3.2). Left alone, ``tests/ui`` writes for real --
+    That is the same org/app the running Trigger tool persists its window
+    geometry and dock layout under -- the opaque Qt blobs that stay out of the
+    hand-editable preferences file. Left alone, ``tests/ui`` writes for real --
     to the Windows registry here, an ini file under ``~/.config`` elsewhere --
-    and a UI test run has been observed to flip the *live* app's default
-    ``auto_sync`` setting. ``qapp`` below requests this fixture explicitly
+    and a UI test run has been observed to move the *live* app's window.
+    (User preferences moved to ``~/TikWorks/trigger.json``; ``_prefs_sandbox``
+    in ``tests/conftest.py`` guards that store.) ``qapp`` below requests this
+    fixture explicitly
     (rather than relying on autouse-ordering) so the redirect is in place
     before anything constructs a ``QSettings`` object.
 
@@ -90,7 +93,7 @@ def _qsettings_isolated(_qsettings_sandbox):
     ``_qsettings_sandbox`` above is session-scoped -- the registry/plist
     redirect only needs to happen once -- but that means the ini-backed
     store it points at persists for the life of the whole test run. A test
-    that writes ``designer/auto_sync`` (or any other key) leaks it into
+    that writes ``window/geometry`` (or any other key) leaks it into
     every test that runs after it in the same session: exactly the
     order-dependent flakiness that let a test assuming a fresh ``True``
     default silently read a ``False`` an earlier test left behind.

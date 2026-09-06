@@ -10,14 +10,31 @@ class LogWidget(QtWidgets.QPlainTextEdit):
 
     LEVEL_COLORS = {"warning": "#d9a400", "error": "#e05555"}
 
+    #: Ranked low to high, matching the ``interface.log_verbosity`` choices.
+    LEVELS = ("debug", "info", "warning", "error")
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("LogWidget")
         self.setReadOnly(True)
         self.setMaximumBlockCount(2000)
+        self._threshold = self.LEVELS.index("info")
+
+    def _rank(self, level) -> int:
+        """``level``'s position in :attr:`LEVELS`; unknown names read as info."""
+        try:
+            return self.LEVELS.index(str(level).strip().lower())
+        except ValueError:
+            return self.LEVELS.index("info")
+
+    def set_level(self, name: str) -> None:
+        """Drop messages below ``name`` (an ``interface.log_verbosity`` value)."""
+        self._threshold = self._rank(name)
 
     def append_message(self, message: str, level: str = "info") -> None:
-        """Append a line, coloured by ``level``."""
+        """Append a line, coloured by ``level``, unless the level is filtered."""
+        if self._rank(level) < self._threshold:
+            return
         color = self.LEVEL_COLORS.get(level)
         text = message if not color else f'<span style="color:{color}">{message}</span>'
         self.appendHtml(text)

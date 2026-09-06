@@ -12,7 +12,7 @@ from typing import Optional
 from tik.shared.io import open_external
 from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
-from tik.trigger.actions.script.script import editor_command
+from tik.trigger.ui.prefs_access import editor_command
 
 PLACEHOLDER = "Select a script action."
 RULE = "\n\n# " + "-" * 60 + "  inline code\n\n"

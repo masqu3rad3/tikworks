@@ -12,11 +12,11 @@ from tik.shared.io import open_external
 from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.Qt import QtCore, QtWidgets
-from tik.trigger.actions.script.script import editor_command
 from tik.trigger.core import registry
 from tik.trigger.core.document import BUILD
 from tik.trigger.session import ActionHandle
 from tik.trigger.ui.iconography import action_icon
+from tik.trigger.ui.prefs_access import editor_command
 
 NEW_SCRIPT_TIP = "Write a versioned stub into the session's scripts folder"
 UNSAVED_TIP = "Save the session first: scripts live beside the .tr file"

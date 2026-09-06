@@ -370,3 +370,85 @@ def test_the_destructive_entry_says_what_it_destroys(window):
     entries = items(menu(window, "&Guides"))
     assert "Delete All Modules" in entries
     assert "Clear Scene Guides" not in entries
+
+
+class TestSettingsMenuEntry:
+    """Settings lives under File, not Tools."""
+
+    def test_settings_is_in_the_file_menu(self, window):
+        assert "Settings…" in items(menu(window, "&File"))
+
+    def test_settings_is_not_in_the_tools_menu(self, window):
+        assert "Settings…" not in items(menu(window, "&Tools"))
+
+    def test_settings_has_the_standard_shortcut(self, window):
+        action = next(
+            entry
+            for entry in menu(window, "&File").actions()
+            if entry.text() == "Settings…"
+        )
+        assert action.shortcut().toString() == "Ctrl+,"
+
+    def test_opening_settings_builds_a_dialog(self, window):
+        dialog = window.open_settings(exec_=False)
+        assert dialog.categories.count() == 4
+        dialog.close()
+
+    def test_the_dialog_shows_every_trigger_page(self, window):
+        dialog = window.open_settings(exec_=False)
+        labels = [dialog.categories.item(i).text() for i in range(4)]
+        assert labels == ["Interface", "Guides", "Files & Sessions", "External Tools"]
+        dialog.close()
+
+
+class TestSettingsActuallyOpens:
+    """The menu path, not just the method.
+
+    ``QAction.triggered`` emits a ``checked`` boolean, and PySide passes it to
+    any slot whose signature accepts a positional argument. ``open_settings``
+    took ``exec_`` first, so clicking the menu entry bound ``exec_=False``: the
+    dialog was built, never shown, and garbage collected. No error, no window.
+    Every earlier test called ``open_settings(exec_=False)`` directly and so
+    never crossed the signal.
+    """
+
+    @staticmethod
+    def _settings_action(window):
+        return next(
+            entry
+            for entry in menu(window, "&File").actions()
+            if entry.text() == "Settings…"
+        )
+
+    def test_triggering_the_menu_entry_runs_the_modal_loop(self, window, monkeypatch):
+        from tik.shared.ui.prefs_dialog import PrefsDialog
+
+        shown = []
+        monkeypatch.setattr(PrefsDialog, "exec", lambda self: shown.append(True))
+        self._settings_action(window).trigger()
+        assert shown == [True]
+
+    def test_the_slot_cannot_absorb_the_checked_argument(self, window):
+        """The invariant behind the bug, pinned directly.
+
+        Any menu slot with a positional parameter silently receives
+        ``triggered``'s bool. ``exec_`` must stay keyword-only.
+        """
+        import inspect
+
+        positional = [
+            name
+            for name, param in inspect.signature(
+                window.open_settings
+            ).parameters.items()
+            if param.kind is param.POSITIONAL_OR_KEYWORD
+        ]
+        assert positional == []
+
+    def test_calling_it_directly_still_opts_out(self, window, monkeypatch):
+        from tik.shared.ui.prefs_dialog import PrefsDialog
+
+        shown = []
+        monkeypatch.setattr(PrefsDialog, "exec", lambda self: shown.append(True))
+        window.open_settings(exec_=False).close()
+        assert shown == []

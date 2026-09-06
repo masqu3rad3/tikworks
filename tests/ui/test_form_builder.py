@@ -314,3 +314,42 @@ def test_text_field_renders_full_row_and_commits_on_focus_out(qapp):
     form.target.code = "z = 3"
     form.refresh()
     assert editor.value() == "z = 3"
+
+
+class TestVisibleFields:
+    """Filtering a form down to a subset of its fields."""
+
+    @staticmethod
+    def _form():
+        class Demo(Schema):
+            LOOK = FieldGroup("Look")
+            SIZE = FieldGroup("Size")
+
+            enabled = BoolField(True, group=LOOK, help="on")
+            colour = IntField(1, group=LOOK, help="hue")
+            width = IntField(2, group=SIZE, help="wide")
+
+        return FormBuilder(Demo())
+
+    def test_hides_unlisted_fields(self, qapp):
+        form = self._form()
+        form.set_visible_fields({"enabled"})
+        assert form.widget("enabled").isVisibleTo(form)
+        assert not form.widget("colour").isVisibleTo(form)
+
+    def test_hides_group_with_no_visible_fields(self, qapp):
+        form = self._form()
+        form.set_visible_fields({"enabled"})
+        assert not form.group_widget("Size").isVisibleTo(form)
+
+    def test_keeps_group_with_a_visible_field(self, qapp):
+        form = self._form()
+        form.set_visible_fields({"width"})
+        assert form.group_widget("Size").isVisibleTo(form)
+
+    def test_none_restores_everything(self, qapp):
+        form = self._form()
+        form.set_visible_fields({"enabled"})
+        form.set_visible_fields(None)
+        assert form.widget("colour").isVisibleTo(form)
+        assert form.group_widget("Size").isVisibleTo(form)

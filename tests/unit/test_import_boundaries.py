@@ -13,15 +13,21 @@ SRC = Path(__file__).resolve().parents[2] / "src" / "python" / "tik"
 
 QT = ("PySide2", "PySide6", "tik.vendor.Qt", "tik.shared.ui")
 
+#: A user preference must never be able to change a rig. The build path is
+#: therefore forbidden from importing the preferences packages at all, which
+#: is a stronger and cheaper guarantee than reviewing every read site.
+#: Only ``tik/trigger/ui`` may read preferences.
+PREFS = ("tik.trigger.config", "tik.shared.prefs")
+
 FORBIDDEN = {
     "core": ("maya", "tik.maya", "tik.trigger", "tik.shared") + QT,
     "maya": ("tik.trigger", "tik.shared") + QT,
-    "trigger/core": ("maya", "tik.maya") + QT,
-    # ``tik.trigger.config`` builds a settings singleton at import time that
-    # writes a file into the process's working directory. Importing it at
-    # module level in the UI made ``tik.trigger.ui.show()`` fail under Maya
-    # with a permission error; the UI reads settings lazily instead.
-    "trigger/ui": ("tik.trigger.config",),
+    "trigger/core": ("maya", "tik.maya") + QT + PREFS,
+    "trigger/modules": PREFS,
+    "trigger/systems": PREFS,
+    "trigger/maya": PREFS,
+    "trigger/actions": PREFS,
+    "trigger/guides": PREFS,
 }
 
 

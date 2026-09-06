@@ -1,16 +1,28 @@
-"""Configuration system for tik.trigger.
+"""Trigger's user preferences.
 
-This package provides the settings management system including:
-- FACTORY_DEFAULTS: Immutable default values
-- UserSettings: Per-user settings with file persistence
-- trigger_settings: Singleton facade for application-wide settings
+``prefs`` is lazy: importing this package performs no file I/O, so it is safe
+to import at module level from the UI. The store is read the first time a page
+is touched.
+
+Nothing on the build path may import this package -- a preference must never
+be able to change a rig. ``tests/unit/test_import_boundaries.py`` enforces it.
 """
 
-from tik.trigger.config.defaults import FACTORY_DEFAULTS
-from tik.trigger.config.settings import UserSettings, trigger_settings
+from tik.shared.prefs import LazyPreferences, Preferences, PrefStore
 
-__all__ = [
-    "FACTORY_DEFAULTS",
-    "UserSettings",
-    "trigger_settings",
-]
+#: The file under ``~/TikWorks``.
+STORE_NAME = "trigger"
+
+
+def _build_preferences() -> Preferences:
+    """Register Trigger's pages and bind them to the store."""
+    from tik.shared.prefs import registry
+    from tik.trigger.config import pages  # noqa: F401 - importing registers
+
+    return Preferences(PrefStore(STORE_NAME), registry.pages())
+
+
+#: Application-wide preference values. Resolved on first attribute access.
+prefs = LazyPreferences(_build_preferences)
+
+__all__ = ["LazyPreferences", "STORE_NAME", "prefs"]

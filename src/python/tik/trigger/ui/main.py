@@ -27,6 +27,9 @@ from tik.trigger.core.document import EXTENSION
 from tik.trigger.core.exceptions import SessionError
 from tik.trigger.session import Session
 
+from .autosave import AutosaveTimer
+from .autosave import clear as clear_autosave
+from .autosave import recoverable
 from .designer.widgets import SCENE_NODE
 from .script_dock import ScriptViewer
 from .session_view import DESIGNER_TAB, SessionView
@@ -34,7 +37,6 @@ from .widgets import LogWidget
 
 FILE_FILTER = f"Trigger session (*{EXTENSION})"
 VERSION = "0.2.0"
-MAX_RECENT = 8
 
 
 def _holder() -> QtWidgets.QWidget:
@@ -44,6 +46,13 @@ def _holder() -> QtWidgets.QWidget:
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(0)
     return widget
+
+
+def prefs_value(page: str, field: str):
+    """One preference value, read lazily so imports stay cheap."""
+    from tik.trigger.config import prefs
+
+    return getattr(prefs.page(page), field)
 
 
 class TriggerWindow(MayaToolWindow):
@@ -69,6 +78,12 @@ class TriggerWindow(MayaToolWindow):
         self.events.subscribe(ERROR, self._on_error)
         self.new_session()
         self._sync_menu_state()
+        self.log.set_level(prefs_value("interface", "log_verbosity"))
+        self.log.setMaximumBlockCount(prefs_value("interface", "log_max_lines"))
+        self.restore_window_state()
+        self._load_recent()
+        self.autosave = AutosaveTimer(self, prefs_value("files", "autosave_interval"))
+        self.autosave.reconfigure()
 
     # ------------------------------------------------------------------ ui
     def _build_shell(self) -> None:
@@ -172,6 +187,8 @@ class TriggerWindow(MayaToolWindow):
         file_menu.addSeparator()
         # no shortcut: it throws the scene away, and there is nothing to undo
         self._action(file_menu, "Reset Scene", self.reset_scene)
+        file_menu.addSeparator()
+        self._action(file_menu, "Settings…", self.open_settings, "Ctrl+,")
         file_menu.addSeparator()
         self._action(
             file_menu,
@@ -421,8 +438,6 @@ class TriggerWindow(MayaToolWindow):
             "Ctrl+Shift+L",
             checkable=True,
         )
-        tools_menu.addSeparator()
-        self._action(tools_menu, "Settings…", self.open_settings)
 
     def _build_help_menu(self, help_menu) -> None:
         self._action(help_menu, "Documentation", self.open_docs)
@@ -591,7 +606,7 @@ class TriggerWindow(MayaToolWindow):
         """Open a ``.tr`` file (asking for one when ``path`` is empty)."""
         if not path:
             path = Feedback(self).browse_open(
-                "Open session", "", (EXTENSION,), FILE_FILTER
+                "Open session", self.browse_folder(), (EXTENSION,), FILE_FILTER
             )
         if not path:
             return None
@@ -599,6 +614,7 @@ class TriggerWindow(MayaToolWindow):
             if view.session.file_path and Path(view.session.file_path) == Path(path):
                 self.tabs.setCurrentWidget(view)
                 return view
+        path = self._offer_recovery(path)
         session = Session.open(path, events=self.events)
         view = self.add_session(session)
         untouched = [
@@ -613,6 +629,24 @@ class TriggerWindow(MayaToolWindow):
         self._remember(path)
         return view
 
+    def _offer_recovery(self, path: str) -> str:
+        """Offer a newer autosave in place of ``path``, returning what to open.
+
+        A sidecar newer than the session means Trigger stopped between an
+        autosave and a save. The rigger decides which one is the real work --
+        we never substitute it silently.
+        """
+        found = recoverable(path)
+        if found is None:
+            return path
+        answer = Feedback(self).pop_question(
+            title="Recover autosave",
+            text=f"A newer autosave exists for {Path(path).name}.",
+            details=(f"{found}\n\nOpen the autosave instead of the saved session?"),
+            buttons=["open autosave", "open session"],
+        )
+        return str(found) if answer == "open autosave" else path
+
     def save_session(self) -> None:
         """Save the current session, asking for a path if it has none."""
         view = self.current_view
@@ -626,7 +660,7 @@ class TriggerWindow(MayaToolWindow):
             return
         if not path:
             path = Feedback(self).browse_save(
-                "Save session", "", (EXTENSION,), FILE_FILTER
+                "Save session", self.browse_folder(), (EXTENSION,), FILE_FILTER
             )
         if not path:
             return
@@ -682,7 +716,17 @@ class TriggerWindow(MayaToolWindow):
 
         Returns ``"save"``, ``"discard"`` or ``"cancel"`` -- never a Qt enum,
         so the callers stay readable and a test can answer with a string.
+
+        With ``files.confirm_unsaved_close`` turned off the question is not
+        asked and the changes are discarded, which is what turning the warning
+        off means.
         """
+        if not prefs_value("files", "confirm_unsaved_close"):
+            return "discard"
+        return self._ask_save_discard_dialog(session)
+
+    def _ask_save_discard_dialog(self, session: Session) -> str:
+        """The unsaved-changes question itself, split out so it can be skipped."""
         answer = Feedback(self).pop_question(
             title="Unsaved changes",
             text=f"Save changes to {session.name} before closing?",
@@ -700,7 +744,7 @@ class TriggerWindow(MayaToolWindow):
         session = view.session
         if not path and session.file_path is None:
             path = Feedback(self).browse_save(
-                "Save session", "", (EXTENSION,), FILE_FILTER
+                "Save session", self.browse_folder(), (EXTENSION,), FILE_FILTER
             )
             if not path:
                 return False
@@ -709,6 +753,7 @@ class TriggerWindow(MayaToolWindow):
         except Exception as error:  # noqa: BLE001 - report, never trap
             self.events.log(f"Could not save {session.name}: {error}", level="warning")
             return False
+        clear_autosave(str(session.file_path))
         self._remember(str(session.file_path))
         self._update_title()
         return not session.is_modified
@@ -830,17 +875,18 @@ class TriggerWindow(MayaToolWindow):
         they asked for. The run statuses go with it -- the build they described
         no longer exists.
         """
-        answer = Feedback(self).pop_question(
-            title="Reset Scene",
-            text="Delete everything in the Maya scene?",
-            details=(
-                "Your session and its guides are kept. Anything built or "
-                "imported into the scene is lost."
-            ),
-            buttons=["cancel", "reset"],
-        )
-        if answer != "reset":
-            return
+        if prefs_value("guides", "confirm_reset_scene"):
+            answer = Feedback(self).pop_question(
+                title="Reset Scene",
+                text="Delete everything in the Maya scene?",
+                details=(
+                    "Your session and its guides are kept. Anything built or "
+                    "imported into the scene is lost."
+                ),
+                buttons=["cancel", "reset"],
+            )
+            if answer != "reset":
+                return
         from tik.trigger.guides import nodes
 
         nodes.new_scene()
@@ -849,9 +895,49 @@ class TriggerWindow(MayaToolWindow):
             view.clear_statuses()
         self.status.set_activity("Scene reset")
 
-    def open_settings(self) -> None:
-        """Placeholder until the settings dialog exists."""
-        Feedback(self).pop_info("Settings", "Settings are not available yet.")
+    def open_settings(self, *, exec_: bool = True):
+        """Open the preferences dialog.
+
+        ``exec_`` is keyword-only on purpose. ``QAction.triggered`` emits a
+        ``checked`` boolean, and PySide hands it to any slot whose signature
+        accepts a positional argument -- so as a positional parameter this
+        bound ``exec_=False`` on every menu click, building the dialog,
+        skipping the modal loop and discarding it without a word.
+
+        Args:
+            exec_: Run the modal loop. Tests pass False to inspect the dialog.
+
+        Returns:
+            The dialog, so a caller can inspect it.
+        """
+        from tik.shared.ui.prefs_dialog import PrefsDialog
+        from tik.trigger.config import prefs
+
+        # Held on self: a modeless dialog assigned to a local is garbage
+        # collected the moment this returns.
+        self._prefs_dialog = PrefsDialog(prefs, self)
+        self._prefs_dialog.applied.connect(self._on_prefs_applied)
+        if exec_:
+            self._prefs_dialog.exec()
+        return self._prefs_dialog
+
+    def _on_prefs_applied(self, changed: list) -> None:
+        """Push applied preferences into the widgets that cache them.
+
+        Only settings that a *live* widget holds a copy of need pushing.
+        Everything else is read at the point of use and picks the new value
+        up on its own, which is why this table stays short.
+        """
+        if "interface.log_max_lines" in changed:
+            self.log.setMaximumBlockCount(prefs_value("interface", "log_max_lines"))
+        if "interface.log_verbosity" in changed:
+            self.log.set_level(prefs_value("interface", "log_verbosity"))
+        if any(key.startswith("files.autosave") for key in changed):
+            self.autosave.reconfigure()
+        if "files.max_recent" in changed:
+            del self.recent_files[prefs_value("files", "max_recent") :]
+            self._save_recent()
+            self._update_recent_menu()
 
     def open_docs(self) -> None:
         """Open the project page in the browser."""
@@ -867,12 +953,51 @@ class TriggerWindow(MayaToolWindow):
 
     # -------------------------------------------------------------- recent
     def _remember(self, path: str) -> None:
+        """Put ``path`` at the top of the recent list and persist it."""
         path = str(Path(path))
         if path in self.recent_files:
             self.recent_files.remove(path)
         self.recent_files.insert(0, path)
-        del self.recent_files[MAX_RECENT:]
+        del self.recent_files[prefs_value("files", "max_recent") :]
+        self._remember_folder(path)
+        self._save_recent()
         self._update_recent_menu()
+
+    def _load_recent(self) -> None:
+        """Fill the recent list from the preferences file."""
+        if not prefs_value("files", "remember_recent"):
+            self.recent_files = []
+        else:
+            stored = prefs_value("files", "recent_sessions") or []
+            self.recent_files = [str(item) for item in stored]
+            del self.recent_files[prefs_value("files", "max_recent") :]
+        self._update_recent_menu()
+
+    def _save_recent(self) -> None:
+        """Persist the recent list, unless the user asked us not to."""
+        from tik.trigger.config import prefs
+
+        prefs.files.recent_sessions = (
+            list(self.recent_files) if prefs_value("files", "remember_recent") else []
+        )
+        prefs.save()
+
+    def browse_folder(self) -> str:
+        """Where a file browser should open."""
+        if prefs_value("files", "remember_last_folder"):
+            last = prefs_value("files", "last_folder")
+            if last:
+                return str(last)
+        return str(prefs_value("files", "default_folder") or "")
+
+    def _remember_folder(self, path: str) -> None:
+        """Store ``path``'s folder as the one browsers reopen in."""
+        if not prefs_value("files", "remember_last_folder"):
+            return
+        from tik.trigger.config import prefs
+
+        prefs.files.last_folder = str(Path(path).parent)
+        prefs.save()
 
     def _update_recent_menu(self) -> None:
         self.recent_menu.clear()
@@ -991,8 +1116,72 @@ class TriggerWindow(MayaToolWindow):
 
     def _on_error(self, exception=None, context: str = "", **_kw) -> None:
         self.log.append_message(f"{context}: {exception}", "error")
-        self.log_dock.show()
-        self.log_action.setChecked(True)
+        if prefs_value("interface", "log_open_on_error"):
+            self.log_dock.show()
+            self.log_action.setChecked(True)
+
+    # ------------------------------------------------------------ autosave
+    def autosave_target(self) -> str:
+        """The active session's file path, or ``""`` when it has none."""
+        session = self.session
+        if session is None or session.file_path is None:
+            return ""
+        return str(session.file_path)
+
+    def is_modified(self) -> bool:
+        """True when the active session has unsaved changes."""
+        session = self.session
+        return bool(session is not None and session.is_modified)
+
+    def write_autosave(self, target) -> None:
+        """Write the active session to ``target`` without changing its path.
+
+        Goes through ``Document.save`` rather than ``Session.save``: the
+        latter reassigns ``Session.file_path``, which would quietly rename the
+        open session to its own recovery file.
+        """
+        session = self.session
+        if session is not None:
+            session.document.save(str(target))
+
+    # -------------------------------------------------------- window state
+    #: Opaque Qt blobs, kept out of the readable JSON file on purpose.
+    STATE_ORG, STATE_APP = "tikworks", "trigger"
+
+    def save_window_state(self) -> None:
+        """Store geometry and dock layout as Qt blobs."""
+        settings = QtCore.QSettings(self.STATE_ORG, self.STATE_APP)
+        settings.setValue("window/geometry", self.saveGeometry())
+        settings.setValue("window/state", self.saveState())
+
+    def restore_window_state(self) -> None:
+        """Put back whatever the preferences allow, tolerating missing blobs.
+
+        Geometry and dock layout are opaque Qt byte blobs that vary by Qt
+        version and monitor arrangement, so they live in ``QSettings`` rather
+        than polluting the hand-editable preferences file. The two booleans
+        that gate them are ordinary preferences.
+        """
+        settings = QtCore.QSettings(self.STATE_ORG, self.STATE_APP)
+        if prefs_value("interface", "restore_geometry"):
+            blob = settings.value("window/geometry")
+            if blob:
+                self.restoreGeometry(blob)
+        if prefs_value("interface", "restore_dock_layout"):
+            blob = settings.value("window/state")
+            if blob:
+                self.restoreState(blob)
+
+    def closeEvent(self, event) -> None:  # noqa: N802 - Qt style
+        """Remember the layout, then let the base class decide about closing.
+
+        The unsaved-changes question lives in ``MayaToolWindow.closeEvent`` and
+        must be asked exactly once, so this override must not repeat it. Saving
+        the layout unconditionally is harmless: if the user cancels the close,
+        the window keeps the geometry that was just stored.
+        """
+        self.save_window_state()
+        super().closeEvent(event)
 
     def confirm_close(self) -> bool:
         """Ask about every dirty tab in order; the first Cancel stops the close.

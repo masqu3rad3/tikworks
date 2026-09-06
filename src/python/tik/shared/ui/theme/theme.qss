@@ -241,3 +241,8 @@ QMessageBox QPushButton { min-width: 105px; min-height: 20px; background-color: 
 QMessageBox QPushButton:hover { color: rgb(234,240,248); background-color: #FE7E00; }
 
 QMessageBox QPushButton:default:hover { color: rgb(234,240,248); background-color: #FE7E00; }
+
+/*-----Preferences------------------------------------------------------------------------------------------------------------------------------*/
+QLabel#PrefsCaption { color: #8f8f8f; font-size: 10px; padding: 6px 0px 2px 4px; }
+
+QLabel#PrefsEmpty { color: #8f8f8f; padding: 24px; }

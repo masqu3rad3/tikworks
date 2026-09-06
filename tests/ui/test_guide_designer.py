@@ -115,9 +115,12 @@ def test_the_bar_spans_the_window_not_a_pane(designer):
 
 def test_auto_sync_survives_a_relaunch(designer, qapp):
     """A working habit, not rig data: it belongs to the user, not the .tr."""
+    from tik.trigger.config import prefs
+
     designer.set_auto_sync(False)
-    stored = QtCore.QSettings("tikworks", "trigger").value("designer/auto_sync")
-    assert stored in (False, "false")
+    # Stored in the preferences file now, not QSettings.
+    assert prefs.guides.auto_sync is False
+    assert prefs.store.read()["guides.auto_sync"] is False
 
     # "Survives a relaunch" means a *second*, independently-constructed
     # Designer picks the setting back up -- not just that the raw value was
@@ -173,22 +176,25 @@ def test_opening_a_designer_does_not_modify_a_clean_session(qapp):
         designer.close()
 
 
-def test_a_leaked_auto_sync_setting_does_not_survive_this_test(qapp):
-    """Paired with the test below: this one leaves ``auto_sync`` False in the
-    QSettings store, with nothing tearing it down. Without function-scoped
-    isolation (``_qsettings_isolated`` in conftest.py), the next test would
-    silently inherit it -- which is exactly the false pass that motivated
-    that fixture. Declaration order matters here: this must run immediately
-    before ``test_the_next_test_still_sees_the_default_auto_sync``."""
-    QtCore.QSettings("tikworks", "trigger").setValue("designer/auto_sync", False)
+def test_a_leaked_qsettings_value_does_not_survive_this_test(qapp):
+    """Paired with the test below: this one leaves a value in the QSettings
+    store, with nothing tearing it down. Without function-scoped isolation
+    (``_qsettings_isolated`` in conftest.py), the next test would silently
+    inherit it -- which is exactly the false pass that motivated that fixture.
+    Declaration order matters here: this must run immediately before
+    ``test_the_next_test_sees_a_clean_qsettings_store``.
+
+    Uses ``window/geometry`` because that is what QSettings actually holds now;
+    the designer toggles moved to the preferences file.
+    """
+    QtCore.QSettings("tikworks", "trigger").setValue("window/geometry", b"leaked")
     QtCore.QSettings("tikworks", "trigger").sync()
 
 
-def test_the_next_test_still_sees_the_default_auto_sync(qapp):
-    """A fresh store per test function: the previous test's leaked ``False``
-    must not have survived to this one."""
-    stored = QtCore.QSettings("tikworks", "trigger").value("designer/auto_sync", True)
-    assert stored not in (False, "false", "0", 0)
+def test_the_next_test_sees_a_clean_qsettings_store(qapp):
+    """A fresh store per test function: the previous test's leaked value must
+    not have survived to this one."""
+    assert QtCore.QSettings("tikworks", "trigger").value("window/geometry") is None
 
 
 def test_qsettings_is_sandboxed_away_from_the_real_machine(_qsettings_sandbox, qapp):
@@ -571,6 +577,11 @@ def test_unique_names_layout_persistence_and_slice(designer, tmp_path):
         data["designer"]["positions"]["L_tail"] == [40.0, 40.0]
         and data["designer"]["collapse"]["L_tail"] == 0
     )
+    # Clearing is setup here, not the thing under test, so skip the
+    # confirmation rather than answering a modal dialog.
+    from tik.trigger.config import prefs
+
+    prefs.guides.confirm_delete_all = False
     designer.clear_guides()
     assert designer.guides.layout == {}
     designer.import_file(str(path))
