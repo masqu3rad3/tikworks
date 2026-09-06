@@ -61,3 +61,80 @@ def test_guides_file_and_guide_roots_are_gone():
     assert "guides_file" not in fields
     assert "guide_roots" not in fields
     assert "modules" in fields
+
+
+def _legacy_document(roots, entries, guides_file=""):
+    """A schema-6 ``.tr`` dict holding one kinematics action."""
+    settings = {"guide_roots": list(roots), "after_build": "delete"}
+    if guides_file:
+        settings["guides_file"] = guides_file
+    return {
+        "schema": 6,
+        "meta": {},
+        "actions": [
+            {
+                "name": "kinematics",
+                "type": "kinematics",
+                "enabled": True,
+                "settings": settings,
+                "children": [],
+            }
+        ],
+        "publish": [],
+        "guides": {"schema": 1, "modules": [entry.to_dict() for entry in entries]},
+    }
+
+
+def test_empty_roots_migrates_to_every_module():
+    """The old 'empty means all' keeps building the same rig."""
+    from tik.trigger.core.document import Document
+
+    entries = [_entry("aaa", name="spine"), _entry("bbb", name="arm", side="L")]
+    document = Document.from_dict(_legacy_document([], entries))
+    assert document.actions[0].settings["modules"] == ["aaa", "bbb"]
+    assert "guide_roots" not in document.actions[0].settings
+
+
+def test_named_root_matches_every_side():
+    """'arm' selected L_arm and R_arm alike, and still does."""
+    from tik.trigger.core.document import Document
+
+    entries = [
+        _entry("aaa", name="spine"),
+        _entry("bbb", name="arm", side="L"),
+        _entry("ccc", name="arm", side="R"),
+    ]
+    document = Document.from_dict(_legacy_document(["arm"], entries))
+    assert sorted(document.actions[0].settings["modules"]) == ["bbb", "ccc"]
+
+
+def test_named_root_pulls_its_subtree():
+    """The old semantics included everything parented under the root."""
+    from tik.trigger.core.document import Document
+
+    spine = _entry("aaa", name="spine")
+    arm = _entry("bbb", "toy_chain", name="arm", side="L")
+    arm.inputs = {"root": "aaa.root"}
+    document = Document.from_dict(_legacy_document(["spine"], [spine, arm]))
+    assert sorted(document.actions[0].settings["modules"]) == ["aaa", "bbb"]
+
+
+def test_unresolvable_root_is_kept_not_dropped():
+    """A root joint name cannot be resolved headlessly; it must not vanish."""
+    from tik.trigger.core.document import Document
+
+    document = Document.from_dict(_legacy_document(["base_c"], []))
+    settings = document.actions[0].settings
+    assert settings["modules"] == []
+    assert settings["legacy_roots"] == ["base_c"]
+
+
+def test_migration_does_not_rerun_on_current_schema():
+    """undo/redo/copy round-trip through from_dict and must not re-migrate."""
+    from tik.trigger.core.document import Document
+
+    entries = [_entry("aaa", name="spine")]
+    document = Document.from_dict(_legacy_document([], entries))
+    again = Document.from_dict(document.to_dict())
+    assert again.actions[0].settings["modules"] == ["aaa"]
+    assert "legacy_roots" not in again.actions[0].settings
