@@ -629,6 +629,26 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         with nodes.undo_chunk("Trigger designer layout"):
             self._touch()
 
+    @property
+    def frames(self) -> dict:
+        """Graph frame placement per reference, ``{ref_id: {...}}``.
+
+        Its own section rather than part of ``layout``: that one is projected
+        through display keys and replaced wholesale on every node drag, so a
+        frame stored there would be deleted the first time anybody moved a
+        node.
+        """
+        return {key: dict(value) for key, value in self.document.frames.items()}
+
+    def set_frame(self, ref_id: str, position=None, collapsed=None) -> None:
+        """Store a frame's position and/or collapsed state. Partial updates."""
+        frame = self.document.frames.setdefault(ref_id, {})
+        if position is not None:
+            frame["position"] = [float(position[0]), float(position[1])]
+        if collapsed is not None:
+            frame["collapsed"] = bool(collapsed)
+        self._touch()
+
     def update_layout(self, **sections) -> dict:
         """Replace whole sections (``positions=``, ``scene_nodes=``, ``collapse=``)."""
         layout = self.layout

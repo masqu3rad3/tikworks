@@ -46,6 +46,9 @@ class StubScene:
         # instance *borrowed* for the designer's reference surfaces
         self._borrowed: dict = {}
         self._disabled: set = set()
+        # kept apart from _positions/_collapse for the same reason the real
+        # document does: set_layout replaces those wholesale
+        self._frames: dict = {}
         # matches GuideScene's default (spec 3.1): governs whether a scene
         # event may start a sync, nothing else
         self.auto_sync = True
@@ -64,6 +67,20 @@ class StubScene:
         """
         self._borrowed[instance_id] = (ref_id, file, dict(source or {}))
         self._document_cache = None
+
+    @property
+    def frames(self) -> dict:
+        """Mirror ``GuideScene.frames``."""
+        return {key: dict(value) for key, value in self._frames.items()}
+
+    def set_frame(self, ref_id, position=None, collapsed=None) -> None:
+        """Mirror ``GuideScene.set_frame``: partial updates, never a replace."""
+        frame = self._frames.setdefault(ref_id, {})
+        if position is not None:
+            frame["position"] = [float(position[0]), float(position[1])]
+        if collapsed is not None:
+            frame["collapsed"] = bool(collapsed)
+        self.calls.append(("set_frame", ref_id, position, collapsed))
 
     def set_enabled(self, instance_id, enabled) -> None:
         """Mirror ``GuideScene.set_enabled``."""
