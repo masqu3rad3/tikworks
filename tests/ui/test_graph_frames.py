@@ -258,3 +258,64 @@ def test_a_collapsed_frames_position_is_not_stored_as_a_module(wired):
     view.save_positions()
     assert scene.frames["r1"]["position"] == [140.0, 260.0]
     assert "@r1" not in scene.layout.get("positions", {})
+
+
+# ------------------------------------------- a collapsed frame is not a group
+def test_a_collapsed_frame_is_not_a_scene_group(wired):
+    """`external` means scene-nodes group; a reference must not borrow it."""
+    view, scene, _body, _arm, _wing = wired
+    scene.set_frame("r1", collapsed=True)
+    view.rebuild()
+    node = view.graph.nodes["@r1"]
+    assert node.reference is True
+    assert node.external is False
+
+
+def test_selecting_a_collapsed_frame_is_not_a_group_selection(wired):
+    """Otherwise the properties panel offers Scene Nodes > Add."""
+    view, scene, _body, _arm, _wing = wired
+    scene.set_frame("r1", collapsed=True)
+    view.rebuild()
+    externals, frames = [], []
+    view.graph.external_selected.connect(externals.append)
+    view.graph.frame_selected.connect(frames.append)
+    view.graph.nodes["@r1"].setSelected(True)
+    assert externals == []
+    assert frames == ["r1"]
+
+
+def test_the_glyph_on_a_collapsed_frame_expands_it(wired):
+    """The only way back: there is no backdrop to click while collapsed."""
+    from tik.shared.ui.Qt import QtCore, QtWidgets
+
+    view, scene, _body, _arm, _wing = wired
+    scene.set_frame("r1", collapsed=True)
+    view.rebuild()
+    node = view.graph.nodes["@r1"]
+
+    event = QtWidgets.QGraphicsSceneMouseEvent()
+    event.setButton(QtCore.Qt.LeftButton)
+    event.setPos(node.glyph_rect().center())
+    node.mousePressEvent(event)
+
+    assert scene.frames["r1"]["collapsed"] is False
+    assert "@r1" not in view.graph.nodes
+    assert {"body", "L_arm"} <= set(view.graph.nodes)
+
+
+def test_the_glyph_does_not_change_the_display_mode(wired):
+    """A reference node has one toggle, and it is not the 1/2/3 collapse mode."""
+    from tik.shared.ui.Qt import QtCore, QtWidgets
+
+    view, scene, _body, _arm, _wing = wired
+    scene.set_frame("r1", collapsed=True)
+    view.rebuild()
+    node = view.graph.nodes["@r1"]
+    modes = []
+    view.graph.mode_change_requested.connect(lambda key, mode: modes.append(key))
+
+    event = QtWidgets.QGraphicsSceneMouseEvent()
+    event.setButton(QtCore.Qt.LeftButton)
+    event.setPos(node.glyph_rect().center())
+    node.mousePressEvent(event)
+    assert modes == []

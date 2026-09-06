@@ -100,7 +100,12 @@ class NodeSpec:
     inputs: list
     outputs: list
     color: str
+    #: A scene-nodes group: dashed, and its properties are the group's.
     external: bool = False
+    #: A collapsed reference. Drawn like a group but emphatically not one --
+    #: ``external`` carries the scene-nodes *meaning*, and borrowing it gave
+    #: a collapsed reference that panel and its Add buttons.
+    reference: bool = False
     primary_input: Optional[str] = None
     mode: int = MODE_FULL
     spaces: Optional[list] = None
@@ -204,6 +209,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.subtitle = spec.subtitle
         self.color = spec.color
         self.external = spec.external
+        self.reference = spec.reference
         self.mode = spec.mode
         self.draw_state = spec.draw_state
         # absent from the scene: the whole node recedes, which is what
@@ -284,7 +290,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         pen = QtGui.QPen(
             QtGui.QColor(theme.ACCENT if self.isSelected() else "#3a3a3a"), 1.2
         )
-        if self.external:
+        if self.external or self.reference:
             pen.setStyle(QtCore.Qt.DashLine)
         painter.setPen(pen)
         painter.setBrush(QtGui.QColor("#262626"))
@@ -310,7 +316,12 @@ class NodeItem(QtWidgets.QGraphicsItem):
             painter.restore()
         header = QtCore.QRectF(0, 0, NODE_WIDTH, HEADER)
         painter.setPen(QtCore.Qt.NoPen)
-        painter.setBrush(QtGui.QColor("#3a4048" if self.external else self.color))
+        header_ink = self.color
+        if self.reference:
+            header_ink = FRAME_INK
+        elif self.external:
+            header_ink = "#3a4048"
+        painter.setBrush(QtGui.QColor(header_ink))
         path = QtGui.QPainterPath()
         path.setFillRule(QtCore.Qt.WindingFill)
         path.addRoundedRect(header, 4, 4)
@@ -388,7 +399,13 @@ class NodeItem(QtWidgets.QGraphicsItem):
         if event.button() == QtCore.Qt.LeftButton and self.glyph_rect().contains(
             event.pos()
         ):
-            self.scene().mode_change_requested.emit(self.key, (self.mode + 1) % 3)
+            if self.reference:
+                # A collapsed reference has exactly one toggle, and it is not
+                # the 1/2/3 display mode: while collapsed there is no backdrop
+                # to click, so this glyph is the only way back.
+                self.scene().frame_toggle_requested.emit(self.key.lstrip("@"))
+            else:
+                self.scene().mode_change_requested.emit(self.key, (self.mode + 1) % 3)
             event.accept()
             return
         super().mousePressEvent(event)

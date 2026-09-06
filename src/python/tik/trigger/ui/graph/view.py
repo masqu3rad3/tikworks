@@ -39,6 +39,7 @@ class GraphView(QtWidgets.QGraphicsView):
 
     selection_changed = QtCore.Signal(str)
     external_selection_changed = QtCore.Signal(str)
+    frame_selection_changed = QtCore.Signal(str)  # reference id
     node_menu_requested = QtCore.Signal(str, object)  # module key, global QPoint
     palette_requested = QtCore.Signal()
     edited = QtCore.Signal()
@@ -77,6 +78,7 @@ class GraphView(QtWidgets.QGraphicsView):
         self.graph.remove_group_requested.connect(self.remove_scene_group)
         self.graph.node_selected.connect(self.selection_changed)
         self.graph.external_selected.connect(self.external_selection_changed)
+        self.graph.frame_selected.connect(self.frame_selection_changed)
         self.graph.mode_change_requested.connect(self.set_mode)
         self.graph.nodes_moved.connect(self.save_positions)
         self.graph.frame_toggle_requested.connect(self.toggle_frame)
@@ -189,7 +191,7 @@ class GraphView(QtWidgets.QGraphicsView):
                     inputs=list(ports["inputs"]),
                     outputs=list(ports["outputs"]),
                     color="",
-                    external=True,
+                    reference=True,
                     mode=MODE_FULL,
                 ),
                 pos=pos,

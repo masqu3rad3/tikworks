@@ -362,24 +362,14 @@ class Session:
                     ref_id=uuid.uuid4().hex,
                     file=str(file_path),
                     version=version or "latest",
+                    auto=True,
                 )
             )
-        # A reference whose modules are no longer wanted loses its link. Only
-        # links a pipeline reference created are dropped: one made by hand
-        # through File > Reference Modules... answers to nobody.
-        pipeline_files = {
-            str(
-                resolved_path(
-                    node.settings.get("file", ""),
-                    self.directory,
-                    node.settings.get("version", "latest"),
-                )
-            )
-            for _p, node, _parent in self.document.walk(BUILD)
-            if node.type == "reference" and node.settings.get("file")
-        }
+        # A link a pipeline reference created lives and dies with it: unticking
+        # the box, disabling the action or deleting it outright all take the
+        # modules with them. Anything made by hand is left alone.
         for key, reference in linked.items():
-            if key in pipeline_files and key not in wanted:
+            if reference.auto and key not in wanted:
                 guides.references.remove(reference)
                 changed = True
         return changed

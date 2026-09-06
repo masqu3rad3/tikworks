@@ -118,3 +118,39 @@ def test_a_missing_file_links_nothing_and_does_not_raise(tmp_path):
     host = _host(tmp_path)
     host.add("reference", file=str(tmp_path / "nope.tr"))
     assert host.document.guides.modules == []
+
+
+def test_deleting_the_reference_action_removes_its_modules(tmp_path):
+    """They are a link, not a copy: nothing keeps them once nothing wants them."""
+    base = _base(tmp_path, "body")
+    host = _host(tmp_path)
+    handle = host.add("reference", file=str(base))
+    assert [item.key for item in host.document.guides.modules] == ["body"]
+
+    host.remove(handle.path)
+    assert host.document.guides.modules == []
+    assert host.document.guides.references == []
+
+
+def test_deleting_a_reference_leaves_a_hand_made_link_alone(tmp_path):
+    """One made through File > Reference Modules... answers to nobody."""
+    base = _base(tmp_path, "body")
+    host = _host(tmp_path)
+    host.link_modules(str(base))
+    handle = host.add("reference", file=str(base))
+    host.remove(handle.path)
+    assert [item.key for item in host.document.guides.modules] == ["body"]
+
+
+def test_the_file_never_stores_the_borrowed_modules(tmp_path):
+    """A reference is a link. The .tr holds the link and the overrides only."""
+    import json
+
+    base = _base(tmp_path, "body", "arm")
+    host = _host(tmp_path)
+    host.add("reference", file=str(base))
+    path = host.save(tmp_path / "hero.tr")
+
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    assert stored["guides"]["modules"] == []
+    assert len(stored["guides"]["references"]) == 1

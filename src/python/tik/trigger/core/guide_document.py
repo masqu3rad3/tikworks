@@ -193,6 +193,10 @@ class ModuleReference:
     ref_id: str
     file: str
     version: str = "latest"
+    #: True when a pipeline ``reference`` action created this link. Such a
+    #: link lives and dies with that action; one made by hand through
+    #: *Reference Modules...* answers to nobody and is never auto-removed.
+    auto: bool = False
     #: ``{instance_id: {enabled, name, side, settings, inputs, guides}}``, where
     #: a guide key is ``"<role>:<index>"``. Produced by diffing, never written
     #: by hand -- see ``core.guide_reference.overrides_for``.
@@ -204,6 +208,7 @@ class ModuleReference:
             "ref_id": self.ref_id,
             "file": self.file,
             "version": self.version,
+            "auto": self.auto,
             "overrides": copy.deepcopy(self.overrides),
         }
 
@@ -214,6 +219,7 @@ class ModuleReference:
             ref_id=data["ref_id"],
             file=data.get("file", ""),
             version=data.get("version", "latest"),
+            auto=bool(data.get("auto", False)),
             overrides=copy.deepcopy(data.get("overrides") or {}),
         )
 

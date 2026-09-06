@@ -361,6 +361,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.graph.palette_requested.connect(self.show_palette)
         self.graph.selection_changed.connect(self._on_graph_selection)
         self.graph.external_selection_changed.connect(self._on_external_selection)
+        self.graph.frame_selection_changed.connect(self._on_frame_selection)
         self.graph.node_menu_requested.connect(
             lambda _key, pos: self.module_menu().exec(pos)
         )
@@ -743,6 +744,15 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         if self._syncing:
             return
         self._select_handles(self.selected_handles())
+
+    def _on_frame_selection(self, ref_id: str) -> None:
+        """A collapsed reference is not a module and has no properties.
+
+        Clearing beats leaving the previous module's panel up, which would
+        read as though the selection had not changed at all.
+        """
+        self._set_current(None)
+        self.status.set_activity("Collapsed reference — click its glyph to expand it.")
 
     def _on_external_selection(self, name: str) -> None:
         self._syncing = True

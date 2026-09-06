@@ -22,6 +22,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
     mode_change_requested = QtCore.Signal(str, int)  # node key, mode
     nodes_moved = QtCore.Signal()  # a drag finished and at least one node moved
     frame_toggle_requested = QtCore.Signal(str)  # reference id
+    frame_selected = QtCore.Signal(str)  # reference id
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -252,6 +253,9 @@ class GraphScene(QtWidgets.QGraphicsScene):
 
     def _on_selection(self) -> None:
         for item in self.selectedItems():
+            if isinstance(item, NodeItem) and item.reference:
+                self.frame_selected.emit(item.key.lstrip("@"))
+                return
             if isinstance(item, NodeItem):
                 (self.external_selected if item.external else self.node_selected).emit(
                     item.key
