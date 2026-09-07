@@ -446,6 +446,8 @@ class TriggerWindow(MayaToolWindow):
             "Ctrl+Shift+L",
             checkable=True,
         )
+        tools_menu.addSeparator()
+        self._action(tools_menu, "Switch Pivot (Preserve)…", self.switch_pivot_preset)
 
     def _build_help_menu(self, help_menu) -> None:
         self._action(help_menu, "Documentation", self.open_docs)
@@ -862,6 +864,42 @@ class TriggerWindow(MayaToolWindow):
         self.script_action.setChecked(self.script_dock.isVisible())
         if self.script_dock.isVisible():
             self._refresh_script_viewer()
+
+    def switch_pivot_preset(self) -> None:
+        """Switch the selected controls' pivot preset without moving them.
+
+        A live network cannot hold the pose across a pivot change -- the
+        compensation cancels the pivot itself -- so this does it once, here.
+        """
+        from tik.trigger.maya import pivot as pivot_tool
+
+        selected = self._selected_pivot_controls()
+        if not selected:
+            Feedback(self).pop_warning(
+                title="Switch Pivot",
+                text="Select a control that has pivot presets.",
+            )
+            return
+        labels = pivot_tool.preset_labels(selected[0])
+        choice = Feedback(self).ask_choice("Switch Pivot", "Pivot preset:", labels)
+        if choice is None:
+            return
+        for node in selected:
+            pivot_tool.switch_pivot_preset(node, choice, key=True)
+
+    @staticmethod
+    def _selected_pivot_controls() -> list:
+        """Selected transforms carrying a ``pivotPreset``, in selection order."""
+        if not HAS_MAYA:
+            return []
+        import tik.maya as tm
+        from tik.trigger.maya import pivot as pivot_tool
+
+        return [
+            node
+            for node in (tm.ls(selection=True, type="transform") or [])
+            if pivot_tool.preset_labels(node)
+        ]
 
     def _refresh_script_viewer(self) -> None:
         view = self.current_view

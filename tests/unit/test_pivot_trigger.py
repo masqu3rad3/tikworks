@@ -170,3 +170,67 @@ def test_building_a_pivot_for_an_undeclared_control_raises():
     register_module("undeclared")(Undeclared)
     with pytest.raises(Exception):
         _build("undeclared")
+
+
+# ------------------------------------------------------- switch pivot (tool)
+def test_switch_pivot_preset_holds_the_pose():
+    from tik.trigger.maya.pivot import switch_pivot_preset
+
+    ctx = _build(
+        "pivot_toy",
+        {"pivot_main_tip": (9.0, 0.0, 0.0), "pivot_main_ball": (7.0, 0.0, 0.0)},
+    )
+    main = ctx.controller_by_role("main")
+    main.transform["pivotPreset"].value = 1
+    main.transform.rotate = (0.0, 45.0, 0.0)
+    # the world *matrix*, not world_position: the latter queries the rotate
+    # pivot, which is a fixed point by construction and so proves nothing.
+    before = [round(value, 4) for value in main.transform.world_matrix]
+
+    switch_pivot_preset(main, "ball")
+
+    assert main.transform["pivotPreset"].value == 2
+    assert [round(value, 4) for value in main.transform.world_matrix] == before
+
+
+def test_switch_pivot_preset_holds_the_pose_under_a_rotated_parent():
+    """The compensation is written in the control's own parent space."""
+    import tik.maya as tm
+    from tik.trigger.maya.pivot import switch_pivot_preset
+
+    ctx = _build(
+        "pivot_toy",
+        {"pivot_main_tip": (9.0, 0.0, 0.0), "pivot_main_ball": (7.0, 0.0, 0.0)},
+    )
+    main = ctx.controller_by_role("main")
+    parent = tm.resolve(main.transform.parent)
+    parent.rotate = (12.0, 34.0, -21.0)
+    parent.translate = (3.0, 1.0, -2.0)
+    main.transform["pivotPreset"].value = 1
+    main.transform.rotate = (0.0, 45.0, 0.0)
+    before = [round(value, 4) for value in main.transform.world_matrix]
+
+    switch_pivot_preset(main, "ball")
+
+    assert [round(value, 4) for value in main.transform.world_matrix] == before
+
+
+def test_switch_pivot_preset_accepts_an_index_and_rejects_an_unknown_name():
+    from tik.trigger.maya.pivot import switch_pivot_preset
+
+    ctx = _build("pivot_toy", {"pivot_main_tip": (9.0, 0.0, 0.0)})
+    main = ctx.controller_by_role("main")
+    switch_pivot_preset(main, 1)
+    assert main.transform["pivotPreset"].value == 1
+    with pytest.raises(ValueError):
+        switch_pivot_preset(main, "knuckle")
+
+
+def test_switch_pivot_preset_rejects_a_control_with_no_presets():
+    from tik.trigger.maya.pivot import preset_labels, switch_pivot_preset
+
+    ctx = _build("pivot_toy")
+    pivot = _pivot(ctx)
+    assert preset_labels(pivot) == []
+    with pytest.raises(ValueError):
+        switch_pivot_preset(pivot, "tip")

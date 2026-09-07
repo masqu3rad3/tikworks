@@ -851,11 +851,12 @@ def test_space_inputs_get_rows_in_the_properties_panel(designer):
     assert "root_chest" in designer._input_rows
 
 
-def test_anim_spaces_renders_after_the_module_settings():
+def test_base_tables_render_after_the_module_settings():
+    """The ``last=True`` fields trail, in the order the base declares them."""
     from tik.trigger.core import get_module
 
     names = list(get_module("toy_chain").fields())
-    assert names[-1] == "anim_spaces"
+    assert names[-2:] == ["anim_spaces", "pivot_presets"]
 
 
 def test_delete_removes_a_module_selected_in_the_graph(designer):
