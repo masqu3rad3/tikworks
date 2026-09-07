@@ -34,6 +34,9 @@ from .schemas import GuidePose, ModuleInstance, ParentRef
 SPACES = FieldGroup("Spaces", collapsed=True)
 """Every module's animation spaces fold away; declared here, not per module."""
 
+PIVOTS = FieldGroup("Pivots", collapsed=True)
+"""Every module's pivot presets fold away; declared here, not per module."""
+
 
 class Module(Schema):
     """Base class for rig modules."""
@@ -49,6 +52,12 @@ class Module(Schema):
     #: animation space; tweak controllers are excluded by construction, since
     #: ``rig.tweak_control`` parents them under their main.
     controls: tuple[str, ...] = ()
+    #: Controller roles that get a movable pivot, mapped to the guide their
+    #: preset guides hang under. Declaring an entry is what makes the control
+    #: movable, the way declaring an input is what makes its socket. The anchor
+    #: is the module author's business, never the rigger's, so it is a class
+    #: attribute rather than a table column.
+    pivot_controls: dict[str, str] = {}
     outputs: tuple[str, ...] = ("root",)
     module_type: str = ""  # stamped by @register_module
     category: str = "generic"  # stamped by @register_module
@@ -62,6 +71,17 @@ class Module(Schema):
         columns=(
             Column("control", "choice", choices_from="control_names"),
             Column("mode", "choice", choices=("parent", "point", "orient")),
+            Column("label", "string"),
+        ),
+    )
+    pivot_presets = TableField(
+        [],
+        label="Pivot Presets",
+        group=PIVOTS,
+        help="Each row adds one named pivot position and one guide to place it with.",
+        last=True,
+        columns=(
+            Column("control", "choice", choices_from="pivot_control_names"),
             Column("label", "string"),
         ),
     )
@@ -148,6 +168,38 @@ class Module(Schema):
         return tuple(cls.controls)
 
     @classmethod
+    def pivot_control_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Controller roles with a movable pivot.
+
+        Override when a setting drives them, exactly as ``control_names`` and
+        ``output_names`` are overridden.
+        """
+        return tuple(cls.pivot_controls)
+
+    @classmethod
+    def pivot_rows(cls, settings=None) -> list[dict]:
+        """The pivot-preset rows from ``settings`` (or the field default)."""
+        if settings is None:
+            return [dict(row) for row in cls.pivot_presets.default]
+        return [dict(row) for row in (settings.get("pivot_presets") or [])]
+
+    @classmethod
+    def pivot_guide_roles(cls, settings=None) -> tuple[str, ...]:
+        """``pivot_<control>_<label>`` per well-formed row, in row order.
+
+        The role carries the *label*, never the row index: a document stores
+        poses by ``(role, index)``, and an index-keyed role would shuffle every
+        preset's position between presets the moment a row is reordered or
+        removed.
+        """
+        found = []
+        for row in cls.pivot_rows(settings):
+            control, label = row.get("control", ""), row.get("label", "")
+            if control and label:
+                found.append(f"pivot_{control}_{label}")
+        return tuple(found)
+
+    @classmethod
     def attrs_for_role(cls, role: str) -> tuple[GuideAttr, ...]:
         """Declared per-guide attributes for ``role`` (empty when none)."""
         return tuple(cls.guide_attrs.get(role, ()))
@@ -173,15 +225,27 @@ class Module(Schema):
         return self.guides.min_count
 
     def expected_guides(self) -> list[tuple[str, int]]:
-        """``(role, index)`` pairs this module wants when drawing fresh guides."""
-        return self.guides.expand(self.guide_count())
+        """``(role, index)`` pairs this module wants when drawing fresh guides.
+
+        The layout's pairs first, then one guide per pivot-preset row. A preset
+        guide is an ordinary guide in every respect -- it poses, syncs,
+        reconciles and round-trips through a ``.trg`` -- so the only thing that
+        marks it out is where its role name comes from.
+        """
+        pairs = self.guides.expand(self.guide_count())
+        pairs.extend((role, 0) for role in self.pivot_guide_roles(self.values()))
+        return pairs
 
     # ------------------------------------------------------------ lifecycle
     def validate(self) -> list[str]:
         """Return problems that prevent building (empty list = ok)."""
         pairs = self.guide_pairs or self.expected_guides()
-        problems = list(self.guides.validate(pairs))
+        pivot_roles = set(self.pivot_guide_roles(self.values()))
+        problems = list(
+            self.guides.validate([p for p in pairs if p[0] not in pivot_roles])
+        )
         problems.extend(self._validate_spaces())
+        problems.extend(self._validate_pivots())
         return problems
 
     def warnings(self) -> list[str]:
@@ -204,6 +268,16 @@ class Module(Schema):
                     f"anim space '{control}_{label}': control '{control}' is "
                     f"not built with the current settings"
                 )
+        movable = type(self).pivot_control_names(self.values())
+        for row in self.pivot_presets:
+            control, label = row.get("control", ""), row.get("label", "")
+            if not control or not label:
+                continue
+            if control not in movable:
+                problems.append(
+                    f"pivot preset '{control}.{label}': control '{control}' has "
+                    f"no movable pivot with the current settings"
+                )
         return problems
 
     def _validate_spaces(self) -> list[str]:
@@ -218,6 +292,22 @@ class Module(Schema):
             if name in seen:
                 problems.append(
                     f"anim space row {index + 1}: '{name}' is already defined"
+                )
+            seen.add(name)
+        return problems
+
+    def _validate_pivots(self) -> list[str]:
+        """Pivot-preset rows must derive unique, well-formed guide roles."""
+        problems, seen = [], set()
+        for index, row in enumerate(self.pivot_presets):
+            control, label = row.get("control", ""), row.get("label", "")
+            if not label:
+                problems.append(f"pivot preset row {index + 1}: label is required")
+                continue
+            name = f"{control}.{label}"
+            if name in seen:
+                problems.append(
+                    f"pivot preset row {index + 1}: '{name}' is already defined"
                 )
             seen.add(name)
         return problems
