@@ -13,6 +13,7 @@ from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.trigger.core import registry
+from tik.trigger.core.action import NOTES
 from tik.trigger.core.document import BUILD
 from tik.trigger.session import ActionHandle
 from tik.trigger.ui.iconography import action_icon
@@ -143,6 +144,10 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.title.setText(handle.name)
         self.subtitle.setText(f"{action_cls.display_label()} · {handle.path}")
         self.form.set_target(self._action)
+        # A note nobody can see is worthless: the fold is closed by default,
+        # so open it for an action that already carries one.
+        if getattr(self._action, "notes", ""):
+            self.form.expand_group(NOTES.label)
         self.linked_note.setVisible(handle.is_linked)
         self.reset_button.setVisible(handle.is_linked)
         self.guides_button.setVisible(self._guides_field_name() is not None)

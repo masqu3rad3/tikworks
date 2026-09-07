@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
-from tik.core.fields import Schema
+from tik.core.fields import FieldGroup, Schema, TextField
 
 
 @dataclass
@@ -35,6 +35,10 @@ class ActionContext:
             self.events.emit("log", level=level, message=message)
 
 
+#: The fold every action's notes live in, closed until there is one to read.
+NOTES = FieldGroup("Notes", collapsed=True)
+
+
 class Action(Schema):
     """Base class for pipeline actions: typed fields + ``run(ctx)``."""
 
@@ -44,6 +48,16 @@ class Action(Schema):
     scope: str = "build"  # stamped by @register_action: build | publish | both
     icon: str = ""  # stamped by @register_action
     info: str = ""  # shown by the "?" button; defaults to the class docstring
+    #: Free text the rigger keeps beside the action. ``last`` puts it after
+    #: every subclass's own settings, and the group is what keeps it there:
+    #: an ungrouped field renders before the first fold, whatever its order.
+    notes = TextField(
+        "",
+        label="Notes",
+        group=NOTES,
+        last=True,
+        help="Free notes about this action. Nothing in the build ever reads them.",
+    )
 
     def __init__(self, settings: Optional[dict] = None) -> None:
         if settings:

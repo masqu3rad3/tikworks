@@ -24,6 +24,22 @@ LabelRole = QtCore.Qt.UserRole + 8
 ErrorRole = QtCore.Qt.UserRole + 9
 
 
+def _note_line(handle: ActionHandle) -> str:
+    """The opening line of an action's note, elided when more follows.
+
+    A note can run to any length, so the tooltip shows the head of it and
+    leaves the rest to the settings panel where it was written.
+    """
+    try:
+        note = str(handle.settings.get("notes", "") or "")
+    except SessionError:  # an unregistered type has no settings to read
+        return ""
+    lines = [line for line in note.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    return lines[0] + (" …" if len(lines) > 1 else "")
+
+
 class _Item:
     __slots__ = ("handle", "parent", "children", "row")
 
@@ -187,10 +203,11 @@ class PipelineModel(QtCore.QAbstractItemModel):
         if role == QtCore.Qt.CheckStateRole and handle.is_linked:
             return QtCore.Qt.Checked if handle.enabled else QtCore.Qt.Unchecked
         if role == QtCore.Qt.ToolTipRole:
-            error = self._errors.get(handle.path)
-            if error:
-                return error
-            return f"{handle.path} ({handle.type})"
+            tip = self._errors.get(handle.path) or f"{handle.path} ({handle.type})"
+            note = _note_line(handle)
+            # appended rather than substituted: "this one fails until the
+            # export lands" is exactly the note you want next to the error
+            return f"{tip}\n\n{note}" if note else tip
         return None
 
     def setData(

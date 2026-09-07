@@ -435,6 +435,25 @@ class FormBuilder(QtWidgets.QWidget):
         """The fold for a group, by label."""
         return self._groups[label]
 
+    def expand_group(self, label: str) -> None:
+        """Open one fold because the form knows it has something to show.
+
+        Unlike a click on the header this is not recorded in the fold memory:
+        it says "there is a note here", not "this rigger likes Notes open", so
+        the next target of the same class still starts where they left it.
+
+        Args:
+            label: The group label; one this target lacks is ignored.
+        """
+        fold = self._groups.get(label)
+        if fold is None or fold.is_expanded():
+            return
+        blocked = fold.blockSignals(True)
+        try:
+            fold.set_expanded(True)
+        finally:
+            fold.blockSignals(blocked)
+
     def _fold_key(self, group) -> str:
         return f"{type(self._target).__name__}.{group.label}"
 
