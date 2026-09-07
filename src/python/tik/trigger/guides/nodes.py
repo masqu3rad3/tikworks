@@ -133,14 +133,13 @@ def _style_as_marker(joint) -> None:
     override lives on the transform, so the locator shape inherits the colour.
     """
     joint["drawStyle"].value = 2  # None: the bone is not drawn
-    created = tm.spaceLocator(name=f"{joint.name}_tmpMarker")
-    locator = tm.resolve(created[0] if isinstance(created, (list, tuple)) else created)
-    shape = locator.shapes[0]
+    # The shape is created straight under the joint rather than via
+    # ``spaceLocator`` and a reparent: importing a ``.trg`` draws a scratch
+    # copy of a module beside the real one, so two joints legitimately share a
+    # short name, and anything that looks one up by it raises.
+    shape = tm.create_node("locator", name=f"{joint.name}Shape", parent=joint.long_name)
     for axis in "XYZ":
         shape[f"localScale{axis}"].value = 0.6
-    tm.parent(shape, joint, relative=True, shape=True)
-    tm.rename(shape, f"{joint.name}Shape")
-    locator.delete()
     joint.color = MARKER_COLOR
 
 

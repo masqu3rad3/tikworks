@@ -88,17 +88,18 @@ def _built_with(module_type, settings):
 
 
 def _built_control_roles(ctx):
-    """Roles tagged on the controllers a build created, tweaks excluded.
+    """Roles tagged on the controllers a build created, tweaks and pivots excluded.
 
     A tweak is parented under its main and follows it, so a space switch on
-    one would fight the parent it hangs from -- it is never in a manifest.
+    one would fight the parent it hangs from -- it is never in a manifest. A
+    pivot controller is the same species for the same reason.
     """
     return sorted(
         role
         for role in (
             controller.transform.meta.get(tags.ROLE) for controller in ctx.controllers
         )
-        if role and not role.endswith("_tweak")
+        if role and not role.endswith(("_tweak", "_pivot"))
     )
 
 
@@ -332,8 +333,8 @@ def test_every_controller_carries_a_valid_tier(module_type):
     for controller in ctx.controllers:
         role = controller.transform.meta.get(tags.ROLE, "")
         tier = controller.transform.meta.get(tags.TIER)
-        if role.endswith("_tweak"):
-            assert tier is None, f"{controller.transform.name} is a tiered tweak"
+        if role.endswith(("_tweak", "_pivot")):
+            assert tier is None, f"{controller.transform.name} is a tiered helper"
         else:
             assert tier in TIERS, f"{controller.transform.name} has tier {tier!r}"
 
@@ -348,3 +349,27 @@ def test_visibilities_enum_matches_the_control_manifest(module_type):
     assert (
         vis[ctx.instance.key].exists() is expected
     ), f"{module_type}: enum present={not expected}"
+
+
+# ------------------------------------------------------------ movable pivots
+@pytest.mark.parametrize("module_type", _shipped_module_types())
+def test_every_movable_pivot_names_a_control_and_a_guide_the_module_has(module_type):
+    """Rule: pivot_controls points at real controls and real guide roles.
+
+    A typo here is invisible until a rigger opens the properties table and
+    finds a preset row pointing at nothing.
+    """
+    module_cls = get_module(module_type)
+    for settings in CONTROL_VARIATIONS.get(module_type, [{}]):
+        instance = module_cls(settings=settings)
+        controls = set(module_cls.control_names(instance.values()))
+        roles = set(module_cls.guides.all_roles)
+        for control, anchor in module_cls.pivot_controls.items():
+            assert control in controls, f"{module_type}: '{control}' is not a control"
+            assert anchor in roles, f"{module_type}: anchor '{anchor}' is not a guide"
+
+
+@pytest.mark.parametrize("module_type", _shipped_module_types())
+def test_every_preset_row_targets_a_movable_control(module_type):
+    """Rule: a module's own default rows never warn out of the box."""
+    assert get_module(module_type)().warnings() == []

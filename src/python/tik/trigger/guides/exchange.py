@@ -86,7 +86,11 @@ class GuideExchangeMixin:
         joints we are short of. They come out correctly named, tagged and
         attributed, because ``GuideDraft`` made them.
         """
-        missing = {role for role in module.guides.roles if role not in present_roles}
+        declared = (
+            *module.guides.roles,
+            *module.pivot_guide_roles(module.values()),
+        )
+        missing = {role for role in declared if role not in present_roles}
         if not missing:
             return {}
         scratch = tm.Transform.create(name="trg_import_scratch_GRP")

@@ -698,3 +698,16 @@ def test_the_scalars_have_a_soft_slider_and_a_wider_hard_range(scene):
         assert cmds.attributeQuery(name, node=node, minimum=True) == [-2.0]
         cmds.setAttr(f"{node}.{name}", 1.6)
         assert abs(cmds.getAttr(f"{node}.{name}") - 1.6) < 1e-6
+
+
+# ------------------------------------------------------------- movable pivot
+def test_the_ik_hand_control_has_a_movable_pivot_with_three_presets(scene):
+    """A planted hand rolls about the fingertips, the knuckles, then the wrist."""
+    ctx = _arm_ctx(scene)
+    ik = ctx.controller_by_role("ik")
+    assert ik.transform["showPivot"].exists()
+    listed = cmds.attributeQuery(
+        "pivotPreset", node=ik.transform.long_name, listEnum=True
+    )[0]
+    assert listed == "default:tip:ball:wrist"
+    assert ctx.controller_by_role("ik_pivot") is not None
