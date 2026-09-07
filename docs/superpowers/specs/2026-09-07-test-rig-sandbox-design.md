@@ -39,9 +39,10 @@ removes what it is about to rebuild.
    containers, buys nothing back.
 4. **Teardown follows build scope.** `Build All` deletes the whole test rig; a scoped build
    deletes only the modules it is about to rebuild.
-5. **A scoped build expands downstream, and upstream only to fill gaps.** Consumers of a
-   rebuilt module are torn down and rebuilt, so the test rig never holds a dangling attach.
-   Producers are pulled in only when they are not already built.
+5. **A scoped build expands downstream to repair, and upstream to fill gaps.** Consumers that
+   are already built are torn down and rebuilt, so the test rig never holds a dangling attach;
+   consumers that are not built are left alone. Producers are pulled in only when they are not
+   already built.
 6. **A pipeline run does not inherit a test rig.** `Runner.run` resets the scene before its
    first step, so `Build` and `Build & Publish` always start clean and no extra code is
    needed. The one gap is `Runner.run(only=...)` — running a single action deliberately skips
@@ -147,8 +148,9 @@ def expand_build_scope(entries, ids, already_built) -> list[str]
 rig — `sandbox` derives it by scanning `trg_instance` tags on the containers under
 `test_rig_grp`, so it is a fact about the scene, never a cached list.
 
-- **Downstream, always.** Every transitive consumer of a module in `ids` joins the scope.
-  They are torn down and rebuilt.
+- **Downstream, to repair.** Every transitive consumer of a module in `ids` **that is already
+  built** joins the scope, and is torn down and rebuilt. A consumer that is *not* built has no
+  attach to dangle, so it is left alone rather than built behind the rigger's back.
 - **Upstream, only to fill gaps.** A transitive producer joins the scope only if it is not in
   `already_built`. The common loop — body built, tweak the arm, rebuild the arm — stays fast,
   and a first build of an arm on its own works instead of failing on a required input.
