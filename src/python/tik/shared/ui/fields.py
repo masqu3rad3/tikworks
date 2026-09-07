@@ -9,13 +9,12 @@ from __future__ import annotations
 from typing import Any, Callable, Iterable, Optional
 
 from tik.core.fields import Field, FieldValidationError, Schema
+from tik.shared.ui.check_list import MISSING_SUFFIX, CheckListEditor
 from tik.shared.ui.collapsible import CollapsibleGroup
 from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 
-#: Appended to a choice the target no longer offers, so a row referencing a
-#: renamed or removed option stays visible instead of being rewritten.
-MISSING_SUFFIX = " (missing)"
+__all__ = ["MISSING_SUFFIX", "CheckListEditor", "FormBuilder"]
 
 
 class _VectorEditor(QtWidgets.QWidget):
@@ -348,76 +347,6 @@ class _TextEditor(QtWidgets.QWidget):
         self.edit.setPlainText(text)
 
 
-class _CheckListEditor(QtWidgets.QWidget):
-    """A tick list for a ``ListField`` that declares ``choices_from``.
-
-    Shows each option by its label and stores its *value*, which is what makes
-    a list of ids editable at all. Options are re-read on every ``set_value``,
-    because the thing being offered -- the session's modules -- changes while
-    the panel is open.
-
-    A stored value nothing offers any more is kept, ticked, and marked with
-    ``MISSING_SUFFIX``. Dropping it would silently shrink whatever the list
-    governs the moment somebody opened the panel.
-    """
-
-    valueChanged = QtCore.Signal(list)  # noqa: N815 - Qt signal naming
-
-    def __init__(self, options: Callable[[], list], parent=None) -> None:
-        super().__init__(parent)
-        self._options = options
-        self._value: list = []
-        self._loading = False
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.list = QtWidgets.QListWidget()
-        self.list.setObjectName("CheckList")
-        self.list.setUniformItemSizes(True)
-        self.list.setMaximumHeight(160)
-        self.list.itemChanged.connect(self._on_item_changed)
-        layout.addWidget(self.list)
-
-    def value(self) -> list:
-        """The ticked values, in the order the options offer them."""
-        return list(self._value)
-
-    def set_value(self, value) -> None:
-        """Show ``value`` as ticks, re-reading the options first."""
-        self._value = [str(item) for item in (value or [])]
-        self._loading = True
-        try:
-            self.list.clear()
-            offered = []
-            for label, item_value in self._options() or []:
-                offered.append(str(item_value))
-                self._add(str(label), str(item_value))
-            for stored in self._value:
-                if stored not in offered:
-                    self._add(f"{stored}{MISSING_SUFFIX}", stored)
-        finally:
-            self._loading = False
-
-    def _add(self, label: str, value: str) -> None:
-        item = QtWidgets.QListWidgetItem(label)
-        item.setData(QtCore.Qt.UserRole, value)
-        item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
-        item.setCheckState(
-            QtCore.Qt.Checked if value in self._value else QtCore.Qt.Unchecked
-        )
-        self.list.addItem(item)
-
-    def _on_item_changed(self, _item) -> None:
-        if self._loading:
-            return
-        ticked = []
-        for row in range(self.list.count()):
-            item = self.list.item(row)
-            if item.checkState() == QtCore.Qt.Checked:
-                ticked.append(item.data(QtCore.Qt.UserRole))
-        self._value = ticked
-        self.valueChanged.emit(list(ticked))
-
-
 class FormBuilder(QtWidgets.QWidget):
     """Form generated from a ``Schema`` object.
 
@@ -462,6 +391,9 @@ class FormBuilder(QtWidgets.QWidget):
         self._collapsed: dict[str, bool] = {}
         self._widgets: dict[str, QtWidgets.QWidget] = {}
         self._labels: dict[str, QtWidgets.QLabel] = {}
+        #: ``{list field name: hidden companion field name}`` for the pickers
+        #: that draw their own "show only selected" box.
+        self._companions: dict[str, str] = {}
         self._target: Optional[Schema] = None
         self.node_picker = node_picker
         self.file_browser = file_browser
@@ -486,6 +418,7 @@ class FormBuilder(QtWidgets.QWidget):
         self._groups.clear()
         self._widgets.clear()
         self._labels.clear()
+        self._companions.clear()
 
     def _clear_layout(self, layout) -> None:
         while layout.count():
@@ -664,10 +597,24 @@ class FormBuilder(QtWidgets.QWidget):
             kind == "list" and getattr(field, "choices_from", "") and self.list_choices
         ):
             source = field.choices_from
-            widget = _CheckListEditor(lambda key=source: self.list_choices(key))
+            widget = CheckListEditor(
+                lambda key=source: self.list_choices(key),
+                filterable=getattr(field, "filterable", False),
+            )
             widget.valueChanged.connect(
                 lambda value, field_name=name: self._on_change(field_name, value)
             )
+            companion = getattr(field, "only_selected_name", "")
+            if companion:
+                # The box is drawn inside the list, but its state is an
+                # ordinary setting: it goes through _on_change like any other,
+                # so it dirties and undoes with the rest of them.
+                self._companions[name] = companion
+                widget.onlySelectedChanged.connect(
+                    lambda value, field_name=companion: self._on_change(
+                        field_name, value
+                    )
+                )
         elif kind == "list":
             widget = QtWidgets.QLineEdit()
             widget.setPlaceholderText("comma separated")
@@ -752,12 +699,15 @@ class FormBuilder(QtWidgets.QWidget):
             widget.blockSignals(True)
             try:
                 self._set_widget_value(widget, value)
+                companion = self._companions.get(name)
+                if companion:
+                    widget.set_only_selected(getattr(self._target, companion))
             finally:
                 widget.blockSignals(False)
 
     @staticmethod
     def _set_widget_value(widget, value) -> None:
-        if isinstance(widget, _CheckListEditor):
+        if isinstance(widget, CheckListEditor):
             widget.set_value(value)
         elif isinstance(widget, QtWidgets.QCheckBox):
             widget.setChecked(bool(value))
