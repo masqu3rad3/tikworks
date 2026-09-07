@@ -174,3 +174,51 @@ def test_regenerate_applies_radius_colour_and_orient_even_when_unposed():
     assert joint.radius == pytest.approx(3.0)
     assert joint.color == 13
     assert tuple(round(value, 3) for value in joint.joint_orient) == (10.0, 20.0, 30.0)
+
+
+def test_preset_guides_draw_under_their_anchor_as_markers():
+    """A preset row draws one locator-styled guide, parented to its anchor."""
+    from tik.trigger.core.manifest import GuideLayout
+    from tik.trigger.core.module import Module
+
+    class Pivoted(Module):
+        guides = GuideLayout("root", "hand")
+        controls = ("ik",)
+        pivot_controls = {"ik": "hand"}
+        pivot_presets = Module.pivot_presets.with_default(
+            [{"control": "ik", "label": label} for label in ("tip", "ball")]
+        )
+
+        def draw_guides(self, guides):
+            root = guides.joint("root", (0, 0, 0))
+            guides.joint("hand", (5, 0, 0), parent=root)
+
+    registry.register_module("pivoted")(Pivoted)
+    try:
+        cmds.file(new=True, force=True)
+        entry = ModuleEntry("pid", "pivoted", "pivoted", "C")
+        module = registry.get_module("pivoted")()
+        expand_guides(
+            entry,
+            module.guides,
+            module.guide_count(),
+            extra=module.pivot_guide_roles(module.values()),
+        )
+
+        created = regenerate.regenerate(entry)
+
+        assert ("pivot_ik_tip", 0) in created
+        assert ("pivot_ik_ball", 0) in created
+        tip = created[("pivot_ik_tip", 0)]
+        anchor = created[("hand", 0)]
+        # parented under the anchor guide, and drawn there
+        assert tip.parent.long_name == anchor.long_name
+        assert list(tip.world_position) == list(anchor.world_position)
+        # a marker: the bone is not drawn, and it carries a locator shape
+        assert tip["drawStyle"].value == 2
+        assert [cmds.nodeType(shape.long_name) for shape in tip.shapes] == ["locator"]
+        # still a joint to every scan in the guide layer
+        assert cmds.nodeType(tip.long_name) == "joint"
+        assert tip.meta.get(tags.ROLE) == "pivot_ik_tip"
+    finally:
+        registry.unregister_module("pivoted")

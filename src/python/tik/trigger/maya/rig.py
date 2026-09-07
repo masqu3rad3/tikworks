@@ -70,8 +70,13 @@ class GuideDraft:
         index: int = 0,
         parent: Any = None,
         radius: float = 1.0,
+        marker: bool = False,
     ) -> tm.Joint:
-        """Create one tagged guide joint; the first one becomes the module root."""
+        """Create one tagged guide joint; the first one becomes the module root.
+
+        ``marker`` draws it as a locator cross rather than a bone -- what a
+        pivot-preset guide wants.
+        """
         if (role, index) in self.created:
             raise GuideError(f"Guide '{role}' [{index}] created twice.")
         is_root = not self.created
@@ -80,7 +85,13 @@ class GuideDraft:
             if parent is None:
                 parent = self.holder
         joint = create_guide_joint(
-            self.module, role, position, index=index, parent=parent, radius=radius
+            self.module,
+            role,
+            position,
+            index=index,
+            parent=parent,
+            radius=radius,
+            marker=marker,
         )
         for declared in self.module.attrs_for_role(role):
             joint[declared.name].create(

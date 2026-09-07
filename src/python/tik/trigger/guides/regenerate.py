@@ -100,7 +100,7 @@ def regenerate(entry: ModuleEntry, document: Optional[GuideDocument] = None) -> 
             cmds.delete([node.long_name for node in existing.values() if node.exists()])
 
         draft = GuideDraft(module, holder, _producer_guide(entry, document))
-        module.draw_guides(draft)
+        module.draw_all_guides(draft)
         created = draft.created
         for record in entry.guides:
             joint = created.get(record.pair)

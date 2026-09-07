@@ -92,7 +92,7 @@ class GuideExchangeMixin:
         scratch = tm.Transform.create(name="trg_import_scratch_GRP")
         try:
             draft = GuideDraft(module, scratch, None)
-            module.draw_guides(draft)
+            module.draw_all_guides(draft)
             role_of = {
                 joint.long_name: role for (role, _index), joint in draft.created.items()
             }

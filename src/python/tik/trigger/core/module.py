@@ -316,6 +316,38 @@ class Module(Schema):
         """Create the default guide layout through ``ctx``."""
         raise NotImplementedError
 
+    def draw_all_guides(self, draft) -> None:
+        """Everything a fresh draw creates: the module's guides, then its presets.
+
+        The draw path calls this, not ``draw_guides``: preset guides follow a
+        settings table rather than the layout, so no module author should have
+        to remember to draw them.
+        """
+        self.draw_guides(draft)
+        self._draw_pivot_guides(draft)
+
+    def _draw_pivot_guides(self, draft) -> None:
+        """One marker guide per pivot-preset row, at its control's anchor guide.
+
+        Stacked on the anchor is deliberate: an unplaced preset should look
+        unplaced, and moving the anchor carries its presets along.
+        """
+        settings = self.values()
+        for row in self.pivot_rows(settings):
+            control, label = row.get("control", ""), row.get("label", "")
+            if not control or not label:
+                continue
+            anchor_role = self.pivot_controls.get(control)
+            anchor = draft.created.get((anchor_role, 0)) if anchor_role else None
+            if anchor is None:
+                continue  # a stale row; Module.warnings() reports it
+            draft.joint(
+                f"pivot_{control}_{label}",
+                tuple(anchor.world_position),
+                parent=anchor,
+                marker=True,
+            )
+
     def wire_guides(self, guides) -> None:
         """Connect a guide rig over already-created guides.
 

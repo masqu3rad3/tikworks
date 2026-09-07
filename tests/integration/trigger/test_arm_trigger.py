@@ -71,6 +71,7 @@ def test_has_only_the_behaviour_fields():
         "squash",
         "pole_pin",
         "anim_spaces",
+        "pivot_presets",
         "limb_lock",
         "lock_from",
         "auto_collar",
