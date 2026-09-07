@@ -309,13 +309,14 @@ controller hung off a main one, with a bool on the main driving its visibility.
 
 ```python
 def pivot_control(
-    self, main: Controller, *, size: Optional[float] = None, shape: str = "Diamond"
+    self, main: Controller, *, size: Optional[float] = None, shape: str = "Sphere"
 ) -> Controller:
     """Give ``main`` a movable pivot, with this module's presets for its role."""
 ```
 
-`Diamond` is the default shape — the control-shape library has no `Pivot` entry
-and a diamond reads as a marker without adding one.
+`Sphere` is the default shape — a pivot is a point, and a sphere is the one
+shape that reads the same from every angle, which is what a marker the animator
+orbits around needs.
 
 What it builds, for a main whose role is `ik`:
 
