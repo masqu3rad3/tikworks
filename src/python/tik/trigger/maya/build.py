@@ -454,8 +454,8 @@ class Builder:
                     node = self.resolve(source, by_key, report, strict=False)
                     if node is None:
                         self.events.log(
-                            f"{instance.key}.{control}_{label}: source '{source}' was not "
-                            f"found; skipped.",
+                            f"{instance.key}.{control}_{label}: "
+                            f"source '{source}' was not found; skipped.",
                             level="warning",
                         )
                         continue

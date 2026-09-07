@@ -1,7 +1,7 @@
 # The Test Rig: Guide Designer builds in their own container
 
 **Date:** 2026-09-07
-**Status:** approved, not yet implemented
+**Status:** implemented
 **Amends:** `2026-09-05-rig-scaffold-and-master-controls-design.md` (decision 1 and section 3)
 and `2026-09-05-draw-and-sync-separation-design.md` (section 7, for the Designer's build only
 — a pipeline build is unchanged). Where this document and those disagree, this one wins;
@@ -30,13 +30,16 @@ removes what it is about to rebuild.
 
 ## 2. Decisions
 
-1. **A test build goes into its own rig**, addressed by its own fixed names, never into
-   `rig_grp`. The real build path is unchanged.
+1. **A test build goes into its own rig**, in its own namespace, never into `rig_grp`. It
+   keeps the real rig's node names -- the namespace is what separates them. The real build
+   path is unchanged.
 2. **Each module in the test rig gets a Maya `dagContainer`**, and teardown is deleting it.
    A container captures every node created while it is current — DAG *and* DG — so the
    utility nodes that a hierarchy delete would strand go with it.
-3. **No namespace.** See section 8; it costs a real problem in the build path and, given
-   containers, buys nothing back.
+3. **The test rig lives in the namespace `trigger_test:`.** Section 8 records why this
+   design first rejected a namespace, and why implementation overturned that: tik.maya
+   resolves nodes through short names in several places, so two rigs sharing short names
+   makes them ambiguous and the build fails.
 4. **Teardown follows build scope.** `Build All` deletes the whole test rig; a scoped build
    deletes only the modules it is about to rebuild.
 5. **A scoped build expands downstream to repair, and upstream to fill gaps.** Consumers that
@@ -72,6 +75,12 @@ Two side-effects worth recording:
 
 - **`ls(type="container")` does not find a `dagContainer`.** Use `ls(type="dagContainer")` or
   `ls(containers=True)`.
+- **`container -e -current False` does not restore an outer container**, it sets the current
+  container to nothing. `sandbox.current` saves and restores the previous value itself.
+- **A `dagContainer` adopts its DAG children as members** even when it is not current, so the
+  root owns the module containers and, transitively, their DG nodes.
+- **An ambiguous short name raises `(kInvalidParameter): Object does not exist`.** This is the
+  finding that forced the namespace; see section 8.
 - **Deleting a producer's container also took the consumer's attach `multMatrix`** (the
   socket transform survived) — Maya cascading through the orphaned utility chain. Harmless
   here, and consistent with decision 5.
@@ -79,14 +88,14 @@ Two side-effects worth recording:
 ## 4. The test scaffold
 
 ```
-|test_rig_grp                    dagContainer, trg_kind = rig_root
-├── test_trigger_grp             trg_kind = rig_trigger
-│   ├── test_preferences_ctrl    controller, trg_kind = preferences
-│   ├── test_visibilities_ctrl   controller, trg_kind = visibilities
-│   ├── body_con                 dagContainer, trg_instance = <uuid>
-│   │   └── body_grp …           the module's four groups, as today
-│   └── L_arm_con                dagContainer, trg_instance = <uuid>
-└── test_geo_grp                 trg_kind = rig_geo
+|trigger_test:rig_grp                  dagContainer, trg_kind = rig_root
+├── trigger_test:trigger_grp           trg_kind = rig_trigger
+│   ├── trigger_test:preferences_ctrl  controller, trg_kind = preferences
+│   ├── trigger_test:visibilities_ctrl controller, trg_kind = visibilities
+│   ├── trigger_test:body_con          dagContainer, trg_instance = <uuid>
+│   │   └── trigger_test:body_grp …    the module's four groups, as today
+│   └── trigger_test:L_arm_con         dagContainer, trg_instance = <uuid>
+└── trigger_test:geo_grp               trg_kind = rig_geo
 ```
 
 `scaffold.py` keeps one private `_ensure(names, events)` and grows a second public entry:
@@ -97,17 +106,19 @@ def ensure_test_rig(events=None) -> RigScaffold:   # new
 def find_test_rig() -> Optional[RigScaffold]:      # new, creates nothing
 ```
 
-The two differ in the name table and in the root being a `dagContainer`. `RigScaffold` gains
-`is_test: bool = False`.
+The two differ only in `ScaffoldNames.namespace` and in the root being a `dagContainer`; the
+five node names are identical. `RigScaffold` gains `is_test: bool = False`, and
+`scaffold.namespace(name)` is the context manager that puts creation inside the namespace and
+restores the previous one in a `finally`.
 
 `wire_preferences` and `wire_tiers` (`maya/build.py`) read `rig.scaffold` and need no change:
-a test build lands its per-module tier enums on `test_visibilities_ctrl` and its visibility
-connections on `test_preferences_ctrl`, never on the real controls.
+a test build lands its per-module tier enums on `trigger_test:visibilities_ctrl` and its
+visibility connections on `trigger_test:preferences_ctrl`, never on the real controls.
 
 This amends decision 1 of the scaffold spec, which now reads: **one *real* rig per scene, and
-it has no name; plus at most one test rig.** Both are addressed by fixed names and confirmed
-by tags. The test rig is created lazily, by the first test build, and is not in the session
-document.
+it has no name; plus at most one test rig, in its own namespace.** Both are addressed by fixed
+names and confirmed by tags. The test rig is created lazily, by the first test build, and is
+not in the session document.
 
 ## 5. Module containers
 
@@ -115,7 +126,8 @@ A new `tik/trigger/maya/sandbox.py` owns the container machinery. It is named `s
 than `test_rig` so that no file under `src/` carries a `test_` prefix.
 
 ```python
-TEST_ROOT = "test_rig_grp"
+TEST_NAMESPACE = "trigger_test"
+TEST_ROOT = "trigger_test:rig_grp"
 
 def module_container(instance_id: str, key: str, parent) -> tm.Transform
 def find_module_container(instance_id: str)                 # by trg_instance tag
@@ -131,9 +143,10 @@ out of a failed build.
 `_connect_one` and space wiring. Attach constraints therefore belong to the *consumer* and
 die with it — which is what makes decision 5 sound. Module code and tik.maya are untouched.
 
-Teardown of one module is `cmds.delete(container)` plus removing that module's enum from
-`test_visibilities_ctrl` (`tier_attr_name(key)`), which is an attribute on the scaffold
-control rather than a node in the container.
+Teardown of one module is `cmds.delete(container)` plus removing that module's enum from the
+test rig's `visibilities_ctrl` (`tier_attr_name(key)`), which is an attribute on the scaffold
+control rather than a node in the container. The display key is read from a `trg_name` tag on
+the container, never parsed back off its node name, so a rename cannot strand the enum.
 
 ## 6. Scope
 
@@ -146,7 +159,7 @@ def expand_build_scope(entries, ids, already_built) -> list[str]
 
 `already_built` is the set of instance ids that currently have a module container in the test
 rig — `sandbox` derives it by scanning `trg_instance` tags on the containers under
-`test_rig_grp`, so it is a fact about the scene, never a cached list.
+`trigger_test:rig_grp`, so it is a fact about the scene, never a cached list.
 
 - **Downstream, to repair.** Every transitive consumer of a module in `ids` **that is already
   built** joins the scope, and is torn down and rebuilt. A consumer that is *not* built has no
@@ -169,31 +182,43 @@ It gains an `under: Optional[str] = None` parameter — a long-path prefix. Ever
 bind joint, so the test is exact and cheap. `Builder` passes the root it is building into,
 whichever that is, which closes the same ambiguity for the real build.
 
-## 8. Why there is no namespace
+## 8. The namespace: rejected, then required
 
-A `trigger_test:` namespace was the obvious first answer and is the wrong one.
+This design first rejected a namespace. Implementation proved that wrong, and the reversal is
+worth recording because both halves of the argument are true.
 
-`cmds.ls` with a wildcard **does not cross namespace boundaries**:
+**Why it was rejected.** `cmds.ls` with a wildcard does not cross namespace boundaries:
 
 ```
 ls("*.trg_kind")                 → ['root_tagged']                      ← namespaced node missed
 ls("*.trg_kind", recursive=True) → ['nstest:ns_tagged', 'root_tagged']
 ```
 
-`find_instances` and `find_output` both scan with exactly that pattern (`guides/nodes.py:56`,
-`:259`). Put the test rig in a namespace and `find_output` stops seeing its outputs, so
-`_earlier_pass_output` returns `None` and every cross-module connection inside the test rig
-fails with an `AttachError`. The repair would be `recursive=True` in shared build-path code —
-which then makes those scans see *everything everywhere*, reintroducing the ambiguity of
-section 7 in the one place the real build depends on.
+`find_output` scans with exactly that pattern (`guides/nodes.py:67`). Namespace the test rig
+and it stops seeing the test rig's own outputs, so `_earlier_pass_output` returns `None` and
+every cross-module connection inside the test rig fails with an `AttachError`.
 
-Against that, the namespace's remaining jobs are all covered:
+**Why it turned out to be required.** The claim that replaced it — that DAG nodes under
+different parents may share a short name harmlessly — is false. `Node.__str__` returns the
+**short** name (`tik/maya/core/node.py:193`), and `create_node_with_dag_modifier` resolves a
+parent through `MSelectionList.add(str(parent))` (`tik/maya/core/apicommon.py:72`). With a real
+rig and a test rig both built, `L_arm_arm_puppet_grp` exists twice, that name is ambiguous, and
+Maya raises `(kInvalidParameter): Object does not exist`. Measured, not theorised: the
+integration test `test_a_test_build_does_not_touch_a_built_real_rig` failed on exactly this.
 
-| Job | Covered by |
-|---|---|
-| Wholesale teardown | Deleting the root container (measured: 17 nodes, one call) |
-| Short-name collisions | DAG nodes under different parents may share a short name; DG nodes auto-uniquify harmlessly. The one genuine clash, the scaffold root, is solved by the `test_` names of section 4 |
-| "This is throwaway" | The container node and its `trg_kind` tag say it more plainly than a prefix |
+Fixing tik.maya instead was tried and rejected on evidence. Teaching `normalize_mobject` to use
+the wrapper's own `MObject` moved the failure to `tik/maya/types/ikhandle.py:37`, where a
+wrapper is built from a short name `cmds.ikHandle` returned. Maya's own commands hand back
+short names, so every wrapper construction site is a candidate. The namespace makes short names
+unique by construction and needs no change to tik.maya at all.
+
+**The two mechanisms need each other.** `find_output` gains `recursive=True` so it can see
+across the boundary, which is safe *precisely because* section 7 also scopes it with `under=`.
+Either alone is unsound; together they are exact. Guides are unaffected either way — they live
+in the root namespace, so `find_instances` never had a boundary to cross.
+
+Teardown gains from it too: `clear()` is `namespace -removeNamespace -deleteNamespaceContent`,
+which takes the scaffold, the module containers and every DG node any of them created.
 
 ## 9. Entry points
 
@@ -213,7 +238,7 @@ pull a module into scope.
 
 **Integration, Maya** — `tests/integration/trigger/test_test_rig_trigger.py`:
 
-- a test build creates `test_rig_grp` and leaves `rig_grp` absent;
+- a test build creates `trigger_test:rig_grp` and leaves `rig_grp` absent;
 - with a real rig already built, a test build does not add, remove or alter one node under
   `rig_grp`, and adds no enum to the real `visibilities_ctrl`;
 - a module's `dagContainer` holds its DG utility nodes as well as its DAG hierarchy;

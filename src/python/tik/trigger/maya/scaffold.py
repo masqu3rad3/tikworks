@@ -147,9 +147,7 @@ def _ensure_group(
     inside that namespace already, so only the *lookup* needs it spelled out.
     """
     addressed = f"{prefix}{name}"
-    path = (
-        f"{parent.long_name}|{addressed}" if parent is not None else f"|{addressed}"
-    )
+    path = f"{parent.long_name}|{addressed}" if parent is not None else f"|{addressed}"
     if cmds.objExists(path):
         node = tm.Transform(path)
         if node.meta.get(tags.KIND) != kind:

@@ -156,7 +156,5 @@ def clear() -> bool:
     if active == f":{TEST_NAMESPACE}":
         # Removing the current namespace is an error; step out of it first.
         cmds.namespace(set=":")
-    cmds.namespace(
-        removeNamespace=f":{TEST_NAMESPACE}", deleteNamespaceContent=True
-    )
+    cmds.namespace(removeNamespace=f":{TEST_NAMESPACE}", deleteNamespaceContent=True)
     return True

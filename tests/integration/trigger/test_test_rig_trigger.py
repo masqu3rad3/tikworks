@@ -277,9 +277,7 @@ def test_a_scoped_build_rebuilds_a_built_consumer():
     session.guides.test_build()
     session.guides.test_build(body)
 
-    sockets = (
-        cmds.ls("trigger_test:L_arm_*socket*", long=True, type="transform") or []
-    )
+    sockets = cmds.ls("trigger_test:L_arm_*socket*", long=True, type="transform") or []
     assert sockets
     drivers = cmds.listConnections(sockets[0], source=True, destination=False) or []
     assert drivers, "the rebuilt arm lost its attach"
