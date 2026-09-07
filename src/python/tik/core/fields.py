@@ -133,6 +133,24 @@ class Field:
             "last": self.last,
         }
 
+    def with_default(self, default: Any) -> "Field":
+        """A copy of this field holding a different default.
+
+        For a subclass that keeps a base field's shape -- its columns, group,
+        help and ordering -- and changes only what it starts out holding.
+        Restating the whole declaration to move a default would duplicate it in
+        every subclass and drift the moment the shape changes.
+
+        Args:
+            default: The new default, validated the way an assignment would be.
+
+        Returns:
+            Field: A new field of the same type; this one is untouched.
+        """
+        clone = copy.copy(self)
+        clone.default = clone.validate(default)
+        return clone
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.name!r}, default={self.default!r})"
 
