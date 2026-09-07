@@ -452,3 +452,11 @@ class TestSettingsActuallyOpens:
         monkeypatch.setattr(PrefsDialog, "exec", lambda self: shown.append(True))
         window.open_settings(exec_=False).close()
         assert shown == []
+
+
+def test_tools_offers_switches_and_not_the_old_modal_dialog(window):
+    """The dock replaces the dialog: two ways to do one thing, one of them
+    taking the viewport away, is what the dock exists to end."""
+    labels = [action.text() for action in menu(window, "&Tools").actions()]
+    assert "Switches" in labels
+    assert not any("Switch Pivot" in text for text in labels)

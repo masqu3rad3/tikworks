@@ -447,7 +447,7 @@ class TriggerWindow(MayaToolWindow):
             checkable=True,
         )
         tools_menu.addSeparator()
-        self._action(tools_menu, "Switch Pivot (Preserve)…", self.switch_pivot_preset)
+        self._action(tools_menu, "Switches", self.open_switches)
 
     def _build_help_menu(self, help_menu) -> None:
         self._action(help_menu, "Documentation", self.open_docs)
@@ -865,41 +865,15 @@ class TriggerWindow(MayaToolWindow):
         if self.script_dock.isVisible():
             self._refresh_script_viewer()
 
-    def switch_pivot_preset(self) -> None:
-        """Switch the selected controls' pivot preset without moving them.
+    def open_switches(self) -> None:
+        """Open the animator's Switches dock.
 
-        A live network cannot hold the pose across a pivot change -- the
-        compensation cancels the pivot itself -- so this does it once, here.
+        A separate, non-modal window rather than a panel in here: it works on a
+        built rig with no session, and the import boundary keeps it that way.
         """
-        from tik.trigger.maya import pivot as pivot_tool
+        from tik.trigger import anim
 
-        selected = self._selected_pivot_controls()
-        if not selected:
-            Feedback(self).pop_warning(
-                title="Switch Pivot",
-                text="Select a control that has pivot presets.",
-            )
-            return
-        labels = pivot_tool.preset_labels(selected[0])
-        choice = Feedback(self).ask_choice("Switch Pivot", "Pivot preset:", labels)
-        if choice is None:
-            return
-        for node in selected:
-            pivot_tool.switch_pivot_preset(node, choice, key=True)
-
-    @staticmethod
-    def _selected_pivot_controls() -> list:
-        """Selected transforms carrying a ``pivotPreset``, in selection order."""
-        if not HAS_MAYA:
-            return []
-        import tik.maya as tm
-        from tik.trigger.maya import pivot as pivot_tool
-
-        return [
-            node
-            for node in (tm.ls(selection=True, type="transform") or [])
-            if pivot_tool.preset_labels(node)
-        ]
+        anim.show()
 
     def _refresh_script_viewer(self) -> None:
         view = self.current_view

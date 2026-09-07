@@ -323,8 +323,7 @@ class SwitchesWindow(MayaToolWindow):
             events=("SelectionChanged", "Undo", "Redo"),
             parent=self,
         )
-        self._watcher.install()
-        for job in getattr(self._watcher, "jobs", ()):
+        for job in self._watcher.install():
             self.register_script_job(job)
         self.set_context(SwitchContext.from_scene())
 
