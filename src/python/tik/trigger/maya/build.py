@@ -220,6 +220,10 @@ class Builder:
         #: Display key -> instance id for every module in the document, so a
         #: pass can name a producer an earlier pass built. Filled by ``build``.
         self._keys_to_ids: dict = {}
+        #: Long path of the scaffold root this build is building into. A scene
+        #: can hold the real rig and the test rig at once, so an earlier-pass
+        #: lookup has to say which one it means.
+        self._root_path: str = ""
 
     @staticmethod
     def order(instances: list[ModuleInstance]) -> list[ModuleInstance]:
@@ -254,6 +258,7 @@ class Builder:
 
         with guide_nodes.undo_chunk("Trigger build"):
             report.scaffold = ensure_rig(self.events)
+            self._root_path = report.scaffold.root.long_name
 
             # Producers must be built before consumers: rig.bind_parent is
             # resolved from the producer's output, so bind joints can be created
@@ -391,7 +396,9 @@ class Builder:
         instance_id = self._keys_to_ids.get(key)
         if instance_id is None:
             return None
-        return guide_nodes.find_output(instance_id, output)
+        return guide_nodes.find_output(
+            instance_id, output, under=self._root_path or None
+        )
 
     def resolve(
         self,
