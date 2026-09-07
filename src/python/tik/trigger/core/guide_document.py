@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Sequence
 
 SCHEMA_VERSION = 2
 
@@ -395,16 +395,27 @@ class GuideDocument:
         )
 
 
-def expand_guides(entry: ModuleEntry, layout, count: int) -> None:
-    """Match ``entry.guides`` to ``layout.expand(count)``, keeping authored poses.
+def expand_guides(
+    entry: ModuleEntry, layout, count: int, extra: Sequence[str] = ()
+) -> None:
+    """Match ``entry.guides`` to ``layout.expand(count)`` plus ``extra``.
 
     The document-side answer to a settings change that adds or removes guides
-    (``fkchain.segments`` 3 -> 5). Survivors keep their records untouched; new
-    pairs arrive unposed, so regenerate places them at their ``draw_guides``
-    position rather than at the origin.
+    (``fkchain.segments`` 3 -> 5, or a pivot-preset row added or dropped).
+    Survivors keep their records untouched; new pairs arrive unposed, so
+    regenerate places them at their ``draw_guides`` position rather than at the
+    origin.
+
+    Args:
+        entry: The document entry to rewrite.
+        layout: The module's ``GuideLayout``.
+        count: Number of multi-role guides.
+        extra: Single-index roles appended after the layout's own -- the pivot
+            preset guides, whose set follows a settings table rather than the
+            layout.
     """
     existing = {record.pair: record for record in entry.guides}
+    pairs = layout.expand(count) + [(role, 0) for role in extra]
     entry.guides = [
-        existing.get(pair) or GuideRecord(role=pair[0], index=pair[1])
-        for pair in layout.expand(count)
+        existing.get(pair) or GuideRecord(role=pair[0], index=pair[1]) for pair in pairs
     ]

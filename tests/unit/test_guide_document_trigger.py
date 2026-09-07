@@ -174,3 +174,26 @@ def test_expand_guides_keeps_fixed_roles():
     expand_guides(entry, layout, 0)
     assert entry.pairs == [("collar", 0), ("shoulder", 0), ("elbow", 0), ("hand", 0)]
     assert entry.guide("collar").position == (1.0, 0.0, 0.0)
+
+
+def test_expand_guides_appends_extra_roles_and_keeps_their_poses():
+    entry = ModuleEntry(instance_id="one", module_type="toy", name="toy")
+    layout = GuideLayout("root", "hand")
+    expand_guides(entry, layout, 0, extra=("pivot_ik_tip", "pivot_ik_ball"))
+    assert entry.pairs == [
+        ("root", 0),
+        ("hand", 0),
+        ("pivot_ik_tip", 0),
+        ("pivot_ik_ball", 0),
+    ]
+
+    entry.guide("pivot_ik_tip", 0).position = (1.0, 2.0, 3.0)
+    # dropping the 'ball' row leaves 'tip' untouched
+    expand_guides(entry, layout, 0, extra=("pivot_ik_tip",))
+    assert entry.pairs == [("root", 0), ("hand", 0), ("pivot_ik_tip", 0)]
+    assert entry.guide("pivot_ik_tip", 0).position == (1.0, 2.0, 3.0)
+
+    # re-adding it restores the record, unposed, without disturbing 'tip'
+    expand_guides(entry, layout, 0, extra=("pivot_ik_tip", "pivot_ik_ball"))
+    assert entry.guide("pivot_ik_tip", 0).position == (1.0, 2.0, 3.0)
+    assert entry.guide("pivot_ik_ball", 0).posed is False

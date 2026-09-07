@@ -309,7 +309,12 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
             settings=module.values(),
             inputs=resolved,
         )
-        expand_guides(entry, module.guides, module.guide_count())
+        expand_guides(
+            entry,
+            module.guides,
+            module.guide_count(),
+            extra=module.pivot_guide_roles(module.values()),
+        )
         for pose in poses or []:
             record = entry.guide(pose.role, pose.index)
             if record is not None:
@@ -479,7 +484,12 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         )
         with nodes.undo_chunk("Trigger module settings"):
             entry.settings = module.values()
-            expand_guides(entry, module.guides, module.guide_count())
+            expand_guides(
+                entry,
+                module.guides,
+                module.guide_count(),
+                extra=module.pivot_guide_roles(module.values()),
+            )
             self._apply(entry)
 
     def _root_node(self, instance_id: str):
@@ -758,7 +768,12 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
                 settings=instance.settings,
             )
             existing_entry.settings = module.values()
-            expand_guides(existing_entry, module.guides, module.guide_count())
+            expand_guides(
+                existing_entry,
+                module.guides,
+                module.guide_count(),
+                extra=module.pivot_guide_roles(module.values()),
+            )
             existing_entry.inputs = {
                 name: self.source_as_id(
                     mirror_source(source, handle.side.value, target_side.value)
