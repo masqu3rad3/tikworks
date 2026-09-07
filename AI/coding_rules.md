@@ -274,6 +274,19 @@ it created, minus tweaks and pivots. A control the module forgot to declare is i
 in the anim-space table — which is exactly how `fkchain` and `ribbon` once
 shipped with animation spaces that could not be used at all.
 
+### Animator switches
+
+A switch changes what a control *does*, and the pose survives it. That is the
+whole entry test for a tab in the Switches dock (`tik/trigger/anim`): name what
+it promises not to disturb, or it is not a switch. A tab is a
+`@register_switch` class supplying `states` / `current` / `apply`; the scene
+work is a plain function in `tik/trigger/maya`, so a shelf button can call it
+without opening a window, and the shell itself never touches Maya.
+
+**An animator tool reads the rig, never the session.** `trigger/anim` may not
+import `trigger.session`, the documents, the guides or `trigger.ui` --
+everything a switch needs is already on the built nodes.
+
 **The boundary rule:** `rig` owns naming, tagging, group placement and
 registration. tik.maya owns the mechanism. A helper earns a place on `rig` only
 when it removes naming, tagging, placement or registration boilerplate — which
