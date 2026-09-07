@@ -31,6 +31,18 @@ FORBIDDEN = {
     "trigger/maya": PREFS,
     "trigger/actions": PREFS,
     "trigger/guides": PREFS,
+    #: An animator tool reads the rig, never the session. Everything a switch
+    #: needs is already on the built nodes -- the pivotPreset enum, the trg_*
+    #: tags -- so this costs nothing, and it keeps the rigger's application and
+    #: the animator's tools from entangling whatever either grows into.
+    "trigger/anim": (
+        "tik.trigger.session",
+        "tik.trigger.core.document",
+        "tik.trigger.core.guide_document",
+        "tik.trigger.guides",
+        "tik.trigger.ui",
+    )
+    + PREFS,
 }
 
 
