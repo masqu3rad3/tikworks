@@ -26,6 +26,8 @@ GEO_GRP = "geo_grp"
 PREFERENCES_CTRL = "preferences_ctrl"
 VISIBILITIES_CTRL = "visibilities_ctrl"
 
+TEST_ROOT = "test_rig_grp"
+
 DISPLAY_MODES = ("normal", "template", "reference")  # == overrideDisplayType 0/1/2
 
 #: (name, attr_type, default, kwargs) in channel-box order. A separator row
@@ -43,15 +45,44 @@ PREFERENCE_ATTRS = (
 DISPLAY_SEPARATOR = "display_"
 
 
+@dataclass(frozen=True)
+class ScaffoldNames:
+    """The fixed names of one scaffold, and whether it is the throwaway one."""
+
+    root: str
+    trigger: str
+    geo: str
+    preferences: str
+    visibilities: str
+    is_test: bool = False
+
+
+REAL_NAMES = ScaffoldNames(
+    RIG_GRP, TRIGGER_GRP, GEO_GRP, PREFERENCES_CTRL, VISIBILITIES_CTRL
+)
+#: The Guide Designer's throwaway rig. Its root is a ``dagContainer`` so that
+#: deleting it takes every module container's DG nodes with it.
+TEST_NAMES = ScaffoldNames(
+    TEST_ROOT,
+    "test_trigger_grp",
+    "test_geo_grp",
+    "test_preferences_ctrl",
+    "test_visibilities_ctrl",
+    is_test=True,
+)
+
+
 @dataclass
 class RigScaffold:
-    """The fixed nodes of the one rig in the scene."""
+    """The fixed nodes of one rig in the scene."""
 
     root: Any  # rig_grp
     trigger: Any  # trigger_grp
     geo: Any  # geo_grp
     preferences: Controller
     visibilities: Controller
+    #: True for the Guide Designer's throwaway rig, which is never published.
+    is_test: bool = False
 
 
 def _log(events, message: str, level: str = "warning") -> None:
@@ -66,14 +97,26 @@ def _lock_channels(node) -> None:
         plug.visible = False
 
 
-def _ensure_group(name: str, parent, kind: str, events) -> tm.Transform:
-    """The transform ``name`` under ``parent`` (None = world), tagged ``kind``."""
+def _ensure_group(
+    name: str, parent, kind: str, events, container: bool = False
+) -> tm.Transform:
+    """The transform ``name`` under ``parent`` (None = world), tagged ``kind``.
+
+    ``container`` creates it as a ``dagContainer`` -- a transform subtype that
+    also *owns* the nodes created while it is current, DG ones included. That
+    ownership is what makes the test rig's teardown complete, and it extends to
+    the container's DAG children, so deleting this root takes the module
+    containers and their utility nodes with it.
+    """
     path = f"{parent.long_name}|{name}" if parent is not None else f"|{name}"
     if cmds.objExists(path):
         node = tm.Transform(path)
         if node.meta.get(tags.KIND) != kind:
             _log(events, f"Adopted existing '{name}' as the rig's {kind}.")
             node.meta[tags.KIND] = kind
+    elif container:
+        node = tm.resolve(cmds.container(type="dagContainer", name=name))
+        node.meta[tags.KIND] = kind
     else:
         node = tm.Transform.create(
             name=name, parent=parent.long_name if parent is not None else None
@@ -138,16 +181,18 @@ def _wire_geo(control: Controller, geo) -> None:
         prefs["geoDisplay"] >> geo["overrideDisplayType"]
 
 
-def ensure_rig(events: Optional[Any] = None) -> RigScaffold:
-    """The scaffold, created or healed. Safe to call before every step."""
-    root = _ensure_group(RIG_GRP, None, tags.RIG_ROOT, events)
-    trigger = _ensure_group(TRIGGER_GRP, root, tags.RIG_TRIGGER, events)
-    geo = _ensure_group(GEO_GRP, root, tags.RIG_GEO, events)
+def _ensure(names: ScaffoldNames, events: Optional[Any] = None) -> RigScaffold:
+    """The scaffold ``names`` describes, created or healed."""
+    root = _ensure_group(
+        names.root, None, tags.RIG_ROOT, events, container=names.is_test
+    )
+    trigger = _ensure_group(names.trigger, root, tags.RIG_TRIGGER, events)
+    geo = _ensure_group(names.geo, root, tags.RIG_GEO, events)
     preferences = _ensure_control(
-        PREFERENCES_CTRL, trigger, tags.PREFERENCES, "P", events, size=1.0
+        names.preferences, trigger, tags.PREFERENCES, "P", events, size=1.0
     )
     visibilities = _ensure_control(
-        VISIBILITIES_CTRL, trigger, tags.VISIBILITIES, "Cog", events, size=0.5
+        names.visibilities, trigger, tags.VISIBILITIES, "Cog", events, size=0.5
     )
     # move the preferences a bit higher
     visibilities.transform["translateX"].set(1)
@@ -159,11 +204,36 @@ def ensure_rig(events: Optional[Any] = None) -> RigScaffold:
         geo=geo,
         preferences=preferences,
         visibilities=visibilities,
+        is_test=names.is_test,
     )
 
 
+def ensure_rig(events: Optional[Any] = None) -> RigScaffold:
+    """The one real scaffold, created or healed. Safe before every step."""
+    return _ensure(REAL_NAMES, events)
+
+
+def ensure_test_rig(events: Optional[Any] = None) -> RigScaffold:
+    """The Guide Designer's throwaway scaffold, created or healed.
+
+    A second rig, deliberately: a mock-up must never land its module groups in
+    the real ``trigger_grp`` or its per-module tier enums on the real
+    ``visibilities_ctrl``. It is created lazily by the first test build, is not
+    in the session document, and is never published.
+    """
+    return _ensure(TEST_NAMES, events)
+
+
 def find_rig() -> Optional[RigScaffold]:
-    """The scaffold if the scene has one, without creating anything."""
+    """The real scaffold if the scene has one, without creating anything."""
     if not cmds.objExists(f"|{RIG_GRP}|{TRIGGER_GRP}|{PREFERENCES_CTRL}"):
         return None
     return ensure_rig()
+
+
+def find_test_rig() -> Optional[RigScaffold]:
+    """The test scaffold if the scene has one, without creating anything."""
+    path = f"|{TEST_NAMES.root}|{TEST_NAMES.trigger}|{TEST_NAMES.preferences}"
+    if not cmds.objExists(path):
+        return None
+    return ensure_test_rig()

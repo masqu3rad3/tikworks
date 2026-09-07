@@ -25,6 +25,8 @@ _LAZY = {
     "RigGroups": ".rig",
     "RigScaffold": ".scaffold",
     "ensure_rig": ".scaffold",
+    "ensure_test_rig": ".scaffold",
+    "find_test_rig": ".scaffold",
     "find_rig": ".scaffold",
 }
 
