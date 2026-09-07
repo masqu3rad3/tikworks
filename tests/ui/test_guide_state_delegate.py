@@ -2,11 +2,13 @@
 
 import pytest
 
+from tik.shared.ui import theme
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.trigger.ui.designer.delegates import DrawStateRole, GuideStateDelegate
-from tik.trigger.ui.draw_state import DRAWN, NOT_DRAWN, STALE
+from tik.trigger.ui.draw_state import DRAWN, NOT_DRAWN, STALE, STALE_INK
 
-ACCENT = "#fe7e00"
+AMBER = STALE_INK.lower()
+ACCENT = theme.ACCENT.lower()
 
 
 @pytest.fixture
@@ -41,14 +43,24 @@ def painted(qapp):
     return _paint
 
 
-def test_out_of_date_paints_the_accent(painted):
-    assert ACCENT in painted(STALE)
+def test_out_of_date_paints_the_warning_ink(painted):
+    assert AMBER in painted(STALE)
 
 
-def test_drawn_and_not_drawn_never_paint_the_accent(painted):
-    """Orange is reserved for 'the scene contradicts the session'."""
-    assert ACCENT not in painted(DRAWN)
-    assert ACCENT not in painted(NOT_DRAWN)
+def test_no_state_ever_paints_the_brand_accent(painted):
+    """The accent means selected / focused / running.
+
+    Wearing it for a warning made the one state that wants attention look
+    like the one state that already has it.
+    """
+    for state in (DRAWN, NOT_DRAWN, STALE):
+        assert ACCENT not in painted(state)
+
+
+def test_drawn_and_not_drawn_never_paint_the_warning_ink(painted):
+    """Amber is reserved for 'the scene contradicts the session'."""
+    assert AMBER not in painted(DRAWN)
+    assert AMBER not in painted(NOT_DRAWN)
 
 
 def test_the_three_states_paint_differently(painted):

@@ -10,7 +10,7 @@ drift into disagreeing about what is in the scene.
                  not damage, and never coloured as a warning.
     drawn        the joints match the document's structure.
     out of date  the joints are there and no longer match. Only this one earns
-                 the accent: the scene *contradicts* the session.
+                 a warning colour: the scene *contradicts* the session.
 """
 
 from __future__ import annotations
@@ -19,12 +19,23 @@ NOT_DRAWN = "not_drawn"
 DRAWN = "drawn"
 STALE = "stale"
 
+#: Amber, and deliberately not ``theme.ACCENT``. The accent is what selection,
+#: focus and a running step are painted in -- the app's "this is active" ink --
+#: so wearing it for a warning made the one state that wants attention look
+#: like the one state that has it. Amber rather than red because an out-of-date
+#: guide is not a failure: it is the normal consequence of changing a setting,
+#: it is on screen constantly while rigging, and red is already what a *failed*
+#: pipeline step means. It is also brighter than the palette's own golds
+#: (module ``body`` #c9a24a, side C #d4b04a) on purpose, so it separates from a
+#: module tint it may sit against.
+STALE_INK = "#EDC13A"
+
 #: Marker colour per state. NOT_DRAWN is stroked as a ring rather than filled
 #: -- an outline for something that is not there reads before any legend does.
 COLORS = {
     NOT_DRAWN: "#5a5a5a",
     DRAWN: "#3f3f3f",
-    STALE: "#FE7E00",
+    STALE: STALE_INK,
 }
 
 #: Text colour for a row whose module has no rendering.
