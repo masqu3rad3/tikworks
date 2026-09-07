@@ -234,3 +234,79 @@ def test_switch_pivot_preset_rejects_a_control_with_no_presets():
     assert preset_labels(pivot) == []
     with pytest.raises(ValueError):
         switch_pivot_preset(pivot, "tip")
+
+
+# ------------------------------------------------------- switching a range
+def test_key_times_unions_every_channel():
+    from tik.trigger.maya.pivot import key_times
+
+    ctx = _build("pivot_toy", {"pivot_main_tip": (9.0, 0.0, 0.0)})
+    main = ctx.controller_by_role("main")
+    cmds.setKeyframe(main.transform.long_name, attribute="translateX", time=1)
+    cmds.setKeyframe(main.transform.long_name, attribute="translateX", time=20)
+    cmds.setKeyframe(main.transform.long_name, attribute="rotateY", time=10)
+    cmds.setKeyframe(main.transform.long_name, attribute="rotateY", time=40)
+
+    assert key_times(main, 1, 30) == (1.0, 10.0, 20.0)
+
+
+def test_switch_over_a_range_holds_the_pose_at_every_key():
+    from tik.trigger.maya.pivot import switch_pivot_preset
+
+    ctx = _build(
+        "pivot_toy",
+        {"pivot_main_tip": (9.0, 0.0, 0.0), "pivot_main_ball": (7.0, 0.0, 0.0)},
+    )
+    main = ctx.controller_by_role("main")
+    main.transform["pivotPreset"].value = 1
+    for time, angle in ((1, 0.0), (12, 35.0), (24, -20.0)):
+        cmds.currentTime(time)
+        main.transform.rotate = (0.0, angle, 0.0)
+        cmds.setKeyframe(main.transform.long_name, attribute=["translate", "rotate"])
+
+    before = {}
+    for time in (1, 12, 24):
+        cmds.currentTime(time)
+        before[time] = [round(value, 4) for value in main.transform.world_matrix]
+
+    switch_pivot_preset(main, "ball", key=True, times=(1.0, 12.0, 24.0))
+
+    for time in (1, 12, 24):
+        cmds.currentTime(time)
+        assert [round(value, 4) for value in main.transform.world_matrix] == before[
+            time
+        ]
+    assert main.transform["pivotPreset"].value == 2
+
+
+def test_the_preset_enum_is_keyed_once_and_stepped():
+    from tik.trigger.maya.pivot import switch_pivot_preset
+
+    ctx = _build("pivot_toy", {"pivot_main_tip": (9.0, 0.0, 0.0)})
+    main = ctx.controller_by_role("main")
+    path = main.transform.long_name + ".pivotPreset"
+    switch_pivot_preset(main, "tip", key=True, times=(3.0, 9.0, 15.0))
+
+    assert cmds.keyframe(path, query=True, timeChange=True) == [3.0]
+    assert cmds.keyTangent(path, query=True, outTangentType=True) == ["step"]
+
+
+def test_switch_without_key_leaves_no_keys():
+    from tik.trigger.maya.pivot import switch_pivot_preset
+
+    ctx = _build("pivot_toy", {"pivot_main_tip": (9.0, 0.0, 0.0)})
+    main = ctx.controller_by_role("main")
+    switch_pivot_preset(main, "tip", key=False, times=(1.0, 5.0))
+
+    assert not cmds.keyframe(main.transform.long_name, query=True, timeChange=True)
+
+
+def test_current_preset_reads_the_label():
+    from tik.trigger.maya.pivot import current_preset
+
+    ctx = _build("pivot_toy", {"pivot_main_tip": (9.0, 0.0, 0.0)})
+    main = ctx.controller_by_role("main")
+    assert current_preset(main) == "default"
+    main.transform["pivotPreset"].value = 2
+    assert current_preset(main) == "ball"
+    assert current_preset(_pivot(ctx)) is None

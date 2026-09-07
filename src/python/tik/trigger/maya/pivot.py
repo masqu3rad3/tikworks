@@ -54,6 +54,51 @@ def preset_labels(control) -> list[str]:
     return listed[0].split(":") if listed else []
 
 
+def current_preset(control) -> Optional[str]:
+    """The preset label ``control`` is currently on, or None when it has none.
+
+    Args:
+        control: A controller, transform or node name.
+
+    Returns:
+        str: The label, or None when the control has no pivot presets.
+    """
+    node = _transform(control)
+    labels = preset_labels(node)
+    if not labels:
+        return None
+    index = int(node[PRESET_ATTR].value)
+    return labels[index] if 0 <= index < len(labels) else None
+
+
+def playback_range() -> tuple[float, float]:
+    """The playback start and end, as the timeline shows them."""
+    return (
+        float(tm.playbackOptions(query=True, minTime=True)),
+        float(tm.playbackOptions(query=True, maxTime=True)),
+    )
+
+
+def key_times(control, start: float, end: float) -> tuple[float, ...]:
+    """Keyframe times on any keyable channel of ``control`` within the range.
+
+    The union across *all* channels, not just translation: once the pivot
+    moves, every later pose depends on it, so a control keyed only on rotation
+    still needs its translation corrected at those times.
+
+    Args:
+        control: A controller, transform or node name.
+        start: First frame of the range, inclusive.
+        end: Last frame of the range, inclusive.
+
+    Returns:
+        tuple[float, ...]: Sorted, de-duplicated times.
+    """
+    node = _transform(control)
+    found = tm.keyframe(node.long_name, query=True, timeChange=True) or []
+    return tuple(sorted({float(time) for time in found if start <= time <= end}))
+
+
 def _preset_index(node, preset: Union[str, int], labels: Sequence[str]) -> int:
     """Resolve ``preset`` to an enum index, raising when it names nothing."""
     if isinstance(preset, bool) or not isinstance(preset, (str, int)):
@@ -71,21 +116,27 @@ def _preset_index(node, preset: Union[str, int], labels: Sequence[str]) -> int:
 
 @undo
 def switch_pivot_preset(
-    control, preset: Union[str, int], key: bool = False
-) -> Optional[str]:
-    """Set ``control``'s pivot preset while holding its current pose.
+    control, preset: Union[str, int], key: bool = False, times=None
+) -> str:
+    """Set ``control``'s pivot preset while holding its pose.
 
-    Reads where the control sits in its parent's space, switches the preset,
-    then writes ``translate`` so it lands back there. Rotation applied *after*
-    the switch swings about the new pivot, which is the point.
+    A ``rotatePivot`` change displaces the control by a constant translation in
+    its parent's space, so correcting ``translate`` by the parent-space delta
+    puts it back exactly. Over several ``times`` the correction is redone at
+    each, because every pose after the switch depends on the new pivot.
 
     Args:
         control: A controller, transform or node name carrying ``pivotPreset``.
         preset: A preset label or its enum index.
-        key: Set a key on ``pivotPreset`` and ``translate`` afterwards.
+        key: Key ``translate`` at each corrected time, and the preset once, at
+            the first. That single stepped key sets the preset for the whole
+            curve, so a range that starts partway through an existing
+            animation changes the pivot for the frames before it too, with no
+            correction there.
+        times: Times to correct at; ``None`` means the current frame only.
 
     Returns:
-        str: The label switched to.
+        str: One line describing what happened.
 
     Raises:
         ValueError: If the control has no pivot presets, or ``preset`` names
@@ -96,14 +147,50 @@ def switch_pivot_preset(
     if not labels:
         raise ValueError(f"'{node.name}' has no pivot presets.")
     index = _preset_index(node, preset, labels)
+    label = labels[index]
 
-    before = _local_origin(node)
-    node[PRESET_ATTR].value = index
-    after = _local_origin(node)
-    node.translate = tuple(
-        current - (moved - rest)
-        for current, rest, moved in zip(node.translate, before, after)
-    )
-    if key:
-        tm.setKeyframe(node.long_name, attribute=[PRESET_ATTR, "translate"])
-    return labels[index]
+    frames = tuple(float(moment) for moment in times) if times else None
+    restore = float(tm.currentTime(query=True))
+    if frames is None:
+        frames = (restore,)
+    try:
+        # Two passes, and the order is load-bearing. Keying the enum makes
+        # every later frame evaluate with the *new* pivot, so a one-pass loop
+        # measures no displacement there and leaves those poses uncorrected.
+        # The displacement depends on the control's rotation and the two pivot
+        # points, never on its translation, so recording the old origins up
+        # front is exact.
+        origins = {}
+        for moment in frames:
+            tm.currentTime(moment)
+            origins[moment] = _local_origin(node)
+
+        node[PRESET_ATTR].value = index
+        if key:
+            # A pivot is a discrete state: interpolating between two enum
+            # values is meaningless, so it is keyed once, stepped. The tangents
+            # ride on setKeyframe rather than a keyTangent call, whose range
+            # flag wants a tuple the cmds proxy turns into a list.
+            tm.setKeyframe(
+                node.long_name,
+                attribute=PRESET_ATTR,
+                time=frames[0],
+                inTangentType="step",
+                outTangentType="step",
+            )
+
+        for moment in frames:
+            tm.currentTime(moment)
+            after = _local_origin(node)
+            node.translate = tuple(
+                current - (moved - rest)
+                for current, rest, moved in zip(node.translate, origins[moment], after)
+            )
+            if key:
+                tm.setKeyframe(node.long_name, attribute="translate", time=moment)
+    finally:
+        tm.currentTime(restore)
+
+    if len(frames) > 1:
+        return f"{node.name} to {label} over {len(frames)} keys — pose held"
+    return f"{node.name} to {label} — pose held"
