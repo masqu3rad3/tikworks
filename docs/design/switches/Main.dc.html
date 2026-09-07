@@ -1,0 +1,290 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+  <style>
+    body { margin: 0; background: #242424; color: #c0c0c0;
+           font-family: "Roboto", "Segoe UI", sans-serif; font-size: 12px;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #FE7E00; } a:hover { color: #FF9500; }
+    button { font-family: inherit; cursor: pointer; border: none; background: none;
+             color: inherit; padding: 0; text-align: left; }
+    .cap { color: #7b7b7b; font-size: 10px; letter-spacing: 1px; }
+  </style>
+</helmet>
+
+<div style="display: flex; flex-direction: column; width: 380px; height: 430px; background: #242424; overflow: hidden">
+
+  <div style="display: flex; align-items: center; gap: 8px; background: #1e1e1e; padding: 4px 8px; border-bottom: 1px solid #303030">
+    <span style="color: #7b7b7b; font-weight: 700; font-size: 11px">Switches</span>
+    <span style="flex-grow: 1"></span>
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#7b7b7b" stroke-width="1.4">
+      <rect x="2.5" y="4.5" width="9" height="7" rx="1"></rect>
+      <path d="M6 4.5V3.5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-1"></path>
+    </svg>
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#7b7b7b" stroke-width="1.4">
+      <path d="M4 4l8 8M12 4l-8 8"></path>
+    </svg>
+  </div>
+
+  <div style="display: flex; gap: 2px; padding: 6px 6px 0 6px">
+    <sc-for list="{{tabs}}" as="tab" hint-placeholder-count="3">
+      <button onClick="{{tab.pick}}" style="{{tab.style}}">
+        <span style="{{tab.dot}}"></span>{{tab.label}}
+      </button>
+    </sc-for>
+  </div>
+
+  <div style="flex-grow: 1; display: flex; flex-direction: column; margin: 0 6px 6px 6px; border: 1px solid #303030; border-top: none; background: #242424; overflow: hidden">
+
+    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #2a2a2a; border-bottom: 1px solid #303030">
+      <span style="display: inline-block; width: 3px; height: 14px; border-radius: 2px; background: #5b8fd0"></span>
+      <span style="color: #ececec; font-family: Consolas, 'Roboto Mono', monospace; font-size: 11px">L_arm_ik_ctrl</span>
+      <span style="flex-grow: 1"></span>
+      <span style="color: #7b7b7b; font-size: 11px">arm</span>
+    </div>
+
+    <div style="{{bodyStyle}}">
+
+      <sc-if value="{{isPivot}}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <div class="cap">PIVOT PRESET</div>
+          <div style="{{chipRow}}">
+            <sc-for list="{{presets}}" as="item" hint-placeholder-count="4">
+              <button onClick="{{item.pick}}" style="{{item.style}}">{{item.label}}</button>
+            </sc-for>
+          </div>
+          <div style="height: 1px; background: #303030"></div>
+          <div style="display: flex; align-items: center; gap: 8px">
+            <button onClick="{{toggleShow}}" style="{{showBox}}">
+              <sc-if value="{{showPivot}}" hint-placeholder-val="{{ true }}">
+                <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#1a1a1a" stroke-width="2.2">
+                  <path d="M2 6.4l2.6 2.6L10 3.4"></path>
+                </svg>
+              </sc-if>
+            </button>
+            <button onClick="{{toggleShow}}" style="color: #e6e6e6">Show pivot control</button>
+          </div>
+          <div style="color: #7b7b7b; font-size: 11px; line-height: 1.5; margin-left: 23px">
+            Draws the pivot handle in the viewport so it can be nudged off a preset.
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isIkFk}}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <div class="cap">KINEMATICS</div>
+          <div style="{{chipRow}}">
+            <sc-for list="{{modes}}" as="item" hint-placeholder-count="2">
+              <button onClick="{{item.pick}}" style="{{item.style}}">{{item.label}}</button>
+            </sc-for>
+          </div>
+          <div style="color: #7b7b7b; font-size: 11px; line-height: 1.5">
+            Switching matches the other chain to the pose on screen first, so the arm
+            stays exactly where it is.
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{isPin}}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <div class="cap">POLE PIN</div>
+          <div style="{{chipRow}}">
+            <sc-for list="{{pins}}" as="item" hint-placeholder-count="2">
+              <button onClick="{{item.pick}}" style="{{item.style}}">{{item.label}}</button>
+            </sc-for>
+          </div>
+          <div style="color: #7b7b7b; font-size: 11px; line-height: 1.5">
+            Pinning locks the elbow to the pole control and holds it where it already is.
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+
+    <div style="background: #1e1e1e; border-top: 1px solid #353535">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 7px 10px">
+        <button onClick="{{toggleKey}}" style="{{keyBox}}">
+          <sc-if value="{{key}}" hint-placeholder-val="{{ true }}">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#1a1a1a" stroke-width="2.2">
+              <path d="M2 6.4l2.6 2.6L10 3.4"></path>
+            </svg>
+          </sc-if>
+        </button>
+        <button onClick="{{toggleKey}}" style="color: #e6e6e6">Key</button>
+        <span style="flex-grow: 1"></span>
+        <div style="display: flex; gap: 2px">
+          <sc-for list="{{scopes}}" as="item" hint-placeholder-count="2">
+            <button onClick="{{item.pick}}" style="{{item.style}}">{{item.label}}</button>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 7px; padding: 0 10px 8px 10px">
+        <span style="{{statusDot}}"></span>
+        <span style="{{statusStyle}}">{{status}}</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</x-dc>
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#FE7E00","options":["#FE7E00","#5b8fd0","#5ec48a","#d06a66"],"section":"Theme"},"density":{"editor":"enum","options":["Comfortable","Compact"],"default":"Comfortable","section":"Theme"},"$preview":{"width":380,"height":430}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      tab: 'pivot',
+      preset: 'ball',
+      showPivot: true,
+      key: true,
+      mode: 'IK',
+      pin: 'Free',
+      scope: 'Frame',
+      status: 'Snapped to ball — pose held',
+      tone: 'ok'
+    };
+  }
+
+  rgb(hex) {
+    const value = String(hex || '#FE7E00').replace('#', '');
+    const full = value.length === 3 ? value.split('').map((c) => c + c).join('') : value;
+    return [
+      parseInt(full.slice(0, 2), 16),
+      parseInt(full.slice(2, 4), 16),
+      parseInt(full.slice(4, 6), 16)
+    ];
+  }
+
+  wash(hex, alpha) {
+    const [r, g, b] = this.rgb(hex);
+    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+
+  tint(hex) {
+    const [r, g, b] = this.rgb(hex);
+    const lift = (c) => Math.round(c + (255 - c) * 0.55);
+    return 'rgb(' + lift(r) + ',' + lift(g) + ',' + lift(b) + ')';
+  }
+
+  metrics() {
+    const compact = this.props.density === 'Compact';
+    return {
+      body: compact ? '10px 10px' : '14px 12px',
+      chip: compact ? '4px 10px' : '6px 13px',
+      gap: compact ? 4 : 6,
+      font: compact ? 11 : 12
+    };
+  }
+
+  chipStyle(selected, accent, metrics) {
+    const base = 'padding: ' + metrics.chip + '; border-radius: 3px; font-size: '
+      + (metrics.font - 1) + 'px; line-height: 1.2; border: 1px solid ';
+    if (selected) {
+      return base + accent + '; background: ' + this.wash(accent, 0.16)
+        + '; color: ' + this.tint(accent) + '; font-weight: 500';
+    }
+    return base + '#353535; background: #282828; color: #c8c8c8';
+  }
+
+  pillGroup(values, current, accent, metrics, onPick) {
+    return values.map((label) => ({
+      label,
+      style: this.chipStyle(label === current, accent, metrics),
+      pick: () => onPick(label)
+    }));
+  }
+
+  renderVals() {
+    const accent = this.props.accent || '#FE7E00';
+    const metrics = this.metrics();
+    const { tab, preset, mode, pin, scope } = this.state;
+
+    const say = (text, tone) => this.setState({ status: text, tone: tone });
+
+    const tabs = [
+      { id: 'pivot', label: 'Pivot' },
+      { id: 'ikfk', label: 'IK / FK' },
+      { id: 'pin', label: 'Pin' }
+    ].map((item) => {
+      const active = item.id === tab;
+      return {
+        label: item.label,
+        style: 'display: flex; align-items: center; gap: 6px; padding: 5px 12px;'
+          + ' font-size: ' + (metrics.font - 1) + 'px;'
+          + ' border-top-left-radius: 3px; border-top-right-radius: 3px;'
+          + ' border: 1px solid #303030; border-bottom: none;'
+          + (active
+            ? ' background: #2a2a2a; color: #ececec; border-top: 2px solid ' + accent + ';'
+            : ' background: #1f1f1f; color: #8a8a8a;'),
+        dot: 'display: inline-block; width: 4px; height: 4px; border-radius: 50%;'
+          + ' background: ' + (active ? accent : '#4f4f4f'),
+        pick: () => this.setState({ tab: item.id })
+      };
+    });
+
+    const presets = this.pillGroup(
+      ['default', 'tip', 'ball', 'wrist'], preset, accent, metrics,
+      (label) => {
+        if (label === preset) return say('Already on ' + label, 'idle');
+        this.setState({ preset: label });
+        say('Snapped to ' + label + ' — pose held', 'ok');
+      }
+    );
+
+    const modes = this.pillGroup(['IK', 'FK'], mode, accent, metrics, (label) => {
+      if (label === mode) return say('Already in ' + label, 'idle');
+      this.setState({ mode: label });
+      say('Matched and switched to ' + label + ' — pose held', 'ok');
+    });
+
+    const pins = this.pillGroup(['Free', 'Pinned'], pin, accent, metrics, (label) => {
+      if (label === pin) return say('Elbow is already ' + label.toLowerCase(), 'idle');
+      this.setState({ pin: label });
+      say(label === 'Pinned' ? 'Elbow pinned in place' : 'Elbow released — pose held', 'ok');
+    });
+
+    const scopes = ['Frame', 'Range'].map((label) => ({
+      label,
+      style: 'padding: 3px 10px; font-size: 11px; border-radius: 3px; border: 1px solid '
+        + (label === scope ? accent + '; background: ' + this.wash(accent, 0.16)
+          + '; color: ' + this.tint(accent) : '#353535; background: #282828; color: #8f8f8f'),
+      pick: () => this.setState({ scope: label })
+    }));
+
+    const box = (on) => 'display: flex; align-items: center; justify-content: center;'
+      + ' width: 13px; height: 13px; border-radius: 2px; border: 1px solid '
+      + (on ? accent + '; background: ' + accent : '#353535; background: #0f0f0f');
+
+    const toneColor = { ok: '#5ec48a', idle: '#4f4f4f', info: accent }[this.state.tone] || '#4f4f4f';
+
+    return {
+      tabs, presets, modes, pins, scopes,
+      isPivot: tab === 'pivot',
+      isIkFk: tab === 'ikfk',
+      isPin: tab === 'pin',
+      bodyStyle: 'flex-grow: 1; padding: ' + metrics.body + '; font-size: ' + metrics.font + 'px',
+      chipRow: 'display: flex; flex-wrap: wrap; gap: ' + metrics.gap + 'px',
+      showPivot: this.state.showPivot,
+      key: this.state.key,
+      showBox: box(this.state.showPivot),
+      keyBox: box(this.state.key),
+      toggleShow: () => this.setState({ showPivot: !this.state.showPivot }),
+      toggleKey: () => this.setState({ key: !this.state.key }),
+      status: this.state.status,
+      statusDot: 'display: inline-block; width: 6px; height: 6px; border-radius: 50%;'
+        + ' background: ' + toneColor,
+      statusStyle: 'color: ' + (this.state.tone === 'idle' ? '#7b7b7b' : '#c0c0c0')
+        + '; font-size: 11px'
+    };
+  }
+}
+</script>
+</body>
+</html>

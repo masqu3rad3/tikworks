@@ -1,0 +1,196 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+  <style>
+    body { margin: 0; background: #1a1a1a; color: #c0c0c0;
+           font-family: "Roboto", "Segoe UI", sans-serif; font-size: 12px;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #FE7E00; } a:hover { color: #FF9500; }
+    .cap { color: #7b7b7b; font-size: 10px; letter-spacing: 1px; }
+    .zone { color: #FE7E00; font-size: 10px; letter-spacing: 1px; font-weight: 500; }
+    .why { color: #8f8f8f; font-size: 11px; line-height: 1.55; }
+    .name { color: #ececec; font-family: Consolas, "Roboto Mono", monospace; font-size: 11px; }
+    .chip { padding: 6px 13px; border-radius: 3px; font-size: 11px;
+            border: 1px solid #353535; background: #282828; color: #c8c8c8; }
+    .chipOn { border-color: #FE7E00; background: rgba(254,126,0,0.16);
+              color: #ffbd7f; font-weight: 500; }
+    .row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .rule { height: 1px; background: #2c2c2c; }
+    .badge { display: flex; align-items: center; justify-content: center;
+             width: 15px; height: 15px; border-radius: 50%; font-size: 9px;
+             border: 1px solid #FE7E00; background: rgba(254,126,0,0.16);
+             color: #ffbd7f; flex-shrink: 0; }
+    .band { box-shadow: inset 3px 0 0 rgba(254,126,0,0.5); }
+    th { text-align: left; color: #7b7b7b; font-size: 10px; letter-spacing: 1px;
+         font-weight: 400; padding: 0 14px 7px 0; border-bottom: 1px solid #2c2c2c; }
+    td { padding: 9px 14px 9px 0; vertical-align: top; border-bottom: 1px solid #232323;
+         font-size: 11px; line-height: 1.5; }
+  </style>
+</helmet>
+
+<div style="width: 720px; box-sizing: border-box; padding: 26px; display: flex; flex-direction: column; gap: 22px">
+
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <div class="cap">THE SHELL</div>
+    <div style="color: #ececec; font-size: 19px; font-weight: 500; line-height: 1.35; max-width: 620px">
+      Every tab is the same interaction: a set of states you pick from,
+      one click, and the rig does not move.
+    </div>
+    <div class="why" style="max-width: 620px">
+      That is what makes one tool out of three. A switch changes what a control
+      <em>does</em> &mdash; which point it turns about, which chain drives it, whether the
+      elbow is held &mdash; and the animator's pose survives it. Anything that moves the
+      rig belongs somewhere else.
+    </div>
+  </div>
+
+  <div class="rule"></div>
+
+  <div style="display: flex; gap: 26px; align-items: flex-start">
+
+    <div style="width: 300px; flex-shrink: 0; border: 1px solid #303030; background: #242424">
+      <div style="display: flex; align-items: center; background: #1e1e1e; padding: 4px 8px; border-bottom: 1px solid #303030">
+        <span style="color: #7b7b7b; font-weight: 700; font-size: 11px">Switches</span>
+      </div>
+      <div class="band" style="display: flex; align-items: flex-end; gap: 2px; padding: 6px 6px 0 9px">
+        <div style="padding: 5px 11px; font-size: 11px; background: #2a2a2a; color: #ececec;
+                    border: 1px solid #303030; border-bottom: none; border-top: 2px solid #FE7E00;
+                    border-top-left-radius: 3px; border-top-right-radius: 3px; display: flex;
+                    align-items: center; gap: 6px"><span style="width: 4px; height: 4px;
+                    border-radius: 50%; background: #FE7E00"></span>Pivot</div>
+        <div style="padding: 5px 11px; font-size: 11px; background: #1f1f1f; color: #8a8a8a;
+                    border: 1px solid #303030; border-bottom: none;
+                    border-top-left-radius: 3px; border-top-right-radius: 3px; display: flex;
+                    align-items: center; gap: 6px"><span style="width: 4px; height: 4px;
+                    border-radius: 50%; background: #FE7E00"></span>IK / FK</div>
+        <div style="padding: 5px 11px; font-size: 11px; background: #1f1f1f; color: #8a8a8a;
+                    border: 1px solid #303030; border-bottom: none;
+                    border-top-left-radius: 3px; border-top-right-radius: 3px; display: flex;
+                    align-items: center; gap: 6px"><span style="width: 4px; height: 4px;
+                    border-radius: 50%; background: #FE7E00"></span>Pin</div>
+        <span style="flex-grow: 1"></span>
+        <span class="badge" style="margin-bottom: 4px">1</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+                  background: #2a2a2a; border-top: 1px solid #303030; border-bottom: 1px solid #303030;
+                  box-shadow: inset 3px 0 0 rgba(254,126,0,0.5)">
+        <span style="width: 3px; height: 14px; border-radius: 2px; background: #5b8fd0"></span>
+        <span class="name">L_arm_ik_ctrl</span>
+        <span style="flex-grow: 1"></span>
+        <span style="color: #7b7b7b; font-size: 11px">arm</span>
+        <span class="badge">2</span>
+      </div>
+      <div style="padding: 13px 11px; display: flex; flex-direction: column; gap: 9px;
+                  box-shadow: inset 3px 0 0 rgba(254,126,0,0.5)">
+        <div style="display: flex; align-items: center; gap: 8px">
+          <span class="cap">PIVOT PRESET</span>
+          <span style="flex-grow: 1"></span>
+          <span class="badge">3</span>
+        </div>
+        <div class="row">
+          <div class="chip">default</div>
+          <div class="chip">tip</div>
+          <div class="chip chipOn">ball</div>
+          <div class="chip">wrist</div>
+        </div>
+      </div>
+      <div style="background: #1e1e1e; border-top: 1px solid #353535; padding: 7px 10px;
+                  display: flex; flex-direction: column; gap: 6px;
+                  box-shadow: inset 3px 0 0 rgba(254,126,0,0.5)">
+        <div style="display: flex; align-items: center; gap: 9px">
+          <span style="width: 13px; height: 13px; border-radius: 2px; background: #FE7E00;
+                       display: flex; align-items: center; justify-content: center">
+            <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#1a1a1a" stroke-width="2.2">
+              <path d="M2 6.4l2.6 2.6L10 3.4"></path>
+            </svg>
+          </span>
+          <span style="color: #e6e6e6; font-size: 11px">Key</span>
+          <span style="flex-grow: 1"></span>
+          <span style="padding: 3px 10px; font-size: 11px; border-radius: 3px;
+                       border: 1px solid #FE7E00; background: rgba(254,126,0,0.16);
+                       color: #ffbd7f">Frame</span>
+          <span style="padding: 3px 10px; font-size: 11px; border-radius: 3px;
+                       border: 1px solid #353535; background: #282828; color: #8f8f8f">Range</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 7px">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: #5ec48a"></span>
+          <span style="color: #c0c0c0; font-size: 11px">Snapped to ball &mdash; pose held</span>
+          <span style="flex-grow: 1"></span>
+          <span class="badge">4</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 17px; padding-top: 4px">
+      <div>
+        <div class="zone">1 &nbsp;TAB STRIP</div>
+        <div class="why">One tab per family of switch. A lit dot means the current
+          selection can use it.</div>
+      </div>
+      <div>
+        <div class="zone">2 &nbsp;SELECTION CONTEXT</div>
+        <div class="why">Always the same shape, always second. Side colour, control
+          name, module. This is what makes the tool non-modal &mdash; it reads the
+          viewport instead of blocking it.</div>
+      </div>
+      <div>
+        <div class="zone">3 &nbsp;STATE PICKER</div>
+        <div class="why">The only part that differs per tab, and only in its labels:
+          presets, IK/FK, free/pinned. One click applies.</div>
+      </div>
+      <div>
+        <div class="zone">4 &nbsp;SHARED ACTION BAR</div>
+        <div class="why">Concerns every switch has: whether to key, which frames, and
+          what just happened. Written once, not three times.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rule"></div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px">
+    <div class="cap">WHAT EACH TAB PICKS BETWEEN</div>
+    <table style="border-collapse: collapse; width: 100%">
+      <tr>
+        <th style="width: 88px">TAB</th>
+        <th style="width: 190px">STATES</th>
+        <th style="width: 200px">WHAT THE SWITCH DOES</th>
+        <th>HELD ACROSS IT</th>
+      </tr>
+      <tr>
+        <td style="color: #ececec">Pivot</td>
+        <td>default, and one per preset the rigger placed</td>
+        <td>Moves the rotate pivot to the preset, then corrects translate</td>
+        <td>The control's world matrix</td>
+      </tr>
+      <tr>
+        <td style="color: #ececec">IK / FK</td>
+        <td>IK, FK</td>
+        <td>Matches the other chain to what is on screen, then flips the blend</td>
+        <td>The limb's silhouette</td>
+      </tr>
+      <tr>
+        <td style="color: #ececec">Pin</td>
+        <td>Free, Pinned</td>
+        <td>Locks the elbow to the pole control at its current position</td>
+        <td>The elbow's world position</td>
+      </tr>
+    </table>
+    <div class="why" style="max-width: 660px">
+      A fourth tab earns its place by fitting that table &mdash; a named set of
+      states, a match step, and something it promises not to disturb. If it cannot
+      fill the last column it is not a switch, and it does not belong here.
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
