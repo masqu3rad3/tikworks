@@ -329,6 +329,11 @@ class TriggerWindow(MayaToolWindow):
             "Build All Guides",
             lambda: self._designer_call("test_build", True),
         )
+        self._action(
+            guides_menu,
+            "Clear Test Rig",
+            lambda: self._designer_call("clear_test_rig"),
+        )
         guides_menu.addSeparator()
         # The verbs that cross the session/scene line, grouped by direction:
         # Draw pushes the session into Maya, Sync and Snapshot pull back.

@@ -460,3 +460,14 @@ def test_tools_offers_switches_and_not_the_old_modal_dialog(window):
     labels = [action.text() for action in menu(window, "&Tools").actions()]
     assert "Switches" in labels
     assert not any("Switch Pivot" in text for text in labels)
+
+
+def test_the_guides_menu_offers_clearing_the_test_rig(window):
+    """Build makes a throwaway rig; there has to be a way to take it away.
+
+    A pipeline run resets the scene, so a leftover test rig cannot reach a
+    build or a publish -- except through Run This Action Only, which skips
+    the reset. This is the remedy for that, and it beats deleting the rig
+    implicitly behind the rigger's back."""
+    entries = items(menu(window, "&Guides"))
+    assert "Clear Test Rig" in entries
