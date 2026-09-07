@@ -294,3 +294,41 @@ def test_controller_plugs_pass_through_to_its_transform():
     control["translateX"] >> driven["translateX"]
     control.transform.translate_x = 3.0
     assert round(driven.translate_x, 4) == 3.0
+
+
+# ------------------------------------------------------------------- pivot
+def test_drive_pivot_from_a_transform():
+    cmds.file(new=True, force=True)
+    ctrl = Controller.create(name="main_ctrl", shape="Circle")
+    driver = tm.Transform.create(name="pivot_driver", parent=ctrl.transform)
+    ctrl.drive_pivot(driver)
+
+    driver.translate = (0.0, 0.0, 4.0)
+    assert list(ctrl.transform["rotatePivot"].value[0]) == [0.0, 0.0, 4.0]
+    assert list(ctrl.transform["scalePivot"].value[0]) == [0.0, 0.0, 4.0]
+
+
+def test_drive_pivot_from_a_plug_and_without_scale():
+    cmds.file(new=True, force=True)
+    ctrl = Controller.create(name="main_ctrl", shape="Circle")
+    one = tm.Transform.create(name="one", parent=ctrl.transform)
+    two = tm.Transform.create(name="two", parent=one)
+    ctrl.drive_pivot(one["translate"] + two["translate"], scale=False)
+
+    one.translate = (0.0, 0.0, 2.0)
+    two.translate = (0.5, 0.0, 0.0)
+    assert list(ctrl.transform["rotatePivot"].value[0]) == [0.5, 0.0, 2.0]
+    assert list(ctrl.transform["scalePivot"].value[0]) == [0.0, 0.0, 0.0]
+
+
+def test_a_child_at_the_rotate_pivot_is_the_rotations_fixed_point():
+    """The property that lets the pivot controller be a plain child."""
+    cmds.file(new=True, force=True)
+    ctrl = Controller.create(name="main_ctrl", shape="Circle")
+    driver = tm.Transform.create(name="pivot_driver", parent=ctrl.transform)
+    ctrl.drive_pivot(driver)
+    driver.translate = (0.0, 0.0, 5.0)
+
+    rest = [round(value, 5) for value in driver.world_position]
+    ctrl.transform.rotate = (0.0, 90.0, 0.0)
+    assert [round(value, 5) for value in driver.world_position] == rest

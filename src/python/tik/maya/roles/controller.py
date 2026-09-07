@@ -21,6 +21,11 @@ from ..utils.control_shapes import ControlShapeLibrary  # Import the manager
 LOG = logging.getLogger(__name__)
 
 
+def node_of(value):
+    """The Transform behind a role (a Controller), or ``value`` unchanged."""
+    return getattr(value, "transform", value)
+
+
 def replace_curve(orig_curve, new_curve, snap=True, transfer_color=True):
     """Replace curve shapes on a controller.
 
@@ -334,6 +339,29 @@ class Controller:
                 - None: Disable color override
         """
         self.node.set_color(color)
+
+    # --------------------------------------------------
+    # pivot
+    # --------------------------------------------------
+
+    def drive_pivot(self, source, *, scale: bool = True) -> None:
+        """Drive this controller's rotate (and scale) pivot from ``source``.
+
+        Mechanism only: what a movable pivot *is*, with no opinion about who
+        moves it, what the attribute driving it is called, or how many named
+        positions it offers. Lazy by design -- call it at any time on any
+        controller, after whatever attributes the caller wants ordered first.
+
+        Args:
+            source: A transform whose ``translate`` drives the pivot, or a
+                double3 plug (a sum of several, say).
+            scale: Also drive ``scalePivot``, so scaling happens about the same
+                point (default True).
+        """
+        plug = source if hasattr(source, "connect") else node_of(source)["translate"]
+        plug >> self.node["rotatePivot"]
+        if scale:
+            plug >> self.node["scalePivot"]
 
     # --------------------------------------------------
     # defaults & cleanup
