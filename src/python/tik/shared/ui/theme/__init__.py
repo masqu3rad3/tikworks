@@ -104,6 +104,21 @@ QTreeView::branch:selected, QTreeView::branch:selected:active, QTreeView::branch
 #PipelineTree::item:selected, #PipelineTree::item:selected:active, #PipelineTree::item:hover { background-color: transparent; }
 #LogWidget { background-color: #151515; color: #c0c0c0; border: none; font-family: Consolas, "Roboto Mono", monospace; font-size: 11px; }
 QDockWidget::title { background-color: #1e1e1e; padding: 4px 8px; color: #7b7b7b; }
+/* --- the animator Switches dock --- */
+#SwitchContext { background-color: #2a2a2a; border-top: 1px solid #303030; border-bottom: 1px solid #303030; }
+#SwitchName { color: #ececec; font-family: Consolas, "Roboto Mono", monospace; font-size: 11px; }
+#SwitchSides { font-size: 13px; }
+#SwitchNote { color: #7b7b7b; font-size: 11px; }
+/* the base theme gives every QPushButton width: 100px; a chip is as wide as
+   its label, so both the fixed width and the inherited min-width go */
+#SwitchChip { background-color: #282828; border: 1px solid #353535; border-radius: 3px; color: #c8c8c8; width: auto; min-width: 0px; min-height: 20px; padding: 2px 12px; }
+#SwitchChip:hover { border-color: #FE7E00; }
+#SwitchChip[state="current"] { background-color: #3a2e1f; border-color: #FE7E00; color: #e0c8a8; }
+#SwitchChip[state="pending"] { border-color: #FE7E00; color: #e0c8a8; }
+#SwitchChip[state="mixed"] { border-style: dashed; border-color: #6a5a44; color: #a89478; }
+#SwitchChip:checked { background-color: #3a2e1f; border-color: #FE7E00; color: #e0c8a8; }
+#SwitchBar { background-color: #1e1e1e; border-top: 1px solid #353535; }
+#SwitchBar QPushButton#PrimaryButton { width: auto; min-width: 64px; }
 """
 
 
