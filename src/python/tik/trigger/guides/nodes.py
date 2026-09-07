@@ -58,10 +58,16 @@ def find_output(instance_id: str, output_name: str, under: Optional[str] = None)
     ``trg_instance``; every output is a bind joint, so restricting the scan to
     one root's subtree is exact. None scans the whole scene, which is what a
     caller with no root in hand wants.
+
+    ``recursive`` is what lets the scan see the test rig at all: a wildcard
+    ``ls`` does not cross a namespace boundary, and the test rig lives in one.
+    It is safe precisely because ``under`` scopes the result -- the two go
+    together, and neither is sound on its own.
     """
     pattern = f"*.{tm.META_PREFIX}{tags.OUTPUT_NAME}"
     prefix = f"{under}|" if under else ""
-    for name in cmds.ls(pattern, long=True, objectsOnly=True) or []:
+    found = cmds.ls(pattern, long=True, objectsOnly=True, recursive=True) or []
+    for name in found:
         if prefix and not name.startswith(prefix):
             continue
         node = tm.resolve(name)

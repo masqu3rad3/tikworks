@@ -829,6 +829,12 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         module nobody has drawn contributes nothing and would be skipped in
         silence. The sync before it makes that draw lossless, which is why
         this path never has to ask about discarding poses.
+
+        The rig it builds is the *test* rig -- its own root, one container per
+        module -- so a mock-up never lands in the real ``rig_grp``, and the
+        build tears down whatever it is about to rebuild. Pressing Build again
+        after changing a setting is the point of the feature, so it has to
+        leave exactly one copy however many times it is pressed.
         """
         ids = [handle.instance_id for handle in handles]
         scope = ids or "scene"
@@ -837,7 +843,7 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         self.sync()
         self.draw(ids or None)
         return Builder(self.events).build(
-            scope=scope, document=self.document, afterlife="keep"
+            scope=scope, document=self.document, afterlife="keep", test=True
         )
 
     def __repr__(self) -> str:

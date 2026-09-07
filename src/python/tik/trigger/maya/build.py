@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
@@ -10,6 +11,7 @@ from maya import cmds
 
 import tik.maya as tm
 from tik.trigger.core import registry
+from tik.trigger.core.build_scope import expand_build_scope
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import AttachError, BuildError
 from tik.trigger.core.manifest import TIERS
@@ -24,7 +26,7 @@ from tik.trigger.guides import nodes as guide_nodes
 
 from . import tags
 from .rig import ModuleRig
-from .scaffold import RigScaffold, ensure_rig
+from .scaffold import RigScaffold, ensure_rig, ensure_test_rig
 
 
 @dataclass
@@ -40,6 +42,9 @@ class BuildReport:
         default_factory=list
     )  # ("L_arm.ik_chest", "body.root")
     scaffold: Any = None  # RigScaffold
+    #: Instance ids removed from the test rig before this build, so a caller
+    #: can say what a scoped rebuild actually replaced.
+    torn_down: list[str] = field(default_factory=list)
 
     @property
     def count(self) -> int:
@@ -224,6 +229,8 @@ class Builder:
         #: can hold the real rig and the test rig at once, so an earlier-pass
         #: lookup has to say which one it means.
         self._root_path: str = ""
+        #: True while building into the Guide Designer's throwaway rig.
+        self._test: bool = False
 
     @staticmethod
     def order(instances: list[ModuleInstance]) -> list[ModuleInstance]:
@@ -231,11 +238,26 @@ class Builder:
         return order_instances(instances)
 
     def build(
-        self, scope: Any = "scene", afterlife: str = "delete", document=None
+        self,
+        scope: Any = "scene",
+        afterlife: str = "delete",
+        document=None,
+        test: bool = False,
     ) -> BuildReport:
-        """Build every guide instance in ``scope`` into the scene's one rig."""
+        """Build every guide instance in ``scope`` into a rig.
+
+        ``test`` builds into the Guide Designer's throwaway rig instead of the
+        real one, one ``dagContainer`` per module, tearing down whatever it is
+        about to rebuild first. A test build is a mock-up the rigger repeats
+        while changing settings, so it has to be idempotent; the real build
+        path is unchanged.
+        """
         if afterlife not in AFTERLIFE_MODES:
             raise ValueError(f"afterlife must be one of {AFTERLIFE_MODES}.")
+        report = BuildReport()
+        self._test = test
+        if test:
+            scope = self._prepare_test_scope(scope, document, report)
         instances = self.order(guide_nodes.find_instances(scope, document))
         # From the *document*: a pass that deleted its guides is invisible to a
         # scene scan, which is exactly when a later pass needs its outputs.
@@ -250,14 +272,15 @@ class Builder:
                     module_type=entry.module_type,
                 )
             self._keys_to_ids[entry.key] = entry.instance_id
-        report = BuildReport()
         total = len(instances)
         if not total:
             self.events.log("No module guides found to build.", level="warning")
             return report
 
-        with guide_nodes.undo_chunk("Trigger build"):
-            report.scaffold = ensure_rig(self.events)
+        with guide_nodes.undo_chunk("Trigger build"), self._rig_scope():
+            report.scaffold = (
+                ensure_test_rig(self.events) if test else ensure_rig(self.events)
+            )
             self._root_path = report.scaffold.root.long_name
 
             # Producers must be built before consumers: rig.bind_parent is
@@ -284,15 +307,73 @@ class Builder:
                 bind_parent = self._bind_parent_for(
                     instance, module_cls, inputs, by_key, report
                 )
-                ctx = self._build_one(instance, report.scaffold, bind_parent)
-                report.rigs[instance.instance_id] = ctx
-                report.built.append(instance.instance_id)
-                by_key[instance.key] = instance
-                self._connect_one(instance, module_cls, inputs, by_key, report)
+                with self._module_scope(instance, report.scaffold):
+                    ctx = self._build_one(instance, report.scaffold, bind_parent)
+                    report.rigs[instance.instance_id] = ctx
+                    report.built.append(instance.instance_id)
+                    by_key[instance.key] = instance
+                    self._connect_one(instance, module_cls, inputs, by_key, report)
             self._connect_spaces(instances, report, by_key)
             apply_afterlife(instances, afterlife)
         self.events.log(f"Built {total} module(s).")
         return report
+
+    # ---------------------------------------------------------- test rig
+    def _prepare_test_scope(self, scope, document, report: BuildReport):
+        """Clear or tear down the test rig, and return the scope to build.
+
+        ``"scene"`` is Build All: the whole test rig goes, because rebuilding
+        everything is exactly what wiping it leaves behind. A picked scope is
+        expanded first -- downstream to repair consumers that are already
+        built, upstream to fill in producers that are not -- and only those
+        modules are torn down.
+        """
+        from . import sandbox
+
+        if scope in ("scene", "selection") or document is None:
+            sandbox.clear()
+            return scope
+        scope = expand_build_scope(
+            document.modules, list(scope), sandbox.built_instance_ids()
+        )
+        report.torn_down = sandbox.teardown(scope)
+        return scope
+
+    @contextmanager
+    def _rig_scope(self):
+        """Create this build's nodes in the test rig's namespace, if it is one.
+
+        The namespace is not decoration. tik.maya resolves nodes through short
+        names in several places, so a test rig sharing short names with a built
+        real rig makes them ambiguous and the build dies with "Object does not
+        exist". The namespace makes them unique by construction.
+        """
+        if not self._test:
+            yield
+            return
+        from . import sandbox
+
+        with sandbox.namespace(sandbox.TEST_NAMESPACE):
+            yield
+
+    @contextmanager
+    def _module_scope(self, instance, scaffold):
+        """Build this module inside its own container, on a test build.
+
+        The connect wiring belongs inside the block deliberately: an attach
+        constraint belongs to the *consumer*, so tearing the consumer down
+        takes it too. On a real build this does nothing at all.
+        """
+        if not self._test:
+            yield
+            return
+        from . import sandbox
+
+        container = sandbox.module_container(
+            instance.instance_id, instance.key, scaffold.trigger
+        )
+        with sandbox.current(container):
+            yield
 
     # ------------------------------------------------------------- connect
     def _bind_parent_for(self, instance, module_cls, inputs, by_key, report):
@@ -354,40 +435,41 @@ class Builder:
             ctx = report.rigs.get(instance.instance_id)
             if ctx is None:
                 continue
-            inputs = dict(instance.inputs)
-            groups: dict = {}
-            for row in module_cls.space_rows(instance.settings):
-                control, mode = row.get("control", ""), row.get("mode", "parent")
-                label = row.get("label", "")
-                if not control or not label:
-                    continue
-                source = inputs.get(f"{control}_{label}")
-                if not source:
-                    self.events.log(
-                        f"{instance.key}.{control}_{label}: "
-                        "no source connected; skipped.",
-                        level="warning",
-                    )
-                    continue
-                node = self.resolve(source, by_key, report, strict=False)
-                if node is None:
-                    self.events.log(
-                        f"{instance.key}.{control}_{label}: source '{source}' was not "
-                        f"found; skipped.",
-                        level="warning",
-                    )
-                    continue
-                targets, labels = groups.setdefault((control, mode), ([], []))
-                targets.append(node)
-                labels.append(label)
-                report.spaces.append((f"{instance.key}.{control}_{label}", source))
-            for (control, mode), (targets, labels) in groups.items():
-                if not connect_space(ctx, control, mode, targets, labels):
-                    self.events.log(
-                        f"{instance.key}: no controller with role '{control}'; "
-                        f"its {mode} space was skipped.",
-                        level="warning",
-                    )
+            with self._module_scope(instance, report.scaffold):
+                inputs = dict(instance.inputs)
+                groups: dict = {}
+                for row in module_cls.space_rows(instance.settings):
+                    control, mode = row.get("control", ""), row.get("mode", "parent")
+                    label = row.get("label", "")
+                    if not control or not label:
+                        continue
+                    source = inputs.get(f"{control}_{label}")
+                    if not source:
+                        self.events.log(
+                            f"{instance.key}.{control}_{label}: "
+                            "no source connected; skipped.",
+                            level="warning",
+                        )
+                        continue
+                    node = self.resolve(source, by_key, report, strict=False)
+                    if node is None:
+                        self.events.log(
+                            f"{instance.key}.{control}_{label}: source '{source}' was not "
+                            f"found; skipped.",
+                            level="warning",
+                        )
+                        continue
+                    targets, labels = groups.setdefault((control, mode), ([], []))
+                    targets.append(node)
+                    labels.append(label)
+                    report.spaces.append((f"{instance.key}.{control}_{label}", source))
+                for (control, mode), (targets, labels) in groups.items():
+                    if not connect_space(ctx, control, mode, targets, labels):
+                        self.events.log(
+                            f"{instance.key}: no controller with role '{control}'; "
+                            f"its {mode} space was skipped.",
+                            level="warning",
+                        )
 
     def _earlier_pass_output(self, key: Optional[str], output: str):
         """The scene node for ``key``.``output`` when an earlier pass built it."""

@@ -27,10 +27,12 @@ from maya import cmds
 import tik.maya as tm
 
 from . import tags
-from .scaffold import TEST_ROOT, find_test_rig
+from .scaffold import TEST_NAMESPACE, TEST_ROOT, find_test_rig, namespace
 
 __all__ = [
+    "TEST_NAMESPACE",
     "TEST_ROOT",
+    "namespace",
     "module_container",
     "find_module_container",
     "built_instance_ids",
@@ -119,8 +121,8 @@ def teardown(instance_ids: Iterable, scaffold=None) -> list:
     """Remove each module's container from the test rig; report what went.
 
     The container takes the module's nodes, DG ones included. Its tier enum
-    lives on ``test_visibilities_ctrl`` -- an attribute on the scaffold, not a
-    node in the container -- so that is removed separately.
+    lives on the test rig's ``visibilities_ctrl`` -- an attribute on the
+    scaffold, not a node in the container -- so that is removed separately.
     """
     from .build import tier_attr_name
 
@@ -144,10 +146,17 @@ def teardown(instance_ids: Iterable, scaffold=None) -> list:
 def clear() -> bool:
     """Delete the whole test rig. True when there was one to delete.
 
-    One call is enough: a ``dagContainer`` adopts its DAG children as members,
-    so the root owns the module containers, which own their own DG nodes.
+    Removing the namespace and its contents is the completest sweep there is:
+    it takes the scaffold, the module containers and every DG node any of them
+    created, with nothing left to hunt for.
     """
-    if not cmds.objExists(f"|{TEST_ROOT}"):
+    if not cmds.namespace(exists=TEST_NAMESPACE):
         return False
-    cmds.delete(f"|{TEST_ROOT}")
+    active = cmds.namespaceInfo(currentNamespace=True, absoluteName=True)
+    if active == f":{TEST_NAMESPACE}":
+        # Removing the current namespace is an error; step out of it first.
+        cmds.namespace(set=":")
+    cmds.namespace(
+        removeNamespace=f":{TEST_NAMESPACE}", deleteNamespaceContent=True
+    )
     return True
