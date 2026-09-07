@@ -31,6 +31,7 @@ class Kinematics(Action):
         item_type=str,
         label="Modules",
         choices_from="modules",
+        filterable=True,
         help="Instance ids of the modules to build. Never empty.",
     )
     after_build = ChoiceField(

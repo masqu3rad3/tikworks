@@ -73,6 +73,14 @@ QSplitter::handle:vertical { height: 6px; border-top: 1px solid #303030; border-
 #FilterPillLabel { color: #e0c8a8; font-size: 10px; background: transparent; border: none; }
 #FilterPillClose { color: #e0c8a8; background: transparent; border: none; font-size: 9px; padding: 0 2px; }
 #FilterPillClose:hover { color: #ffffff; }
+/* --- the filterable tick list (CheckListEditor) --- */
+#CheckList { background-color: #151515; border: 1px solid #353535; border-radius: 3px; }
+/* the accent is the only thing telling a short list that rows are hidden --
+   loud enough to notice on the left edge, quiet enough not to shout */
+#CheckList[onlySelected="true"] { border-color: #4a3a26; border-left: 3px solid #FE7E00; background-color: #191512; }
+#CheckListHeader { background: transparent; }
+#CheckListOnlySelected { color: #b4b4b4; font-size: 10px; }
+#CheckListCount { color: #7b7b7b; font-size: 10px; }
 #BuildBar { background-color: #1e1e1e; border-top: 1px solid #353535; }
 #BuildBar QPushButton { width: auto; min-width: 110px; }
 #BuildBar QPushButton#SyncButton { min-width: 92px; }

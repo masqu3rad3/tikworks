@@ -415,3 +415,44 @@ def test_with_default_copies_the_field_and_replaces_its_default():
     assert IntField(1, max=10).with_default(5).default == 5
     with pytest.raises(FieldValidationError):
         IntField(1, max=10).with_default(50)
+
+
+# --- filterable list fields ---------------------------------------------------
+
+
+class Scoped(Schema):
+    modules = ListField(item_type=str, choices_from="modules", filterable=True)
+    plain = ListField(item_type=str, choices_from="modules")
+
+
+def test_a_filterable_list_injects_a_hidden_companion():
+    """The 'show only selected' state has to live somewhere the document saves."""
+    fields = Scoped.fields()
+    assert "modules_only_selected" in fields
+    companion = fields["modules_only_selected"]
+    assert isinstance(companion, BoolField)
+    assert companion.hidden is True
+    assert companion.default is False
+
+
+def test_the_companion_is_an_ordinary_stored_field():
+    scoped = Scoped()
+    assert scoped.modules_only_selected is False
+    assert scoped.values()["modules_only_selected"] is False
+    scoped.apply({"modules_only_selected": True})
+    assert scoped.values()["modules_only_selected"] is True
+
+
+def test_a_plain_choices_list_injects_nothing():
+    assert "plain_only_selected" not in Scoped.fields()
+
+
+def test_the_list_field_names_its_companion():
+    assert Scoped.fields()["modules"].only_selected_name == "modules_only_selected"
+    assert Scoped.fields()["plain"].only_selected_name == ""
+
+
+def test_filterable_without_choices_is_refused():
+    """Nothing would render it, so the declaration is a mistake, not a no-op."""
+    with pytest.raises(TypeError):
+        ListField(item_type=str, filterable=True)

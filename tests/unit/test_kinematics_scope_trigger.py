@@ -233,3 +233,47 @@ def test_a_legacy_guides_file_is_reported():
     session.document = Document.from_dict(data)
     reported = [item for item in session.validate() if "hero.trg" in item]
     assert reported and "import the .trg" in reported[0]
+
+
+# --- the picker's saved view state -------------------------------------------
+
+
+def test_the_modules_field_is_filterable():
+    """Dozens of modules, local and referenced, need more than a bare list."""
+    field = Kinematics.fields()["modules"]
+    assert field.filterable is True
+    assert field.only_selected_name == "modules_only_selected"
+
+
+def test_show_only_selected_starts_off_and_is_hidden():
+    session = _session_with(_entry("aaa"))
+    handle = session.add("kinematics", modules=["aaa"])
+    assert handle.modules_only_selected is False
+    assert Kinematics.fields()["modules_only_selected"].hidden is True
+
+
+def test_show_only_selected_survives_a_round_trip(tmp_path):
+    session = _session_with(_entry("aaa"))
+    session.add("kinematics", modules=["aaa"], modules_only_selected=True)
+    path = tmp_path / "rig.tr"
+    session.save(str(path))
+    reopened = Session()
+    reopened.load(str(path))
+    assert reopened.actions[0].modules_only_selected is True
+
+
+def test_a_file_written_before_the_key_existed_opens_unfiltered(tmp_path):
+    """It is view state: absent means the list shows everything, as before."""
+    import json
+
+    session = _session_with(_entry("aaa"))
+    session.add("kinematics", modules=["aaa"], modules_only_selected=True)
+    path = tmp_path / "rig.tr"
+    session.save(str(path))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for action in data["actions"]:
+        action["settings"].pop("modules_only_selected")
+    path.write_text(json.dumps(data), encoding="utf-8")
+    reopened = Session()
+    reopened.load(str(path))
+    assert reopened.actions[0].modules_only_selected is False

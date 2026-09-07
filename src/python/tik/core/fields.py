@@ -328,6 +328,7 @@ class ListField(Field):
         *,
         item_type: Optional[type] = None,
         choices_from: str = "",
+        filterable: bool = False,
         **kwargs,
     ) -> None:
         self.item_type = item_type
@@ -336,7 +337,39 @@ class ListField(Field):
         #: type by hand. A declaration only: ``tik.core`` never imports Qt,
         #: and a list without it behaves exactly as it always has.
         self.choices_from = choices_from
+        if filterable and not choices_from:
+            raise TypeError(
+                "ListField(filterable=True) needs choices_from: there is no "
+                "picker to filter without one."
+            )
+        #: Asks a UI for a filter bar, a context menu and a "show only
+        #: selected" box over the picker. The box's state is a *setting* -- it
+        #: has to survive a save -- so declaring this injects a hidden
+        #: companion field to hold it; see ``__set_name__``.
+        self.filterable = filterable
+        #: The injected companion's name, or "" when there is none.
+        self.only_selected_name = ""
         super().__init__(list(default) if default else [], **kwargs)
+
+    def __set_name__(self, owner, name: str) -> None:
+        """Name this field, and give a filterable one its companion.
+
+        The companion is a real field on the owner, so it validates, defaults,
+        serializes and round-trips like any other setting -- the alternative,
+        a parallel store of view state, would need its own persistence for a
+        single bool. It is hidden: the picker draws the box itself, inside the
+        list, where the state means something.
+        """
+        super().__set_name__(owner, name)
+        if not self.filterable:
+            return
+        companion_name = f"{name}_only_selected"
+        self.only_selected_name = companion_name
+        if isinstance(vars(owner).get(companion_name), Field):
+            return  # already declared, by hand or by an earlier base class
+        companion = BoolField(False, hidden=True, label="Show only selected")
+        setattr(owner, companion_name, companion)
+        companion.__set_name__(owner, companion_name)
 
     def coerce(self, value):
         """Accept any non-string iterable; items are coerced to ``item_type``."""

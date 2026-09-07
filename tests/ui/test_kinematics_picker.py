@@ -4,6 +4,8 @@
 has to offer the modules by their display key and store their ids.
 """
 
+import pytest
+
 from tik.core.fields import ListField, Schema
 from tik.shared.ui.fields import FormBuilder
 from tik.shared.ui.Qt import QtCore, QtWidgets
@@ -85,3 +87,62 @@ def test_unticking_removes_the_id(qapp):
     rows = _rows(form.widget("modules").list)
     rows[0].setCheckState(QtCore.Qt.Unchecked)
     assert target.modules == ["bbb"]
+
+
+# --- the filterable picker ----------------------------------------------------
+
+
+class Filtered(Schema):
+    modules = ListField(item_type=str, choices_from="modules", filterable=True)
+
+
+def _filtered_form(target=None):
+    return FormBuilder(target or Filtered(), list_choices=_choices)
+
+
+def test_a_filterable_field_gets_the_filter_furniture(qapp):
+    widget = _filtered_form().widget("modules")
+    assert widget.filter_bar is not None
+    assert widget.only_selected_box is not None
+
+
+def test_a_field_without_the_flag_stays_bare(qapp):
+    assert _form().widget("modules").filter_bar is None
+
+
+def test_the_hidden_companion_gets_no_row_of_its_own(qapp):
+    """It is drawn inside the list, where the state means something."""
+    form = _filtered_form()
+    with pytest.raises(KeyError):
+        form.widget("modules_only_selected")
+
+
+def test_a_stored_only_selected_opens_the_box_ticked(qapp):
+    target = Filtered()
+    target.modules_only_selected = True
+    widget = _filtered_form(target).widget("modules")
+    assert widget.only_selected_box.isChecked() is True
+    assert widget.only_selected is True
+
+
+def test_toggling_the_box_writes_the_companion_field(qapp):
+    target = Filtered()
+    form = _filtered_form(target)
+    form.widget("modules").only_selected_box.setChecked(True)
+    assert target.modules_only_selected is True
+
+
+def test_toggling_the_box_reports_a_change_like_any_setting(qapp):
+    form = _filtered_form()
+    seen = []
+    form.changed.connect(lambda name, value: seen.append((name, value)))
+    form.widget("modules").only_selected_box.setChecked(True)
+    assert seen == [("modules_only_selected", True)]
+
+
+def test_refresh_pushes_the_companion_back_in(qapp):
+    target = Filtered()
+    form = _filtered_form(target)
+    target.modules_only_selected = True
+    form.refresh()
+    assert form.widget("modules").only_selected is True
