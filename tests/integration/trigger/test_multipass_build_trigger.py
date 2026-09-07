@@ -91,3 +91,37 @@ def test_duplicate_display_key_raises():
     # guard for anyone driving it directly
     with pytest.raises(SessionError, match="display key"):
         session.build()
+
+
+def test_find_output_is_scoped_to_one_rig_root():
+    """Two rigs can hold the same instance's output; the lookup must not guess."""
+    import tik.maya as tm
+    from tik.trigger.guides import nodes as guide_nodes
+    from tik.trigger.maya import tags
+
+    cmds.file(new=True, force=True)
+    made = []
+    for root_name in ("rig_grp", "test_rig_grp"):
+        root = tm.Transform.create(name=root_name)
+        node = tm.Transform.create(name=f"{root_name}_out", parent=root.long_name)
+        tags.tag(
+            node,
+            **{
+                tags.KIND: tags.DEFORM,
+                tags.INSTANCE: "id_shared",
+                tags.OUTPUT_NAME: "root",
+            },
+        )
+        made.append((root.long_name, node.long_name))
+
+    real_root, real_out = made[0]
+    test_root, test_out = made[1]
+
+    found = guide_nodes.find_output("id_shared", "root", under=real_root)
+    assert found.long_name == real_out
+    found = guide_nodes.find_output("id_shared", "root", under=test_root)
+    assert found.long_name == test_out
+    # unscoped still answers, for callers that have no root
+    assert guide_nodes.find_output("id_shared", "root") is not None
+    # a root with no such output answers None rather than the other rig's
+    assert guide_nodes.find_output("id_shared", "missing", under=real_root) is None

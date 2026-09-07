@@ -42,7 +42,7 @@ def scene_node(name: str):
     return tm.resolve(name)
 
 
-def find_output(instance_id: str, output_name: str):
+def find_output(instance_id: str, output_name: str, under: Optional[str] = None):
     """The built node fulfilling ``instance_id``'s ``output_name``, or None.
 
     How a later build pass reaches a module an earlier one produced. Outputs
@@ -52,9 +52,24 @@ def find_output(instance_id: str, output_name: str):
 
     Guides are irrelevant here -- an earlier pass may well have deleted its
     own -- so this scans the built rig, not the guide holder.
+
+    ``under`` is the long path of a rig root. A scene can hold the real rig and
+    the Guide Designer's test rig at once, and both answer to the same
+    ``trg_instance``; every output is a bind joint, so restricting the scan to
+    one root's subtree is exact. None scans the whole scene, which is what a
+    caller with no root in hand wants.
+
+    ``recursive`` is what lets the scan see the test rig at all: a wildcard
+    ``ls`` does not cross a namespace boundary, and the test rig lives in one.
+    It is safe precisely because ``under`` scopes the result -- the two go
+    together, and neither is sound on its own.
     """
     pattern = f"*.{tm.META_PREFIX}{tags.OUTPUT_NAME}"
-    for name in cmds.ls(pattern, long=True, objectsOnly=True) or []:
+    prefix = f"{under}|" if under else ""
+    found = cmds.ls(pattern, long=True, objectsOnly=True, recursive=True) or []
+    for name in found:
+        if prefix and not name.startswith(prefix):
+            continue
         node = tm.resolve(name)
         data = node.meta.as_dict()
         if (

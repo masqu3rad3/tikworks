@@ -302,6 +302,17 @@ class DesignerCommands:
         finally:
             self.refresh()
 
+    def clear_test_rig(self) -> None:
+        """Delete the throwaway rig the Designer's Build made."""
+        from tik.trigger.maya import sandbox
+
+        with self.watcher.mute():
+            cleared = sandbox.clear()
+        self.status.set_activity(
+            "Test rig cleared." if cleared else "No test rig to clear."
+        )
+        self.refresh()
+
     def draw_selected(self) -> None:
         """Draw the selected modules' guides into the scene."""
         self._draw([handle.instance_id for handle in self.selected_handles()])

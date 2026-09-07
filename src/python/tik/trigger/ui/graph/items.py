@@ -7,9 +7,10 @@ from typing import Optional
 
 from tik.shared.ui import theme
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
-from tik.trigger.ui.draw_state import DRAWN, NOT_DRAWN, STALE
+from tik.trigger.ui.draw_state import DRAWN, NOT_DRAWN, STALE, STALE_INK
 
 from .constants import (
+    BADGE,
     FRAME_INK,
     FRAME_PADDING,
     FRAME_TITLE,
@@ -23,6 +24,7 @@ from .constants import (
     PORT_RADIUS,
     PORT_SPACE,
     ROW,
+    STATE_STRIPE,
     WIRE_PRIMARY,
     WIRE_SECONDARY,
 )
@@ -284,6 +286,36 @@ class NodeItem(QtWidgets.QGraphicsItem):
         )
 
     # ---------------------------------------------------------------- paint
+    def _paint_stale_badge(self, painter) -> None:
+        """The out-of-date "!" at the head of the header.
+
+        Drawn on a dark chip rather than straight onto the header: the header
+        is tinted per module category, and an amber mark on the gold ``body``
+        tint would be the one pairing that does not read. The chip makes it
+        legible on every tint at once.
+        """
+        painter.save()
+        try:
+            top = (HEADER - BADGE) / 2.0
+            chip = QtCore.QRectF(5, top, BADGE, BADGE)
+            painter.setPen(QtCore.Qt.NoPen)
+            painter.setBrush(QtGui.QColor(0, 0, 0, 150))
+            painter.drawRoundedRect(chip, 3, 3)
+            ink = QtGui.QColor(STALE_INK)
+            centre = chip.center().x()
+            pen = QtGui.QPen(ink, 2.0)
+            pen.setCapStyle(QtCore.Qt.RoundCap)
+            painter.setPen(pen)
+            painter.drawLine(
+                QtCore.QPointF(centre, chip.top() + 3.0),
+                QtCore.QPointF(centre, chip.top() + 7.5),
+            )
+            painter.setPen(QtCore.Qt.NoPen)
+            painter.setBrush(ink)
+            painter.drawEllipse(QtCore.QPointF(centre, chip.bottom() - 2.7), 1.15, 1.15)
+        finally:
+            painter.restore()
+
     def paint(self, painter, option, widget=None) -> None:
         painter.setRenderHint(QtGui.QPainter.Antialiasing)
         body = QtCore.QRectF(0, 0, NODE_WIDTH, self._height)
@@ -305,8 +337,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
             painter.setClipPath(clip)
             painter.setPen(QtCore.Qt.NoPen)
             if self.draw_state == STALE:
-                painter.setBrush(QtGui.QColor(theme.ACCENT))
-                painter.drawRect(QtCore.QRectF(0, 0, 3, self._height))
+                painter.setBrush(QtGui.QColor(STALE_INK))
+                painter.drawRect(QtCore.QRectF(0, 0, STATE_STRIPE, self._height))
             else:
                 painter.setBrush(QtGui.QColor("#5a5a5a"))
                 offset = 0.0
@@ -335,10 +367,18 @@ class NodeItem(QtWidgets.QGraphicsItem):
         painter.setPen(ink)
         metrics = QtGui.QFontMetricsF(font)
         baseline = HEADER / 2 + metrics.capHeight() / 2
+        # The header paints over the top of the state stripe, so an out-of-date
+        # node would lose its marker exactly where the eye lands first. The
+        # badge carries it across: a shape, not only a colour, so it survives
+        # the gold module tints it may sit on and a reader who cannot separate
+        # amber from them.
+        shift = BADGE + 4 if self.draw_state == STALE else 0
+        if shift:
+            self._paint_stale_badge(painter)
         title = metrics.elidedText(
-            self.title, QtCore.Qt.ElideRight, NODE_WIDTH - GLYPH_WIDTH - 60
+            self.title, QtCore.Qt.ElideRight, NODE_WIDTH - GLYPH_WIDTH - 60 - shift
         )
-        painter.drawText(QtCore.QPointF(8, baseline), title)
+        painter.drawText(QtCore.QPointF(8 + shift, baseline), title)
         font.setBold(False)
         painter.setFont(font)
         metrics = QtGui.QFontMetricsF(font)

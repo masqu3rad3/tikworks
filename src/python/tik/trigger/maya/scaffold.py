@@ -10,6 +10,7 @@ and the values of attributes already present are left alone.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -25,6 +26,14 @@ TRIGGER_GRP = "trigger_grp"
 GEO_GRP = "geo_grp"
 PREFERENCES_CTRL = "preferences_ctrl"
 VISIBILITIES_CTRL = "visibilities_ctrl"
+
+#: The test rig lives in its own namespace, and it has to. tik.maya resolves
+#: nodes through short names in several places (``Node.__str__`` is the short
+#: name, and Maya's own commands hand short names back), so a test rig sharing
+#: short names with a built real rig makes them ambiguous and the build fails
+#: with "Object does not exist". A namespace makes them unique by construction.
+TEST_NAMESPACE = "trigger_test"
+TEST_ROOT = f"{TEST_NAMESPACE}:{RIG_GRP}"
 
 DISPLAY_MODES = ("normal", "template", "reference")  # == overrideDisplayType 0/1/2
 
@@ -43,15 +52,72 @@ PREFERENCE_ATTRS = (
 DISPLAY_SEPARATOR = "display_"
 
 
+@dataclass(frozen=True)
+class ScaffoldNames:
+    """The fixed names of one scaffold, and whether it is the throwaway one."""
+
+    root: str
+    trigger: str
+    geo: str
+    preferences: str
+    visibilities: str
+    is_test: bool = False
+    #: Namespace the scaffold's nodes live in. Empty for the real rig.
+    namespace: str = ""
+
+    def qualified(self, name: str) -> str:
+        """``name`` as it is addressed in the scene."""
+        return f"{self.namespace}:{name}" if self.namespace else name
+
+
+REAL_NAMES = ScaffoldNames(
+    RIG_GRP, TRIGGER_GRP, GEO_GRP, PREFERENCES_CTRL, VISIBILITIES_CTRL
+)
+#: The Guide Designer's throwaway rig. It keeps the real rig's names and takes
+#: them apart with a namespace; its root is a ``dagContainer`` so that deleting
+#: it takes every module container's DG nodes with it.
+TEST_NAMES = ScaffoldNames(
+    RIG_GRP,
+    TRIGGER_GRP,
+    GEO_GRP,
+    PREFERENCES_CTRL,
+    VISIBILITIES_CTRL,
+    is_test=True,
+    namespace=TEST_NAMESPACE,
+)
+
+
+@contextmanager
+def namespace(name: str):
+    """Create nodes inside the namespace ``name`` for the duration of the block.
+
+    Restores the previous namespace in a ``finally``: a build that raises must
+    not leave the rigger authoring into the test rig's namespace.
+    """
+    if not name:
+        yield
+        return
+    if not cmds.namespace(exists=name):
+        cmds.namespace(add=name)
+    previous = cmds.namespaceInfo(currentNamespace=True, absoluteName=True)
+    cmds.namespace(set=f":{name}")
+    try:
+        yield
+    finally:
+        cmds.namespace(set=previous)
+
+
 @dataclass
 class RigScaffold:
-    """The fixed nodes of the one rig in the scene."""
+    """The fixed nodes of one rig in the scene."""
 
     root: Any  # rig_grp
     trigger: Any  # trigger_grp
     geo: Any  # geo_grp
     preferences: Controller
     visibilities: Controller
+    #: True for the Guide Designer's throwaway rig, which is never published.
+    is_test: bool = False
 
 
 def _log(events, message: str, level: str = "warning") -> None:
@@ -66,14 +132,30 @@ def _lock_channels(node) -> None:
         plug.visible = False
 
 
-def _ensure_group(name: str, parent, kind: str, events) -> tm.Transform:
-    """The transform ``name`` under ``parent`` (None = world), tagged ``kind``."""
-    path = f"{parent.long_name}|{name}" if parent is not None else f"|{name}"
+def _ensure_group(
+    name: str, parent, kind: str, events, container: bool = False, prefix: str = ""
+) -> tm.Transform:
+    """The transform ``name`` under ``parent`` (None = world), tagged ``kind``.
+
+    ``container`` creates it as a ``dagContainer`` -- a transform subtype that
+    also *owns* the nodes created while it is current, DG ones included. That
+    ownership is what makes the test rig's teardown complete, and it extends to
+    the container's DAG children, so deleting this root takes the module
+    containers and their utility nodes with it.
+
+    ``prefix`` is the namespace the node is addressed under. Creation happens
+    inside that namespace already, so only the *lookup* needs it spelled out.
+    """
+    addressed = f"{prefix}{name}"
+    path = f"{parent.long_name}|{addressed}" if parent is not None else f"|{addressed}"
     if cmds.objExists(path):
         node = tm.Transform(path)
         if node.meta.get(tags.KIND) != kind:
             _log(events, f"Adopted existing '{name}' as the rig's {kind}.")
             node.meta[tags.KIND] = kind
+    elif container:
+        node = tm.resolve(cmds.container(type="dagContainer", name=name))
+        node.meta[tags.KIND] = kind
     else:
         node = tm.Transform.create(
             name=name, parent=parent.long_name if parent is not None else None
@@ -84,10 +166,13 @@ def _ensure_group(name: str, parent, kind: str, events) -> tm.Transform:
 
 
 def _ensure_control(
-    name: str, parent, kind: str, shape: str, events, size=1.0
+    name: str, parent, kind: str, shape: str, events, size=1.0, prefix: str = ""
 ) -> Controller:
-    """The controller ``name`` under ``parent``, tagged ``kind``."""
-    path = f"{parent.long_name}|{name}"
+    """The controller ``name`` under ``parent``, tagged ``kind``.
+
+    ``prefix`` is the namespace it is addressed under; see ``_ensure_group``.
+    """
+    path = f"{parent.long_name}|{prefix}{name}"
     if cmds.objExists(path):
         node = tm.Transform(path)
         if Controller.is_controller(node):
@@ -138,32 +223,84 @@ def _wire_geo(control: Controller, geo) -> None:
         prefs["geoDisplay"] >> geo["overrideDisplayType"]
 
 
-def ensure_rig(events: Optional[Any] = None) -> RigScaffold:
-    """The scaffold, created or healed. Safe to call before every step."""
-    root = _ensure_group(RIG_GRP, None, tags.RIG_ROOT, events)
-    trigger = _ensure_group(TRIGGER_GRP, root, tags.RIG_TRIGGER, events)
-    geo = _ensure_group(GEO_GRP, root, tags.RIG_GEO, events)
-    preferences = _ensure_control(
-        PREFERENCES_CTRL, trigger, tags.PREFERENCES, "P", events, size=1.0
-    )
-    visibilities = _ensure_control(
-        VISIBILITIES_CTRL, trigger, tags.VISIBILITIES, "Cog", events, size=0.5
-    )
-    # move the preferences a bit higher
-    visibilities.transform["translateX"].set(1)
-    _ensure_preference_attrs(preferences)
-    _wire_geo(preferences, geo)
+def _ensure(names: ScaffoldNames, events: Optional[Any] = None) -> RigScaffold:
+    """The scaffold ``names`` describes, created or healed."""
+    prefix = f"{names.namespace}:" if names.namespace else ""
+    with namespace(names.namespace):
+        root = _ensure_group(
+            names.root,
+            None,
+            tags.RIG_ROOT,
+            events,
+            container=names.is_test,
+            prefix=prefix,
+        )
+        trigger = _ensure_group(
+            names.trigger, root, tags.RIG_TRIGGER, events, prefix=prefix
+        )
+        geo = _ensure_group(names.geo, root, tags.RIG_GEO, events, prefix=prefix)
+        preferences = _ensure_control(
+            names.preferences,
+            trigger,
+            tags.PREFERENCES,
+            "P",
+            events,
+            size=1.0,
+            prefix=prefix,
+        )
+        visibilities = _ensure_control(
+            names.visibilities,
+            trigger,
+            tags.VISIBILITIES,
+            "Cog",
+            events,
+            size=0.5,
+            prefix=prefix,
+        )
+        # move the preferences a bit higher
+        visibilities.transform["translateX"].set(1)
+        _ensure_preference_attrs(preferences)
+        _wire_geo(preferences, geo)
     return RigScaffold(
         root=root,
         trigger=trigger,
         geo=geo,
         preferences=preferences,
         visibilities=visibilities,
+        is_test=names.is_test,
     )
 
 
+def ensure_rig(events: Optional[Any] = None) -> RigScaffold:
+    """The one real scaffold, created or healed. Safe before every step."""
+    return _ensure(REAL_NAMES, events)
+
+
+def ensure_test_rig(events: Optional[Any] = None) -> RigScaffold:
+    """The Guide Designer's throwaway scaffold, created or healed.
+
+    A second rig, deliberately: a mock-up must never land its module groups in
+    the real ``trigger_grp`` or its per-module tier enums on the real
+    ``visibilities_ctrl``. It is created lazily by the first test build, is not
+    in the session document, and is never published.
+    """
+    return _ensure(TEST_NAMES, events)
+
+
 def find_rig() -> Optional[RigScaffold]:
-    """The scaffold if the scene has one, without creating anything."""
+    """The real scaffold if the scene has one, without creating anything."""
     if not cmds.objExists(f"|{RIG_GRP}|{TRIGGER_GRP}|{PREFERENCES_CTRL}"):
         return None
     return ensure_rig()
+
+
+def find_test_rig() -> Optional[RigScaffold]:
+    """The test scaffold if the scene has one, without creating anything."""
+    path = "|{}|{}|{}".format(
+        TEST_NAMES.qualified(TEST_NAMES.root),
+        TEST_NAMES.qualified(TEST_NAMES.trigger),
+        TEST_NAMES.qualified(TEST_NAMES.preferences),
+    )
+    if not cmds.objExists(path):
+        return None
+    return ensure_test_rig()

@@ -107,7 +107,9 @@ QSplitter::handle:vertical { height: 6px; border-top: 1px solid #303030; border-
 #BuildBar QPushButton#SyncButton { min-width: 92px; }
 #BarRule { background-color: #353535; min-width: 1px; max-width: 1px; border: none; }
 #BuildBar QPushButton[quiet="true"] { color: #8f8f8f; }
-#BuildBar QPushButton[alert="true"] { border-color: #FE7E00; color: #e0c8a8; }
+/* Amber, matching trigger.ui.draw_state.STALE_INK -- the bar says the same
+   thing the tree dot and the graph node say, and never in the accent. */
+#BuildBar QPushButton[alert="true"] { border-color: #EDC13A; color: #e6d5a8; }
 #BuildBar #FilterPillLabel { background-color: #3a2e1f; border: 1px solid #FE7E00; border-radius: 9px; padding: 2px 10px; }
 QPushButton#PrimaryButton { background-color: #FE7E00; color: #1a1a1a; font-weight: 500; }
 QPushButton#PrimaryButton:hover { background-color: #FF9500; }
