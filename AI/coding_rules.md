@@ -250,16 +250,27 @@ def control_names(cls, settings=None):
 
 Two rules keep the manifest honest:
 
-- **Tweaks are excluded by construction.** `rig.tweak_control(main)` creates the
-  role `<main>_tweak` parented under its main, so a space switch on one would
-  fight the parent it hangs from. A role ending in `_tweak` is never declared.
+- **Tweaks and pivots are excluded by construction.** `rig.tweak_control(main)`
+  creates the role `<main>_tweak` parented under its main, so a space switch on
+  one would fight the parent it hangs from; `rig.pivot_control(main)` creates
+  `<main>_pivot` the same way. A role ending in `_tweak` or `_pivot` is never
+  declared.
 - **Roles a system chooses are named by that system.** A module using
   `build_ikfk_limb` calls `limb_control_names(labels=...)` rather than writing
   `"fk_upper"` out; hardcoding would drift the moment the system renamed a role.
 
+A module may also declare **`pivot_controls`** — `{control role: anchor guide
+role}` — which gives that control a movable pivot through
+`rig.pivot_control(ctrl)`: a `showPivot` bool, a pivot controller under it
+driving `rotatePivot`/`scalePivot`, and, when the rigger's `pivot_presets` table
+has rows for it, a `pivotPreset` enum switching between named positions placed
+as guides. The anchor is the guide those preset guides hang under, so moving it
+carries them along. tik.maya owns only the wiring (`Controller.drive_pivot`);
+naming `showPivot` and `pivotPreset` is policy, and policy is trigger's.
+
 `tests/integration/trigger/test_module_ground_rules.py` builds every shipped
 module and asserts the manifest **equals** the roles tagged on the controllers
-it created, minus tweaks. A control the module forgot to declare is invisible
+it created, minus tweaks and pivots. A control the module forgot to declare is invisible
 in the anim-space table — which is exactly how `fkchain` and `ribbon` once
 shipped with animation spaces that could not be used at all.
 
