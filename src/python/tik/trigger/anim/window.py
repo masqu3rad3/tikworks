@@ -70,8 +70,12 @@ class SwitchesWindow(MayaToolWindow):
         self._build_bar(layout)
 
         self.resize(380, 430)
-        self._install_watcher()
+        # Clear first, install second, seed last. Seeding inside the watcher
+        # install and clearing afterwards is what shipped an empty tool over a
+        # live selection.
         self.set_context(SwitchContext())
+        self._install_watcher()
+        self.refresh_from_scene()
 
     # ------------------------------------------------------------- building
     def _build_tabs(self, layout) -> None:
@@ -292,7 +296,7 @@ class SwitchesWindow(MayaToolWindow):
             self.body_note.setText(EMPTY_NOTE)
         elif not self._states:
             self.body_note.setText(
-                f"Nothing selected can use this switch. {switch.help}"
+                f"No selected control can use this switch. {switch.help}"
             )
         else:
             self.body_note.setText(switch.help)
@@ -319,12 +323,17 @@ class SwitchesWindow(MayaToolWindow):
         from tik.shared.ui.scene_watcher import SceneWatcher
 
         self._watcher = SceneWatcher(
-            lambda _event: self.set_context(SwitchContext.from_scene()),
+            lambda _event: self.refresh_from_scene(),
             events=("SelectionChanged", "Undo", "Redo"),
             parent=self,
         )
         for job in self._watcher.install():
             self.register_script_job(job)
+
+    def refresh_from_scene(self) -> None:
+        """Re-read the selection. A no-op outside Maya, where there is none."""
+        if not HAS_MAYA:
+            return
         self.set_context(SwitchContext.from_scene())
 
     def _scene_times(self) -> tuple:

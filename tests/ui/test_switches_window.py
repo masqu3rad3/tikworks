@@ -202,3 +202,26 @@ def test_frame_is_the_default_scope(qapp):
     window = _window()
     assert window.frame_button.isChecked() is True
     assert window.range_button.isChecked() is False
+
+
+# ------------------------------------------------------------ scene seeding
+def test_a_new_window_shows_the_live_selection(qapp, monkeypatch):
+    """Construction seeds from the scene. It once cleared straight afterwards,
+    so the tool opened empty over a live selection."""
+    from tik.trigger.anim import window as window_module
+
+    monkeypatch.setattr(window_module, "HAS_MAYA", True)
+    monkeypatch.setattr(
+        window_module.SwitchContext, "from_scene", classmethod(lambda cls: _one())
+    )
+    window = SwitchesWindow()
+    window.times_provider = lambda: (1.0,)
+    assert window.context_label.text() == "L_arm_ik_ctrl"
+    assert window.states == ["a", "b", "c"]
+
+
+def test_refresh_from_scene_is_inert_without_maya(qapp):
+    window = _window()
+    window.set_context(_one())
+    window.refresh_from_scene()
+    assert window.context_label.text() == "L_arm_ik_ctrl"
