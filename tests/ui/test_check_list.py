@@ -279,3 +279,65 @@ def test_the_theme_paints_the_only_selected_state(qapp):
     from tik.shared.ui import theme
 
     assert '#CheckList[onlySelected="true"]' in theme.stylesheet()
+
+
+# --- the empty list ------------------------------------------------------------
+
+
+def test_an_empty_list_says_so_in_words(qapp):
+    """ "0 of 9" reads like a fact; "None selected" reads like something to fix."""
+    editor = _editor()
+    assert editor.count_label.text() == "None selected"
+
+
+def test_an_empty_list_still_reports_the_filtered_count(qapp):
+    editor = _editor()
+    editor.filter_bar.set_text("L_")
+    assert editor.count_label.text() == "None selected · 2 shown"
+
+
+def test_the_count_is_marked_while_nothing_is_ticked(qapp):
+    """The theme tints it, so an untouched picker does not read as finished."""
+    editor = _editor()
+    assert editor.count_label.property("empty") is True
+    _tick(editor, "spine")
+    assert editor.count_label.property("empty") is False
+
+
+def test_the_theme_tints_the_empty_count(qapp):
+    from tik.shared.ui import theme
+
+    assert '#CheckListCount[empty="true"]' in theme.stylesheet()
+
+
+def test_the_theme_draws_the_tick_boxes_itself(qapp):
+    """Left to the base style they are a dark box on the darkest ground."""
+    from tik.shared.ui import theme
+
+    qss = theme.stylesheet()
+    for rule in (
+        "#CheckList::indicator",
+        "#CheckList::indicator:unchecked",
+        "#CheckList::indicator:unchecked:hover",
+        "#CheckList::indicator:checked",
+        "#CheckList::item",
+        "#CheckList::item:hover",
+        # the header's own box is the same house style on the same dark ground
+        "#CheckListOnlySelected::indicator:unchecked",
+        "#CheckListOnlySelected::indicator:checked",
+    ):
+        assert rule in qss, f"{rule} is unstyled"
+
+
+def test_only_selected_alone_adds_no_shown_count(qapp):
+    """ "3 of 9 · 3 shown" is noise: the accent border already says rows hide."""
+    editor = _editor(value=["id_spine", "id_larm"])
+    editor.set_only_selected(True)
+    assert editor.count_label.text() == "2 of 4"
+
+
+def test_a_filter_on_top_of_only_selected_still_counts(qapp):
+    editor = _editor(value=["id_spine"])
+    editor.set_only_selected(True)
+    editor.filter_bar.set_text("arm")
+    assert editor.count_label.text() == "1 of 4 · 2 shown"

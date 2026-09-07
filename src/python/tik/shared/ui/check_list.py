@@ -82,9 +82,7 @@ class CheckListEditor(QtWidgets.QWidget):
         self.list = QtWidgets.QListWidget(self)
         self.list.setObjectName("CheckList")
         self.list.setUniformItemSizes(True)
-        # The filter bar and header cost height a properties panel does not
-        # have to spare, so the list itself gives some back.
-        self.list.setMaximumHeight(150 if filterable else 160)
+        self.list.setMaximumHeight(160)
         self.list.setProperty("onlySelected", False)
         self.list.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._show_menu)
@@ -109,6 +107,7 @@ class CheckListEditor(QtWidgets.QWidget):
         self.only_selected_box.toggled.connect(self._on_box_toggled)
         self.count_label = QtWidgets.QLabel("", header)
         self.count_label.setObjectName("CheckListCount")
+        self.count_label.setProperty("empty", True)
         row.addWidget(self.only_selected_box)
         row.addStretch(1)
         row.addWidget(self.count_label)
@@ -277,16 +276,30 @@ class CheckListEditor(QtWidgets.QWidget):
                 visible = value in self._value or value in self._kept
             item.setHidden(not visible)
             shown += int(visible)
-        self._update_count(shown)
+        self._update_count(shown, filtering)
 
-    def _update_count(self, shown: int) -> None:
+    def _update_count(self, shown: int, filtering: bool) -> None:
+        """Say what is ticked -- in words when that is nothing.
+
+        "0 of 9" reads like a fact about the list; "None selected" reads like
+        something the rigger still has to do, which is what an untouched
+        picker actually is.
+        """
         if self.count_label is None:
             return
         total = len(self._entries)
-        text = f"{len(self._value)} of {total}"
-        if shown != total:
+        empty = not self._value
+        text = "None selected" if empty else f"{len(self._value)} of {total}"
+        # Only the filter earns the second number. When only-selected is what
+        # hides the rows the accent border already says so, and "3 of 9 -- 3
+        # shown" is the same fact twice.
+        if filtering and shown != total:
             text = f"{text} · {shown} shown"
         self.count_label.setText(text)
+        if self.count_label.property("empty") != empty:
+            self.count_label.setProperty("empty", empty)
+            self.count_label.style().unpolish(self.count_label)
+            self.count_label.style().polish(self.count_label)
 
     def _on_item_changed(self, item) -> None:
         if self._loading:

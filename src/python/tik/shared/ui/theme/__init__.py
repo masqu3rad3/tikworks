@@ -79,8 +79,29 @@ QSplitter::handle:vertical { height: 6px; border-top: 1px solid #303030; border-
    loud enough to notice on the left edge, quiet enough not to shout */
 #CheckList[onlySelected="true"] { border-color: #4a3a26; border-left: 3px solid #FE7E00; background-color: #191512; }
 #CheckListHeader { background: transparent; }
-#CheckListOnlySelected { color: #b4b4b4; font-size: 10px; }
+#CheckListOnlySelected { color: #b4b4b4; font-size: 11px; }
 #CheckListCount { color: #7b7b7b; font-size: 10px; }
+/* an untouched picker should not read as a finished one */
+#CheckListCount[empty="true"] { color: #c9a24a; }
+/* rows: room to click, and a hover that says the row is the target */
+#CheckList::item { padding: 2px 5px; border-radius: 2px; color: #c8c8c8; }
+#CheckList::item:hover { background-color: #232323; }
+#CheckList::item:selected { background-color: #2b2b2b; color: #ececec; }
+/* Item-view indicators inherit nothing from the QCheckBox rules above, so
+   without these they are whatever the host style draws -- in Maya, a dark box
+   on the darkest ground in the app. The unchecked border is deliberately
+   lighter than the house checkbox's: this one sits on #151515. */
+#CheckList::indicator { width: 13px; height: 13px; margin-right: 4px; border-radius: 2px; }
+#CheckList::indicator:unchecked { background-color: #0f0f0f; border: 1px solid #5a5a5a; }
+#CheckList::indicator:unchecked:hover { background-color: #1a1a1a; border: 1px solid #FE7E00; }
+#CheckList::indicator:checked { background-color: #FE7E00; border: 1px solid #FE7E00; }
+#CheckList::indicator:checked:hover { background-color: #FF9500; border: 1px solid #FF9500; }
+/* the header's own box sits on the same dark ground and needs the same help;
+   the house QCheckBox rule sizes it 9px, so re-assert the whole box */
+#CheckListOnlySelected::indicator { width: 11px; height: 11px; border-radius: 2px; }
+#CheckListOnlySelected::indicator:unchecked { background-color: #0f0f0f; border: 1px solid #5a5a5a; width: 11px; height: 11px; }
+#CheckListOnlySelected::indicator:unchecked:hover { background-color: #1a1a1a; border: 1px solid #FE7E00; width: 11px; height: 11px; }
+#CheckListOnlySelected::indicator:checked { background-color: #FE7E00; border: 1px solid #FE7E00; width: 11px; height: 11px; }
 #BuildBar { background-color: #1e1e1e; border-top: 1px solid #353535; }
 #BuildBar QPushButton { width: auto; min-width: 110px; }
 #BuildBar QPushButton#SyncButton { min-width: 92px; }
