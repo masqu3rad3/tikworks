@@ -250,18 +250,42 @@ def control_names(cls, settings=None):
 
 Two rules keep the manifest honest:
 
-- **Tweaks are excluded by construction.** `rig.tweak_control(main)` creates the
-  role `<main>_tweak` parented under its main, so a space switch on one would
-  fight the parent it hangs from. A role ending in `_tweak` is never declared.
+- **Tweaks and pivots are excluded by construction.** `rig.tweak_control(main)`
+  creates the role `<main>_tweak` parented under its main, so a space switch on
+  one would fight the parent it hangs from; `rig.pivot_control(main)` creates
+  `<main>_pivot` the same way. A role ending in `_tweak` or `_pivot` is never
+  declared.
 - **Roles a system chooses are named by that system.** A module using
   `build_ikfk_limb` calls `limb_control_names(labels=...)` rather than writing
   `"fk_upper"` out; hardcoding would drift the moment the system renamed a role.
 
+A module may also declare **`pivot_controls`** — `{control role: anchor guide
+role}` — which gives that control a movable pivot through
+`rig.pivot_control(ctrl)`: a `showPivot` bool, a pivot controller under it
+driving `rotatePivot`/`scalePivot`, and, when the rigger's `pivot_presets` table
+has rows for it, a `pivotPreset` enum switching between named positions placed
+as guides. The anchor is the guide those preset guides hang under, so moving it
+carries them along. tik.maya owns only the wiring (`Controller.drive_pivot`);
+naming `showPivot` and `pivotPreset` is policy, and policy is trigger's.
+
 `tests/integration/trigger/test_module_ground_rules.py` builds every shipped
 module and asserts the manifest **equals** the roles tagged on the controllers
-it created, minus tweaks. A control the module forgot to declare is invisible
+it created, minus tweaks and pivots. A control the module forgot to declare is invisible
 in the anim-space table — which is exactly how `fkchain` and `ribbon` once
 shipped with animation spaces that could not be used at all.
+
+### Animator switches
+
+A switch changes what a control *does*, and the pose survives it. That is the
+whole entry test for a tab in the Switches dock (`tik/trigger/anim`): name what
+it promises not to disturb, or it is not a switch. A tab is a
+`@register_switch` class supplying `states` / `current` / `apply`; the scene
+work is a plain function in `tik/trigger/maya`, so a shelf button can call it
+without opening a window, and the shell itself never touches Maya.
+
+**An animator tool reads the rig, never the session.** `trigger/anim` may not
+import `trigger.session`, the documents, the guides or `trigger.ui` --
+everything a switch needs is already on the built nodes.
 
 **The boundary rule:** `rig` owns naming, tagging, group placement and
 registration. tik.maya owns the mechanism. A helper earns a place on `rig` only

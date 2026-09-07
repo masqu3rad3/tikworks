@@ -312,3 +312,16 @@ class Feedback:
             self._host(), title, label, text=text
         )
         return entered if accepted else None
+
+    def ask_choice(
+        self,
+        title: str = "",
+        label: str = "",
+        options: Sequence[str] = (),
+        current: int = 0,
+    ) -> Optional[str]:
+        """Ask the user to pick one of ``options``; ``None`` when they cancel."""
+        picked, accepted = QtWidgets.QInputDialog.getItem(
+            self._host(), title, label, list(options), current, False
+        )
+        return picked if accepted else None

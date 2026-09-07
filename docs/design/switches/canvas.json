@@ -1,0 +1,56 @@
+{
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 380,
+      "h": 430,
+      "title": "Switches \u2014 the tool",
+      "is_interactive": true
+    },
+    {
+      "file": "States.dc.html",
+      "x": 480,
+      "y": 0,
+      "w": 380,
+      "h": 1240,
+      "title": "Selection states"
+    },
+    {
+      "file": "Anatomy.dc.html",
+      "x": 960,
+      "y": 0,
+      "w": 720,
+      "h": 980,
+      "title": "The shell"
+    },
+    {
+      "file": "InContext.dc.html",
+      "x": 0,
+      "y": 1320,
+      "w": 1120,
+      "h": 730,
+      "title": "Docked and floating"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "try-me",
+      "x": 0,
+      "y": -150,
+      "w": 380,
+      "text": "Click the chips and the tabs \u2014 this one is live.\n\nThe question to answer: does one click to snap feel right, or would you rather pick then Apply?"
+    },
+    {
+      "id": "the-idea",
+      "x": 960,
+      "y": -150,
+      "w": 720,
+      "text": "The organising idea: a switch changes what a control DOES, and the pose survives it.\n\nThat is why pivot presets, IK/FK and the pole pin belong in one tool \u2014 and it is the test a fourth tab has to pass."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

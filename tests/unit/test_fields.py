@@ -384,3 +384,34 @@ def test_text_field_is_exported_by_trigger_core():
     from tik.trigger.core import TextField as exported
 
     assert exported is TextField
+
+
+def test_with_default_copies_the_field_and_replaces_its_default():
+    from tik.core.fields import Column, TableField
+
+    class Base(Schema):
+        rows = TableField(
+            [],
+            label="Rows",
+            help="original help",
+            last=True,
+            columns=(Column("control", "choice"), Column("label", "string")),
+        )
+
+    class Child(Base):
+        rows = Base.rows.with_default([{"control": "ik", "label": "tip"}])
+
+    assert Base().rows == []
+    assert Child().rows == [{"control": "ik", "label": "tip"}]
+    # the shape travels with the copy
+    child_field = Child.fields()["rows"]
+    assert [column.name for column in child_field.columns] == ["control", "label"]
+    assert child_field.help == "original help"
+    assert child_field.last is True
+    assert child_field.label == "Rows"
+    # the original is untouched
+    assert Base.fields()["rows"].default == []
+    # a plain field works too, and the new default is validated
+    assert IntField(1, max=10).with_default(5).default == 5
+    with pytest.raises(FieldValidationError):
+        IntField(1, max=10).with_default(50)

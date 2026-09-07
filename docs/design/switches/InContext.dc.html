@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
+  <style>
+    body { margin: 0; background: #1a1a1a; color: #c0c0c0;
+           font-family: "Roboto", "Segoe UI", sans-serif; font-size: 12px;
+           -webkit-font-smoothing: antialiased; }
+    a { color: #FE7E00; } a:hover { color: #FF9500; }
+    .cap { color: #7b7b7b; font-size: 10px; letter-spacing: 1px; }
+    .why { color: #8f8f8f; font-size: 11px; line-height: 1.55; }
+    .name { color: #ececec; font-family: Consolas, "Roboto Mono", monospace; font-size: 11px; }
+    .chip { padding: 6px 13px; border-radius: 3px; font-size: 11px;
+            border: 1px solid #353535; background: #282828; color: #c8c8c8; }
+    .chipOn { border-color: #FE7E00; background: rgba(254,126,0,0.16);
+              color: #ffbd7f; font-weight: 500; }
+    .row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tab { padding: 5px 11px; font-size: 11px; border: 1px solid #303030;
+           border-bottom: none; border-top-left-radius: 3px; border-top-right-radius: 3px; }
+    .on { background: #2a2a2a; color: #ececec; border-top: 2px solid #FE7E00; }
+    .off { background: #1f1f1f; color: #8a8a8a; }
+  </style>
+</helmet>
+
+<div style="width: 1120px; box-sizing: border-box; padding: 26px; display: flex; flex-direction: column; gap: 18px">
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div class="cap">IN CONTEXT</div>
+    <div class="why" style="max-width: 700px">
+      Docked to the host's right edge for a session of blocking, or torn off as a
+      floating strip parked over the viewport. The viewport stays live either way &mdash;
+      nothing here takes a modal grab.
+    </div>
+  </div>
+
+  <div style="display: flex; border: 1px solid #303030; background: #202020; height: 560px">
+
+    <div style="flex-grow: 1; display: flex; flex-direction: column">
+      <div style="display: flex; align-items: center; gap: 16px; background: #2f2f2f;
+                  padding: 6px 12px; border-bottom: 1px solid #262626; color: #c0c0c0; font-size: 11px">
+        <span>File</span><span>Edit</span><span>Modify</span><span>Display</span>
+        <span style="color: #FE7E00">Trigger</span>
+        <span style="flex-grow: 1"></span>
+        <span style="color: #7b7b7b">host DCC window</span>
+      </div>
+
+      <div style="flex-grow: 1; position: relative; background: #2b2b2b; overflow: hidden">
+        <svg width="100%" height="100%" viewBox="0 0 700 480" preserveAspectRatio="xMidYMid meet"
+             style="position: absolute; inset: 0">
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M40 0H0V40" fill="none" stroke="#333333" stroke-width="1"></path>
+            </pattern>
+          </defs>
+          <rect width="700" height="480" fill="url(#grid)"></rect>
+          <line x1="0" y1="330" x2="700" y2="330" stroke="#3d3d3d" stroke-width="1.5"></line>
+
+          <g stroke="#5b8fd0" stroke-width="2.5" fill="none" stroke-linecap="round">
+            <path d="M250 150 L350 165 L430 235"></path>
+          </g>
+          <g fill="#5b8fd0">
+            <circle cx="250" cy="150" r="5"></circle>
+            <circle cx="350" cy="165" r="5"></circle>
+          </g>
+
+          <g stroke="#d4b04a" stroke-width="1.6" fill="none" opacity="0.9">
+            <path d="M430 235 L470 258 L505 262"></path>
+            <circle cx="470" cy="258" r="3.5" fill="#d4b04a" stroke="none"></circle>
+          </g>
+
+          <circle cx="430" cy="235" r="19" fill="none" stroke="#FE7E00" stroke-width="2"></circle>
+          <circle cx="430" cy="235" r="19" fill="none" stroke="#FE7E00" stroke-width="6" opacity="0.14"></circle>
+
+          <g stroke="#5ec48a" stroke-width="1.6" fill="none">
+            <circle cx="505" cy="262" r="8"></circle>
+            <path d="M497 262h16M505 254v16"></path>
+          </g>
+          <text x="519" y="259" fill="#5ec48a" font-family="Roboto, sans-serif" font-size="12">ball</text>
+          <text x="519" y="274" fill="#6f6f6f" font-family="Roboto, sans-serif" font-size="11">active pivot</text>
+
+          <g stroke="#4d5a48" stroke-width="1.3" fill="none" opacity="0.8">
+            <circle cx="548" cy="268" r="6"></circle>
+            <path d="M542 268h12M548 262v12"></path>
+            <circle cx="452" cy="243" r="6"></circle>
+            <path d="M446 243h12M452 237v12"></path>
+          </g>
+          <text x="560" y="272" fill="#5f5f5f" font-family="Roboto, sans-serif" font-size="11">tip</text>
+          <text x="418" y="272" fill="#5f5f5f" font-family="Roboto, sans-serif" font-size="11">wrist</text>
+        </svg>
+
+        <div style="position: absolute; left: 26px; bottom: 26px; width: 330px;
+                    border: 1px solid #303030; background: #242424;
+                    box-shadow: 0 14px 34px rgba(0,0,0,0.55)">
+          <div style="display: flex; align-items: center; background: #1e1e1e; padding: 4px 8px;
+                      border-bottom: 1px solid #303030">
+            <span style="color: #7b7b7b; font-weight: 700; font-size: 11px">Switches</span>
+            <span style="flex-grow: 1"></span>
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#7b7b7b" stroke-width="1.4">
+              <path d="M4 4l8 8M12 4l-8 8"></path>
+            </svg>
+          </div>
+          <div style="display: flex; gap: 2px; padding: 6px 6px 0 6px">
+            <div class="tab on">Pivot</div>
+            <div class="tab off">IK / FK</div>
+            <div class="tab off">Pin</div>
+          </div>
+          <div style="border: 1px solid #303030; border-top: none; margin: 0 6px 6px 6px">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+                        background: #2a2a2a; border-bottom: 1px solid #303030">
+              <span style="width: 3px; height: 13px; border-radius: 2px; background: #5b8fd0"></span>
+              <span class="name">L_arm_ik_ctrl</span>
+            </div>
+            <div style="padding: 11px 10px" class="row">
+              <div class="chip">default</div>
+              <div class="chip">tip</div>
+              <div class="chip chipOn">ball</div>
+              <div class="chip">wrist</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="position: absolute; left: 380px; bottom: 40px; color: #6f6f6f; font-size: 11px;
+                    line-height: 1.5; max-width: 190px">
+          Floating: parked over the viewport,<br>collapsed to the one tab in use.
+        </div>
+      </div>
+
+      <div style="background: #1e1e1e; border-top: 1px solid #303030; padding: 5px 12px;
+                  color: #6f6f6f; font-size: 11px">
+        1 control selected
+      </div>
+    </div>
+
+    <div style="width: 4px; background: #1f1f1f; border-left: 1px solid #303030;
+                border-right: 1px solid #303030"></div>
+
+    <div style="width: 320px; flex-shrink: 0; display: flex; flex-direction: column; background: #242424">
+      <div style="display: flex; align-items: center; background: #1e1e1e; padding: 5px 9px;
+                  border-bottom: 1px solid #303030">
+        <span style="color: #7b7b7b; font-weight: 700; font-size: 11px">Switches</span>
+        <span style="flex-grow: 1"></span>
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="#7b7b7b" stroke-width="1.4">
+          <rect x="2.5" y="4.5" width="9" height="7" rx="1"></rect>
+          <path d="M6 4.5V3.5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-1"></path>
+        </svg>
+      </div>
+
+      <div style="display: flex; gap: 2px; padding: 6px 6px 0 6px">
+        <div class="tab on">Pivot</div>
+        <div class="tab off">IK / FK</div>
+        <div class="tab off">Pin</div>
+      </div>
+
+      <div style="flex-grow: 1; display: flex; flex-direction: column; margin: 0 6px 6px 6px;
+                  border: 1px solid #303030; border-top: none">
+        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+                    background: #2a2a2a; border-bottom: 1px solid #303030">
+          <span style="width: 3px; height: 14px; border-radius: 2px; background: #5b8fd0"></span>
+          <span class="name">L_arm_ik_ctrl</span>
+          <span style="flex-grow: 1"></span>
+          <span style="color: #7b7b7b; font-size: 11px">arm</span>
+        </div>
+        <div style="flex-grow: 1; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px">
+          <div class="cap">PIVOT PRESET</div>
+          <div class="row">
+            <div class="chip">default</div>
+            <div class="chip">tip</div>
+            <div class="chip chipOn">ball</div>
+            <div class="chip">wrist</div>
+          </div>
+          <div style="height: 1px; background: #303030"></div>
+          <div style="display: flex; align-items: center; gap: 9px">
+            <span style="width: 13px; height: 13px; border-radius: 2px; background: #FE7E00;
+                         display: flex; align-items: center; justify-content: center">
+              <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#1a1a1a" stroke-width="2.2">
+                <path d="M2 6.4l2.6 2.6L10 3.4"></path>
+              </svg>
+            </span>
+            <span style="color: #e6e6e6">Show pivot control</span>
+          </div>
+          <div class="why" style="margin-left: 22px">
+            Draws the pivot handle in the viewport so it can be nudged off a preset.
+          </div>
+        </div>
+        <div style="background: #1e1e1e; border-top: 1px solid #353535; padding: 7px 10px;
+                    display: flex; flex-direction: column; gap: 6px">
+          <div style="display: flex; align-items: center; gap: 9px">
+            <span style="width: 13px; height: 13px; border-radius: 2px; background: #FE7E00;
+                         display: flex; align-items: center; justify-content: center">
+              <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#1a1a1a" stroke-width="2.2">
+                <path d="M2 6.4l2.6 2.6L10 3.4"></path>
+              </svg>
+            </span>
+            <span style="color: #e6e6e6; font-size: 11px">Key</span>
+            <span style="flex-grow: 1"></span>
+            <span style="padding: 3px 10px; font-size: 11px; border-radius: 3px;
+                         border: 1px solid #FE7E00; background: rgba(254,126,0,0.16);
+                         color: #ffbd7f">Frame</span>
+            <span style="padding: 3px 10px; font-size: 11px; border-radius: 3px;
+                         border: 1px solid #353535; background: #282828; color: #8f8f8f">Range</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 7px">
+            <span style="width: 6px; height: 6px; border-radius: 50%; background: #5ec48a"></span>
+            <span style="color: #c0c0c0; font-size: 11px">Snapped to ball &mdash; pose held</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

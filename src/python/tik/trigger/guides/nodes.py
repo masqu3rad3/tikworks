@@ -24,6 +24,7 @@ from tik.trigger.maya import tags
 INPUTS = "trg_inputs"
 
 SIDE_COLORS = {"L": 6, "R": 13, "C": 17}
+MARKER_COLOR = 14  # green: a pivot-preset marker, never a chain guide
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +83,14 @@ def create_guide_joint(
     index: int = 0,
     parent=None,
     radius: float = 1.0,
+    marker: bool = False,
 ) -> tm.Joint:
-    """Create one tagged guide joint for ``module``."""
+    """Create one tagged guide joint for ``module``.
+
+    ``marker`` draws it as a locator cross instead of a bone -- what a
+    pivot-preset guide wants, since it marks a point rather than linking a
+    chain.
+    """
     joint = tm.Joint.create(
         name=naming.format_name(
             module.name,
@@ -111,7 +118,29 @@ def create_guide_joint(
         },
     )
     joint.color = SIDE_COLORS.get(module.side.value, 17)
+    if marker:
+        _style_as_marker(joint)
     return joint
+
+
+def _style_as_marker(joint) -> None:
+    """Draw ``joint`` as a locator cross instead of a bone.
+
+    A pivot-preset guide is a marker, not a link in a chain, and must not be
+    mistaken for one. It stays a joint so ``guide_nodes``, ``scan``,
+    ``snapshot`` and the selection sync -- all of which filter ``type="joint"``
+    -- keep working on it unchanged; only what it draws changes. The drawing
+    override lives on the transform, so the locator shape inherits the colour.
+    """
+    joint["drawStyle"].value = 2  # None: the bone is not drawn
+    # The shape is created straight under the joint rather than via
+    # ``spaceLocator`` and a reparent: importing a ``.trg`` draws a scratch
+    # copy of a module beside the real one, so two joints legitimately share a
+    # short name, and anything that looks one up by it raises.
+    shape = tm.create_node("locator", name=f"{joint.name}Shape", parent=joint.long_name)
+    for axis in "XYZ":
+        shape[f"localScale{axis}"].value = 0.6
+    joint.color = MARKER_COLOR
 
 
 # -------------------------------------------------------------------- read

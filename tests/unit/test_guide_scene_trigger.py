@@ -31,6 +31,7 @@ def test_create_guides_tags_and_parents(scene):
     assert scene.document.module(instance.instance_id).settings == {
         "controller_size": 10.0,
         "anim_spaces": [],
+        "pivot_presets": [],
     }
     assert joint.parent.name == tags.GUIDE_HOLDER
     assert instance.guide_pairs == [("root", 0)]
@@ -85,6 +86,7 @@ def test_settings_roundtrip_and_delete_keeps_children(scene):
     assert scene.read_settings(root.instance_id) == {
         "controller_size": 3.0,
         "anim_spaces": [],
+        "pivot_presets": [],
     }
     scene.delete_guides(root.instance_id)
     assert scene.find_instances([root.instance_id]) == []

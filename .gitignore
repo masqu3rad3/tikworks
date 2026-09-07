@@ -36,3 +36,9 @@ develop-eggs/
 /dump
 # Coverage
 .coverage
+
+# Seeded design canvases: ~2.5MB of generated editor payload each. The
+# .dc.html artboards and canvas.json beside them are the source; a canvas is
+# re-seeded from those, never edited in place.
+docs/design/**/*.html
+!docs/design/**/*.dc.html

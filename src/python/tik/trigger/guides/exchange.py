@@ -86,13 +86,17 @@ class GuideExchangeMixin:
         joints we are short of. They come out correctly named, tagged and
         attributed, because ``GuideDraft`` made them.
         """
-        missing = {role for role in module.guides.roles if role not in present_roles}
+        declared = (
+            *module.guides.roles,
+            *module.pivot_guide_roles(module.values()),
+        )
+        missing = {role for role in declared if role not in present_roles}
         if not missing:
             return {}
         scratch = tm.Transform.create(name="trg_import_scratch_GRP")
         try:
             draft = GuideDraft(module, scratch, None)
-            module.draw_guides(draft)
+            module.draw_all_guides(draft)
             role_of = {
                 joint.long_name: role for (role, _index), joint in draft.created.items()
             }
@@ -231,7 +235,12 @@ class GuideExchangeMixin:
                 side=module.side.value,
                 settings=module.values(),
             )
-            expand_guides(entry, module.guides, module.guide_count())
+            expand_guides(
+                entry,
+                module.guides,
+                module.guide_count(),
+                extra=module.pivot_guide_roles(module.values()),
+            )
             # radius/colour/orient aren't captured from the scene (spec 4.2 gap),
             # so the .trg file is their only source -- fill them in directly from
             # what the file recorded, for regenerate to re-apply from here on.

@@ -446,6 +446,8 @@ class TriggerWindow(MayaToolWindow):
             "Ctrl+Shift+L",
             checkable=True,
         )
+        tools_menu.addSeparator()
+        self._action(tools_menu, "Switches", self.open_switches)
 
     def _build_help_menu(self, help_menu) -> None:
         self._action(help_menu, "Documentation", self.open_docs)
@@ -862,6 +864,16 @@ class TriggerWindow(MayaToolWindow):
         self.script_action.setChecked(self.script_dock.isVisible())
         if self.script_dock.isVisible():
             self._refresh_script_viewer()
+
+    def open_switches(self) -> None:
+        """Open the animator's Switches dock.
+
+        A separate, non-modal window rather than a panel in here: it works on a
+        built rig with no session, and the import boundary keeps it that way.
+        """
+        from tik.trigger import anim
+
+        anim.show()
 
     def _refresh_script_viewer(self) -> None:
         view = self.current_view

@@ -9,6 +9,7 @@ import tik.trigger as trigger
 from tik.trigger.core import (
     DuplicateRegistrationError,
     GuideLayout,
+    Module,
     ModuleInstance,
     NotFoundError,
     ParentRef,
@@ -91,8 +92,13 @@ def test_module_instance_roundtrip():
     )
     data = json.loads(json.dumps(instance.to_dict()))
     restored = ModuleInstance.from_dict(data)
-    # anim_spaces lives on the base Module, so every module carries the key.
-    assert restored.settings == {"segments": 3, "anim_spaces": []}
+    # anim_spaces and pivot_presets live on the base Module, so every module
+    # carries both keys.
+    assert restored.settings == {
+        "segments": 3,
+        "anim_spaces": [],
+        "pivot_presets": [],
+    }
     assert restored.side == "R"
     assert restored.parent == ParentRef("abc", "root")
     assert restored.inputs == {"root": "body.root"}
@@ -461,3 +467,95 @@ def test_shipped_actions_declare_their_scopes():
     # a reference in the publish list would expand another session's *build*
     # actions into a publish run, which is nonsense
     assert not registry.allows("reference", PUBLISH)
+
+
+# ------------------------------------------------------------ pivot presets
+def _pivot_module():
+    """A module with one movable control and three preset rows."""
+
+    class Pivoted(Module):
+        guides = GuideLayout("root", "hand")
+        controls = ("ik",)
+        pivot_controls = {"ik": "hand"}
+        pivot_presets = Module.pivot_presets.with_default(
+            [{"control": "ik", "label": label} for label in ("tip", "ball", "wrist")]
+        )
+
+    return Pivoted
+
+
+def test_pivot_control_names_comes_from_the_declaration():
+    module = _pivot_module()()
+    assert module.pivot_control_names(module.values()) == ("ik",)
+    assert Module.pivot_control_names({}) == ()
+
+
+def test_pivot_rows_default_to_the_modules_own():
+    module = _pivot_module()()
+    assert [row["label"] for row in module.pivot_rows(module.values())] == [
+        "tip",
+        "ball",
+        "wrist",
+    ]
+
+
+def test_pivot_guide_roles_are_named_for_control_and_label():
+    module = _pivot_module()()
+    assert module.pivot_guide_roles(module.values()) == (
+        "pivot_ik_tip",
+        "pivot_ik_ball",
+        "pivot_ik_wrist",
+    )
+
+
+def test_pivot_guide_roles_skip_incomplete_rows():
+    module = _pivot_module()()
+    module.pivot_presets = [
+        {"control": "ik", "label": "tip"},
+        {"control": "", "label": "orphan"},
+        {"control": "ik", "label": ""},
+    ]
+    assert module.pivot_guide_roles(module.values()) == ("pivot_ik_tip",)
+
+
+def test_expected_guides_includes_the_preset_guides():
+    module = _pivot_module()()
+    assert module.expected_guides() == [
+        ("root", 0),
+        ("hand", 0),
+        ("pivot_ik_tip", 0),
+        ("pivot_ik_ball", 0),
+        ("pivot_ik_wrist", 0),
+    ]
+
+
+def test_validate_accepts_preset_guides():
+    """The layout does not know the pivot roles; validate must not hand them over."""
+    module = _pivot_module()()
+    assert module.validate() == []
+
+
+def test_validate_rejects_an_empty_preset_label():
+    module = _pivot_module()()
+    module.pivot_presets = [{"control": "ik", "label": ""}]
+    assert module.validate() == ["pivot preset row 1: label is required"]
+
+
+def test_validate_rejects_duplicate_preset_rows():
+    module = _pivot_module()()
+    module.pivot_presets = [
+        {"control": "ik", "label": "tip"},
+        {"control": "ik", "label": "tip"},
+    ]
+    assert module.validate() == ["pivot preset row 2: 'ik.tip' is already defined"]
+
+
+def test_a_preset_on_a_control_with_no_movable_pivot_warns():
+    """A settings change must cost a warning, never the rig."""
+    module = _pivot_module()()
+    module.pivot_presets = [{"control": "fk", "label": "tip"}]
+    assert module.validate() == []
+    assert module.warnings() == [
+        "pivot preset 'fk.tip': control 'fk' has no movable pivot with the "
+        "current settings"
+    ]

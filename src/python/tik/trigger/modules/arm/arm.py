@@ -44,6 +44,10 @@ class Arm(Module):
     inputs = (Input("root", primary=True, help="Where the collar hangs (chest/body)"),)
     outputs = ("collar", "upperarm", "lowerarm", "hand")
     controls = ("collar", *limb_control_names(labels=LIMB_LABELS))
+    pivot_controls = {"ik": "hand"}
+    pivot_presets = Module.pivot_presets.with_default(
+        [{"control": "ik", "label": label} for label in ("tip", "ball", "wrist")]
+    )
 
     stretch = BoolField(True, help="Build the stretch network")
     squash = BoolField(True, help="Build the compress-side network")
@@ -218,6 +222,9 @@ class Arm(Module):
             pole_pin=self.pole_pin,
             labels=LIMB_LABELS,
         )
+        # A planted hand rolls about the fingertips, then the knuckles, then
+        # the wrist. The rigger places all three; the animator picks one.
+        rig.pivot_control(limb.ik_control)
         if self.auto_collar:
             reach = build_reach(
                 rig,

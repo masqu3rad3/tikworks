@@ -153,3 +153,21 @@ def test_a_labelled_button_reaches_a_real_dialog_as_its_label(qapp):
     finally:
         QtWidgets.QMessageBox.exec = original
     assert "Sync and redraw" in captured["texts"]
+
+
+def test_ask_choice_returns_the_picked_item(qapp, monkeypatch):
+    monkeypatch.setattr(
+        feedback.QtWidgets.QInputDialog,
+        "getItem",
+        staticmethod(lambda *args, **kwargs: ("ball", True)),
+    )
+    assert Feedback().ask_choice("t", "l", ["tip", "ball"]) == "ball"
+
+
+def test_ask_choice_returns_none_on_cancel(qapp, monkeypatch):
+    monkeypatch.setattr(
+        feedback.QtWidgets.QInputDialog,
+        "getItem",
+        staticmethod(lambda *args, **kwargs: ("", False)),
+    )
+    assert Feedback().ask_choice("t", "l", ["tip"]) is None
