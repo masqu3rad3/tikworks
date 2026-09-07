@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 
-from tik.shared.ui.Qt import QtWidgets
+from tik.shared.ui.Qt import QtCore, QtWidgets
 from tik.shared.ui.qtmaya import get_main_window
 
 LOG = logging.getLogger(__name__)
@@ -191,5 +191,37 @@ class MayaToolWindow(MayaQWidgetDockableMixin, QtWidgets.QMainWindow):
             # retained: closing hides the control, so a cancelled close can
             # bring it back -- see dockCloseEventTriggered
             super().show(dockable=dockable, retain=True)
+            # Deferred: Maya parents a dockable widget into its workspace
+            # control on idle, and claiming the window before that steals it
+            # out of the control -- leaving a floating tool beside an empty
+            # docked panel.
+            from maya import cmds
+
+            cmds.evalDeferred(self.own_to_maya)
         else:
             QtWidgets.QWidget.setVisible(self, True)
+
+    def own_to_maya(self) -> None:
+        """Give a floating tool Maya as its owner, so it cannot sink behind it.
+
+        ``MayaQWidgetDockableMixin`` drops the parent it is handed, and a
+        window Maya does not own goes behind the main window the moment Maya
+        takes focus -- which is what a floating tool must never do. Docking
+        re-parents the widget into its workspace control, so the guard below
+        means this only ever applies while the tool floats.
+
+        ``Qt.Window`` is kept deliberately: the tool stays a real, resizable,
+        non-modal window with its own title bar. It gains an owner, not a mode.
+        """
+        if self._workspace_control() is not None:
+            return  # Maya owns it through its control; leave it alone
+        main = get_main_window()
+        window = self.window()
+        if main is None or window is main or window.parent() is not None:
+            return
+        # setParent hides the widget and forgets where it was
+        position = window.pos()
+        window.setParent(main, QtCore.Qt.Window)
+        if not position.isNull():
+            window.move(position)
+        QtWidgets.QWidget.setVisible(window, True)

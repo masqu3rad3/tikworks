@@ -225,3 +225,26 @@ def test_refresh_from_scene_is_inert_without_maya(qapp):
     window.set_context(_one())
     window.refresh_from_scene()
     assert window.context_label.text() == "L_arm_ik_ctrl"
+
+
+def test_own_to_maya_is_inert_without_maya(qapp):
+    """The floating-window owner step must never fire outside Maya."""
+    window = _window()
+    before = window.parent()
+    window.own_to_maya()
+    assert window.parent() is before
+
+
+def test_own_to_maya_leaves_a_docked_window_alone(qapp, monkeypatch):
+    """Claiming a widget Maya has put in a workspace control would steal it
+    out of the control, leaving a floating tool beside an empty panel."""
+    from tik.shared.ui import maya_window
+
+    monkeypatch.setattr(
+        SwitchesWindow, "_workspace_control", lambda self: "SomeWorkspaceControl"
+    )
+    monkeypatch.setattr(maya_window, "get_main_window", lambda: qapp.activeWindow())
+    window = _window()
+    before = window.parent()
+    window.own_to_maya()
+    assert window.parent() is before
