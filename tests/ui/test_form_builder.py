@@ -243,6 +243,26 @@ def test_a_collapsed_group_starts_folded(qapp):
     assert form.group_widget("Shape").is_expanded() is True
 
 
+def test_expand_group_opens_a_fold_the_caller_knows_has_content(qapp):
+    form = FormBuilder(Groupy())
+    assert form.group_widget("Tuning").is_expanded() is False
+    form.expand_group("Tuning")
+    assert form.group_widget("Tuning").is_expanded() is True
+
+
+def test_expand_group_is_not_remembered_as_the_users_own_choice(qapp):
+    """Opening a fold for one target must not reopen it for the next."""
+    form = FormBuilder(Groupy())
+    form.expand_group("Tuning")
+    form.set_target(Groupy())
+    assert form.group_widget("Tuning").is_expanded() is False
+
+
+def test_expand_group_ignores_a_group_this_target_does_not_have(qapp):
+    form = FormBuilder(Groupy())
+    form.expand_group("Nowhere")  # no raise
+
+
 def test_non_adjacent_fields_join_one_group(qapp):
     """Declaring A, A, B, A must make two groups, not three."""
     form = FormBuilder(Groupy())

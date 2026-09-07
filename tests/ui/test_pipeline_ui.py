@@ -658,3 +658,46 @@ def test_the_panel_announces_its_handle(view):
     assert seen[-1] == "mark"
     view.settings.set_handle(None)
     assert seen[-1] is None
+
+
+def test_the_notes_fold_stays_shut_until_the_action_carries_a_note(view):
+    view.add_action("mark")
+    fold = view.settings.form.group_widget("Notes")
+    assert fold.is_expanded() is False
+    view.session["mark"].notes = "waiting on the new head mesh"
+    view.settings.set_handle(view.session["mark"])
+    assert view.settings.form.group_widget("Notes").is_expanded() is True
+
+
+def test_a_note_is_edited_through_the_form_like_any_other_setting(view):
+    view.add_action("mark")
+    editor = view.settings.form.widget("notes")
+    editor.edit.setPlainText("check with modelling")  # as if typed
+    editor.commit()
+    assert view.session["mark"].notes == "check with modelling"
+
+
+def test_a_note_shows_in_the_pipeline_tooltip(view):
+    view.add_action("mark")
+    index = view.model.index_for_path("mark")
+    assert view.model.data(index, QtCore.Qt.ToolTipRole) == "mark (mark)"
+    view.session["mark"].notes = "waiting on the new head mesh"
+    tip = view.model.data(index, QtCore.Qt.ToolTipRole)
+    assert tip.startswith("mark (mark)")
+    assert "waiting on the new head mesh" in tip
+
+
+def test_the_tooltip_shows_the_first_line_of_a_long_note(view):
+    view.add_action("mark")
+    view.session["mark"].notes = "the short of it\nand a long tail\nof detail"
+    tip = view.model.data(view.model.index_for_path("mark"), QtCore.Qt.ToolTipRole)
+    assert "the short of it" in tip
+    assert "and a long tail" not in tip
+
+
+def test_a_note_joins_an_error_in_the_tooltip_rather_than_replacing_it(view):
+    view.add_action("boom")
+    view.session["boom"].notes = "expected until the export lands"
+    view.model.set_status("boom", "error", "it blew up")
+    tip = view.model.data(view.model.index_for_path("boom"), QtCore.Qt.ToolTipRole)
+    assert "it blew up" in tip and "expected until the export lands" in tip

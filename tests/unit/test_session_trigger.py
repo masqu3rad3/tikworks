@@ -1,5 +1,7 @@
 """Session / ActionHandle API (no Maya)."""
 
+import json
+
 import pytest
 from maya import cmds
 
@@ -79,7 +81,7 @@ def test_add_nest_after_and_attribute_settings():
     assert rig.paths() == ["import", "import/rename", "shapes", "kinematics"]
     assert rig["import/rename"].tag == "REN"
     kin.amount = 3
-    assert rig["kinematics"].settings == {"tag": "KIN", "amount": 3}
+    assert rig["kinematics"].settings == {"tag": "KIN", "amount": 3, "notes": ""}
     with pytest.raises(FieldValidationError):
         kin.amount = -1
     with pytest.raises(AttributeError):
@@ -299,3 +301,63 @@ def test_publish_survives_a_save_and_reopen(tmp_path):
     assert reopened.paths() == ["kine"]
     assert reopened.publish.paths() == ["fbx"]
     assert reopened.publish["fbx"].tag == "FBX"
+
+
+def test_a_note_starts_empty_and_is_stored_like_any_other_default():
+    rig = Session()
+    handle = rig.add("mark", "a")
+    assert handle.notes == ""
+    assert handle.node.settings["notes"] == ""
+
+
+def test_a_session_written_before_notes_existed_still_opens(tmp_path):
+    """No schema bump: an older .tr simply has no notes key."""
+    path = tmp_path / "legacy.tr"
+    path.write_text(
+        json.dumps(
+            {
+                "schema": 7,
+                "meta": {},
+                "publish": [],
+                "guides": {},
+                "actions": [
+                    {
+                        "name": "a",
+                        "type": "mark",
+                        "enabled": True,
+                        "settings": {"tag": "T", "amount": 2},
+                        "children": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    rig = Session.open(str(path))
+    assert rig["a"].tag == "T" and rig["a"].notes == ""
+
+
+def test_a_note_survives_a_save_and_reopen(tmp_path):
+    rig = Session()
+    rig.add("mark", "a")
+    rig["a"].notes = "waiting on the new head mesh\ndo not re-export"
+    path = rig.save(tmp_path / "hero")
+    assert Session.open(str(path))["a"].notes == (
+        "waiting on the new head mesh\ndo not re-export"
+    )
+
+
+def test_a_note_on_a_referenced_action_is_stored_as_an_override(tmp_path):
+    """The note belongs to this session, not to the file it borrows from."""
+    base = Session()
+    base.add("mark", "kinematics", tag="KIN")
+    base.save(tmp_path / "baseRig_v001.tr")
+
+    rig = Session()
+    rig.save(tmp_path / "hero.tr")
+    ref = rig.add("reference", "base", file="baseRig_v001.tr")
+    ref["kinematics"].notes = "upstream owns this; ask before touching"
+    assert ref.node.settings["overrides"] == {
+        "kinematics": {"settings": {"notes": "upstream owns this; ask before touching"}}
+    }
+    assert Session.open(str(tmp_path / "baseRig_v001.tr"))["kinematics"].notes == ""

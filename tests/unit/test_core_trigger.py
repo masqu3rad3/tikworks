@@ -559,3 +559,40 @@ def test_a_preset_on_a_control_with_no_movable_pivot_warns():
         "pivot preset 'fk.tip': control 'fk' has no movable pivot with the "
         "current settings"
     ]
+
+
+# ------------------------------------------------------------- action notes
+def test_every_action_carries_a_note_that_renders_after_its_own_settings():
+    from tik.trigger.core import Action, StringField
+
+    class Annotated(Action):
+        tag = StringField("")
+
+        def run(self, ctx):
+            pass
+
+    names = list(Annotated.fields())
+    assert names[-1] == "notes"
+    assert names.index("tag") < names.index("notes")
+    assert Annotated().notes == ""
+
+
+def test_the_note_lives_in_its_own_fold_so_it_lands_at_the_end_of_the_form():
+    """Ungrouped fields render before every fold: the note needs a group."""
+    from tik.trigger.core import Action
+
+    group = Action.fields()["notes"].group
+    assert group is not None and group.label == "Notes"
+    assert group.collapsed is True
+
+
+def test_a_note_is_free_text_and_keeps_its_line_breaks():
+    from tik.trigger.core import Action
+
+    class Annotated(Action):
+        def run(self, ctx):
+            pass
+
+    action = Annotated()
+    action.notes = "first line\r\nsecond line"
+    assert action.notes == "first line\nsecond line"
