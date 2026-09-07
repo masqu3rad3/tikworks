@@ -310,3 +310,80 @@ def test_current_preset_reads_the_label():
     main.transform["pivotPreset"].value = 2
     assert current_preset(main) == "ball"
     assert current_preset(_pivot(ctx)) is None
+
+
+# ------------------------------------------------------------- the switch tab
+def _context_for(*controls):
+    from tik.trigger.anim.context import Control, SwitchContext
+
+    return SwitchContext(
+        nodes=tuple(item.transform.long_name for item in controls),
+        controls=tuple(
+            Control(node=item.transform.long_name, role="main", side="C", module="toy")
+            for item in controls
+        ),
+    )
+
+
+def test_pivot_switch_offers_the_controls_presets():
+    from tik.trigger.anim.switches.pivot.pivot import PivotSwitch
+
+    ctx = _build("pivot_toy", {"pivot_main_tip": (9.0, 0.0, 0.0)})
+    main = ctx.controller_by_role("main")
+    switch = PivotSwitch()
+    context = _context_for(main)
+
+    assert switch.states(context) == ["default", "tip", "ball"]
+    assert switch.current(context) == "default"
+
+
+def test_pivot_switch_offers_nothing_for_a_control_without_presets():
+    from tik.trigger.anim.switches.pivot.pivot import PivotSwitch
+
+    ctx = _build("bare_pivot_toy")
+    main = ctx.controller_by_role("main")
+    context = _context_for(main)
+    assert PivotSwitch().states(context) == []
+    assert PivotSwitch().current(context) is None
+
+
+def test_pivot_switch_offers_only_what_the_whole_selection_shares():
+    """The intersection: a preset only some controls have would silently skip."""
+    from tik.trigger.anim.switches.pivot.pivot import PivotSwitch
+
+    ctx = _build("pivot_toy", {"pivot_main_tip": (9.0, 0.0, 0.0)})
+    main = ctx.controller_by_role("main")
+    bare = _pivot(ctx)  # the pivot control itself has no presets
+    assert PivotSwitch().states(_context_for(main, bare)) == []
+
+
+def test_pivot_switch_applies_and_reports():
+    from tik.trigger.anim.switches.pivot.pivot import PivotSwitch
+
+    ctx = _build("pivot_toy", {"pivot_main_tip": (9.0, 0.0, 0.0)})
+    main = ctx.controller_by_role("main")
+    report = PivotSwitch().apply(_context_for(main), "tip", key=False, times=(1.0,))
+
+    assert main.transform["pivotPreset"].value == 1
+    assert "tip" in report and "pose held" in report
+
+
+def test_pivot_switch_says_so_when_nothing_matches():
+    from tik.trigger.anim.switches.pivot.pivot import PivotSwitch
+
+    ctx = _build("pivot_toy")
+    report = PivotSwitch().apply(
+        _context_for(_pivot(ctx)), "tip", key=False, times=(1.0,)
+    )
+    assert "No selected control" in report
+
+
+def test_pivot_switch_reports_a_range():
+    from tik.trigger.anim.switches.pivot.pivot import PivotSwitch
+
+    ctx = _build("pivot_toy", {"pivot_main_tip": (9.0, 0.0, 0.0)})
+    main = ctx.controller_by_role("main")
+    report = PivotSwitch().apply(
+        _context_for(main), "tip", key=True, times=(1.0, 5.0, 9.0)
+    )
+    assert "over 3 keys" in report

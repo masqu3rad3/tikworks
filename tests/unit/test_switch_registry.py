@@ -129,3 +129,35 @@ def test_an_empty_context_is_empty():
 def test_a_selection_of_non_controls_is_still_empty():
     """Nodes are recorded, but a switch has nothing to act on."""
     assert SwitchContext(nodes=("|pCube1",)).is_empty is True
+
+
+# ---------------------------------------------------------- shipped switches
+def test_the_shipped_switches_register_in_order():
+    from tik.trigger.anim import switches  # noqa: F401 - registers them
+
+    listed = [(item.switch_type, item.available) for item in iter_switches()]
+    assert listed == [("pivot", True), ("ikfk", False), ("polepin", False)]
+
+
+def test_a_placeholder_offers_no_states_and_says_why():
+    from tik.trigger.anim import switches  # noqa: F401
+
+    for name in ("ikfk", "polepin"):
+        switch = get_switch(name)()
+        assert switch.available is False
+        assert switch.states(SwitchContext()) == []
+        assert switch.current(SwitchContext()) is None
+        assert switch.help, f"{name} must say what it will do"
+
+
+def test_every_shipped_switch_has_an_icon_file():
+    from pathlib import Path
+
+    from tik.trigger.anim import switches
+
+    root = Path(switches.__file__).parent
+    for item in iter_switches():
+        found = list(root.rglob(f"{item.icon}.svg")) + list(
+            root.rglob(f"{item.icon}.png")
+        )
+        assert found, f"{item.switch_type} ships no {item.icon} artwork"
