@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from maya import cmds
 
+from tik.core import control_shapes as core_control_shapes
 from tik.maya.utils import control_shapes
 from tik.maya.utils.control_shapes import (
     ControlShapeLibrary,
@@ -30,12 +31,12 @@ def clean_library():
 
 def test_get_home_dir(monkeypatch):
     # Test Windows
-    monkeypatch.setattr(control_shapes, "CURRENT_PLATFORM", "Windows")
+    monkeypatch.setattr(core_control_shapes, "CURRENT_PLATFORM", "Windows")
     monkeypatch.setenv("USERPROFILE", "C:\\Users\\Test")
     assert get_home_dir() == "C:\\Users\\Test"
 
     # Test Linux/Other
-    monkeypatch.setattr(control_shapes, "CURRENT_PLATFORM", "Linux")
+    monkeypatch.setattr(core_control_shapes, "CURRENT_PLATFORM", "Linux")
     monkeypatch.setenv("HOME", "/home/test")
     # os.path.normpath might convert slashes depending on the OS running the test
     # (Windows)
@@ -231,7 +232,7 @@ class TestControlShapeLibrary:
     def test_load_missing_shape_logs_warning(self, clean_library):
         lib = ControlShapeLibrary.get_instance()
 
-        with patch("tik.maya.utils.control_shapes.LOG") as mock_log:
+        with patch("tik.core.control_shapes.LOG") as mock_log:
             result = lib.load("missing_shape")
             assert result is None
             mock_log.warning.assert_called()
@@ -369,3 +370,63 @@ def test_normalize_data_small_dim():
     normalized = _scale_data(data, n_ratio)
     # Should be unchanged because max_dim < 0.0001
     assert normalized == data
+
+
+def test_library_lives_in_core_and_needs_no_maya():
+    """The resolver must import without Maya: the picker runs headless."""
+    import ast
+    from pathlib import Path
+
+    import tik.core.control_shapes as core_shapes
+
+    assert core_shapes.ControlShapeLibrary is ControlShapeLibrary
+
+    source = Path(core_shapes.__file__).read_text(encoding="utf-8")
+    imported = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            imported.add(node.module)
+    banned = [
+        name
+        for name in imported
+        if name == "maya" or name.startswith(("maya.", "tik.maya", "tik.shared"))
+    ]
+    assert banned == [], f"core resolver imports {banned}"
+
+
+def test_shipped_shapes_moved_to_core():
+    from pathlib import Path
+
+    import tik.core.control_shapes as core_shapes
+
+    core_path = Path(core_shapes.__file__).parent / "data" / "control_shapes"
+    assert core_path.is_dir()
+    assert len(list(core_path.rglob("*.json"))) == 86
+    assert (core_path / "basics" / "Circle.json").exists()
+    assert (core_path / "animated" / "FkikSwitch.json").exists()
+
+
+def test_user_path_is_opt_in(tmp_path, monkeypatch, clean_library):
+    """The build pins its library by excluding the per-user folder."""
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    user_shapes = tmp_path / "TikWorks" / "user_control_shapes"
+    user_shapes.mkdir(parents=True)
+    (user_shapes / "OnlyMine.json").write_text('{"name": "OnlyMine", "curves": []}')
+
+    with_user = ControlShapeLibrary(include_user_path=True)
+    without_user = ControlShapeLibrary(include_user_path=False)
+
+    assert "OnlyMine" in with_user.list_shapes()
+    assert "OnlyMine" not in without_user.list_shapes()
+    assert user_shapes not in without_user.search_paths
+
+
+def test_construction_creates_no_directories(tmp_path, monkeypatch, clean_library):
+    """Creating a directory as an import side effect is wrong."""
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    monkeypatch.setenv("HOME", str(tmp_path))
+    ControlShapeLibrary()
+    assert not (tmp_path / "TikWorks").exists()
