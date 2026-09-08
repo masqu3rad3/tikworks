@@ -4,9 +4,9 @@ import pytest
 
 
 class TestPagesRegistered:
-    """The four pages exist, in order, with the expected fields."""
+    """The pages exist, in order, with the expected fields."""
 
-    def test_four_pages_in_order(self):
+    def test_pages_in_order(self):
         from tik.trigger.config import prefs
 
         assert [page.name for page in prefs.pages()] == [
@@ -14,6 +14,7 @@ class TestPagesRegistered:
             "guides",
             "files",
             "tools",
+            "vcs",
         ]
 
     def test_every_field_declares_help(self):
@@ -61,6 +62,7 @@ class TestDefaults:
             ("files.autosave_interval", 300),
             ("files.confirm_unsaved_close", True),
             ("tools.external_editor", ""),
+            ("vcs.provider", ""),
         ],
     )
     def test_default(self, key, expected):
@@ -119,3 +121,11 @@ class TestEditorCommand:
 
         monkeypatch.setattr(prefs.tools, "external_editor", "")
         assert prefs_access.editor_command() == ""
+
+
+def test_vcs_page_holds_the_preferred_provider():
+    from tik.shared.prefs import registry as pages
+
+    page = pages.page("vcs")
+    assert page.label == "Version Control"
+    assert page.fields()["provider"].default == ""
