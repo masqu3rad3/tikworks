@@ -16,17 +16,47 @@ from tik.shared.ui.icons import glyph_icon, initials
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.tile_grid import TileEntry, TileGrid
 
+_LIBRARY: Optional[ControlShapeLibrary] = None
+_ICONS: dict = {}
+
+
+def default_library() -> ControlShapeLibrary:
+    """One library for the whole tool, scanned once.
+
+    A fold builds a button per control and each one used to construct its own,
+    rescanning the shape folder every time. The scan is only milliseconds, but
+    it is milliseconds per control per selection for an answer that cannot
+    change while the tool is open.
+    """
+    global _LIBRARY  # noqa: PLW0603 - one shared library per process
+    if _LIBRARY is None:
+        _LIBRARY = ControlShapeLibrary()
+    return _LIBRARY
+
 
 def thumbnail_for(library, name: str) -> Optional[QtGui.QIcon]:
-    """The shape's ``.png`` sibling as an icon, or ``None`` when absent."""
+    """The shape's ``.png`` sibling as an icon, or ``None`` when absent.
+
+    Cached by resolved *path*, not by name: decoding a PNG per tile per
+    rebuild is the bulk of what made the Designer stutter, but two libraries
+    can hold different files under one name -- polish searches the artist's
+    own folder, the rig build does not -- so a name-keyed cache would serve
+    one of them the other's thumbnail.
+    """
     path = library.get_path(name)
     if not path:
         return None
     thumb = path.with_suffix(".png")
-    if not thumb.exists():
-        return None
-    pixmap = QtGui.QPixmap(str(thumb))
-    return QtGui.QIcon(pixmap) if not pixmap.isNull() else None
+    key = str(thumb)
+    if key in _ICONS:
+        return _ICONS[key]
+    icon = None
+    if thumb.exists():
+        pixmap = QtGui.QPixmap(key)
+        if not pixmap.isNull():
+            icon = QtGui.QIcon(pixmap)
+    _ICONS[key] = icon
+    return icon
 
 
 class ShapePicker(QtWidgets.QWidget):
@@ -36,7 +66,7 @@ class ShapePicker(QtWidgets.QWidget):
 
     def __init__(self, library=None, parent=None) -> None:
         super().__init__(parent)
-        self.library = library or ControlShapeLibrary()
+        self.library = library if library is not None else default_library()
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -135,19 +165,31 @@ class ShapeButton(QtWidgets.QToolButton):
 
     def __init__(self, library=None, parent=None) -> None:
         super().__init__(parent)
-        self.library = library or ControlShapeLibrary()
+        self.library = library if library is not None else default_library()
         self._value = ""
         self._placeholder = ""
+        self._picker: Optional[ShapePicker] = None
         self.setFixedSize(self.SIZE, self.SIZE)
         self.setIconSize(QtCore.QSize(self.SIZE - 8, self.SIZE - 8))
         self.setAutoRaise(True)
         self.clicked.connect(self.open_picker)
-
-        self.picker = ShapePicker(self.library)
-        self.picker.setWindowFlags(QtCore.Qt.Popup)
-        self.picker.resize(420, 460)
-        self.picker.shapeChosen.connect(self._on_chosen)
         self._refresh()
+
+    @property
+    def picker(self) -> ShapePicker:
+        """The popup, built the first time it is actually wanted.
+
+        A picker is 86 tiles; a fold builds one button per control role and
+        rebuilds them on every selection. Building the popup eagerly cost
+        ~60ms a button -- most of a second for an arm, on every click.
+        """
+        if self._picker is None:
+            picker = ShapePicker(self.library)
+            picker.setWindowFlags(QtCore.Qt.Popup)
+            picker.resize(420, 460)
+            picker.shapeChosen.connect(self._on_chosen)
+            self._picker = picker
+        return self._picker
 
     # ------------------------------------------------------------- value
     def value(self) -> str:
@@ -172,7 +214,8 @@ class ShapeButton(QtWidgets.QToolButton):
         self.picker.show()
 
     def _on_chosen(self, name: str) -> None:
-        self.picker.hide()
+        if self._picker is not None:
+            self._picker.hide()
         self.setValue(name)
         self.shapeChosen.emit(name)
 

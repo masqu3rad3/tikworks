@@ -85,3 +85,40 @@ def test_a_plain_table_still_gets_the_add_remove_editor(qapp):
 
     builder = FormBuilder(Plain())
     assert isinstance(builder.widget("rows"), _TableEditor)
+
+
+def test_refreshing_an_unchanged_target_keeps_the_existing_rows(form):
+    """Rebuilding tears down a ShapeButton per control on every selection.
+
+    The Designer calls set_target on every guide click, so an unchanged role
+    list must reuse its widgets rather than rebuild them.
+    """
+    editor = form.widget("rows")
+    before = editor.row_widgets("ik")
+    form.refresh()
+    assert editor.row_widgets("ik") is before
+
+
+def test_rebuilding_follows_a_changed_role_list(qapp):
+    """When the settings do change the controls, the rows must follow."""
+
+    class Chain(Schema):
+        rows = TableField(
+            [],
+            rows_from="control_names",
+            columns=(
+                Column("control", "choice", choices_from="control_names"),
+                Column("shape", "shape"),
+                Column("size", "float"),
+            ),
+        )
+        control_names = ("fk0", "fk1")
+
+    target = Chain()
+    builder = FormBuilder(target)
+    editor = builder.widget("rows")
+    assert editor.roles() == ("fk0", "fk1")
+
+    target.control_names = ("fk0", "fk1", "fk2")
+    builder.refresh()
+    assert editor.roles() == ("fk0", "fk1", "fk2")

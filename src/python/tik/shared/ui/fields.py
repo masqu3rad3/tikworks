@@ -252,7 +252,15 @@ class _ControlShapeEditor(QtWidgets.QWidget):
             self._rows[role] = (button, spin)
 
     def rebuild(self) -> None:
-        """Re-read the role list, keeping whatever is already stored."""
+        """Re-read the role list, keeping whatever is already stored.
+
+        A no-op when the roles are unchanged, which is the overwhelmingly
+        common case: the Designer re-targets the form on every guide click,
+        and tearing down a row per control there meant rebuilding a shape
+        button -- and its popup -- for a list that had not moved.
+        """
+        if tuple(self._rows_resolver()) == self.roles():
+            return
         stored = self.value()
         self._build_rows()
         self.setValue(stored)
