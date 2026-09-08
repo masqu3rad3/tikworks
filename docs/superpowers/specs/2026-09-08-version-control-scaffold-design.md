@@ -165,7 +165,7 @@ what a session needs, assembled at the tail of Build & Publish.
   hero_rig.mb
   manifest.json        every dependency: original relative path, hash, size, store path, external flag
   <products...>
-<target>/../_store/<sha1[:2]>/<sha1>_<name>
+<target>/../_store/<sha1>_<name>
 ```
 
 - Each dependency path in the copied `.tr` is rewritten to its store path
@@ -181,6 +181,10 @@ what a session needs, assembled at the tail of Build & Publish.
 - `PublishSet.clean(store_root, bundle_roots)` deletes store files no manifest
   under `bundle_roots` names. It is a tool a rigger runs; nothing runs it
   automatically.
+
+The store is flat: a nested referenced `.tr` is rewritten and stored too, and
+with every stored file a sibling its own paths are deterministic before its
+hash is known.
 
 ### Publishable actions
 
