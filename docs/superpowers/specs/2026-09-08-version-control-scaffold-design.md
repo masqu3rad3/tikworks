@@ -216,10 +216,11 @@ fully version controlled: a `FileField` for where its file lives, a
 
 Its own fields, on top of `notes`: `include_guides` (default on) and
 `include_products` (default on). Two rules the base enforces: `deliver`
-receives paths only, never the session, so a subclass cannot mutate the
-document; and a failure inside `deliver` becomes an `ActionExecutionError`
-carrying the subclass's message, with the temporaries left in place for
-inspection.
+receives the `PublishSet`, which carries a **copy** of the document, so a
+subclass cannot mutate the session; `ctx` stays for logging, path resolution
+and the identity check a VCS subclass makes against the host; and a failure
+inside `deliver` becomes an `ActionExecutionError` carrying the subclass's
+message, with the temporaries left in place for inspection.
 
 **`publish`**, the generic action, adds `folder` (a `FileField` with
 `mode="dir"`, relative to the session when possible). Its `deliver` writes
