@@ -12,6 +12,7 @@ from tik.trigger.core.exceptions import ActionExecutionError, SessionError, Trig
 from tik.trigger.core.steps import STEP_FAILED, STEP_FINISHED, STEP_STARTED
 from tik.trigger.session import ActionHandle, Session
 
+from . import vcs_ui
 from .delegates import PipelineDelegate
 from .iconography import icon_for_tile
 from .model import MIME_TYPE, PipelineModel
@@ -625,6 +626,7 @@ class SessionView(QtWidgets.QWidget):
             menu.addAction(
                 "Disable" if handle.enabled else "Enable", self.toggle_current
             )
+            vcs_ui.add_publish_submenu(menu, handle, self.session)
             if not handle.is_linked:
                 menu.addAction("Rename", self.rename_current)
                 menu.addAction("Duplicate", self.duplicate_current)

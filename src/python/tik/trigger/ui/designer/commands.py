@@ -13,9 +13,10 @@ from typing import TYPE_CHECKING, Optional
 from tik.core.side import Side
 from tik.shared.ui.feedback import Feedback
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
-from tik.trigger.core import registry
+from tik.trigger.core import kinds, registry
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.guides import EXTENSION as GUIDE_EXTENSION
+from tik.trigger.ui import vcs_ui
 
 from .widgets import SCENE_NODE
 
@@ -465,20 +466,15 @@ class DesignerCommands:
             return (
                 self.file_browser(mode, [GUIDE_EXTENSION], self.last_guide_file) or ""
             )
-        dialog = Feedback(self)
-        guide_filter = f"GuideLayout (*{GUIDE_EXTENSION})"
-        if mode == "save":
-            return dialog.browse_save(
-                "Export guides",
-                self.last_guide_file,
-                (GUIDE_EXTENSION,),
-                guide_filter,
-            )
-        return dialog.browse_open(
-            "Import guides",
+        # the same picker the file fields use, so a version control provider
+        # offers its own browser here for free
+        return vcs_ui.pick_file(
+            self,
+            kinds.GUIDES,
+            [GUIDE_EXTENSION],
+            mode,
             self.last_guide_file,
-            (GUIDE_EXTENSION,),
-            guide_filter,
+            "Export guides" if mode == "save" else "Import guides",
         )
 
     # -------------------------------------------------- module references

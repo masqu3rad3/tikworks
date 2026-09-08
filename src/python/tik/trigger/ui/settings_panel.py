@@ -16,6 +16,7 @@ from tik.trigger.core import registry
 from tik.trigger.core.action import NOTES
 from tik.trigger.core.document import BUILD
 from tik.trigger.session import ActionHandle
+from tik.trigger.ui import vcs_ui
 from tik.trigger.ui.iconography import action_icon
 from tik.trigger.ui.prefs_access import editor_command
 
@@ -74,6 +75,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
             },
             base_dir=base_dir,
             list_choices=list_choices,
+            file_vcs=vcs_ui.form_vcs_slot(base_dir),
         )
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
