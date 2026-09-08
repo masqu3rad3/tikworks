@@ -78,16 +78,30 @@ def test_no_forbidden_imports(package, forbidden):
     assert _violations(package, forbidden) == []
 
 
+def _imports_vcs(py_file: Path) -> bool:
+    return any(
+        name == "tik.trigger.vcs" or name.startswith("tik.trigger.vcs.")
+        for name in _imports(py_file)
+    )
+
+
 def test_only_the_publish_action_package_may_import_vcs():
-    """Build actions never see the VCS; the publish base does not either."""
+    """Build actions never see the VCS; the publish base does not either.
+
+    The ``publish`` folder is exempt as a package so a subclass shipped as a
+    plugin can talk to a provider -- but the base and the generic action in
+    ``publish.py`` publish to a plain folder, and must stay VCS-free.
+    """
     offenders = []
     for py_file in (SRC / "trigger" / "actions").rglob("*.py"):
         if py_file.parent.name == "publish":
             continue
-        for name in _imports(py_file):
-            if name == "tik.trigger.vcs" or name.startswith("tik.trigger.vcs."):
-                offenders.append(str(py_file.relative_to(SRC)))
+        if _imports_vcs(py_file):
+            offenders.append(str(py_file.relative_to(SRC)))
     assert offenders == []
+    base = SRC / "trigger" / "actions" / "publish" / "publish.py"
+    assert base.exists()
+    assert not _imports_vcs(base)
 
 
 def test_vcs_never_reads_preferences_and_nothing_imports_tik_manager4():

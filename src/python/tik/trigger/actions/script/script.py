@@ -81,6 +81,14 @@ class Script(Action):
         return name
 
     @classmethod
+    def pin_settings(cls, settings: dict) -> dict:
+        """Freeze the alias: in a bundle the file is renamed to its hash."""
+        action = cls(settings=settings)
+        if not action.file_path or action.import_as:
+            return {}
+        return {"import_as": action.alias()}
+
+    @classmethod
     def migrate_settings(cls, settings: dict) -> dict:
         """Accept the legacy ``script_file_path`` / ``commands`` keys."""
         data = dict(settings)

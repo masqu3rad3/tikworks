@@ -445,6 +445,10 @@ def rewrite_document(
                     )
                     settings["version"] = "pinned"
                 continue
+            # before any path moves: a setting that defaulted from the file's
+            # name has to be written down, or the store's hashed name changes
+            # what it means (a script's module alias, for one).
+            settings.update(action_cls.pin_settings(settings))
             for name in action_cls.file_fields():
                 value = settings.get(name)
                 if not value:

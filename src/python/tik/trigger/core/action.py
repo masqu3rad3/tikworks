@@ -82,6 +82,17 @@ class Action(Schema):
         """
         return settings
 
+    @classmethod
+    def pin_settings(cls, settings: dict) -> dict:
+        """Settings a publish must write down before it rewrites file paths.
+
+        A bundled file lands in the store under a hashed name, so any setting
+        that *defaults* from the file's name would quietly mean something else
+        in the published copy. Return the values to freeze; the default
+        freezes nothing.
+        """
+        return {}
+
     def summary(self) -> str:
         """Short text shown next to the action name in the pipeline."""
         for name, field_obj in self.fields().items():
