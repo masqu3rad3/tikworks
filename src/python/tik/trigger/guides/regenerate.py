@@ -12,11 +12,12 @@ that throws your work away.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Iterable, Optional
 
 from maya import cmds
 
 from tik.trigger.core import registry
+from tik.trigger.core.exceptions import NotFoundError
 from tik.trigger.core.guide_document import GuideDocument, ModuleEntry
 from tik.trigger.core.ordering import dependency_order
 from tik.trigger.maya import tags
@@ -62,6 +63,57 @@ def _producer_guide(entry: ModuleEntry, document: Optional[GuideDocument]):
     )
     found = nodes.guide_nodes(producer_id)
     return found.get((role, 0)) or found.get((producer_cls.guides.root, 0))
+
+
+def _primary_producer_id(entry: ModuleEntry) -> Optional[str]:
+    """The instance id ``entry``'s root should hang under, or None."""
+    try:
+        module_cls = registry.get_module(entry.module_type)
+    except NotFoundError:
+        return None  # unregistered: it renders nothing, so it parents nowhere
+    primary = module_cls.primary_input()
+    if primary is None:
+        return None
+    source = entry.inputs.get(primary.name)
+    if not source or "." not in source:
+        return None
+    return source.rpartition(".")[0] or None
+
+
+def reparent_consumers(document: GuideDocument, drawn_ids: Iterable[str]) -> None:
+    """Hang already-drawn consumers of ``drawn_ids`` back under their producer.
+
+    The other half of "the DAG is a rendering of the primary input connection"
+    (spec 4.4): ``regenerate`` renders that connection for the module it is
+    drawing, but a module is free to be drawn before its producer exists, and
+    ``regenerate`` evicts foreign children to the holder before it rebuilds. So
+    without this, drawing the base either strands an arm that was hanging
+    correctly or leaves one that was drawn first parked at the holder for good
+    -- reported out of date by a marker no Draw of that arm could clear.
+
+    A re-parent, deliberately, not a redraw: the consumer's joints keep their
+    identity and (``set_parent`` compensating) their world poses, so drawing
+    one module never rebuilds another behind the rigger's back. Only modules
+    that are *already drawn* are touched; an undrawn one has nothing to strand.
+    """
+    drawn = set(drawn_ids)
+    for entry in document.modules:
+        if entry.instance_id in drawn:
+            continue  # just regenerated: it parented itself
+        if _primary_producer_id(entry) not in drawn:
+            continue
+        module_cls = registry.get_module(entry.module_type)
+        root = nodes.guide_nodes(entry.instance_id).get((module_cls.guides.root, 0))
+        if root is None:
+            continue  # not drawn
+        target = _producer_guide(entry, document)
+        if target is None:
+            continue
+        # By uuid: two wrappers of one node are not equal, and re-parenting a
+        # joint that is already there would recompute its transform for nothing.
+        current = root.parent
+        if current is None or current.uuid != target.uuid:
+            root.parent = target
 
 
 def _stamp_breadcrumb(entry: ModuleEntry, created: dict) -> None:

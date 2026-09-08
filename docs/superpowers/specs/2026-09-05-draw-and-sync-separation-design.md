@@ -127,6 +127,31 @@ Fix: `regenerate` stamps the display key it drew under as a guide tag (`tags.KEY
 `key_stale` — which reads as out of date like any other structural staleness. This keeps
 `reconcile` pure: it compares two recorded strings and never constructs a name.
 
+### 3.2 An undrawn producer is not staleness (amended 2026-09-09)
+
+The root guide's DAG parent is a rendering of the primary input (4.4), and `reconcile`
+reports a mismatch as `parent_wrong`. Read literally that made drawing a single module
+impossible to get right: draw `L_arm` while its `base` is undrawn and the root has nowhere
+to hang, so it lands at the holder and is reported out of date — by a marker that drawing
+`L_arm` again could never clear, because nothing about `L_arm` was wrong.
+
+Two rules settle it, and they belong together:
+
+- `parent_wrong` is not reported when the producer is **not drawn** *and* the root has no
+  parent at all. There is nowhere to hang, so the holder **is** the correct rendering.
+  Silence is for *no* parent, never for the wrong one: a root parked under a module the
+  document does not name stays out of date however the producer stands.
+- Draw **re-parents already-drawn consumers** of what it just drew
+  (`regenerate.reparent_consumers`). Drawing the producer finishes the connection.
+
+The second rule is not only about the first. `regenerate` evicts foreign children to the
+holder before it rebuilds, so without it a redraw of `base` *detaches* an arm that was
+already hanging correctly — the same defect from the other side.
+
+It is a re-parent, deliberately, and not a redraw: the consumer's joints keep their
+identity and (`set_parent` compensating) their world poses. Drawing one module still never
+rebuilds another behind the rigger's back, which is what keeps Draw's scope honest.
+
 ## 4. Where the code splits
 
 `GuideScene` gets one method per direction, and **nothing does both**.

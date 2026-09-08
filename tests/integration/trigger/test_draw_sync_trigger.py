@@ -496,3 +496,71 @@ def test_a_build_captures_the_guides_before_it_resets_the_scene():
 
     record = session.document.guides.module(handle.instance_id).guide("root", 0)
     assert record.position == pytest.approx((7.0, 1.0, 2.0))
+
+
+def test_drawing_a_producer_hangs_its_drawn_consumers_back_under_it(scene):
+    """The user's report: draw the arm alone, then draw the base.
+
+    Drawing one module on its own is a normal way to work, so the arm's root
+    lands at the holder -- there is nothing to hang under yet. Drawing the
+    base afterwards has to finish the job, or the arm is stranded until a
+    Draw All that nobody should have to know about.
+    """
+    base = scene.add("base", side="C", name="body")
+    arm = scene.add("fkchain", side="L", name="arm", segments=2)
+    scene.connect(f"{arm.key}.root", f"{base.key}.root")
+    cmds.file(new=True, force=True)
+
+    scene.draw([arm.instance_id])
+    assert scene.diff().stale == []  # not drawn is not damage
+
+    scene.draw([base.instance_id])
+
+    root = scene.guide_nodes(arm.instance_id)[("root", 0)]
+    base_root = scene.guide_nodes(base.instance_id)[("root", 0)]
+    assert root.parent.uuid == base_root.uuid
+    assert scene.diff().stale == []
+
+
+def test_redrawing_a_producer_does_not_strand_its_consumers(scene):
+    """Regenerate evicts foreign children to the holder before it rebuilds, so
+    without the re-parent a redraw of the base detaches an arm that was already
+    hanging correctly."""
+    base = scene.add("base", side="C", name="body")
+    arm = scene.add("fkchain", side="L", name="arm", segments=2)
+    scene.connect(f"{arm.key}.root", f"{base.key}.root")
+    scene.draw()
+    assert scene.diff().stale == []
+
+    scene.draw([base.instance_id])
+
+    root = scene.guide_nodes(arm.instance_id)[("root", 0)]
+    base_root = scene.guide_nodes(base.instance_id)[("root", 0)]
+    assert root.parent.uuid == base_root.uuid
+    assert scene.diff().stale == []
+
+
+def test_re_parenting_a_consumer_does_not_rebuild_it_or_move_it(scene):
+    """A re-parent, not a redraw: the joints keep their identity and their
+    world poses, so a rigger's placement survives someone drawing the base."""
+    base = scene.add("base", side="C", name="body")
+    arm = scene.add("fkchain", side="L", name="arm", segments=2)
+    scene.connect(f"{arm.key}.root", f"{base.key}.root")
+    cmds.file(new=True, force=True)
+    scene.draw([arm.instance_id])
+    tip = scene.guide_nodes(arm.instance_id)[("segment", 1)]
+    cmds.xform(tip.long_name, worldSpace=True, translation=(4.0, 8.0, 1.0))
+    scene.sync()
+    before = {
+        pair: node.uuid for pair, node in scene.guide_nodes(arm.instance_id).items()
+    }
+
+    scene.draw([base.instance_id])
+
+    after = {
+        pair: node.uuid for pair, node in scene.guide_nodes(arm.instance_id).items()
+    }
+    assert after == before  # not one joint created, deleted or replaced
+    moved = scene.guide_nodes(arm.instance_id)[("segment", 1)]
+    placed = cmds.xform(moved.long_name, query=True, worldSpace=True, translation=True)
+    assert placed == pytest.approx([4.0, 8.0, 1.0])
