@@ -32,6 +32,7 @@ def test_create_guides_tags_and_parents(scene):
         "controller_size": 10.0,
         "anim_spaces": [],
         "pivot_presets": [],
+        "control_shape_overrides": [],
     }
     assert joint.parent.name == tags.GUIDE_HOLDER
     assert instance.guide_pairs == [("root", 0)]
@@ -87,6 +88,7 @@ def test_settings_roundtrip_and_delete_keeps_children(scene):
         "controller_size": 3.0,
         "anim_spaces": [],
         "pivot_presets": [],
+        "control_shape_overrides": [],
     }
     scene.delete_guides(root.instance_id)
     assert scene.find_instances([root.instance_id]) == []

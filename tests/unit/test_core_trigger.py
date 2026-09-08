@@ -92,12 +92,13 @@ def test_module_instance_roundtrip():
     )
     data = json.loads(json.dumps(instance.to_dict()))
     restored = ModuleInstance.from_dict(data)
-    # anim_spaces and pivot_presets live on the base Module, so every module
-    # carries both keys.
+    # anim_spaces, pivot_presets and control_shape_overrides live on the base
+    # Module, so every module carries all three keys.
     assert restored.settings == {
         "segments": 3,
         "anim_spaces": [],
         "pivot_presets": [],
+        "control_shape_overrides": [],
     }
     assert restored.side == "R"
     assert restored.parent == ParentRef("abc", "root")
@@ -596,3 +597,41 @@ def test_a_note_is_free_text_and_keeps_its_line_breaks():
     action = Annotated()
     action.notes = "first line\r\nsecond line"
     assert action.notes == "first line\nsecond line"
+
+
+def test_a_stale_control_shape_row_warns_but_does_not_invalidate():
+    """Lowering a count leaves a row naming a control that is no longer built.
+
+    Kept, not dropped: raising the count restores the setup intact -- the same
+    rule anim_spaces and pivot_presets already follow.
+    """
+    from tik.trigger.core.module import Module
+
+    class Chain(Module):
+        module_type = "shapechain"
+
+        @classmethod
+        def control_names(cls, settings=None):
+            count = int((settings or {}).get("segments", 1))
+            return tuple(f"fk{index}" for index in range(count))
+
+    chain = Chain()
+    chain.control_shape_overrides = [{"control": "fk7", "shape": "Cube"}]
+    warnings = chain.warnings()
+    assert any("fk7" in text and "not built" in text for text in warnings)
+    assert chain.validate() == []
+    # The row survives, so raising the count restores it.
+    assert chain.control_shape_overrides[0]["control"] == "fk7"
+
+
+def test_an_unresolvable_shape_name_warns_but_does_not_invalidate():
+    from tik.trigger.core.module import Module
+
+    class ShapeToy(Module):
+        module_type = "shapetoy"
+        controls = ("root",)
+
+    toy = ShapeToy()
+    toy.control_shape_overrides = [{"control": "root", "shape": "NotAShape"}]
+    assert any("NotAShape" in text for text in toy.warnings())
+    assert toy.validate() == []

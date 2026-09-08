@@ -486,6 +486,20 @@ def limb_control_names(name: str = "", labels: Sequence[str] = ()) -> tuple[str,
     )
 
 
+def limb_control_shapes(name: str = "", labels: Sequence[str] = ()) -> dict[str, str]:
+    """The default shape per role ``build_ikfk_limb`` creates.
+
+    The mirror of ``limb_control_names``, and for the same reason: a module
+    that hardcoded the names this system chose would drift the moment a role
+    was renamed.
+    """
+    return {
+        _role(name, "ik"): "Cube",
+        **{_role(name, "fk", label): "Circle" for label in labels},
+        _role(name, "pole"): "Diamond",
+    }
+
+
 def _derive_size(joints: Sequence) -> float:
     """Base controller size from the chain's rest length."""
     total = 0.0
