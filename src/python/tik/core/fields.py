@@ -432,6 +432,7 @@ class FileField(Field):
         *,
         extensions: Sequence[str] = (),
         mode: str = "open",
+        kind: str = "",
         **kwargs,
     ) -> None:
         if mode not in ("open", "save", "dir"):
@@ -440,6 +441,9 @@ class FileField(Field):
             ext if ext.startswith(".") else f".{ext}" for ext in extensions
         ]
         self.mode = mode
+        #: What the file *is* to a version control system (``"script"``,
+        #: ``"guides"``); empty means "work it out from the extensions".
+        self.kind = kind
         super().__init__(default, **kwargs)
 
     def coerce(self, value):
@@ -451,10 +455,11 @@ class FileField(Field):
         return value.replace("\\", "/")
 
     def to_schema(self) -> dict:
-        """The base schema plus ``extensions`` and ``mode``."""
+        """The base schema plus ``extensions``, ``mode`` and ``kind``."""
         data = super().to_schema()
         data["extensions"] = list(self.extensions)
         data["mode"] = self.mode
+        data["kind"] = self.kind
         return data
 
 

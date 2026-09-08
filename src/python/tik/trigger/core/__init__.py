@@ -22,7 +22,7 @@ from tik.core.fields import (
 )
 from tik.core.side import Side
 
-from . import icons, versioning
+from . import icons, kinds, versioning
 from .action import Action, ActionContext
 from .document import BUILD, PHASES, PUBLISH, ActionNode, Document
 from .events import ERROR, LOG, PROGRESS, EventBus
@@ -89,6 +89,7 @@ __all__ = [
     "PUBLISH",
     "PHASES",
     "versioning",
+    "kinds",
     "EventBus",
     "PROGRESS",
     "LOG",
