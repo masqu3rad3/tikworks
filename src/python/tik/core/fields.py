@@ -476,7 +476,7 @@ class Column:
     """
 
     name: str
-    kind: str = "string"  # "string" | "choice"
+    kind: str = "string"  # "string" | "choice" | "shape" | "float"
     choices: tuple = ()
     choices_from: str = ""
     label: str = ""
@@ -496,9 +496,23 @@ class TableField(Field):
     type_name = "table"
 
     def __init__(
-        self, default=None, *, columns: Sequence[Column] = (), **kwargs
+        self,
+        default=None,
+        *,
+        columns: Sequence[Column] = (),
+        rows_from: str = "",
+        **kwargs,
     ) -> None:
+        """A list of records.
+
+        ``rows_from`` names an attribute on the *target object* supplying the
+        row set, the way ``Column.choices_from`` supplies a column's options.
+        Naming it means the rows are fixed by the target rather than added by
+        hand, and the stored value is a *sparse* set of overrides: a row exists
+        only for an entry the user actually changed.
+        """
         self.columns = tuple(columns)
+        self.rows_from = rows_from
         super().__init__([dict(row) for row in default] if default else [], **kwargs)
 
     def coerce(self, value):
@@ -529,6 +543,13 @@ class TableField(Field):
                             value,
                             f"'{column.name}' must be one of {list(column.choices)}",
                         )
+                if column.kind == "float" and entry != "":
+                    try:
+                        entry = float(entry)
+                    except (TypeError, ValueError):
+                        raise FieldValidationError(
+                            self.name, value, f"'{column.name}' must be a number"
+                        ) from None
                 filled[column.name] = entry
             rows.append(filled)
         return rows
@@ -538,8 +559,9 @@ class TableField(Field):
         return self.coerce(value)
 
     def to_schema(self) -> dict:
-        """The base schema plus the column definitions."""
+        """The base schema plus the column definitions and the row source."""
         schema = super().to_schema()
+        schema["rows_from"] = self.rows_from
         schema["columns"] = [
             {
                 "name": column.name,
