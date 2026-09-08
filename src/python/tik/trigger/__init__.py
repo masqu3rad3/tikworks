@@ -30,15 +30,39 @@ from tik.trigger.core import (
     register_module,
 )
 
+VERSION = "0.2.0"
+
 
 def load_plugins() -> None:
-    """Discover (and re-register if needed) the built-in modules and actions."""
+    """Discover the built-in modules and actions, then every external plugin root."""
     import tik.trigger.actions as actions_pkg
     import tik.trigger.modules as modules_pkg
-    from tik.trigger.core.discovery import discover
+    from tik.trigger.core import discovery
 
-    discover(modules_pkg.__name__, modules_pkg.__path__)
-    discover(actions_pkg.__name__, actions_pkg.__path__)
+    discovery.discover(modules_pkg.__name__, modules_pkg.__path__)
+    discovery.discover(actions_pkg.__name__, actions_pkg.__path__)
+    _register_reference_vcs()
+    discovery.discover_external(discovery.plugin_paths())
+
+
+def _register_reference_vcs() -> None:
+    """Register the shipped folder provider (registering twice is a no-op).
+
+    It is inert unless ``TRIGGER_FOLDER_VCS`` names a folder that exists, so a
+    studio with a real system never notices it; without one it is the working
+    example the integrator's guide quotes.
+    """
+    from tik.trigger.vcs import register_provider
+    from tik.trigger.vcs.folder import FolderProvider
+
+    register_provider("folder")(FolderProvider)
+
+
+def add_plugin_path(path) -> None:
+    """Register an external plugin root (``<root>/<name>/<name>.py``)."""
+    from tik.trigger.core import discovery
+
+    discovery.add_plugin_path(path)
 
 
 _MAYA_NAMES = {
@@ -66,6 +90,7 @@ __all__ = [
     "Action",
     "ActionContext",
     "ActionHandle",
+    "add_plugin_path",
     "AFTERLIFE_MODES",
     "BuildError",
     "Builder",
@@ -78,6 +103,7 @@ __all__ = [
     "Session",
     "Side",
     "TriggerError",
+    "VERSION",
     "get_action",
     "get_module",
     "list_actions",

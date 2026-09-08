@@ -22,11 +22,13 @@ from tik.shared.ui.maya_window import HAS_MAYA, MayaToolWindow
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.scene_watcher import SceneWatcher
 from tik.shared.ui.status import StatusFields
+from tik.trigger import VERSION, vcs
 from tik.trigger.core import ERROR, LOG, EventBus, versioning
 from tik.trigger.core.document import EXTENSION
 from tik.trigger.core.exceptions import SessionError
 from tik.trigger.session import Session
 
+from . import vcs_ui
 from .autosave import AutosaveTimer
 from .autosave import clear as clear_autosave
 from .autosave import recoverable
@@ -36,7 +38,6 @@ from .session_view import DESIGNER_TAB, SessionView
 from .widgets import LogWidget
 
 FILE_FILTER = f"Trigger session (*{EXTENSION})"
-VERSION = "0.2.0"
 
 
 def _holder() -> QtWidgets.QWidget:
@@ -71,6 +72,10 @@ class TriggerWindow(MayaToolWindow):
         self.setWindowTitle(f"Trigger {VERSION}")
         self.resize(1180, 720)
         self.setMinimumWidth(900)
+        # before the shell: the File menu it builds carries the active
+        # provider's submenu, and which provider is active depends on the
+        # preference below
+        self._attach_vcs_host()
         self._build_shell()
         self._build_tabs()
         theme.apply(self)
@@ -113,6 +118,28 @@ class TriggerWindow(MayaToolWindow):
         self.script_dock.hide()
         # closing the dock from its title bar must un-tick the menu entry
         self.script_dock.visibilityChanged.connect(self.script_action.setChecked)
+
+    def _attach_vcs_host(self) -> None:
+        """Make this window the host every version control provider drives.
+
+        The preference is read *here*, in the UI: ``tik.trigger.vcs`` never
+        imports the preferences packages, so the window is what tells it which
+        provider wins when several are installed.
+        """
+        vcs.set_preferred(prefs_value("vcs", "provider") or None)
+        vcs.host.attach(
+            session=lambda: self.session,
+            open=self.open_session,
+            save_as=self._save_current_as,
+            refresh=lambda: vcs_ui.refresh_chip(self),
+            feedback=lambda: Feedback(self),
+        )
+
+    def _save_current_as(self, path) -> str:
+        """Save the active session at ``path``; where it went, for the host."""
+        self.save_session_as(str(path))
+        session = self.session
+        return str(session.file_path) if session is not None else ""
 
     @property
     def menu_bar(self) -> QtWidgets.QMenuBar:
@@ -193,6 +220,15 @@ class TriggerWindow(MayaToolWindow):
             lambda: self._designer_call("reference_modules"),
         )
         file_menu.addSeparator()
+        # Only when a provider is active: without one the File menu is
+        # byte-for-byte what it was before version control existed.
+        self.vcs_menu = vcs_ui.build_file_submenu(self, file_menu)
+        if self.vcs_menu is not None:
+            file_menu.addSeparator()
+            # "Publish…" follows the publish list, which changes on any edit --
+            # not only on the tab changes ``_sync_menu_state`` reacts to. Asking
+            # the session as the menu opens is the cheap way to never be stale.
+            file_menu.aboutToShow.connect(lambda: vcs_ui.sync_publish_entry(self))
         # no shortcut: it throws the scene away, and there is nothing to undo
         self._action(file_menu, "Reset Scene", self.reset_scene)
         file_menu.addSeparator()
@@ -459,7 +495,7 @@ class TriggerWindow(MayaToolWindow):
         self._action(help_menu, "About Trigger", self.about)
 
     def _build_status(self, strip) -> None:
-        self.status = StatusFields(strip, ("references", "maya", "version"))
+        self.status = StatusFields(strip, ("references", "maya", "version", "vcs"))
         maya_text = "Maya"
         if HAS_MAYA:
             try:
@@ -470,6 +506,14 @@ class TriggerWindow(MayaToolWindow):
                 pass
         self.status.set("maya", maya_text)
         self.status.set("version", f"tik.trigger {VERSION}")
+        self.status.set_click(
+            "vcs",
+            lambda: (
+                vcs.launch()
+                if vcs.active() is not None and vcs.active().supports("launch")
+                else None
+            ),
+        )
         self.status.set_activity("Ready")
 
     # ---------------------------------------------------------------- tabs
@@ -545,6 +589,7 @@ class TriggerWindow(MayaToolWindow):
         if designer is not None:
             self._connect_designer_auto_sync(designer)
             self._on_designer_auto_sync_changed(designer.guides.auto_sync)
+        vcs_ui.sync_publish_entry(self)
 
     def _connect_designer_auto_sync(self, designer) -> None:
         """Wire the Auto Sync menu action to ``designer``'s signal, once.
@@ -959,6 +1004,9 @@ class TriggerWindow(MayaToolWindow):
             self.log.set_level(prefs_value("interface", "log_verbosity"))
         if any(key.startswith("files.autosave") for key in changed):
             self.autosave.reconfigure()
+        if "vcs.provider" in changed:
+            vcs.set_preferred(prefs_value("vcs", "provider") or None)
+            vcs_ui.refresh_chip(self)
         if "files.max_recent" in changed:
             del self.recent_files[prefs_value("files", "max_recent") :]
             self._save_recent()
@@ -1039,6 +1087,10 @@ class TriggerWindow(MayaToolWindow):
             self.tabs.setTabText(
                 index, view.session.name + ("*" if view.session.is_modified else "")
             )
+        # the VCS chip describes the active session's file, which is the same
+        # question on either sub-tab -- so it is answered before the two early
+        # returns below, not after them
+        vcs_ui.refresh_chip(self)
         view = self.current_view
         if view is not None and view.on_designer_tab:
             self.setWindowTitle(f"Trigger {VERSION} — {view.session.name} — Guides")
@@ -1219,6 +1271,7 @@ class TriggerWindow(MayaToolWindow):
     def teardown(self) -> None:
         for view in self.views:
             view.teardown()
+        vcs.host.detach()
         super().teardown()
 
 

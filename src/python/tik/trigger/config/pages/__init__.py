@@ -8,5 +8,6 @@ from tik.trigger.config.pages.files import FilesPrefs
 from tik.trigger.config.pages.guides import GuidesPrefs
 from tik.trigger.config.pages.interface import InterfacePrefs
 from tik.trigger.config.pages.tools import ToolsPrefs
+from tik.trigger.config.pages.vcs import VcsPrefs
 
-__all__ = ["FilesPrefs", "GuidesPrefs", "InterfacePrefs", "ToolsPrefs"]
+__all__ = ["FilesPrefs", "GuidesPrefs", "InterfacePrefs", "ToolsPrefs", "VcsPrefs"]

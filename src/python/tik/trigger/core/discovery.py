@@ -10,6 +10,8 @@ from __future__ import annotations
 import importlib
 import json
 import logging
+import os
+import sys
 from pathlib import Path
 from typing import Iterable
 
@@ -72,3 +74,64 @@ def _apply_defaults(module, defaults_file: Path) -> None:
                 fields[key].default = fields[key].validate(value)
             else:
                 logger.warning("%s: unknown default '%s'", defaults_file, key)
+
+
+#: ``os.pathsep``-separated folders, each holding ``<name>/<name>.py`` plugins.
+PLUGIN_PATH_VAR = "TRIGGER_PLUGIN_PATH"
+
+_added: list[Path] = []
+
+
+def add_plugin_path(path) -> None:
+    """Register ``path`` as an external plugin root for the next ``load_plugins``."""
+    resolved = Path(path)
+    if resolved not in _added:
+        _added.append(resolved)
+
+
+def clear_plugin_paths() -> None:
+    """Forget every path added at runtime (tests)."""
+    _added.clear()
+
+
+def plugin_paths() -> list[Path]:
+    """Existing external plugin roots: the env var first, then ``add_plugin_path``."""
+    found: list[Path] = []
+    raw = os.environ.get(PLUGIN_PATH_VAR, "")
+    for item in raw.split(os.pathsep) if raw else []:
+        if item.strip():
+            found.append(Path(item.strip()))
+    found.extend(_added)
+    unique: list[Path] = []
+    for path in found:
+        if path.is_dir() and path not in unique:
+            unique.append(path)
+    return unique
+
+
+def discover_external(paths: Iterable[Path]) -> list[str]:
+    """Import ``<root>/<name>/<name>.py`` for every root; return module names.
+
+    Each plugin folder is imported as its own top-level package, so the root
+    goes on ``sys.path``. A plugin that fails to import is logged and skipped.
+    """
+    imported: list[str] = []
+    for root in paths:
+        root_str = str(root)
+        if root_str not in sys.path:
+            sys.path.append(root_str)
+        for folder in sorted(Path(root).iterdir()):
+            if not folder.is_dir() or folder.name.startswith("_"):
+                continue
+            if not (folder / f"{folder.name}.py").exists():
+                continue
+            module_name = f"{folder.name}.{folder.name}"
+            try:
+                module = importlib.import_module(module_name)
+            except Exception as error:  # noqa: BLE001 - keep discovering others
+                logger.error("Failed to import plugin %s: %s", module_name, error)
+                continue
+            imported.append(module_name)
+            _ensure_registered(module)
+            _apply_defaults(module, folder / "defaults.json")
+    return imported

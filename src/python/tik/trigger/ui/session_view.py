@@ -12,6 +12,7 @@ from tik.trigger.core.exceptions import ActionExecutionError, SessionError, Trig
 from tik.trigger.core.steps import STEP_FAILED, STEP_FINISHED, STEP_STARTED
 from tik.trigger.session import ActionHandle, Session
 
+from . import vcs_ui
 from .delegates import PipelineDelegate
 from .iconography import icon_for_tile
 from .model import MIME_TYPE, PipelineModel
@@ -369,7 +370,6 @@ class SessionView(QtWidgets.QWidget):
 
         self.settings.edited.connect(self._on_settings_edited)
         self.settings.run_requested.connect(self.run_step)
-        self.settings.save_requested.connect(self.save_from_scene)
         self.settings.open_file_requested.connect(self._on_open_file_requested)
         self.build_button.clicked.connect(self.build)
         self.publish_button.clicked.connect(self.build_and_publish)
@@ -626,6 +626,7 @@ class SessionView(QtWidgets.QWidget):
             menu.addAction(
                 "Disable" if handle.enabled else "Enable", self.toggle_current
             )
+            vcs_ui.add_publish_submenu(menu, handle, self.session)
             if not handle.is_linked:
                 menu.addAction("Rename", self.rename_current)
                 menu.addAction("Duplicate", self.duplicate_current)
@@ -701,19 +702,3 @@ class SessionView(QtWidgets.QWidget):
             model.clear_status()
         self.progress.setValue(0)
         self.counter.setText("")
-
-    def save_from_scene(self, path: str) -> None:
-        """Ask the action at ``path`` to store the scene state into its settings."""
-        handle = self.session.view(self._focus_phase)[path]
-        action = registry.get_action(handle.type)(settings=handle.settings)
-        from tik.trigger.core.action import ActionContext
-
-        ctx = ActionContext(
-            session=self.session,
-            events=self.session.events,
-            base_dir=self.session.directory,
-            path=path,
-        )
-        written = action.save_from_scene(ctx)
-        self.session.events.log(f"{path}: saved {len(written)} file(s)")
-        self.settings.set_handle(handle)

@@ -69,6 +69,7 @@ class VersionedFileField(QtWidgets.QWidget):
         browser: Optional[Callable] = None,
         extra: Optional[tuple] = None,
         base_dir: Optional[Callable[[], str]] = None,
+        vcs: Optional[tuple] = None,
     ) -> None:
         super().__init__(parent)
         self.extensions = list(extensions)
@@ -97,6 +98,15 @@ class VersionedFileField(QtWidgets.QWidget):
             self.extra_button.setText(label)
             self.extra_button.clicked.connect(lambda: callback(self.value()))
             layout.addWidget(self.extra_button)
+        self.vcs_button = None
+        if vcs is not None:
+            tooltip, on_click = vcs
+            self.vcs_button = QtWidgets.QToolButton()
+            self.vcs_button.setObjectName("VcsButton")
+            self.vcs_button.setText("⇩")
+            self.vcs_button.setToolTip(tooltip)
+            self.vcs_button.clicked.connect(lambda: on_click(self))
+            layout.addWidget(self.vcs_button)
         self.line.editingFinished.connect(self._commit)
         self.browse.clicked.connect(self._browse)
         self.setToolTip("Alt+Up / Alt+Down while hovering: step versions")

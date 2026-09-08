@@ -391,13 +391,19 @@ class TestSettingsMenuEntry:
 
     def test_opening_settings_builds_a_dialog(self, window):
         dialog = window.open_settings(exec_=False)
-        assert dialog.categories.count() == 4
+        assert dialog.categories.count() == 5
         dialog.close()
 
     def test_the_dialog_shows_every_trigger_page(self, window):
         dialog = window.open_settings(exec_=False)
-        labels = [dialog.categories.item(i).text() for i in range(4)]
-        assert labels == ["Interface", "Guides", "Files & Sessions", "External Tools"]
+        labels = [dialog.categories.item(i).text() for i in range(5)]
+        assert labels == [
+            "Interface",
+            "Guides",
+            "Files & Sessions",
+            "External Tools",
+            "Version Control",
+        ]
         dialog.close()
 
 

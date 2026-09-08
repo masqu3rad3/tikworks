@@ -16,6 +16,7 @@ from tik.trigger.core import registry
 from tik.trigger.core.action import NOTES
 from tik.trigger.core.document import BUILD
 from tik.trigger.session import ActionHandle
+from tik.trigger.ui import vcs_ui
 from tik.trigger.ui.iconography import action_icon
 from tik.trigger.ui.prefs_access import editor_command
 
@@ -27,7 +28,6 @@ class ActionSettingsPanel(QtWidgets.QWidget):
     """Header, generated form and step buttons for the selected action."""
 
     run_requested = QtCore.Signal(str)  # path
-    save_requested = QtCore.Signal(str)
     edited = QtCore.Signal(str)  # path
     open_file_requested = QtCore.Signal(str, str)  # path, extension
     handle_changed = QtCore.Signal(object)  # the ActionHandle shown, or None
@@ -75,6 +75,7 @@ class ActionSettingsPanel(QtWidgets.QWidget):
             },
             base_dir=base_dir,
             list_choices=list_choices,
+            file_vcs=vcs_ui.form_vcs_slot(base_dir),
         )
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
@@ -92,16 +93,14 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.new_script_button.setToolTip(NEW_SCRIPT_TIP)
         self.new_script_button.setVisible(False)
         buttons.addWidget(self.new_script_button)
-        self.save_button = QtWidgets.QPushButton("Save from scene")
         self.reset_button = QtWidgets.QPushButton("Reset overrides")
         self.run_button = QtWidgets.QPushButton("Run step")
         buttons.addStretch(1)
-        for button in (self.save_button, self.reset_button, self.run_button):
+        for button in (self.reset_button, self.run_button):
             buttons.addWidget(button)
         layout.addLayout(buttons)
         self.form.changed.connect(self._on_changed)
         self.run_button.clicked.connect(lambda: self._emit(self.run_requested))
-        self.save_button.clicked.connect(lambda: self._emit(self.save_requested))
         self.reset_button.clicked.connect(self._reset_overrides)
         self.guides_button.clicked.connect(self._open_guides)
         self.new_script_button.clicked.connect(lambda: self.new_script())
@@ -132,7 +131,6 @@ class ActionSettingsPanel(QtWidgets.QWidget):
             self.icon.clear()
             self.form.set_target(None)
             self.linked_note.setVisible(False)
-            self.save_button.setVisible(False)
             self.reset_button.setVisible(False)
             self.guides_button.setVisible(False)
             self.new_script_button.setVisible(False)
@@ -153,7 +151,6 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.guides_button.setVisible(self._guides_field_name() is not None)
         self.new_script_button.setVisible(self._py_field_name() is not None)
         self._refresh_new_script_state()
-        self.save_button.setVisible(self._has_save(action_cls))
         if handle.is_linked:
             self.linked_note.setText(
                 "Referenced action — "
@@ -238,12 +235,6 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         self.open_file_requested.emit(
             str(getattr(self._action, name, "") or ""), ".trg"
         )
-
-    @staticmethod
-    def _has_save(action_cls) -> bool:
-        from tik.trigger.core.action import Action
-
-        return action_cls.save_from_scene is not Action.save_from_scene
 
     def _refresh_override_marks(self) -> None:
         handle = self._handle

@@ -746,33 +746,34 @@ class Session:
                 )
         return problems
 
-    def validate(self) -> list[str]:
-        """Pre-flight problems for every runnable step, in both lists."""
+    def _phase_problems(self, phase: str) -> list[str]:
+        """Every step's own ``validate`` for one phase, the plan's problems first."""
         from tik.trigger.core.action import ActionContext
 
-        runner = self._runner()
+        plan = self._runner().plan(self.document, self.directory, phase=phase)
+        problems = list(plan.problems)
+        for step in plan.steps:
+            action = registry.get_action(step.node.type)(settings=step.node.settings)
+            ctx = ActionContext(
+                session=self,
+                events=self.events,
+                base_dir=step.base_dir,
+                path=step.path,
+            )
+            problems.extend(f"{step.path}: {item}" for item in action.validate(ctx))
+        return problems
+
+    def validate(self) -> list[str]:
+        """Pre-flight problems for every runnable step, in both lists."""
         problems: list[str] = []
         for phase in PHASES:
             prefix = "" if phase == BUILD else f"{phase}: "
             try:
-                plan = runner.plan(self.document, self.directory, phase=phase)
+                found = self._phase_problems(phase)
             except SessionError as error:
                 problems.append(f"{prefix}{error}")
                 continue
-            problems.extend(f"{prefix}{item}" for item in plan.problems)
-            for step in plan.steps:
-                action = registry.get_action(step.node.type)(
-                    settings=step.node.settings
-                )
-                ctx = ActionContext(
-                    session=self,
-                    events=self.events,
-                    base_dir=step.base_dir,
-                    path=step.path,
-                )
-                problems.extend(
-                    f"{prefix}{step.path}: {item}" for item in action.validate(ctx)
-                )
+            problems.extend(f"{prefix}{item}" for item in found)
         problems.extend(self._module_problems())
         problems.extend(self._scope_problems())
         problems.extend(self.reference_problems)
@@ -800,6 +801,13 @@ class Session:
         ]
         if blocking:
             raise SessionError("; ".join(blocking))
+        if publish:
+            # the publish list is validated *before* the scene is reset: a
+            # publish that cannot run must refuse at the door, not after the
+            # rig has been built over whatever the rigger had open.
+            problems = self._phase_problems(PUBLISH)
+            if problems:
+                raise SessionError("; ".join(problems))
         self.events.log(f"Building{' and publishing' if publish else ''} {self.name}")
         # The runner resets the scene, so the guides have to be in the document
         # before it does. Saving already captures; building must too, or a rig

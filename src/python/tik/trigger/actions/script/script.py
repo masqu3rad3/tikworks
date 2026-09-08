@@ -81,6 +81,32 @@ class Script(Action):
         return name
 
     @classmethod
+    def pin_settings(cls, settings: dict) -> dict:
+        """Freeze the alias: in a bundle the file is renamed to its hash."""
+        action = cls(settings=settings)
+        if not action.file_path or action.import_as:
+            return {}
+        return {"import_as": action.alias()}
+
+    def dependencies(self, ctx: ActionContext) -> list[Path]:
+        """The script file, and every ``.py`` beside it.
+
+        A script is a library: the runner puts its folder on the module path,
+        so it may ``import`` a sibling that nothing in the document names. The
+        whole folder travels rather than the one file, deliberately: a spare
+        file costs a copy, a missing one costs the published build.
+        """
+        found = super().dependencies(ctx)
+        if not self.file_path:
+            return found
+        target = ctx.resolve(self.file_path)
+        folder = target.parent
+        if not folder.is_dir():
+            return found
+        found.extend(item for item in sorted(folder.glob("*.py")) if item != target)
+        return found
+
+    @classmethod
     def migrate_settings(cls, settings: dict) -> dict:
         """Accept the legacy ``script_file_path`` / ``commands`` keys."""
         data = dict(settings)
