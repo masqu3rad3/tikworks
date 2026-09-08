@@ -43,6 +43,10 @@ class SessionSaveError(SessionError):
     """The session file could not be written."""
 
 
+class VersionControlError(TriggerError):
+    """A version control operation could not run (no provider, refused, failed)."""
+
+
 class ModuleError(TriggerError):
     """Module related errors."""
 
@@ -91,6 +95,7 @@ __all__ = [
     "SessionError",
     "SessionLoadError",
     "SessionSaveError",
+    "VersionControlError",
     "ModuleError",
     "GuideError",
     "BuildError",

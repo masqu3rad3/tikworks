@@ -41,6 +41,7 @@ from .exceptions import (
     SessionLoadError,
     SessionSaveError,
     TriggerError,
+    VersionControlError,
 )
 from .guide_document import (
     GuideDocument,
@@ -155,6 +156,7 @@ __all__ = [
     "SessionError",
     "SessionLoadError",
     "SessionSaveError",
+    "VersionControlError",
     "ModuleError",
     "GuideError",
     "BuildError",
