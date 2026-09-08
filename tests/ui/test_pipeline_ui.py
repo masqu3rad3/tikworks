@@ -42,10 +42,6 @@ class Weights(Action):
     def run(self, ctx):
         pass
 
-    def save_from_scene(self, ctx):
-        CALLS.append(("saved", ctx.path))
-        return ["x.trw"]
-
 
 # Scope is stamped on the class (like ``category`` and ``icon``), so a scoped
 # variant needs its own subclass rather than a second registration of ``Mark``.
@@ -123,10 +119,6 @@ def test_settings_panel_edits_session(view):
     view.settings.form.widget("tag").editingFinished.emit()
     assert view.session["mark"].tag == "hello"
     assert view.session.is_modified
-    view.add_action("weights")
-    assert view.settings.save_button.isVisible()
-    view.settings.save_button.click()
-    assert ("saved", "weights") in CALLS
 
 
 def test_drag_drop_nesting_and_reorder(view):

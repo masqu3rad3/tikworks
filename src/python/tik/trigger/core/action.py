@@ -108,6 +108,38 @@ class Action(Schema):
         """Execute the action."""
         raise NotImplementedError
 
-    def save_from_scene(self, ctx: ActionContext) -> list[str]:
-        """Write side files from the current scene (weights, shapes...). Optional."""
+    # ------------------------------------------------------------ files
+    @classmethod
+    def file_fields(cls) -> dict:
+        """Every ``FileField`` naming a file (directories are not dependencies)."""
+        return {
+            name: field_obj
+            for name, field_obj in cls.fields().items()
+            if field_obj.type_name == "file" and getattr(field_obj, "mode", "") != "dir"
+        }
+
+    def dependencies(self, ctx: ActionContext) -> list[Path]:
+        """Files this action needs to build, absolute.
+
+        The default is every non-empty file field resolved against the
+        session folder. Override when the files are not fields.
+        """
+        found: list[Path] = []
+        for name in self.file_fields():
+            value = getattr(self, name)
+            if value:
+                found.append(ctx.resolve(value))
+        return found
+
+    def products(self, ctx: ActionContext) -> list:
+        """Files this action writes during a run and wants published as elements.
+
+        Returns ``Artifact`` objects. An action that captures scene data
+        (weights, shapes) writes it here and returns what it wrote.
+        """
         return []
+
+    @classmethod
+    def has_products(cls) -> bool:
+        """True when a subclass overrides ``products``."""
+        return cls.products is not Action.products
