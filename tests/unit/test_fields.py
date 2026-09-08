@@ -456,3 +456,63 @@ def test_filterable_without_choices_is_refused():
     """Nothing would render it, so the declaration is a mistake, not a no-op."""
     with pytest.raises(TypeError):
         ListField(item_type=str, filterable=True)
+
+
+def test_table_field_rows_from_defaults_to_empty():
+    from tik.core.fields import Column, TableField
+
+    field = TableField([], columns=(Column("control", "choice"),))
+    assert field.rows_from == ""
+    assert field.to_schema()["rows_from"] == ""
+
+
+def test_table_field_records_rows_from():
+    from tik.core.fields import Column, TableField
+
+    field = TableField(
+        [], columns=(Column("control", "choice"),), rows_from="control_names"
+    )
+    assert field.rows_from == "control_names"
+    assert field.to_schema()["rows_from"] == "control_names"
+
+
+def test_float_column_coerces_numbers_and_keeps_unset_empty():
+    from tik.core.fields import Column, TableField
+
+    class Target(Schema):
+        rows = TableField([], columns=(Column("control"), Column("size", "float")))
+
+    target = Target()
+    target.rows = [
+        {"control": "ik", "size": "1.5"},
+        {"control": "fk", "size": 2},
+        {"control": "pole"},
+    ]
+    assert target.rows[0]["size"] == 1.5
+    assert target.rows[1]["size"] == 2.0
+    # Unset stays unset: 0.0 would be a real multiplier that collapses a shape.
+    assert target.rows[2]["size"] == ""
+
+
+def test_float_column_rejects_nonsense():
+    from tik.core.fields import Column, TableField
+
+    class Target(Schema):
+        rows = TableField([], columns=(Column("size", "float"),))
+
+    target = Target()
+    with pytest.raises(FieldValidationError):
+        target.rows = [{"size": "wide"}]
+
+
+def test_shape_column_is_a_plain_string_column():
+    """The kind only picks an editor; storage stays a name."""
+    from tik.core.fields import Column, TableField
+
+    class Target(Schema):
+        rows = TableField([], columns=(Column("shape", "shape"),))
+
+    target = Target()
+    target.rows = [{"shape": "Cube"}]
+    assert target.rows == [{"shape": "Cube"}]
+    assert Target.schema()["rows"]["columns"][0]["kind"] == "shape"

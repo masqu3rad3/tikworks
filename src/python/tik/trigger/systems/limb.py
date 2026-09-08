@@ -195,7 +195,6 @@ def _build_controls(rig, name, parent, size, labels, result) -> None:
     """Create the IK, switch and FK controllers."""
     result.ik_control = rig.controller(
         _role(name, "ik"),
-        shape="Cube",
         size=size,
         parent=rig.groups.control,
         match=result.ik_joints[-1],
@@ -207,7 +206,7 @@ def _build_controls(rig, name, parent, size, labels, result) -> None:
         plug.visible = False
     # Created after the lock so it inherits the main's locked channels. The
     # tweak is what the rig follows; the main carries the attributes.
-    result.ik_tweak = rig.tweak_control(result.ik_control, size=size * 0.6)
+    result.ik_tweak = rig.tweak_control(result.ik_control)
 
     rig.separator(result.ik_control, "ikfk_")
     result.switch_plug = result.ik_control["ikFk"].create(
@@ -223,7 +222,6 @@ def _build_controls(rig, name, parent, size, labels, result) -> None:
     for index, (label, joint) in enumerate(zip(labels, result.fk_joints)):
         fk_control = rig.controller(
             _role(name, "fk", label),
-            shape="Circle",
             size=size,
             parent=fk_parent if fk_parent is not None else rig.groups.control,
             match=joint,
@@ -367,7 +365,6 @@ def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -
 
     result.pole_control = rig.controller(
         _role(name, "pole"),
-        shape="Diamond",
         size=size * 0.5,
         parent=rig.groups.control,
         mirror="world",
@@ -389,7 +386,7 @@ def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -
         plug = result.pole_control[channel]
         plug.locked = True
         plug.visible = False
-    result.pole_tweak = rig.tweak_control(result.pole_control, size=size * 0.3)
+    result.pole_tweak = rig.tweak_control(result.pole_control)
     result.ik_handle.pole_vector(result.pole_tweak.transform)
 
     if pole_pin:
@@ -484,6 +481,36 @@ def limb_control_names(name: str = "", labels: Sequence[str] = ()) -> tuple[str,
         *(_role(name, "fk", label) for label in labels),
         _role(name, "pole"),
     )
+
+
+def limb_control_shapes(name: str = "", labels: Sequence[str] = ()) -> dict[str, str]:
+    """The default shape per role ``build_ikfk_limb`` creates.
+
+    The mirror of ``limb_control_names``, and for the same reason: a module
+    that hardcoded the names this system chose would drift the moment a role
+    was renamed.
+    """
+    return {
+        _role(name, "ik"): "Cube",
+        **{_role(name, "fk", label): "Circle" for label in labels},
+        _role(name, "pole"): "Diamond",
+    }
+
+
+def limb_control_orients(
+    name: str = "", labels: Sequence[str] = ()
+) -> dict[str, tuple[float, float, float]]:
+    """The shape rotation per role ``build_ikfk_limb`` creates.
+
+    Only the FK controls turn. An FK joint runs along its local X, and a shape
+    is authored flat in XZ with its normal on +Y, so an unrotated circle lies
+    *along* the limb instead of around it. ``Rz(-90)`` puts the normal on the
+    bone; ``rig.controller`` mirrors it for the right side.
+
+    The IK control, the pole and any collar are world-aligned rather than
+    bone-aligned, so they are deliberately absent.
+    """
+    return {_role(name, "fk", label): (0.0, 0.0, -90.0) for label in labels}
 
 
 def _derive_size(joints: Sequence) -> float:

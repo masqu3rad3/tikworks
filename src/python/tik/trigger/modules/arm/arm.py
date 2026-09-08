@@ -23,7 +23,13 @@ from tik.trigger.core import (
     Vector2Field,
     register_module,
 )
-from tik.trigger.systems.limb import _derive_size, build_ikfk_limb, limb_control_names
+from tik.trigger.systems.limb import (
+    _derive_size,
+    build_ikfk_limb,
+    limb_control_names,
+    limb_control_orients,
+    limb_control_shapes,
+)
 from tik.trigger.systems.limb_lock import build_limb_lock
 from tik.trigger.systems.reach import ReachAxis, build_reach
 
@@ -44,6 +50,11 @@ class Arm(Module):
     inputs = (Input("root", primary=True, help="Where the collar hangs (chest/body)"),)
     outputs = ("collar", "upperarm", "lowerarm", "hand")
     controls = ("collar", *limb_control_names(labels=LIMB_LABELS))
+    control_shapes = {
+        "collar": "CurvedCircle",
+        **limb_control_shapes(labels=LIMB_LABELS),
+    }
+    control_orients = limb_control_orients(labels=LIMB_LABELS)
     pivot_controls = {"ik": "hand"}
     pivot_presets = Module.pivot_presets.with_default(
         [{"control": "ik", "label": label} for label in ("tip", "ball", "wrist")]
@@ -193,7 +204,6 @@ class Arm(Module):
         # their offset groups.
         collar_ctrl = rig.controller(
             "collar",
-            shape="CurvedCircle",
             size=size,
             match=collar_jnt,
             mirror="behaviour",

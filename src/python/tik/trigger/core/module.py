@@ -28,6 +28,7 @@ from typing import Optional
 from tik.core.fields import Column, FieldGroup, Schema, TableField
 from tik.core.side import Side
 
+from . import shapes as shape_library
 from .manifest import GuideAttr, GuideLayout, Input, instance_key
 from .schemas import GuidePose, ModuleInstance, ParentRef
 
@@ -36,6 +37,9 @@ SPACES = FieldGroup("Spaces", collapsed=True)
 
 PIVOTS = FieldGroup("Pivots", collapsed=True)
 """Every module's pivot presets fold away; declared here, not per module."""
+
+SHAPES = FieldGroup("Shapes", collapsed=True)
+"""Every module's control shapes fold away; declared here, not per module."""
 
 
 class Module(Schema):
@@ -58,6 +62,16 @@ class Module(Schema):
     #: is the module author's business, never the rigger's, so it is a class
     #: attribute rather than a table column.
     pivot_controls: dict[str, str] = {}
+    #: Default shape per controller role, keyed by the names ``control_names``
+    #: returns. The manifest is the only place a default lives -- which is why
+    #: ``rig.controller`` has no ``shape`` argument to hide a second one in.
+    control_shapes: dict[str, str] = {}
+    #: Per-role shape rotation in degrees, baked into the CVs at build time.
+    #: Shapes are authored flat in XZ with the normal on +Y; a control that
+    #: wraps a bone wants that normal along the bone instead. Module-level
+    #: only -- an orientation is the module author's business, not a knob the
+    #: rigger needs, and a column for it would crowd the shape table.
+    control_orients: dict[str, tuple[float, float, float]] = {}
     outputs: tuple[str, ...] = ("root",)
     module_type: str = ""  # stamped by @register_module
     category: str = "generic"  # stamped by @register_module
@@ -83,6 +97,19 @@ class Module(Schema):
         columns=(
             Column("control", "choice", choices_from="pivot_control_names"),
             Column("label", "string"),
+        ),
+    )
+    control_shape_overrides = TableField(
+        [],
+        label="Control Shapes",
+        group=SHAPES,
+        help="Override the shape and relative size of one controller.",
+        last=True,
+        rows_from="control_names",
+        columns=(
+            Column("control", "choice", choices_from="control_names"),
+            Column("shape", "shape"),
+            Column("size", "float"),
         ),
     )
 
@@ -175,6 +202,52 @@ class Module(Schema):
         ``output_names`` are overridden.
         """
         return tuple(cls.pivot_controls)
+
+    @classmethod
+    def control_shape_defaults(cls, settings: Optional[dict] = None) -> dict[str, str]:
+        """Default shape per control role.
+
+        Override when a setting drives them -- exactly as ``control_names``
+        and ``output_names`` are overridden.
+        """
+        return dict(cls.control_shapes)
+
+    @classmethod
+    def control_orient_defaults(cls, settings: Optional[dict] = None) -> dict:
+        """Shape rotation per control role, in degrees.
+
+        Override when a setting drives them, exactly as
+        ``control_shape_defaults`` is overridden.
+        """
+        return dict(cls.control_orients)
+
+    def shape_rows(self) -> dict[str, dict]:
+        """The override rows, keyed by control role. Later rows win."""
+        found = {}
+        for row in self.control_shape_overrides:
+            control = row.get("control", "")
+            if control:
+                found[control] = row
+        return found
+
+    def resolve_control_shape(self, role: str) -> tuple[str, float]:
+        """The effective ``(shape, size multiplier)`` for one control role.
+
+        Resolution is *per field*, not per row: a row that sets only a size
+        keeps the manifest shape, and a row that sets only a shape keeps a
+        multiplier of 1.0. An override naming a shape the library cannot
+        resolve is discarded in favour of the manifest default -- the rigger
+        gets a warning, not a broken build.
+        """
+        default = self.control_shape_defaults(self.values()).get(
+            role, shape_library.DEFAULT_SHAPE
+        )
+        row = self.shape_rows().get(role, {})
+        shape = row.get("shape", "")
+        if not shape or not shape_library.has_shape(shape):
+            shape = default
+        size = row.get("size", "")
+        return shape, float(size) if size != "" else 1.0
 
     @classmethod
     def pivot_rows(cls, settings=None) -> list[dict]:
@@ -277,6 +350,20 @@ class Module(Schema):
                 problems.append(
                     f"pivot preset '{control}.{label}': control '{control}' has "
                     f"no movable pivot with the current settings"
+                )
+        for row in self.control_shape_overrides:
+            control, shape = row.get("control", ""), row.get("shape", "")
+            if not control:
+                continue
+            if control not in known:
+                problems.append(
+                    f"control shape '{control}': control is not built with the "
+                    f"current settings"
+                )
+            elif shape and not shape_library.has_shape(shape):
+                problems.append(
+                    f"control shape '{control}': shape '{shape}' is not in the "
+                    f"shape library"
                 )
         return problems
 

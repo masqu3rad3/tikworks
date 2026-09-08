@@ -191,6 +191,117 @@ class _TableEditor(QtWidgets.QWidget):
         self.valueChanged.emit(self.value())
 
 
+class _ControlShapeEditor(QtWidgets.QWidget):
+    """One row per control, over sparse storage.
+
+    A ``TableField`` naming ``rows_from`` has a row set fixed by the target
+    rather than added by hand, so the rigger sees every control at once --
+    including the ones they have never touched, drawn with the module's own
+    default. Only the rows they actually changed are stored.
+    """
+
+    valueChanged = QtCore.Signal(object)  # noqa: N815 - matches the Qt widgets here
+
+    def __init__(
+        self, columns, rows_resolver, defaults_resolver=None, parent=None
+    ) -> None:
+        super().__init__(parent)
+        self.columns = list(columns)
+        self._rows_resolver = rows_resolver
+        self._defaults_resolver = defaults_resolver or (lambda: {})
+        self._rows = {}
+
+        self._layout = QtWidgets.QGridLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setHorizontalSpacing(6)
+        self._layout.setVerticalSpacing(2)
+        self._build_rows()
+
+    # -------------------------------------------------------------- rows
+    def roles(self) -> tuple:
+        """The control roles the target currently offers, in its own order."""
+        return tuple(self._rows)
+
+    def row_widgets(self, role: str) -> tuple:
+        """``(ShapeButton, QDoubleSpinBox)`` for ``role``."""
+        return self._rows[role]
+
+    def _build_rows(self) -> None:
+        from tik.shared.ui.shape_picker import ShapeButton
+
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._rows = {}
+
+        defaults = self._defaults_resolver()
+        for index, role in enumerate(self._rows_resolver()):
+            label = QtWidgets.QLabel(role.replace("_", " "))
+            button = ShapeButton()
+            button.setPlaceholder(defaults.get(role, ""))
+            button.shapeChosen.connect(self.refresh_value)
+            spin = QtWidgets.QDoubleSpinBox()
+            spin.setDecimals(3)
+            spin.setRange(0.001, 1000.0)
+            spin.setValue(1.0)
+            spin.valueChanged.connect(self.refresh_value)
+            self._layout.addWidget(label, index, 0)
+            self._layout.addWidget(button, index, 1)
+            self._layout.addWidget(spin, index, 2)
+            self._rows[role] = (button, spin)
+
+    def rebuild(self) -> None:
+        """Re-read the role list, keeping whatever is already stored.
+
+        A no-op when the roles are unchanged, which is the overwhelmingly
+        common case: the Designer re-targets the form on every guide click,
+        and tearing down a row per control there meant rebuilding a shape
+        button -- and its popup -- for a list that had not moved.
+        """
+        if tuple(self._rows_resolver()) == self.roles():
+            return
+        stored = self.value()
+        self._build_rows()
+        self.setValue(stored)
+
+    # ------------------------------------------------------------- value
+    def value(self) -> list:
+        """Only the rows that differ from the module's defaults."""
+        rows = []
+        for role, (button, spin) in self._rows.items():
+            shape = button.value()
+            size = spin.value()
+            if not shape and abs(size - 1.0) < 1e-9:
+                continue  # inherited: store nothing
+            rows.append(
+                {
+                    "control": role,
+                    "shape": shape,
+                    "size": "" if abs(size - 1.0) < 1e-9 else size,
+                }
+            )
+        return rows
+
+    def setValue(self, rows) -> None:  # noqa: N802 - matches the Qt widgets here
+        stored = {
+            row.get("control", ""): row for row in (rows or []) if row.get("control")
+        }
+        for role, (button, spin) in self._rows.items():
+            row = stored.get(role, {})
+            for widget in (button, spin):
+                widget.blockSignals(True)
+            button.setValue(row.get("shape", "") or "")
+            size = row.get("size", "")
+            spin.setValue(float(size) if size != "" else 1.0)
+            for widget in (button, spin):
+                widget.blockSignals(False)
+
+    def refresh_value(self, *_args) -> None:
+        """Recompute and announce the sparse value."""
+        self.valueChanged.emit(self.value())
+
+
 class _NodeEditor(QtWidgets.QWidget):
     """Line edit plus a "pick" button fed by ``picker``."""
 
@@ -674,6 +785,16 @@ class FormBuilder(QtWidgets.QWidget):
             widget.changed.connect(
                 lambda value, field_name=name: self._on_change(field_name, value)
             )
+        elif kind == "table" and getattr(field, "rows_from", ""):
+            source = field.rows_from
+            widget = _ControlShapeEditor(
+                getattr(field, "columns", ()),
+                rows_resolver=lambda key=source: self._resolve_choices(key),
+                defaults_resolver=self._resolve_shape_defaults,
+            )
+            widget.valueChanged.connect(
+                lambda value, field_name=name: self._on_change(field_name, value)
+            )
         elif kind == "table":
             widget = _TableEditor(
                 getattr(field, "columns", ()),
@@ -713,6 +834,20 @@ class FormBuilder(QtWidgets.QWidget):
             found = found(self._target.values())
         return tuple(found or ())
 
+    def _resolve_shape_defaults(self) -> dict:
+        """The target's manifest shape defaults, for the greyed placeholders.
+
+        Same shape as ``_resolve_choices``: a field is a class attribute and
+        cannot know the subclass it will be edited on, so it resolves at render
+        time.
+        """
+        if self._target is None:
+            return {}
+        found = getattr(self._target, "control_shape_defaults", {})
+        if callable(found):
+            found = found(self._target.values())
+        return dict(found or {})
+
     @staticmethod
     def _parse_list(text: str) -> list:
         return [item.strip() for item in text.split(",") if item.strip()]
@@ -726,6 +861,10 @@ class FormBuilder(QtWidgets.QWidget):
             value = getattr(self._target, name)
             widget.blockSignals(True)
             try:
+                if isinstance(widget, _ControlShapeEditor):
+                    # The role set follows the target's settings, so the rows
+                    # themselves have to be rebuilt before they are filled.
+                    widget.rebuild()
                 self._set_widget_value(widget, value)
                 companion = self._companions.get(name)
                 if companion:

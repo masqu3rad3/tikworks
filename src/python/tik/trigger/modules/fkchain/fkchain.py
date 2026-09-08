@@ -34,6 +34,16 @@ class FkChain(Module):
         count = int((settings or {}).get("segments", cls.segments.default))
         return tuple(f"fk{index}" for index in range(count))
 
+    @classmethod
+    def control_shape_defaults(cls, settings=None):
+        """One circle per FK controller."""
+        return {role: "Circle" for role in cls.control_names(settings)}
+
+    @classmethod
+    def control_orient_defaults(cls, settings=None):
+        """Every control here is FK, so every shape wraps its bone."""
+        return {role: (0.0, 0.0, -90.0) for role in cls.control_names(settings)}
+
     segments = IntField(3, min=1, max=50, help="Number of joints after the root")
     spacing = FloatField(5.0, min=0.01, help="Default distance between guides")
     controller_size = FloatField(2.0, min=0.01, label="Controller Size")

@@ -12,14 +12,64 @@ from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
 import tik.maya as tm
+from tik.core.control_shapes import rotate_data
+from tik.core.side import Side
 from tik.maya import naming
 from tik.maya.roles.controller import Controller
+from tik.trigger.core import shapes as shape_library
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import TIERS
 from tik.trigger.core.schemas import ModuleInstance
 from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_joint
 
 from . import tags
+
+TWEAK_SCALE = 0.875
+"""How much of its master's size a tweak is drawn at.
+
+A tweak is a finer grip on the *same* control, not a different one, so it
+takes the master's shape and reads as that shape one size down.
+"""
+
+
+def mirror_orient(orient):
+    """The right side's version of a shape rotation authored for the left.
+
+    The right side is mirrored *by behaviour*: its joints carry a 180 degree
+    roll about X, so a shape authored for the left arrives rolled. Undoing
+    that is conjugating the rotation by that roll -- ``Rx(180) . R . Rx(180)``
+    -- which works out to negating Y and Z and leaving X alone. Measured: an
+    FK bone runs along local +X on the left and local -X on the right, and
+    ``Rz(-90)`` / ``Rz(+90)`` are what put a shape's normal on each.
+
+    Negating Z alone would happen to be right for the bone-alignment case and
+    wrong the moment a module declares a turn about X or Y.
+    """
+    if not orient:
+        return orient
+    x, y, z = orient
+    return (x, -y, -z)
+
+
+def _curve_for(shape, orient=None):
+    """Curve data for a shape name, resolved through the *pinned* library.
+
+    The data, not the name: ``Controller.create`` and ``Controller.set_shape``
+    both resolve a name through ``ControlShapeLibrary.get_instance()``, the
+    unpinned singleton that searches the artist's own folder -- the exact hole
+    the pinned library exists to close. Falls back to the name when the
+    library cannot resolve it, so the caller still gets tik.maya's warning
+    rather than a controller with no shape at all.
+
+    ``orient`` is baked into the returned CVs, so the controller's transform
+    is never touched and stays aligned to its joint.
+    """
+    data = shape
+    if isinstance(shape, str):
+        data = shape_library.library().load(shape)
+        if not data:
+            return shape
+    return rotate_data(data, orient) if orient else data
 
 
 def node_of(value):
@@ -263,7 +313,6 @@ class ModuleRig:
         self,
         name: str,
         *,
-        shape: str = "Circle",
         size: float = 1.0,
         parent: Any = None,
         color: Any = None,
@@ -273,6 +322,11 @@ class ModuleRig:
         tier: Optional[str] = "primary",
     ) -> Controller:
         """A tagged controller with its offset group.
+
+        The shape is *not* an argument: it comes from the module's manifest,
+        which the rigger overrides per instance. Passing one here would keep a
+        second place a default could hide, and the ground rules already require
+        the manifest to equal what ``build()`` creates.
 
         ``match`` snaps it to a node; ``mirror`` is ``"behaviour"`` (FK-like,
         follows its joint) or ``"world"`` (IK/world-aligned), recorded for a
@@ -286,10 +340,15 @@ class ModuleRig:
                 f"'{name}': tier must be one of {TIERS} or None, got {tier!r}."
             )
         parent = parent if parent is not None else self.groups.control
+        shape, size_multiplier = self.module.resolve_control_shape(name)
+        effective_size = size * size_multiplier
+        orient = self.module.control_orient_defaults(self.module.values()).get(name)
+        if orient and self.side is Side.RIGHT:
+            orient = mirror_orient(orient)
         controller = Controller.create(
             name=self.name(name, suffix="ctrl"),
-            shape=shape,
-            size=size,
+            shape=_curve_for(shape, orient),
+            size=effective_size,
             color=color if color is not None else SIDE_COLORS[self.side.value],
             parent=(
                 node_of(parent).long_name
@@ -315,29 +374,56 @@ class ModuleRig:
             if offset
             else None
         )
+        # What this control ended up looking like, so a tweak can take the
+        # same shape at a smaller size without re-deriving any of it.
+        controller.shape_name = shape
+        controller.shape_size = effective_size
+        controller.shape_orient = orient
         self.controllers.append(controller)
         return controller
 
     def tweak_control(
-        self, main: Controller, *, size: Optional[float] = None, shape: str = "Circle"
+        self,
+        main: Controller,
+        *,
+        size: Optional[float] = None,
+        shape: Optional[str] = None,
+        scale: float = TWEAK_SCALE,
     ) -> Controller:
         """Create a secondary tweak controller under ``main``.
 
         The tweak is a child of the main, so it rides along when the animator
         moves the main control instead of being left behind. Downstream rig
         connections read the tweak, not the main.
+
+        It takes the main's *resolved* shape -- the rigger's override
+        included -- at ``scale`` of its size, because a tweak is a finer grip
+        on the same control rather than a different one. ``shape`` and ``size``
+        override that for a caller that wants something else.
         """
         role = main.transform.meta.get(tags.ROLE, main.transform.name)
+        # A tweak is not in the control manifest -- rig.tweak_control parents
+        # it under its main -- so it has no role of its own to resolve, and
+        # reads what the main resolved to instead.
+        shape = shape if shape is not None else getattr(main, "shape_name", "Circle")
+        if size is None:
+            size = getattr(main, "shape_size", 1.0) * scale
+        # The master's turn too: a bone-aligned control wants a bone-aligned
+        # tweak, and the master has already had its side mirrored in.
+        orient = getattr(main, "shape_orient", None)
         tweak = self.controller(
             f"{role}_tweak",
-            shape=shape,
-            size=size if size is not None else 1.0,
+            size=size,
             parent=main,
             match=main,
             mirror=main.meta.get(tags.MIRROR, tags.WORLD),
             offset=False,
             tier=None,
         )
+        tweak.set_shape(_curve_for(shape, orient), size=size)
+        tweak.shape_name = shape
+        tweak.shape_size = size
+        tweak.shape_orient = orient
         visible = main.transform["tweakVis"].create(
             "bool", default=False, keyable=False
         )
@@ -395,13 +481,18 @@ class ModuleRig:
             )
         pivot = self.controller(
             f"{role}_pivot",
-            shape=shape,
             size=size if size is not None else 1.0,
             parent=main,
             match=main,
             mirror=main.meta.get(tags.MIRROR, tags.WORLD),
             tier=None,
         )
+        # A pivot controller is the same species as a tweak: not in the
+        # control manifest, so it has no role to key an override on.
+        pivot.set_shape(_curve_for(shape), size=size if size is not None else 1.0)
+        pivot.shape_name = shape
+        pivot.shape_size = size if size is not None else 1.0
+        pivot.shape_orient = None
         show = main.transform["showPivot"].create("bool", default=False, keyable=False)
         show.visible = True
         show >> pivot.offset["visibility"]

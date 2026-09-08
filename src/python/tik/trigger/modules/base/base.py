@@ -16,6 +16,7 @@ class Base(Module):
     inputs = ()
     outputs = ("root",)
     controls = ("root",)
+    control_shapes = {"root": "Circle"}
 
     controller_size = FloatField(10.0, min=0.01, label="Controller Size")
 
@@ -28,7 +29,6 @@ class Base(Module):
         root_guide = rig.guide("root")
         controller = rig.controller(
             "root",
-            shape="Circle",
             size=self.controller_size,
             match=root_guide,
             mirror="world",

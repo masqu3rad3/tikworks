@@ -5,6 +5,10 @@ Spec: docs/superpowers/specs/2026-08-30-arm-module-and-module-ground-rules-desig
 A failure here is a finding about the offending module, not a test to relax.
 """
 
+import ast
+from pathlib import Path
+
+import maya.api.OpenMaya as om
 import pytest
 from maya import cmds
 
@@ -373,3 +377,188 @@ def test_every_movable_pivot_names_a_control_and_a_guide_the_module_has(module_t
 def test_every_preset_row_targets_a_movable_control(module_type):
     """Rule: a module's own default rows never warn out of the box."""
     assert get_module(module_type)().warnings() == []
+
+
+@pytest.mark.parametrize("module_type", _shipped_module_types())
+def test_every_declared_control_has_a_resolvable_default_shape(module_type):
+    """Rule: the manifest names a shape the pinned library can resolve.
+
+    A default that does not resolve means every rig using that module silently
+    falls back to a circle, which is exactly the bug this manifest exists to
+    prevent.
+    """
+    from tik.trigger.core import shapes
+
+    module_cls = get_module(module_type)
+    for settings in CONTROL_VARIATIONS.get(module_type, [{}]):
+        module = module_cls(name=module_type)
+        module.apply(settings, strict=False)
+        defaults = module_cls.control_shape_defaults(module.values())
+        for role in module_cls.control_names(module.values()):
+            assert role in defaults, f"{module_type}: '{role}' declares no shape"
+            assert shapes.has_shape(
+                defaults[role]
+            ), f"{module_type}: '{role}' names '{defaults[role]}', not in the library"
+
+
+def test_no_module_or_system_passes_a_shape_to_rig_controller():
+    """Rule: the manifest is the only place a default lives.
+
+    ``rig.controller`` has no ``shape`` argument; this catches a call that
+    tries to reintroduce one before it silently becomes a second source.
+    """
+    import inspect
+
+    from tik.trigger.maya.rig import ModuleRig
+
+    assert "shape" not in inspect.signature(ModuleRig.controller).parameters
+
+    # ``maya`` too: rig.py builds the tweak and pivot controllers through the
+    # same method, and a shape= there is the same second source of truth.
+    root = Path(__file__).resolve().parents[3] / "src" / "python" / "tik" / "trigger"
+    offenders = []
+    for folder in ("modules", "systems", "maya"):
+        for py_file in (root / folder).rglob("*.py"):
+            source = py_file.read_text(encoding="utf-8")
+            for node in ast.walk(ast.parse(source)):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                if not (isinstance(func, ast.Attribute) and func.attr == "controller"):
+                    continue
+                if any(kw.arg == "shape" for kw in node.keywords):
+                    offenders.append(f"{py_file.name}:{node.lineno}")
+    assert offenders == [], f"rig.controller(shape=) at {offenders}"
+
+
+# ------------------------------------------------------- tweak appearance
+def test_a_tweak_takes_its_master_shape_at_the_tweak_scale():
+    """Rule: a tweak looks like the control it belongs to, only smaller.
+
+    A tweak is not in the manifest, so it has no role of its own to resolve --
+    it reads what its master resolved to. A fixed circle under a cube read as
+    a different kind of control rather than a finer grip on the same one.
+    """
+    from tik.trigger.maya.rig import TWEAK_SCALE
+
+    ctx = _built_with("arm", {})
+    by_role = {
+        controller.transform.meta.get(tags.ROLE): controller
+        for controller in ctx.controllers
+    }
+    for role, controller in by_role.items():
+        if not role or not role.endswith("_tweak"):
+            continue
+        master = by_role[role[: -len("_tweak")]]
+        assert controller.shape_name == master.shape_name, role
+        assert controller.shape_size == pytest.approx(
+            master.shape_size * TWEAK_SCALE
+        ), role
+
+
+def test_a_rigger_override_reaches_the_tweak_too():
+    """The tweak follows the master's *resolved* shape, override included."""
+    cmds.file(new=True, force=True)
+    scene = GuideScene()
+    body = scene.create_guides(get_module("base")(name="body"))
+    instance = scene.create_guides(
+        get_module("arm")(name="arm"),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    scene.write_settings(
+        instance.instance_id,
+        {"control_shape_overrides": [{"control": "ik", "shape": "Diamond"}]},
+    )
+    report = Builder().build(document=scene.document, afterlife="keep")
+    ctx = report.rigs[instance.instance_id]
+
+    by_role = {
+        controller.transform.meta.get(tags.ROLE): controller
+        for controller in ctx.controllers
+    }
+    assert by_role["ik"].shape_name == "Diamond"
+    assert by_role["ik_tweak"].shape_name == "Diamond"
+
+
+def test_no_controller_shape_resolves_through_the_user_path():
+    """Tweaks and pivots set their shape after creation, and must stay pinned.
+
+    ``Controller.set_shape`` resolves a *name* through the unpinned singleton,
+    which searches the artist's own folder -- the exact hole the pinned
+    library exists to close.
+    """
+    import inspect
+
+    from tik.trigger.maya import rig as rig_module
+
+    source = inspect.getsource(rig_module)
+    assert (
+        "set_shape(shape" not in source
+    ), "a raw name reaches Controller.set_shape; resolve it through _curve_for"
+
+
+# ------------------------------------------------------ shape orientation
+def _shape_normal(controller):
+    """The plane normal of a flat controller shape, in its own local space."""
+    points = []
+    for shape in controller.transform.shapes:
+        node = shape.long_name
+        count = cmds.getAttr(f"{node}.spans") + cmds.getAttr(f"{node}.degree")
+        points += [
+            om.MVector(*cmds.pointPosition(f"{node}.cv[{i}]", local=True))
+            for i in range(count)
+        ]
+    # The normal of the best-fit plane: sum the cross products around the ring.
+    normal = om.MVector(0, 0, 0)
+    centre = sum(points, om.MVector(0, 0, 0)) / len(points)
+    for first, second in zip(points, points[1:] + points[:1]):
+        normal += (first - centre) ^ (second - centre)
+    return normal.normal()
+
+
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_fk_shapes_are_aligned_to_their_bone(side):
+    """Rule: an FK control's shape wraps its bone, on both sides.
+
+    Shapes are authored flat in XZ with the normal on +Y, but an FK joint runs
+    along local X -- so an unrotated circle lies *along* the limb rather than
+    around it. The right side is mirrored by behaviour (a 180 roll about X),
+    which puts its bone on local -X, so the turn has to mirror with it.
+    """
+    cmds.file(new=True, force=True)
+    scene = GuideScene()
+    body = scene.create_guides(get_module("base")(name="body"))
+    instance = scene.create_guides(
+        get_module("arm")(name="arm", side=side),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    report = Builder().build(document=scene.document, afterlife="keep")
+    ctx = report.rigs[instance.instance_id]
+
+    checked = 0
+    for controller in ctx.controllers:
+        role = controller.transform.meta.get(tags.ROLE) or ""
+        if not role.startswith("fk") or role.endswith("_tweak"):
+            continue
+        normal = _shape_normal(controller)
+        # Aligned to the bone axis: the sign is the side's business, the
+        # alignment is not.
+        assert abs(normal.x) > 0.99, (
+            f"{side} {role}: shape normal is ({normal.x:.2f}, {normal.y:.2f}, "
+            f"{normal.z:.2f}), not along the bone"
+        )
+        checked += 1
+    assert checked, "no FK controllers were checked"
+
+
+def test_a_tweak_inherits_its_master_orientation():
+    """A tweak takes the master's shape; a turned shape must arrive turned."""
+    ctx = _built_with("arm", {})
+    by_role = {
+        controller.transform.meta.get(tags.ROLE): controller
+        for controller in ctx.controllers
+    }
+    for role, controller in by_role.items():
+        if role and role.endswith("_tweak"):
+            master = by_role[role[: -len("_tweak")]]
+            assert controller.shape_orient == master.shape_orient, role
