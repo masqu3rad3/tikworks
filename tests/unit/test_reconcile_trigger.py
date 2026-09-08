@@ -211,3 +211,38 @@ def test_an_untagged_rendering_is_never_key_stale():
         guide.key = ""
     diff = reconcile(GuideDocument(modules=[entry()]), scene)
     assert diff.modules["id1"].key_stale is False
+
+
+def test_an_undrawn_producer_does_not_make_its_consumer_stale():
+    """Drawing one module on its own is a normal way to work.
+
+    Its root has nowhere to hang while the producer is undrawn, so sitting at
+    the holder *is* the correct rendering -- reporting it out of date would
+    leave a marker no Draw of that module could ever clear.
+    """
+    document = GuideDocument(
+        modules=[
+            entry("child", inputs={"root": "parent.end"}),
+            entry("parent", name="spine"),
+        ]
+    )
+    diff = reconcile(document, rendered("child"), primary_input_of=lambda e: "root")
+    assert diff.modules["child"].parent_wrong is False
+    assert diff.stale == []
+
+
+def test_a_consumer_hanging_under_the_wrong_module_is_stale_either_way():
+    """Silence is for *no* parent, not for the wrong one: a root parked under
+    a module the document does not name is out of date whether or not the
+    module it should hang under happens to be drawn."""
+    document = GuideDocument(
+        modules=[
+            entry("child", inputs={"root": "parent.end"}),
+            entry("parent", name="spine"),
+            entry("other", name="neck"),
+        ]
+    )
+    scene = rendered("child")
+    scene[0].parent = ("other", "root", 0)
+    diff = reconcile(document, scene, primary_input_of=lambda e: "root")
+    assert diff.modules["child"].parent_wrong is True

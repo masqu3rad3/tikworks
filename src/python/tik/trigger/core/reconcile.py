@@ -22,6 +22,9 @@ ever repaired automatically -- only an explicit Draw rebuilds a rendering.
 
 A redraw triggered by pose drift would teleport a guide away from where the
 rigger just dragged it, so ``is_stale`` deliberately ignores ``drifted``.
+A root whose producer is not drawn is not out of date either: there is nowhere
+to hang, so sitting at the holder is the correct rendering of that connection
+(spec 3.2). Drawing modules one at a time is a normal way to work.
 Orphans and duplicates are never acted on automatically: they may be a
 rigger's scratch work, and destroying untracked scene content is not a repair.
 """
@@ -223,7 +226,15 @@ def reconcile(
                 if primary_source is not None and "." in primary_source:
                     expected_id = primary_source.rpartition(".")[0]
                     actual_id = guide.parent[0] if guide.parent else None
-                    if expected_id and expected_id != actual_id:
+                    # An undrawn producer offers nothing to hang under, so a
+                    # root sitting at the holder is the *correct* rendering of
+                    # this connection -- drawing one module on its own is a
+                    # normal way to work, and flagging it would leave a marker
+                    # that no Draw of that module could clear. Only "no parent"
+                    # earns the silence: a root parked under some other module
+                    # is wrong however the producer stands.
+                    lone = actual_id is None and expected_id not in by_instance
+                    if expected_id and not lone and expected_id != actual_id:
                         module_diff.parent_wrong = True
             elif record.parent is not None:
                 want = (entry.instance_id, record.parent[0], record.parent[1])

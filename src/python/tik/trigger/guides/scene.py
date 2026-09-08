@@ -175,6 +175,11 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         with nodes.undo_chunk("Trigger draw guides"):
             for entry in entries:
                 regenerate(entry, self.document)
+            # Drawing a producer finishes the job for consumers that are
+            # already on screen: it re-parents them, and never redraws them.
+            regenerate_module.reparent_consumers(
+                self.document, [entry.instance_id for entry in entries]
+            )
         return self.diff()
 
     def diff(self):
