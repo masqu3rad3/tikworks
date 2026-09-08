@@ -22,6 +22,7 @@ from tik.shared.ui.maya_window import HAS_MAYA, MayaToolWindow
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.shared.ui.scene_watcher import SceneWatcher
 from tik.shared.ui.status import StatusFields
+from tik.trigger import VERSION
 from tik.trigger.core import ERROR, LOG, EventBus, versioning
 from tik.trigger.core.document import EXTENSION
 from tik.trigger.core.exceptions import SessionError
@@ -36,7 +37,6 @@ from .session_view import DESIGNER_TAB, SessionView
 from .widgets import LogWidget
 
 FILE_FILTER = f"Trigger session (*{EXTENSION})"
-VERSION = "0.2.0"
 
 
 def _holder() -> QtWidgets.QWidget:
