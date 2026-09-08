@@ -229,3 +229,22 @@ def test_pick_file_offers_the_provider(window, stub, monkeypatch):
     monkeypatch.setattr(vcs_ui, "_popup", lambda parent, entries: entries[1][1]())
     assert vcs_ui.pick_file(window, "guides", [".trg"], "open") == "D:/vcs/guides.trg"
     assert stub.calls[-1] == ("browse", "guides", [".trg"], "open")
+
+
+def test_a_provider_that_never_answers_context_gets_no_chip(window, stub, tmp_path):
+    """No ``context`` is no verdict: the chip says nothing rather than "not a work"."""
+
+    class Quiet(VersionControl):
+        label = "Quiet VCS"
+
+        def available(self):
+            return True
+
+    vcs.clear_providers()
+    vcs.register_provider("quiet")(Quiet)
+    window.session.save(tmp_path / "hero.tr")
+    vcs_ui.refresh_chip(window)
+    assert vcs_ui.provider().display_label() == "Quiet VCS"
+    assert window.status.text("vcs") == ""
+    assert window.status.labels["vcs"].isHidden()
+    assert window.status.separators["vcs"].isHidden()

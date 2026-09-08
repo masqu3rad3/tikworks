@@ -41,7 +41,21 @@ def load_plugins() -> None:
 
     discovery.discover(modules_pkg.__name__, modules_pkg.__path__)
     discovery.discover(actions_pkg.__name__, actions_pkg.__path__)
+    _register_reference_vcs()
     discovery.discover_external(discovery.plugin_paths())
+
+
+def _register_reference_vcs() -> None:
+    """Register the shipped folder provider (registering twice is a no-op).
+
+    It is inert unless ``TRIGGER_FOLDER_VCS`` names a folder that exists, so a
+    studio with a real system never notices it; without one it is the working
+    example the integrator's guide quotes.
+    """
+    from tik.trigger.vcs import register_provider
+    from tik.trigger.vcs.folder import FolderProvider
+
+    register_provider("folder")(FolderProvider)
 
 
 def add_plugin_path(path) -> None:

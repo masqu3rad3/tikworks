@@ -51,6 +51,10 @@ class FolderProvider(VersionControl):
         from tik.trigger.vcs import host
 
         folder = self.root / ("sessions" if kind == kinds.SESSION else kind)
+        if mode == "save":
+            return host.feedback.browse_save(
+                "Save a file", str(folder), tuple(extensions)
+            )
         return host.feedback.browse_open("Pick a file", str(folder), tuple(extensions))
 
     def new_version(self, host) -> str:

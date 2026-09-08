@@ -180,7 +180,7 @@ What each verb buys you in the UI:
 | Verb | Default | Left alone | Implemented |
 |---|---|---|---|
 | `available()` | `False` | your provider is never used | it can be picked as the active one |
-| `context(session_path)` | `None` | the status chip reads "Not a \<label\> work" in amber | the chip reads `label · v###`, green when `is_latest`, amber when not, with `detail` as its tooltip |
+| `context(session_path)` | `None` | there is no status chip at all: a provider that never answers has no verdict to show | the chip reads `label · v###`, green when `is_latest`, amber when not, with `detail` as its tooltip; returning `None` for a path reads "Not a \<label\> work" in amber |
 | `browse(kind, extensions, mode)` | `""` | file fields show no "Browse \<label\>…" entry, and the guide Import/Export picker goes straight to the plain dialog | fields and the guide picker offer your browser beside the plain one |
 | `new_version(host)` | `""` | no **Save New Version** in the File submenu | the entry appears |
 | `open(host)` | `""` | no **Open from \<label\>…** | the entry appears |
@@ -352,9 +352,10 @@ def deliver(self, publish_set: PublishSet, ctx: ActionContext) -> None: ...
 
 Everything `deliver` needs is already on disk by the time it is called, and it
 is a *delivery*: copy, upload, register. It must not edit the session — the
-`PublishSet` carries the document so the bundle writer can rewrite a copy of
-it, not so a destination can change what the rigger has open. Anything `deliver`
-raises becomes an `ActionExecutionError` carrying your action's label, and the
+`PublishSet` carries a *copy* of the document, so nothing a destination does to
+it can reach the session the rigger has open. An `ActionExecutionError` your
+`deliver` raises is re-raised unchanged — the message is yours alone; any other
+exception is wrapped in one carrying your action's label. Either way the
 temporary folder is left in place for inspection.
 
 On top of the `notes` field every action has, the base adds `include_guides`
@@ -597,8 +598,10 @@ default, so you need not write it at all.
 ## 7. A complete minimal provider
 
 `tik/trigger/vcs/folder.py` ships with Trigger: a version control system that is
-only a folder tree, implementing every verb in the simplest form that works.
-Point `TRIGGER_FOLDER_VCS` at a folder and it versions sessions under
+only a folder tree, implementing every verb in the simplest form that works. It
+registers itself on `trigger.load_plugins()` like any built-in, and stays
+inert until `TRIGGER_FOLDER_VCS` points at a folder that exists — `available()`
+is what activates it. Point the variable at one and it versions sessions under
 `sessions/` and published files under `<kind>/`. Copy it and replace the bodies.
 
 ```python
@@ -655,6 +658,10 @@ class FolderProvider(VersionControl):
         from tik.trigger.vcs import host
 
         folder = self.root / ("sessions" if kind == kinds.SESSION else kind)
+        if mode == "save":
+            return host.feedback.browse_save(
+                "Save a file", str(folder), tuple(extensions)
+            )
         return host.feedback.browse_open("Pick a file", str(folder), tuple(extensions))
 
     def new_version(self, host) -> str:

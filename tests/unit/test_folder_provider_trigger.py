@@ -69,7 +69,31 @@ def test_browse_and_open_go_through_the_host_feedback(provider, tmp_path):
             assert start.endswith("sessions") and extensions == (".tr",)
             return str(target)
 
+        def browse_save(self, caption, start, extensions):
+            return f"{start}/new.tr"
+
     vcs.host.attach(session=lambda: None, open=opened.append, feedback=_Feedback)
     assert provider.browse("session", [".tr"], "open") == str(target)
     assert provider.open(vcs.host) == str(target)
     assert opened == [str(target)]
+
+
+def test_browse_asks_for_a_save_dialog_when_the_field_saves(provider):
+    """``mode`` is the field's, not the provider's: a save field saves."""
+    seen = []
+
+    class _Feedback:
+        def browse_open(self, caption, start, extensions):
+            seen.append(("open", start))
+            return ""
+
+        def browse_save(self, caption, start, extensions):
+            seen.append(("save", start))
+            return f"{start}/hero.trg"
+
+    vcs.host.attach(session=lambda: None, feedback=_Feedback)
+    saved = provider.browse("guides", [".trg"], "save")
+    assert saved.endswith("guides/hero.trg")
+    assert provider.browse("guides", [".trg"], "open") == ""
+    assert [mode for mode, _start in seen] == ["save", "open"]
+    assert all(start.endswith("guides") for _mode, start in seen)

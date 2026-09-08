@@ -17,7 +17,10 @@ pytestmark = pytest.mark.usefixtures("trigger_plugins")
 
 
 @pytest.fixture(autouse=True)
-def _clean():
+def _clean(trigger_plugins):
+    # after the plug-ins, not before: ``load_plugins`` registers the shipped
+    # folder provider, and every test here wants a registry holding only what
+    # it put there itself
     vcs.clear_providers()
     vcs.set_preferred(None)
     vcs.host.detach()
@@ -143,3 +146,21 @@ def test_kinds_are_re_exported():
     from tik.trigger.vcs import kinds
 
     assert kinds.SESSION == "session" and kinds.kind_for([".trg"]) == "guides"
+
+
+def test_load_plugins_registers_the_shipped_folder_provider(monkeypatch):
+    """The reference provider is a built-in, and inert until it is configured.
+
+    ``load_plugins`` registers it every time, not only on the first import, so
+    a cleared registry (this module's own fixture, or a reload) gets it back.
+    """
+    import tik.trigger as trigger
+
+    vcs.clear_providers()
+    assert "folder" not in vcs.provider_names()
+    trigger.load_plugins()
+    assert "folder" in vcs.provider_names()
+    assert vcs.get_provider("folder").__name__ == "FolderProvider"
+    # registering is not activating: without TRIGGER_FOLDER_VCS it is unusable
+    monkeypatch.delenv("TRIGGER_FOLDER_VCS", raising=False)
+    assert vcs.get_provider("folder")().available() is False

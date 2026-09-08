@@ -242,7 +242,11 @@ def refresh_chip(window) -> None:
     """
     active = provider()
     context = None
-    if active is not None and active.supports("context"):
+    # a provider that never implements ``context`` has no opinion about any
+    # path, so the chip says nothing at all: "Not a <label> work" would be a
+    # verdict it did not give.
+    answers = active is not None and active.supports("context")
+    if answers:
         try:
             context = active.context(vcs.host.session_path)
         except Exception as error:  # noqa: BLE001 - a broken provider knows nothing
@@ -251,7 +255,7 @@ def refresh_chip(window) -> None:
                 active.name or type(active).__name__,
                 error,
             )
-    text, color = chip(context, active)
+    text, color = chip(context, active) if answers else ("", "")
     window.status.set("vcs", text)
     window.status.set_color("vcs", color)
     window.status.labels["vcs"].setToolTip(context.detail if context else "")
