@@ -7,6 +7,7 @@ shared widgets know nothing of this; they only expose a second button.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -15,6 +16,8 @@ from tik.shared.ui.Qt import QtGui, QtWidgets
 from tik.trigger import vcs
 from tik.trigger.core import ActionContext, kinds
 from tik.trigger.vcs.provider import Context, VersionControl
+
+logger = logging.getLogger(__name__)
 
 LATEST = "#9fd8b3"
 OLDER = "#f0b45c"
@@ -41,9 +44,14 @@ def _resolve(value: str, session_dir: str) -> Optional[Path]:
 
 
 def field_actions(field_name, field, widget, session_dir: str) -> list:
-    """``(text, callable)`` entries for a file field's VCS button."""
+    """``(text, callable)`` entries for a file field's VCS button.
+
+    A ``mode="dir"`` field names a folder, not a file: ``Action.file_fields``
+    already leaves those out of the dependency set, and there is nothing for a
+    VCS to browse for or publish, so it gets no entries at all.
+    """
     active = provider()
-    if active is None:
+    if active is None or getattr(field, "mode", "open") == "dir":
         return []
     label = active.display_label()
     entries = []
@@ -56,12 +64,14 @@ def field_actions(field_name, field, widget, session_dir: str) -> list:
                 getattr(field, "mode", "open"),
             )
             if picked:
+                # the same normalisation the widget's own Browse applies
+                picked = str(picked).replace("\\", "/")
                 widget.setValue(picked)
                 widget.changed.emit(picked)
 
         entries.append((f"Browse {label}…", _browse))
     resolved = _resolve(widget.value(), session_dir)
-    if resolved is not None and resolved.exists() and active.supports("publish_file"):
+    if resolved is not None and resolved.is_file() and active.supports("publish_file"):
         entries.append(
             (
                 f"Publish {resolved.name} to {label}…",
@@ -222,12 +232,29 @@ def chip(context: Optional[Context], active: Optional[VersionControl]) -> tuple:
 
 
 def refresh_chip(window) -> None:
-    """Re-read the provider's context for the active session and paint the chip."""
+    """Re-read the provider's context for the active session and paint the chip.
+
+    Runs on every title update -- a tab change, a save, an open -- and calls
+    into third-party code, so a provider that raises is logged and treated as
+    "this path is not a work", exactly as ``vcs.active()`` treats a provider
+    whose ``available()`` blows up. Saving a session must never fail because a
+    VCS plugin did.
+    """
     active = provider()
     context = None
     if active is not None and active.supports("context"):
-        context = active.context(vcs.host.session_path)
+        try:
+            context = active.context(vcs.host.session_path)
+        except Exception as error:  # noqa: BLE001 - a broken provider knows nothing
+            logger.error(
+                "vcs: provider %s failed to read its context: %s",
+                active.name or type(active).__name__,
+                error,
+            )
     text, color = chip(context, active)
     window.status.set("vcs", text)
     window.status.set_color("vcs", color)
     window.status.labels["vcs"].setToolTip(context.detail if context else "")
+    # built unconditionally so a provider arriving through the preference needs
+    # no rebuilt strip, but hidden -- separator and all -- while it says nothing
+    window.status.set_visible("vcs", bool(text))

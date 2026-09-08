@@ -59,3 +59,18 @@ def test_status_field_click_and_color(qapp):
     assert seen == ["clicked"]
     status.set_color("vcs", "")
     assert status.labels["vcs"].styleSheet() == ""
+
+
+def test_status_field_hides_with_its_separator(qapp):
+    """A field the window builds but has nothing to say in leaves no middot."""
+    strip = QtWidgets.QWidget()
+    status = StatusFields(strip, ("version", "vcs"))
+    strip.show()
+    assert set(status.separators) == {"vcs"}  # nothing precedes the first field
+    status.set_visible("vcs", False)
+    assert status.labels["vcs"].isHidden()
+    assert status.separators["vcs"].isHidden()
+    status.set_visible("vcs", True)
+    assert not status.labels["vcs"].isHidden()
+    assert not status.separators["vcs"].isHidden()
+    strip.close()

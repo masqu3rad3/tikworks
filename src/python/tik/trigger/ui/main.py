@@ -225,6 +225,10 @@ class TriggerWindow(MayaToolWindow):
         self.vcs_menu = vcs_ui.build_file_submenu(self, file_menu)
         if self.vcs_menu is not None:
             file_menu.addSeparator()
+            # "Publish…" follows the publish list, which changes on any edit --
+            # not only on the tab changes ``_sync_menu_state`` reacts to. Asking
+            # the session as the menu opens is the cheap way to never be stale.
+            file_menu.aboutToShow.connect(lambda: vcs_ui.sync_publish_entry(self))
         # no shortcut: it throws the scene away, and there is nothing to undo
         self._action(file_menu, "Reset Scene", self.reset_scene)
         file_menu.addSeparator()

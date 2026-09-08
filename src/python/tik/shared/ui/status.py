@@ -27,11 +27,15 @@ class StatusFields:
         self.activity.setObjectName("StatusActivity")
         self._add(self.activity, stretch=1)
         self.labels: dict[str, QtWidgets.QLabel] = {}
+        #: the "·" drawn *before* each field, kept so a hidden field takes its
+        #: separator with it instead of leaving a dangling middot
+        self.separators: dict[str, QtWidgets.QLabel] = {}
         for index, name in enumerate(fields):
             if index:
                 separator = QtWidgets.QLabel("·")
                 separator.setObjectName("StatusSeparator")
                 self._add(separator, permanent=True)
+                self.separators[name] = separator
             label = QtWidgets.QLabel("")
             label.setObjectName(f"Status_{name}")
             self._add(label, permanent=True)
@@ -64,6 +68,18 @@ class StatusFields:
         label = self.labels[name]
         label.setCursor(QtCore.Qt.PointingHandCursor)
         label.mousePressEvent = lambda _event: callback()  # type: ignore[assignment]
+
+    def set_visible(self, name: str, on: bool) -> None:
+        """Show or hide the field called ``name``, separator included.
+
+        A field a window builds unconditionally but only sometimes has
+        something to say -- the version control chip -- hides here rather than
+        leaving an empty label behind its own separator.
+        """
+        self.labels[name].setVisible(bool(on))
+        separator = self.separators.get(name)
+        if separator is not None:
+            separator.setVisible(bool(on))
 
     def set_color(self, name: str, color: str) -> None:
         """Tint the field's text; ``""`` restores the theme colour."""

@@ -89,6 +89,10 @@ def test_without_a_provider_nothing_is_added(qapp):
     try:
         assert win.vcs_menu is None
         assert win.status.text("vcs") == ""
+        # the strip must look exactly as it did before version control: no
+        # empty label, and no dangling separator in front of it
+        assert win.status.labels["vcs"].isHidden()
+        assert win.status.separators["vcs"].isHidden()
         assert vcs_ui.form_vcs_slot(lambda: "") is None
     finally:
         win.close()
@@ -115,8 +119,12 @@ def test_file_menu_gets_the_provider_submenu(window, stub):
     publish = next(a for a in window.vcs_menu.actions() if a.text() == "Publish…")
     assert publish.isEnabled() is False  # no publish action in the session
     window.session.publish.add("publish", "out")
-    window._sync_menu_state()
+    # opening the File menu re-asks the session: an edit never leaves it stale
+    file_menu.aboutToShow.emit()
     assert publish.isEnabled() is True
+    window.session.publish.remove("out")
+    file_menu.aboutToShow.emit()
+    assert publish.isEnabled() is False
     next(
         a for a in window.vcs_menu.actions() if a.text() == "Open from Stub VCS…"
     ).trigger()
@@ -136,6 +144,31 @@ def test_status_chip_follows_the_context(window, stub, tmp_path):
     stub.ctx = Context(label="hero / rig", version=4, is_latest=True)
     vcs_ui.refresh_chip(window)
     assert "#9fd8b3" in window.status.labels["vcs"].styleSheet()
+    assert not window.status.labels["vcs"].isHidden()
+
+
+def test_a_provider_that_raises_does_not_break_the_window(
+    window, stub, tmp_path, monkeypatch
+):
+    """``context`` is third-party code on the save path; it may not take it down."""
+
+    def _boom(_self, _session_path):
+        raise RuntimeError("the server is down")
+
+    monkeypatch.setattr(stub, "context", _boom)
+    window.session.save(tmp_path / "hero.tr")
+    window._update_title()  # the hot path: every tab change, save and open
+    assert window.status.text("vcs") == "Not a Stub VCS work"
+
+
+def test_a_folder_field_is_never_offered_for_publish(window, stub, tmp_path):
+    from tik.core.fields import FileField
+    from tik.shared.ui.versioned_field import VersionedFileField
+
+    field = FileField("", mode="dir")
+    widget = VersionedFileField([], mode="dir")
+    widget.setValue(str(tmp_path))
+    assert vcs_ui.field_actions("folder", field, widget, str(tmp_path)) == []
 
 
 def test_field_actions_browse_and_publish(window, stub, tmp_path):
@@ -144,10 +177,11 @@ def test_field_actions_browse_and_publish(window, stub, tmp_path):
 
     field = FileField("", extensions=[".py"], kind="script")
     widget = VersionedFileField([".py"])
+    stub.picked = r"D:\vcs\picked.py"
     entries = vcs_ui.field_actions("file_path", field, widget, str(tmp_path))
     assert [text for text, _ in entries] == ["Browse Stub VCS…"]
     entries[0][1]()
-    assert widget.value() == "D:/vcs/picked.py"
+    assert widget.value() == "D:/vcs/picked.py"  # backslashes normalised
     assert stub.calls[-1] == ("browse", "script", [".py"], "open")
 
     (tmp_path / "a.py").write_text("x", encoding="utf-8")
