@@ -9,7 +9,14 @@ from pathlib import Path
 import pytest
 
 import tik.trigger as trigger
-from tik.trigger.core import Document, kinds
+from tik.trigger.core import (
+    Action,
+    Document,
+    FileField,
+    kinds,
+    register_action,
+    unregister_action,
+)
 from tik.trigger.core.document import ActionNode
 from tik.trigger.core.guide_document import ModuleReference
 from tik.trigger.core.publish_set import (
@@ -32,6 +39,28 @@ def _plugins():
 
 def _script(name, file_path):
     return ActionNode(name=name, type="script", settings={"file_path": file_path})
+
+
+class _WithSibling(Action):
+    """A toy action whose script imports a sibling no field names."""
+
+    file_path = FileField("", extensions=[".py"])
+
+    def dependencies(self, ctx):
+        found = super().dependencies(ctx)
+        if self.file_path:
+            found.append(ctx.resolve("scripts/helper.py"))
+        return found
+
+    def run(self, ctx):  # pragma: no cover - never executed
+        return None
+
+
+@pytest.fixture
+def sibling_action():
+    register_action("sibling_script")(_WithSibling)
+    yield
+    unregister_action("sibling_script")
 
 
 def _session(folder: Path, name="hero", scripts=("a.py",)):
@@ -200,6 +229,84 @@ def test_referenced_sessions_are_bundled_recursively(tmp_path):
     inner = nested.actions[0].settings["file_path"]
     assert "/" not in inner and inner.endswith("_base.py")
     assert (nested_path.parent / inner).exists()
+
+
+def test_manifest_store_values_are_relative_to_the_bundle(tmp_path):
+    _session(tmp_path / "base", name="base", scripts=("base.py",))
+    hero = _session(tmp_path / "work", scripts=("a.py",))
+    hero.actions.append(
+        ActionNode(name="ref", type="reference", settings={"file": "../base/base.tr"})
+    )
+    publish_set = PublishSet.collect(tmp_path / "work" / "hero.tr", hero)
+    target = tmp_path / "out" / "hero_v001"
+    write_bundle(publish_set, target)
+    manifest = json.loads((target / MANIFEST).read_text(encoding="utf-8"))
+    stored = {
+        entry["owner"]: entry["store"]
+        for entry in manifest["dependencies"]
+        if not entry["external"]
+    }
+    assert set(stored) == {"a", "ref", "ref/base"}
+    for value in stored.values():
+        assert (target / value).resolve().exists()
+    # every store file the bundle needs is named by that one manifest
+    assert clean(tmp_path / "out" / STORE_DIR, [target]) == []
+
+
+def test_non_field_dependencies_are_copied_into_the_bundle(tmp_path, sibling_action):
+    folder = tmp_path / "work"
+    document = _session(folder, scripts=("a.py",))
+    (folder / "scripts" / "helper.py").write_text("# helper\n", encoding="utf-8")
+    document.actions[0].type = "sibling_script"
+    publish_set = PublishSet.collect(folder / "hero.tr", document)
+    assert [dep.original for dep in publish_set.dependencies] == [
+        "scripts/a.py",
+        "scripts/helper.py",
+    ]
+    target = tmp_path / "out" / "hero_v001"
+    write_bundle(publish_set, target)
+    # the sibling keeps its name and its place; only the field goes to the store
+    assert (target / "scripts" / "helper.py").read_text(
+        encoding="utf-8"
+    ) == "# helper\n"
+    bundled = Document.load(target / "hero.tr")
+    assert bundled.actions[0].settings["file_path"].startswith(f"../{STORE_DIR}/")
+    manifest = json.loads((target / MANIFEST).read_text(encoding="utf-8"))
+    extra = next(
+        entry
+        for entry in manifest["dependencies"]
+        if entry["original"] == "scripts/helper.py"
+    )
+    assert extra["owner"] == "a"
+    assert extra["store"] == "scripts/helper.py"
+    assert extra["external"] is False
+
+
+def test_reference_overrides_are_rewritten_into_the_store(tmp_path):
+    base = tmp_path / "base"
+    _session(base, name="base", scripts=("base.py",))
+    (base / "scripts" / "other.py").write_text("# other\n", encoding="utf-8")
+    hero = _session(tmp_path / "work", scripts=())
+    hero.actions.append(
+        ActionNode(
+            name="ref",
+            type="reference",
+            settings={
+                "file": "../base/base.tr",
+                "overrides": {"base": {"settings": {"file_path": "scripts/other.py"}}},
+            },
+        )
+    )
+    publish_set = PublishSet.collect(tmp_path / "work" / "hero.tr", hero)
+    target = tmp_path / "out" / "hero_v001"
+    write_bundle(publish_set, target)
+    settings = Document.load(target / "hero.tr").actions[0].settings
+    # an override is resolved against the referenced session, which now lives
+    # in the store: the value has to be relative to the store root
+    store_root = (target / settings["file"]).resolve().parent
+    override = settings["overrides"]["base"]["settings"]["file_path"]
+    assert "/" not in override and override.endswith("_other.py")
+    assert (store_root / override).exists()
 
 
 def test_clean_removes_only_unreferenced_store_files(tmp_path):

@@ -117,6 +117,13 @@ def _external(value: str, resolved: Path, base_dir) -> bool:
     return Path(value).is_absolute() and is_external(resolved, base_dir)
 
 
+def _written_form(path: Path, base_dir) -> str:
+    """How a file no field names is written down: session-relative when inside."""
+    if is_external(path, base_dir):
+        return str(path).replace("\\", "/")
+    return relative(path, base_dir)
+
+
 def _resolve_reference(value: str, version: str, base_dir) -> Path:
     path = Path(value)
     if not path.is_absolute():
@@ -161,7 +168,7 @@ def collect_dependencies(
         for dep in action.dependencies(ctx):
             original = next(
                 (value for value in values if ctx.resolve(value) == dep),
-                str(dep).replace("\\", "/"),
+                _written_form(dep, base),
             )
             found.append(
                 Dependency(
@@ -278,7 +285,12 @@ def relative(target, from_dir) -> str:
 
 # --------------------------------------------------------------- bundles
 def _entry(owner, original, dep_path, store_value, external, store=None) -> dict:
-    """One manifest line for a rewritten (or deliberately untouched) path."""
+    """One manifest line for a rewritten (or deliberately untouched) path.
+
+    ``store_value`` is always relative to the *bundle* folder, whatever
+    document the path came from, so reading a manifest never needs to know
+    where the document that named the file ended up.
+    """
     return {
         "owner": owner,
         "original": original,
@@ -289,45 +301,134 @@ def _entry(owner, original, dep_path, store_value, external, store=None) -> dict
     }
 
 
+def _rewrite_value(
+    value, base_dir, store, location, bundle, entries, owner
+) -> Optional[str]:
+    """Store the file ``value`` names; return its new value, or None to keep it."""
+    base = Path(base_dir)
+    resolved = Path(value) if Path(value).is_absolute() else base / value
+    if _external(value, resolved, base) or not resolved.exists():
+        entries.append(_entry(owner, value, resolved, value, True))
+        return None
+    stored = store.put(resolved)
+    entries.append(
+        _entry(owner, value, resolved, relative(stored, bundle), False, store)
+    )
+    return relative(stored, location)
+
+
+def _copy_extra(dep: Path, base_dir, store, location, bundle, entries, owner) -> None:
+    """Carry a file an action names outside its fields.
+
+    Nothing in the document points at it by path, so it keeps its own name and
+    its place beside the session -- a script importing a sibling needs both.
+    That only works for the document that lands in the bundle: a *referenced*
+    document lands in the store, where its extras can only sit under their
+    hashed name, and a sibling import there will not find them.
+    """
+    base = Path(base_dir)
+    original = _written_form(dep, base)
+    if _external(original, dep, base) or not dep.exists():
+        entries.append(_entry(owner, original, dep, original, True))
+        return
+    if Path(location) == Path(bundle):
+        target = Path(bundle) / original
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(dep, target)
+        store_value = original
+    else:
+        store_value = relative(store.put(dep), bundle)
+    entries.append(_entry(owner, original, dep, store_value, False, store))
+
+
+def _rewrite_overrides(
+    overrides: dict, document: Document, base_dir, store, bundle, entries, owner
+) -> None:
+    """Rewrite the file settings a ``reference`` action overrides.
+
+    An override is applied to the *referenced* document's node and resolved
+    against the *referenced* session's folder, so its value belongs to the
+    nested ``.tr`` -- which lands in the store. Rewritten relative to the store
+    root for that reason, not relative to the bundle.
+    """
+    for path, override in (overrides or {}).items():
+        settings = (override or {}).get("settings") or {}
+        node = document.find(path)
+        if not settings or node is None:
+            continue
+        if not registry.is_action_registered(node.type):
+            continue
+        for name in registry.get_action(node.type).file_fields():
+            value = settings.get(name)
+            if not value:
+                continue
+            new_value = _rewrite_value(
+                value,
+                base_dir,
+                store,
+                store.root,
+                bundle,
+                entries,
+                f"{owner}/{path}",
+            )
+            if new_value is not None:
+                settings[name] = new_value
+
+
 def _rewrite_reference(
-    value, version, base_dir, store, location, entries, owner
+    value, version, base_dir, store, location, bundle, entries, owner, overrides=None
 ) -> str:
     """Bundle a referenced ``.tr`` into the store and return its new value."""
     resolved = _resolve_reference(value, version, base_dir)
     if _external(value, resolved, base_dir) or not resolved.exists():
         entries.append(_entry(owner, value, resolved, value, True))
         return value
+    document = Document.load(resolved)
     nested = rewrite_document(
-        Document.load(resolved),
+        document,
         resolved.parent,
         store,
         store.root,
         entries,
         owner=f"{owner}/",
+        bundle=bundle,
     )
+    if overrides is not None:
+        _rewrite_overrides(
+            overrides, document, resolved.parent, store, bundle, entries, owner
+        )
     stored = store.put_bytes(
         json.dumps(nested, indent=2).encode("utf-8"), resolved.name
     )
-    store_value = relative(stored, location)
-    entries.append(_entry(owner, value, stored, store_value, False, store))
-    return store_value
+    entries.append(_entry(owner, value, stored, relative(stored, bundle), False, store))
+    return relative(stored, location)
 
 
 def rewrite_document(
-    document: Document, base_dir, store: Store, location, entries: list, owner: str = ""
+    document: Document,
+    base_dir,
+    store: Store,
+    location,
+    entries: list,
+    owner: str = "",
+    bundle=None,
 ) -> dict:
     """``document.to_dict()`` with every file path pointing into ``store``.
 
     ``location`` is the folder the rewritten document will be written to;
     paths are made relative to it. Nested references are rewritten with the
-    store root as their location, since that is where they land.
+    store root as their location, since that is where they land. ``bundle``
+    is the folder the manifest will sit in, which every ``entries`` line is
+    written relative to; it defaults to ``location``.
     """
     base = Path(base_dir)
+    bundle = Path(location if bundle is None else bundle)
     data = document.to_dict()
     for phase in PHASES:
         for path, node, _parent in document.walk(phase):
             if not registry.is_action_registered(node.type):
                 continue
+            action_cls = registry.get_action(node.type)
             settings = _find_node(data[_PHASE_KEY[phase]], path)["settings"]
             if node.type == REFERENCE_TYPE:
                 if settings.get("file"):
@@ -337,24 +438,24 @@ def rewrite_document(
                         base,
                         store,
                         location,
+                        bundle,
                         entries,
                         owner + path,
+                        overrides=settings.get("overrides"),
                     )
                     settings["version"] = "pinned"
                 continue
-            for name in registry.get_action(node.type).file_fields():
+            for name in action_cls.file_fields():
                 value = settings.get(name)
                 if not value:
                     continue
-                resolved = Path(value) if Path(value).is_absolute() else base / value
-                if _external(value, resolved, base) or not resolved.exists():
-                    entries.append(_entry(owner + path, value, resolved, value, True))
-                    continue
-                stored = store.put(resolved)
-                settings[name] = relative(stored, location)
-                entries.append(
-                    _entry(owner + path, value, resolved, settings[name], False, store)
+                new_value = _rewrite_value(
+                    value, base, store, location, bundle, entries, owner + path
                 )
+                if new_value is not None:
+                    settings[name] = new_value
+            for dep in _extra_dependencies(action_cls, node, path, base):
+                _copy_extra(dep, base, store, location, bundle, entries, owner + path)
     for index, link in enumerate(document.guides.references):
         if not link.file:
             continue
@@ -365,11 +466,24 @@ def rewrite_document(
             base,
             store,
             location,
+            bundle,
             entries,
             f"{owner}guides/{link.ref_id}",
         )
         link_data["version"] = "pinned"
     return data
+
+
+def _extra_dependencies(action_cls, node, path: str, base_dir) -> list[Path]:
+    """The files ``dependencies(ctx)`` adds beyond the action's own fields."""
+    action = action_cls(settings=node.settings)
+    ctx = ActionContext(base_dir=str(base_dir), path=path)
+    from_fields = {
+        ctx.resolve(getattr(action, name))
+        for name in action_cls.file_fields()
+        if getattr(action, name)
+    }
+    return [dep for dep in action.dependencies(ctx) if dep not in from_fields]
 
 
 def _find_node(nodes: list, path: str) -> dict:
@@ -413,7 +527,12 @@ def write_bundle(publish_set: PublishSet, target, store_root=None) -> Path:
 
 
 def clean(store_root, bundle_roots: Iterable) -> list[Path]:
-    """Delete store files no manifest under ``bundle_roots`` references."""
+    """Delete store files no manifest under ``bundle_roots`` references.
+
+    One manifest is enough: a bundle's dependency list is flat and covers the
+    referenced sessions it carries and everything *they* need, each ``store``
+    value written relative to the bundle folder the manifest sits in.
+    """
     store = Store(store_root)
     referenced: set[Path] = set()
     for root in bundle_roots:
@@ -422,38 +541,10 @@ def clean(store_root, bundle_roots: Iterable) -> list[Path]:
             for entry in data.get("dependencies", []):
                 if entry.get("external") or not entry.get("store"):
                     continue
-                stored = (manifest.parent / entry["store"]).resolve()
-                referenced.add(stored)
-                # a nested session in the store references its own siblings
-                if stored.suffix == ".tr" and stored.exists():
-                    referenced |= _nested_references(stored)
+                referenced.add((manifest.parent / entry["store"]).resolve())
     removed: list[Path] = []
     for item in store.files():
         if item.resolve() not in referenced:
             item.unlink()
             removed.append(item)
     return removed
-
-
-def _nested_references(session_file: Path) -> set[Path]:
-    """Store siblings a stored ``.tr`` points at, recursively."""
-    found: set[Path] = set()
-    document = Document.load(session_file)
-
-    def _add(value: str) -> None:
-        if not value or Path(value).is_absolute():
-            return
-        target = (session_file.parent / value).resolve()
-        found.add(target)
-        if target.suffix == ".tr" and target.exists() and target != session_file:
-            found.update(_nested_references(target))
-
-    for phase in PHASES:
-        for _path, node, _parent in document.walk(phase):
-            if not registry.is_action_registered(node.type):
-                continue
-            for name in registry.get_action(node.type).file_fields():
-                _add(node.settings.get(name, ""))
-    for link in document.guides.references:
-        _add(link.file)
-    return found
