@@ -155,6 +155,11 @@ what a session needs, assembled at the tail of Build & Publish.
    their own element, from `Action.products(ctx) -> list[Artifact]`. Empty by
    default. `save_from_scene` is folded into this: an action that writes
    scene data does it inside `products` and returns what it wrote.
+4. **Pins**: `Action.pin_settings(settings) -> dict` returns settings the
+   bundle must freeze because a rewritten path changes a derived value; the
+   script action pins `import_as` to the original stem, since its file is
+   renamed to its hash in the store. Applied by the rewrite to every
+   document, nested ones included.
 
 ### The bundle
 

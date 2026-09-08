@@ -13,6 +13,7 @@ from tik.trigger.core import (
     Action,
     Document,
     FileField,
+    get_action,
     kinds,
     register_action,
     unregister_action,
@@ -318,3 +319,27 @@ def test_clean_removes_only_unreferenced_store_files(tmp_path):
     removed = clean(store.root, [tmp_path / "out" / "hero_v001"])
     assert removed == [orphan]
     assert len(store.files()) == 1
+
+
+# ------------------------------------------------------------------- pins
+def test_an_action_pins_nothing_by_default():
+    assert Action.pin_settings({"file_path": "scripts/a.py"}) == {}
+
+
+def test_the_script_action_pins_the_alias_its_file_name_gave_it():
+    script = get_action("script")
+    assert script.pin_settings({"file_path": "scripts/a.py"}) == {"import_as": "a"}
+    # nothing to pin: the alias is already written down, or there is no file
+    assert script.pin_settings({"file_path": "scripts/a.py", "import_as": "lib"}) == {}
+    assert script.pin_settings({"code": "pass"}) == {}
+
+
+def test_a_bundled_script_keeps_the_alias_its_original_name_gave_it(tmp_path):
+    document = _session(tmp_path / "work")
+    publish_set = PublishSet.collect(tmp_path / "work" / "hero.tr", document)
+    target = tmp_path / "out" / "hero_v001"
+    write_bundle(publish_set, target)
+    settings = Document.load(target / "hero.tr").actions[0].settings
+    # the store renamed the file to its hash; the alias must not follow it
+    assert settings["file_path"].startswith(f"../{STORE_DIR}/")
+    assert settings["import_as"] == "a"

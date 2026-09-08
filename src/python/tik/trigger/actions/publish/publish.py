@@ -66,7 +66,7 @@ class PublishAction(Action):
         guides: Optional[Path] = None
         if self.include_guides:
             guides = temp / f"{name}.trg"
-            session.guides.export(guides)
+            _export_guides(session, guides)
         publish_set = self.collect(ctx, rig=rig, guides=guides)
         try:
             self.deliver(publish_set, ctx)
@@ -109,6 +109,25 @@ class PublishAction(Action):
             guides=guides,
             products=products,
         )
+
+
+def _export_guides(session, target: Path) -> None:
+    """Write the session's guides to ``target``, from the document.
+
+    By the time a publish runs the build has usually deleted the guide joints
+    -- ``kinematics.after_build`` defaults to ``delete`` -- so the scene has
+    nothing left to serialise and the ``.trg`` would come out empty. The
+    document still holds every pose, so draw it back and export that. When the
+    build left no guides behind, the rendering goes away again afterwards:
+    publishing must not change what the rigger is looking at.
+    """
+    from tik.trigger.guides.snapshot import snapshot
+
+    was_drawn = bool(snapshot())
+    session.guides.draw(poses="discard")
+    session.guides.export(target)
+    if not was_drawn:
+        session.guides.clear_rendering()
 
 
 def _save_scene(target: Path) -> None:
