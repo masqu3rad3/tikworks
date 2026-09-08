@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from tik.shared.ui.Qt import QtWidgets
+from tik.shared.ui.Qt import QtCore, QtWidgets
 
 
 class StatusFields:
@@ -58,3 +58,15 @@ class StatusFields:
     def text(self, name: str) -> str:
         """The text shown in the field called ``name``."""
         return self.labels[name].text()
+
+    def set_click(self, name: str, callback) -> None:
+        """Run ``callback`` when the field called ``name`` is clicked."""
+        label = self.labels[name]
+        label.setCursor(QtCore.Qt.PointingHandCursor)
+        label.mousePressEvent = lambda _event: callback()  # type: ignore[assignment]
+
+    def set_color(self, name: str, color: str) -> None:
+        """Tint the field's text; ``""`` restores the theme colour."""
+        self.labels[name].setStyleSheet(
+            f"QLabel {{ color: {color}; }}" if color else ""
+        )

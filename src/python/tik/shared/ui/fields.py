@@ -367,6 +367,7 @@ class FormBuilder(QtWidgets.QWidget):
         file_extras: Optional[dict] = None,
         base_dir: Optional[Callable[[], str]] = None,
         list_choices: Optional[Callable[[str], list]] = None,
+        file_vcs: Optional[tuple] = None,
     ) -> None:
         """
         Args:
@@ -379,6 +380,8 @@ class FormBuilder(QtWidgets.QWidget):
                 replacing the dialogs.
             file_extras: ``{extension: (label, callback(path))}``: an extra
                 button on matching FileFields.
+            file_vcs: ``(tooltip, handler(field_name, field, widget))``: a
+                second button on every file field.
         """
         super().__init__(parent)
         self._layout = QtWidgets.QVBoxLayout(self)
@@ -400,6 +403,7 @@ class FormBuilder(QtWidgets.QWidget):
         self.file_extras = file_extras or {}
         self.base_dir = base_dir
         self.list_choices = list_choices
+        self.file_vcs = file_vcs
         self._overridden: set[str] = set()
         self._reference: dict = {}
         if target is not None:
@@ -655,12 +659,17 @@ class FormBuilder(QtWidgets.QWidget):
                     break
             from tik.shared.ui.versioned_field import VersionedFileField
 
+            vcs = None
+            if self.file_vcs is not None:
+                tooltip, handler = self.file_vcs
+                vcs = (tooltip, lambda w, n=name, f=field: handler(n, f, w))
             widget = VersionedFileField(
                 getattr(field, "extensions", ()),
                 getattr(field, "mode", "open"),
                 extra=extra,
                 browser=self.file_browser,
                 base_dir=self.base_dir,
+                vcs=vcs,
             )
             widget.changed.connect(
                 lambda value, field_name=name: self._on_change(field_name, value)
