@@ -6,7 +6,6 @@ import pytest
 from maya import cmds
 
 from tik.core import control_shapes as core_control_shapes
-from tik.maya.utils import control_shapes
 from tik.maya.utils.control_shapes import (
     ControlShapeLibrary,
     _guess_camera_view,

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from tik.trigger.core import shapes
 from tik.trigger.core.module import Module
 

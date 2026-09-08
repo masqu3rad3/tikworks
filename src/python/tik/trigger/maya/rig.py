@@ -14,10 +14,10 @@ from typing import Any, Optional, Sequence
 import tik.maya as tm
 from tik.maya import naming
 from tik.maya.roles.controller import Controller
+from tik.trigger.core import shapes as shape_library
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import TIERS
 from tik.trigger.core.schemas import ModuleInstance
-from tik.trigger.core import shapes as shape_library
 from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_joint
 
 from . import tags

@@ -9,8 +9,13 @@ class PolishCore:
     """Core utilities for Tik Maya Polish tools."""
 
     def __init__(self):
-        """Initialize the Polish core with library and custom paths."""
-        self.library = control_shapes.ControlShapeLibrary()
+        """Initialize the Polish core with library and custom paths.
+
+        The library keeps its user path: a cleanup tool *should* see the
+        artist's own shapes. Only a rig build resolves through the pinned
+        library in ``tik.trigger.core.shapes``.
+        """
+        self.library = control_shapes.ControlShapeLibrary(include_user_path=True)
         for additional_path in settings.get("additional_library_paths", []):
             self.library.add_path(additional_path)
 
