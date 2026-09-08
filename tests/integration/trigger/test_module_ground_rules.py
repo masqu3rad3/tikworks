@@ -8,6 +8,7 @@ A failure here is a finding about the offending module, not a test to relax.
 import ast
 from pathlib import Path
 
+import maya.api.OpenMaya as om
 import pytest
 from maya import cmds
 
@@ -494,3 +495,70 @@ def test_no_controller_shape_resolves_through_the_user_path():
     assert (
         "set_shape(shape" not in source
     ), "a raw name reaches Controller.set_shape; resolve it through _curve_for"
+
+
+# ------------------------------------------------------ shape orientation
+def _shape_normal(controller):
+    """The plane normal of a flat controller shape, in its own local space."""
+    points = []
+    for shape in controller.transform.shapes:
+        node = shape.long_name
+        count = cmds.getAttr(f"{node}.spans") + cmds.getAttr(f"{node}.degree")
+        points += [
+            om.MVector(*cmds.pointPosition(f"{node}.cv[{i}]", local=True))
+            for i in range(count)
+        ]
+    # The normal of the best-fit plane: sum the cross products around the ring.
+    normal = om.MVector(0, 0, 0)
+    centre = sum(points, om.MVector(0, 0, 0)) / len(points)
+    for first, second in zip(points, points[1:] + points[:1]):
+        normal += (first - centre) ^ (second - centre)
+    return normal.normal()
+
+
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_fk_shapes_are_aligned_to_their_bone(side):
+    """Rule: an FK control's shape wraps its bone, on both sides.
+
+    Shapes are authored flat in XZ with the normal on +Y, but an FK joint runs
+    along local X -- so an unrotated circle lies *along* the limb rather than
+    around it. The right side is mirrored by behaviour (a 180 roll about X),
+    which puts its bone on local -X, so the turn has to mirror with it.
+    """
+    cmds.file(new=True, force=True)
+    scene = GuideScene()
+    body = scene.create_guides(get_module("base")(name="body"))
+    instance = scene.create_guides(
+        get_module("arm")(name="arm", side=side),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    report = Builder().build(document=scene.document, afterlife="keep")
+    ctx = report.rigs[instance.instance_id]
+
+    checked = 0
+    for controller in ctx.controllers:
+        role = controller.transform.meta.get(tags.ROLE) or ""
+        if not role.startswith("fk") or role.endswith("_tweak"):
+            continue
+        normal = _shape_normal(controller)
+        # Aligned to the bone axis: the sign is the side's business, the
+        # alignment is not.
+        assert abs(normal.x) > 0.99, (
+            f"{side} {role}: shape normal is ({normal.x:.2f}, {normal.y:.2f}, "
+            f"{normal.z:.2f}), not along the bone"
+        )
+        checked += 1
+    assert checked, "no FK controllers were checked"
+
+
+def test_a_tweak_inherits_its_master_orientation():
+    """A tweak takes the master's shape; a turned shape must arrive turned."""
+    ctx = _built_with("arm", {})
+    by_role = {
+        controller.transform.meta.get(tags.ROLE): controller
+        for controller in ctx.controllers
+    }
+    for role, controller in by_role.items():
+        if role and role.endswith("_tweak"):
+            master = by_role[role[: -len("_tweak")]]
+            assert controller.shape_orient == master.shape_orient, role

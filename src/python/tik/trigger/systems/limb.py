@@ -497,6 +497,22 @@ def limb_control_shapes(name: str = "", labels: Sequence[str] = ()) -> dict[str,
     }
 
 
+def limb_control_orients(
+    name: str = "", labels: Sequence[str] = ()
+) -> dict[str, tuple[float, float, float]]:
+    """The shape rotation per role ``build_ikfk_limb`` creates.
+
+    Only the FK controls turn. An FK joint runs along its local X, and a shape
+    is authored flat in XZ with its normal on +Y, so an unrotated circle lies
+    *along* the limb instead of around it. ``Rz(-90)`` puts the normal on the
+    bone; ``rig.controller`` mirrors it for the right side.
+
+    The IK control, the pole and any collar are world-aligned rather than
+    bone-aligned, so they are deliberately absent.
+    """
+    return {_role(name, "fk", label): (0.0, 0.0, -90.0) for label in labels}
+
+
 def _derive_size(joints: Sequence) -> float:
     """Base controller size from the chain's rest length."""
     total = 0.0

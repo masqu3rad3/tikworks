@@ -66,6 +66,12 @@ class Module(Schema):
     #: returns. The manifest is the only place a default lives -- which is why
     #: ``rig.controller`` has no ``shape`` argument to hide a second one in.
     control_shapes: dict[str, str] = {}
+    #: Per-role shape rotation in degrees, baked into the CVs at build time.
+    #: Shapes are authored flat in XZ with the normal on +Y; a control that
+    #: wraps a bone wants that normal along the bone instead. Module-level
+    #: only -- an orientation is the module author's business, not a knob the
+    #: rigger needs, and a column for it would crowd the shape table.
+    control_orients: dict[str, tuple[float, float, float]] = {}
     outputs: tuple[str, ...] = ("root",)
     module_type: str = ""  # stamped by @register_module
     category: str = "generic"  # stamped by @register_module
@@ -205,6 +211,15 @@ class Module(Schema):
         and ``output_names`` are overridden.
         """
         return dict(cls.control_shapes)
+
+    @classmethod
+    def control_orient_defaults(cls, settings: Optional[dict] = None) -> dict:
+        """Shape rotation per control role, in degrees.
+
+        Override when a setting drives them, exactly as
+        ``control_shape_defaults`` is overridden.
+        """
+        return dict(cls.control_orients)
 
     def shape_rows(self) -> dict[str, dict]:
         """The override rows, keyed by control role. Later rows win."""

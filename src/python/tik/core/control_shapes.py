@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import platform
 from pathlib import Path
@@ -276,6 +277,45 @@ def _scale_data(data, scale):
         curve["point"] = new_points
 
     return data
+
+
+def rotate_data(data, euler):
+    """A copy of ``data`` with every CV rotated by an XYZ ``euler``, in degrees.
+
+    Shapes are authored in one canonical orientation -- flat in XZ, normal on
+    +Y -- and a control that wraps a bone wants that normal along the bone
+    instead. Baking the turn into the points *is* the freeze: the controller's
+    transform is never touched, so it stays aligned to its joint.
+
+    Args:
+        data: Curve data, as ``load`` returns it.
+        euler: ``(x, y, z)`` degrees, or ``None`` for no rotation.
+
+    Returns:
+        dict: A new dict; ``data`` is left alone.
+    """
+    if not euler or not any(euler):
+        return data
+
+    angle_x, angle_y, angle_z = (math.radians(value) for value in euler)
+    sin_x, cos_x = math.sin(angle_x), math.cos(angle_x)
+    sin_y, cos_y = math.sin(angle_y), math.cos(angle_y)
+    sin_z, cos_z = math.sin(angle_z), math.cos(angle_z)
+
+    def turn(point):
+        x, y, z = point
+        # XYZ order, the same order Maya composes a rotation in.
+        y, z = y * cos_x - z * sin_x, y * sin_x + z * cos_x
+        x, z = x * cos_y + z * sin_y, -x * sin_y + z * cos_y
+        x, y = x * cos_z - y * sin_z, x * sin_z + y * cos_z
+        return (x, y, z)
+
+    turned = dict(data)
+    turned["curves"] = [
+        {**curve, "point": [turn(point) for point in curve["point"]]}
+        for curve in data.get("curves", [])
+    ]
+    return turned
 
 
 def _resolve_folder_path(folder_path, category):

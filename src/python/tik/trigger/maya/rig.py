@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
 import tik.maya as tm
+from tik.core.control_shapes import rotate_data
+from tik.core.side import Side
 from tik.maya import naming
 from tik.maya.roles.controller import Controller
 from tik.trigger.core import shapes as shape_library
@@ -30,7 +32,26 @@ takes the master's shape and reads as that shape one size down.
 """
 
 
-def _curve_for(shape):
+def mirror_orient(orient):
+    """The right side's version of a shape rotation authored for the left.
+
+    The right side is mirrored *by behaviour*: its joints carry a 180 degree
+    roll about X, so a shape authored for the left arrives rolled. Undoing
+    that is conjugating the rotation by that roll -- ``Rx(180) . R . Rx(180)``
+    -- which works out to negating Y and Z and leaving X alone. Measured: an
+    FK bone runs along local +X on the left and local -X on the right, and
+    ``Rz(-90)`` / ``Rz(+90)`` are what put a shape's normal on each.
+
+    Negating Z alone would happen to be right for the bone-alignment case and
+    wrong the moment a module declares a turn about X or Y.
+    """
+    if not orient:
+        return orient
+    x, y, z = orient
+    return (x, -y, -z)
+
+
+def _curve_for(shape, orient=None):
     """Curve data for a shape name, resolved through the *pinned* library.
 
     The data, not the name: ``Controller.create`` and ``Controller.set_shape``
@@ -39,10 +60,16 @@ def _curve_for(shape):
     the pinned library exists to close. Falls back to the name when the
     library cannot resolve it, so the caller still gets tik.maya's warning
     rather than a controller with no shape at all.
+
+    ``orient`` is baked into the returned CVs, so the controller's transform
+    is never touched and stays aligned to its joint.
     """
-    if not isinstance(shape, str):
-        return shape
-    return shape_library.library().load(shape) or shape
+    data = shape
+    if isinstance(shape, str):
+        data = shape_library.library().load(shape)
+        if not data:
+            return shape
+    return rotate_data(data, orient) if orient else data
 
 
 def node_of(value):
@@ -315,9 +342,12 @@ class ModuleRig:
         parent = parent if parent is not None else self.groups.control
         shape, size_multiplier = self.module.resolve_control_shape(name)
         effective_size = size * size_multiplier
+        orient = self.module.control_orient_defaults(self.module.values()).get(name)
+        if orient and self.side is Side.RIGHT:
+            orient = mirror_orient(orient)
         controller = Controller.create(
             name=self.name(name, suffix="ctrl"),
-            shape=_curve_for(shape),
+            shape=_curve_for(shape, orient),
             size=effective_size,
             color=color if color is not None else SIDE_COLORS[self.side.value],
             parent=(
@@ -348,6 +378,7 @@ class ModuleRig:
         # same shape at a smaller size without re-deriving any of it.
         controller.shape_name = shape
         controller.shape_size = effective_size
+        controller.shape_orient = orient
         self.controllers.append(controller)
         return controller
 
@@ -377,6 +408,9 @@ class ModuleRig:
         shape = shape if shape is not None else getattr(main, "shape_name", "Circle")
         if size is None:
             size = getattr(main, "shape_size", 1.0) * scale
+        # The master's turn too: a bone-aligned control wants a bone-aligned
+        # tweak, and the master has already had its side mirrored in.
+        orient = getattr(main, "shape_orient", None)
         tweak = self.controller(
             f"{role}_tweak",
             size=size,
@@ -386,9 +420,10 @@ class ModuleRig:
             offset=False,
             tier=None,
         )
-        tweak.set_shape(_curve_for(shape), size=size)
+        tweak.set_shape(_curve_for(shape, orient), size=size)
         tweak.shape_name = shape
         tweak.shape_size = size
+        tweak.shape_orient = orient
         visible = main.transform["tweakVis"].create(
             "bool", default=False, keyable=False
         )
@@ -457,6 +492,7 @@ class ModuleRig:
         pivot.set_shape(_curve_for(shape), size=size if size is not None else 1.0)
         pivot.shape_name = shape
         pivot.shape_size = size if size is not None else 1.0
+        pivot.shape_orient = None
         show = main.transform["showPivot"].create("bool", default=False, keyable=False)
         show.visible = True
         show >> pivot.offset["visibility"]

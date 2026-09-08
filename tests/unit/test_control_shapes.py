@@ -429,3 +429,46 @@ def test_construction_creates_no_directories(tmp_path, monkeypatch, clean_librar
     monkeypatch.setenv("HOME", str(tmp_path))
     ControlShapeLibrary()
     assert not (tmp_path / "TikWorks").exists()
+
+
+def test_rotate_data_takes_the_circle_normal_from_y_to_x():
+    """A shipped shape lies in XZ with its normal on +Y.
+
+    Aligning a control to its bone means rotating that normal onto the bone
+    axis, which is local X for a joint chain.
+    """
+    from tik.core.control_shapes import rotate_data
+
+    circle = core_control_shapes.ControlShapeLibrary(include_user_path=False).load(
+        "Circle"
+    )
+
+    def extent(points, axis):
+        return max(p[axis] for p in points) - min(p[axis] for p in points)
+
+    flat = [p for curve in circle["curves"] for p in curve["point"]]
+    assert extent(flat, 1) < 1e-6, "the shipped Circle should be flat in Y"
+
+    turned = rotate_data(circle, (0, 0, -90))
+    spun = [p for curve in turned["curves"] for p in curve["point"]]
+    assert extent(spun, 0) < 1e-6, "after Rz(-90) the circle should be flat in X"
+    assert extent(spun, 1) > 0.9 and extent(spun, 2) > 0.9
+
+
+def test_rotate_data_leaves_the_source_untouched():
+    """The library hands out cached-looking dicts; rotating must not mutate."""
+    from tik.core.control_shapes import rotate_data
+
+    data = {"curves": [{"point": [(1.0, 0.0, 0.0)], "degree": 1}]}
+    turned = rotate_data(data, (0, 0, 90))
+    assert data["curves"][0]["point"] == [(1.0, 0.0, 0.0)]
+    x, y, _z = turned["curves"][0]["point"][0]
+    assert round(x, 6) == 0.0 and round(y, 6) == 1.0
+
+
+def test_rotate_data_by_nothing_is_a_no_op():
+    from tik.core.control_shapes import rotate_data
+
+    data = {"curves": [{"point": [(1.0, 2.0, 3.0)], "degree": 1}]}
+    assert rotate_data(data, (0, 0, 0)) == data
+    assert rotate_data(data, None) == data

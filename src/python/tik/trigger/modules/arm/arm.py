@@ -27,6 +27,7 @@ from tik.trigger.systems.limb import (
     _derive_size,
     build_ikfk_limb,
     limb_control_names,
+    limb_control_orients,
     limb_control_shapes,
 )
 from tik.trigger.systems.limb_lock import build_limb_lock
@@ -53,6 +54,7 @@ class Arm(Module):
         "collar": "CurvedCircle",
         **limb_control_shapes(labels=LIMB_LABELS),
     }
+    control_orients = limb_control_orients(labels=LIMB_LABELS)
     pivot_controls = {"ik": "hand"}
     pivot_presets = Module.pivot_presets.with_default(
         [{"control": "ik", "label": label} for label in ("tip", "ball", "wrist")]
