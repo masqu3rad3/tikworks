@@ -428,3 +428,69 @@ def test_no_module_or_system_passes_a_shape_to_rig_controller():
                 if any(kw.arg == "shape" for kw in node.keywords):
                     offenders.append(f"{py_file.name}:{node.lineno}")
     assert offenders == [], f"rig.controller(shape=) at {offenders}"
+
+
+# ------------------------------------------------------- tweak appearance
+def test_a_tweak_takes_its_master_shape_at_the_tweak_scale():
+    """Rule: a tweak looks like the control it belongs to, only smaller.
+
+    A tweak is not in the manifest, so it has no role of its own to resolve --
+    it reads what its master resolved to. A fixed circle under a cube read as
+    a different kind of control rather than a finer grip on the same one.
+    """
+    from tik.trigger.maya.rig import TWEAK_SCALE
+
+    ctx = _built_with("arm", {})
+    by_role = {
+        controller.transform.meta.get(tags.ROLE): controller
+        for controller in ctx.controllers
+    }
+    for role, controller in by_role.items():
+        if not role or not role.endswith("_tweak"):
+            continue
+        master = by_role[role[: -len("_tweak")]]
+        assert controller.shape_name == master.shape_name, role
+        assert controller.shape_size == pytest.approx(
+            master.shape_size * TWEAK_SCALE
+        ), role
+
+
+def test_a_rigger_override_reaches_the_tweak_too():
+    """The tweak follows the master's *resolved* shape, override included."""
+    cmds.file(new=True, force=True)
+    scene = GuideScene()
+    body = scene.create_guides(get_module("base")(name="body"))
+    instance = scene.create_guides(
+        get_module("arm")(name="arm"),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    scene.write_settings(
+        instance.instance_id,
+        {"control_shape_overrides": [{"control": "ik", "shape": "Diamond"}]},
+    )
+    report = Builder().build(document=scene.document, afterlife="keep")
+    ctx = report.rigs[instance.instance_id]
+
+    by_role = {
+        controller.transform.meta.get(tags.ROLE): controller
+        for controller in ctx.controllers
+    }
+    assert by_role["ik"].shape_name == "Diamond"
+    assert by_role["ik_tweak"].shape_name == "Diamond"
+
+
+def test_no_controller_shape_resolves_through_the_user_path():
+    """Tweaks and pivots set their shape after creation, and must stay pinned.
+
+    ``Controller.set_shape`` resolves a *name* through the unpinned singleton,
+    which searches the artist's own folder -- the exact hole the pinned
+    library exists to close.
+    """
+    import inspect
+
+    from tik.trigger.maya import rig as rig_module
+
+    source = inspect.getsource(rig_module)
+    assert (
+        "set_shape(shape" not in source
+    ), "a raw name reaches Controller.set_shape; resolve it through _curve_for"

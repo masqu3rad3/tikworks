@@ -206,7 +206,7 @@ def _build_controls(rig, name, parent, size, labels, result) -> None:
         plug.visible = False
     # Created after the lock so it inherits the main's locked channels. The
     # tweak is what the rig follows; the main carries the attributes.
-    result.ik_tweak = rig.tweak_control(result.ik_control, size=size * 0.6)
+    result.ik_tweak = rig.tweak_control(result.ik_control)
 
     rig.separator(result.ik_control, "ikfk_")
     result.switch_plug = result.ik_control["ikFk"].create(
@@ -386,7 +386,7 @@ def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -
         plug = result.pole_control[channel]
         plug.locked = True
         plug.visible = False
-    result.pole_tweak = rig.tweak_control(result.pole_control, size=size * 0.3)
+    result.pole_tweak = rig.tweak_control(result.pole_control)
     result.ik_handle.pole_vector(result.pole_tweak.transform)
 
     if pole_pin:

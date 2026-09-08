@@ -22,6 +22,28 @@ from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_joint
 
 from . import tags
 
+TWEAK_SCALE = 0.875
+"""How much of its master's size a tweak is drawn at.
+
+A tweak is a finer grip on the *same* control, not a different one, so it
+takes the master's shape and reads as that shape one size down.
+"""
+
+
+def _curve_for(shape):
+    """Curve data for a shape name, resolved through the *pinned* library.
+
+    The data, not the name: ``Controller.create`` and ``Controller.set_shape``
+    both resolve a name through ``ControlShapeLibrary.get_instance()``, the
+    unpinned singleton that searches the artist's own folder -- the exact hole
+    the pinned library exists to close. Falls back to the name when the
+    library cannot resolve it, so the caller still gets tik.maya's warning
+    rather than a controller with no shape at all.
+    """
+    if not isinstance(shape, str):
+        return shape
+    return shape_library.library().load(shape) or shape
+
 
 def node_of(value):
     """The Transform behind a role (a Controller), or ``value`` unchanged.
@@ -292,13 +314,11 @@ class ModuleRig:
             )
         parent = parent if parent is not None else self.groups.control
         shape, size_multiplier = self.module.resolve_control_shape(name)
-        # The *data*, not the name: Controller.create resolves a name through
-        # the unpinned singleton, which searches the artist's own folder.
-        curve_data = shape_library.library().load(shape)
+        effective_size = size * size_multiplier
         controller = Controller.create(
             name=self.name(name, suffix="ctrl"),
-            shape=curve_data if curve_data else shape,
-            size=size * size_multiplier,
+            shape=_curve_for(shape),
+            size=effective_size,
             color=color if color is not None else SIDE_COLORS[self.side.value],
             parent=(
                 node_of(parent).long_name
@@ -324,32 +344,51 @@ class ModuleRig:
             if offset
             else None
         )
+        # What this control ended up looking like, so a tweak can take the
+        # same shape at a smaller size without re-deriving any of it.
+        controller.shape_name = shape
+        controller.shape_size = effective_size
         self.controllers.append(controller)
         return controller
 
     def tweak_control(
-        self, main: Controller, *, size: Optional[float] = None, shape: str = "Circle"
+        self,
+        main: Controller,
+        *,
+        size: Optional[float] = None,
+        shape: Optional[str] = None,
+        scale: float = TWEAK_SCALE,
     ) -> Controller:
         """Create a secondary tweak controller under ``main``.
 
         The tweak is a child of the main, so it rides along when the animator
         moves the main control instead of being left behind. Downstream rig
         connections read the tweak, not the main.
+
+        It takes the main's *resolved* shape -- the rigger's override
+        included -- at ``scale`` of its size, because a tweak is a finer grip
+        on the same control rather than a different one. ``shape`` and ``size``
+        override that for a caller that wants something else.
         """
         role = main.transform.meta.get(tags.ROLE, main.transform.name)
+        # A tweak is not in the control manifest -- rig.tweak_control parents
+        # it under its main -- so it has no role of its own to resolve, and
+        # reads what the main resolved to instead.
+        shape = shape if shape is not None else getattr(main, "shape_name", "Circle")
+        if size is None:
+            size = getattr(main, "shape_size", 1.0) * scale
         tweak = self.controller(
             f"{role}_tweak",
-            size=size if size is not None else 1.0,
+            size=size,
             parent=main,
             match=main,
             mirror=main.meta.get(tags.MIRROR, tags.WORLD),
             offset=False,
             tier=None,
         )
-        # A tweak is not in the control manifest -- rig.tweak_control parents
-        # it under its main -- so it has no role to key an override on, and
-        # its shape is set here rather than resolved.
-        tweak.set_shape(shape, size=size if size is not None else 1.0)
+        tweak.set_shape(_curve_for(shape), size=size)
+        tweak.shape_name = shape
+        tweak.shape_size = size
         visible = main.transform["tweakVis"].create(
             "bool", default=False, keyable=False
         )
@@ -415,7 +454,9 @@ class ModuleRig:
         )
         # A pivot controller is the same species as a tweak: not in the
         # control manifest, so it has no role to key an override on.
-        pivot.set_shape(shape, size=size if size is not None else 1.0)
+        pivot.set_shape(_curve_for(shape), size=size if size is not None else 1.0)
+        pivot.shape_name = shape
+        pivot.shape_size = size if size is not None else 1.0
         show = main.transform["showPivot"].create("bool", default=False, keyable=False)
         show.visible = True
         show >> pivot.offset["visibility"]
