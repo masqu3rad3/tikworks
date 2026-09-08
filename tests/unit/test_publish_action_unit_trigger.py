@@ -53,3 +53,18 @@ def test_deliver_is_abstract_on_the_base():
 
     with pytest.raises(NotImplementedError):
         PublishAction().deliver(None, ActionContext())
+
+
+def test_collect_hands_deliver_a_copy_of_the_document(tmp_path):
+    """``deliver`` is third-party code; it must not reach the open session."""
+    cls = registry.get_action("publish")
+    session = Session()
+    session.save(tmp_path / "hero.tr")
+    session.add("script", "lib", code="pass")
+    ctx = ActionContext(session=session, base_dir=str(tmp_path))
+    publish_set = cls().collect(ctx)
+    assert publish_set.document is not session.document
+    publish_set.document.actions[0].settings["code"] = "changed"
+    publish_set.document.actions.append(publish_set.document.actions[0].copy())
+    assert session.document.actions[0].settings["code"] == "pass"
+    assert len(session.document.actions) == 1

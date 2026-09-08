@@ -42,3 +42,28 @@ def test_products_default_to_nothing_and_subclasses_are_detected(tmp_path):
 
 def test_save_from_scene_is_gone():
     assert not hasattr(Action, "save_from_scene")
+
+
+def test_a_script_depends_on_its_whole_folder(tmp_path):
+    """A script may import a sibling nothing in the document names.
+
+    The runner puts ``<session>/scripts`` on the module path, so the import
+    works in the rigger's session; the publish has to carry the folder or it
+    would only work there.
+    """
+    from tik.trigger.actions.script.script import Script
+
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    for name in ("mark.py", "helper.py", "notes.txt"):
+        (scripts / name).write_text("x", encoding="utf-8")
+    ctx = ActionContext(base_dir=str(tmp_path))
+    assert Script({"code": "pass"}).dependencies(ctx) == []
+    assert Script({"file_path": "scripts/mark.py"}).dependencies(ctx) == [
+        scripts / "mark.py",
+        scripts / "helper.py",
+    ]
+    # a file field pointing nowhere brings nothing along
+    assert Script({"file_path": "gone/mark.py"}).dependencies(ctx) == [
+        tmp_path / "gone" / "mark.py"
+    ]

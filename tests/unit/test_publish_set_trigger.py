@@ -84,8 +84,11 @@ def test_dependencies_come_from_file_fields_of_enabled_actions(tmp_path):
     document = _session(tmp_path / "work", scripts=("a.py", "b.py"))
     document.actions[1].enabled = False
     found = collect_dependencies(document, tmp_path / "work")
+    # b is disabled, so it never owns a dependency -- but it still travels, as
+    # a sibling of a's script that a is free to import
     assert [(dep.owner, dep.original, dep.external) for dep in found] == [
-        ("a", "scripts/a.py", False)
+        ("a", "scripts/a.py", False),
+        ("a", "scripts/b.py", False),
     ]
     assert found[0].path == tmp_path / "work" / "scripts" / "a.py"
 
@@ -308,6 +311,38 @@ def test_reference_overrides_are_rewritten_into_the_store(tmp_path):
     override = settings["overrides"]["base"]["settings"]["file_path"]
     assert "/" not in override and override.endswith("_other.py")
     assert (store_root / override).exists()
+
+
+def test_an_override_pins_the_alias_the_file_it_swaps_in_gives(tmp_path):
+    """The override decides the file, so it has to decide the alias too.
+
+    The nested document pins ``import_as`` from the file *it* names; an
+    override that swaps the file would otherwise leave the published copy
+    importing the base session's name for the hero session's script.
+    """
+    base = tmp_path / "base"
+    _session(base, name="base", scripts=("base.py",))
+    (base / "scripts" / "other.py").write_text("# other\n", encoding="utf-8")
+    hero = _session(tmp_path / "work", scripts=())
+    hero.actions.append(
+        ActionNode(
+            name="ref",
+            type="reference",
+            settings={
+                "file": "../base/base.tr",
+                "overrides": {"base": {"settings": {"file_path": "scripts/other.py"}}},
+            },
+        )
+    )
+    publish_set = PublishSet.collect(tmp_path / "work" / "hero.tr", hero)
+    target = tmp_path / "out" / "hero_v001"
+    write_bundle(publish_set, target)
+    settings = Document.load(target / "hero.tr").actions[0].settings
+    override = settings["overrides"]["base"]["settings"]
+    assert override["import_as"] == "other"
+    # the nested document keeps its own alias; only the override moved
+    nested = Document.load((target / settings["file"]).resolve())
+    assert nested.actions[0].settings["import_as"] == "base"
 
 
 def test_clean_removes_only_unreferenced_store_files(tmp_path):

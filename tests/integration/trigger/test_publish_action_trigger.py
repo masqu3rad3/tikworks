@@ -17,9 +17,14 @@ MARK = "import maya.cmds as cmds\ncmds.createNode('transform', name='{name}')"
 def _session(tmp_path):
     work = tmp_path / "work"
     (work / "scripts").mkdir(parents=True)
+    # mark.py imports a sibling no field names: the bundle has to carry the
+    # whole scripts folder or the published session cannot load it
+    (work / "scripts" / "helper.py").write_text(
+        "NAME = 'from_file'\n", encoding="utf-8"
+    )
     (work / "scripts" / "mark.py").write_text(
-        "import maya.cmds as cmds\n\n\ndef make():\n"
-        "    cmds.createNode('transform', name='from_file')\n",
+        "import maya.cmds as cmds\n\nimport helper\n\n\ndef make():\n"
+        "    cmds.createNode('transform', name=helper.NAME)\n",
         encoding="utf-8",
     )
     rig = trigger.Session()
@@ -50,6 +55,9 @@ def test_build_and_publish_writes_a_bundle_that_rebuilds_alone(tmp_path):
         "rig",
     ]
     assert manifest["dependencies"][0]["original"] == "scripts/mark.py"
+    # the sibling travels beside the session, under its own name, so the
+    # ``import helper`` inside mark.py still resolves in the bundle
+    assert (bundle / "scripts" / "helper.py").exists()
     assert not (tmp_path / "work" / "_publish_tmp").exists()
     # it drew the guides to export them, then put the scene back as it was
     assert not snapshot()
@@ -83,3 +91,19 @@ def test_a_failing_delivery_keeps_the_temporaries(tmp_path, monkeypatch):
     with pytest.raises(ActionExecutionError):
         rig.build(publish=True)
     assert (tmp_path / "work" / "_publish_tmp" / "hero_rig.mb").exists()
+
+
+def test_a_publish_that_cannot_run_refuses_before_the_scene_is_touched(tmp_path):
+    """Build & Publish validates the publish list at the door.
+
+    The runner would only reach the publish action after the build had reset
+    the scene and built the rig -- by which time the rigger has lost whatever
+    was open, for a run that was never going to finish.
+    """
+    marker = cmds.createNode("transform", name="still_here")
+    rig = trigger.Session()  # never saved, so the publish action cannot run
+    rig.publish.add("publish", "out", folder="publish")
+    with pytest.raises(SessionError) as error:
+        rig.build(publish=True)
+    assert "save the session first" in str(error.value)
+    assert cmds.objExists(marker)

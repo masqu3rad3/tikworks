@@ -358,7 +358,13 @@ def _rewrite_overrides(
             continue
         if not registry.is_action_registered(node.type):
             continue
-        for name in registry.get_action(node.type).file_fields():
+        action_cls = registry.get_action(node.type)
+        # the override is what the action will actually see, so it is what a
+        # defaulted setting has to be pinned from: an override that swaps the
+        # file changes the alias its name gave it, and the nested document's
+        # own pin -- taken from the file the override replaced -- is wrong here.
+        settings.update(action_cls.pin_settings({**node.settings, **settings}))
+        for name in action_cls.file_fields():
             value = settings.get(name)
             if not value:
                 continue

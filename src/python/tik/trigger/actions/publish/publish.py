@@ -102,9 +102,12 @@ class PublishAction(Action):
                     scripts=ctx.scripts,
                 )
                 products.extend(action_cls(settings=node.settings).products(node_ctx))
+        # a copy, not the live document: ``deliver`` is third-party code and a
+        # bundle writer rewrites every path it finds. Neither may reach back
+        # into the session the rigger has open.
         return PublishSet.collect(
             session.file_path,
-            session.document,
+            session.document.copy(),
             rig=rig,
             guides=guides,
             products=products,
