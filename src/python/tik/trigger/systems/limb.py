@@ -195,7 +195,6 @@ def _build_controls(rig, name, parent, size, labels, result) -> None:
     """Create the IK, switch and FK controllers."""
     result.ik_control = rig.controller(
         _role(name, "ik"),
-        shape="Cube",
         size=size,
         parent=rig.groups.control,
         match=result.ik_joints[-1],
@@ -223,7 +222,6 @@ def _build_controls(rig, name, parent, size, labels, result) -> None:
     for index, (label, joint) in enumerate(zip(labels, result.fk_joints)):
         fk_control = rig.controller(
             _role(name, "fk", label),
-            shape="Circle",
             size=size,
             parent=fk_parent if fk_parent is not None else rig.groups.control,
             match=joint,
@@ -367,7 +365,6 @@ def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -
 
     result.pole_control = rig.controller(
         _role(name, "pole"),
-        shape="Diamond",
         size=size * 0.5,
         parent=rig.groups.control,
         mirror="world",

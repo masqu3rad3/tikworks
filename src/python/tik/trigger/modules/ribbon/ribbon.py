@@ -80,6 +80,11 @@ class RibbonModule(Module):
             *(("end",) if end else ()),
         )
 
+    @classmethod
+    def control_shape_defaults(cls, settings=None):
+        """A circle for every control the settings ask for."""
+        return {role: "Circle" for role in cls.control_names(settings)}
+
     # --------------------------------------------------------------- guides
     def draw_guides(self, guides) -> None:
         """A start and an end joint along X."""
@@ -113,7 +118,6 @@ class RibbonModule(Module):
             """
             control = rig.controller(
                 role,
-                shape="Circle",
                 size=self.controller_size,
                 match=guide,
                 mirror="behaviour",
@@ -162,7 +166,6 @@ class RibbonModule(Module):
         for index, frame in enumerate(ribbon.mid_frames):
             controller = rig.controller(
                 f"mid{index}",
-                shape="Circle",
                 size=self.controller_size,
                 match=frame,
                 mirror="behaviour",

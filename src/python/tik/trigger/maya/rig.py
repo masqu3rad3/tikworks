@@ -17,6 +17,7 @@ from tik.maya.roles.controller import Controller
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import TIERS
 from tik.trigger.core.schemas import ModuleInstance
+from tik.trigger.core import shapes as shape_library
 from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_joint
 
 from . import tags
@@ -263,7 +264,6 @@ class ModuleRig:
         self,
         name: str,
         *,
-        shape: str = "Circle",
         size: float = 1.0,
         parent: Any = None,
         color: Any = None,
@@ -273,6 +273,11 @@ class ModuleRig:
         tier: Optional[str] = "primary",
     ) -> Controller:
         """A tagged controller with its offset group.
+
+        The shape is *not* an argument: it comes from the module's manifest,
+        which the rigger overrides per instance. Passing one here would keep a
+        second place a default could hide, and the ground rules already require
+        the manifest to equal what ``build()`` creates.
 
         ``match`` snaps it to a node; ``mirror`` is ``"behaviour"`` (FK-like,
         follows its joint) or ``"world"`` (IK/world-aligned), recorded for a
@@ -286,10 +291,14 @@ class ModuleRig:
                 f"'{name}': tier must be one of {TIERS} or None, got {tier!r}."
             )
         parent = parent if parent is not None else self.groups.control
+        shape, size_multiplier = self.module.resolve_control_shape(name)
+        # The *data*, not the name: Controller.create resolves a name through
+        # the unpinned singleton, which searches the artist's own folder.
+        curve_data = shape_library.library().load(shape)
         controller = Controller.create(
             name=self.name(name, suffix="ctrl"),
-            shape=shape,
-            size=size,
+            shape=curve_data if curve_data else shape,
+            size=size * size_multiplier,
             color=color if color is not None else SIDE_COLORS[self.side.value],
             parent=(
                 node_of(parent).long_name
@@ -330,7 +339,6 @@ class ModuleRig:
         role = main.transform.meta.get(tags.ROLE, main.transform.name)
         tweak = self.controller(
             f"{role}_tweak",
-            shape=shape,
             size=size if size is not None else 1.0,
             parent=main,
             match=main,
@@ -338,6 +346,10 @@ class ModuleRig:
             offset=False,
             tier=None,
         )
+        # A tweak is not in the control manifest -- rig.tweak_control parents
+        # it under its main -- so it has no role to key an override on, and
+        # its shape is set here rather than resolved.
+        tweak.set_shape(shape, size=size if size is not None else 1.0)
         visible = main.transform["tweakVis"].create(
             "bool", default=False, keyable=False
         )
@@ -395,13 +407,15 @@ class ModuleRig:
             )
         pivot = self.controller(
             f"{role}_pivot",
-            shape=shape,
             size=size if size is not None else 1.0,
             parent=main,
             match=main,
             mirror=main.meta.get(tags.MIRROR, tags.WORLD),
             tier=None,
         )
+        # A pivot controller is the same species as a tweak: not in the
+        # control manifest, so it has no role to key an override on.
+        pivot.set_shape(shape, size=size if size is not None else 1.0)
         show = main.transform["showPivot"].create("bool", default=False, keyable=False)
         show.visible = True
         show >> pivot.offset["visibility"]

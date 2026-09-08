@@ -72,6 +72,7 @@ def test_has_only_the_behaviour_fields():
         "pole_pin",
         "anim_spaces",
         "pivot_presets",
+        "control_shape_overrides",
         "limb_lock",
         "lock_from",
         "auto_collar",

@@ -5,6 +5,9 @@ Spec: docs/superpowers/specs/2026-08-30-arm-module-and-module-ground-rules-desig
 A failure here is a finding about the offending module, not a test to relax.
 """
 
+import ast
+from pathlib import Path
+
 import pytest
 from maya import cmds
 
@@ -373,3 +376,55 @@ def test_every_movable_pivot_names_a_control_and_a_guide_the_module_has(module_t
 def test_every_preset_row_targets_a_movable_control(module_type):
     """Rule: a module's own default rows never warn out of the box."""
     assert get_module(module_type)().warnings() == []
+
+
+@pytest.mark.parametrize("module_type", _shipped_module_types())
+def test_every_declared_control_has_a_resolvable_default_shape(module_type):
+    """Rule: the manifest names a shape the pinned library can resolve.
+
+    A default that does not resolve means every rig using that module silently
+    falls back to a circle, which is exactly the bug this manifest exists to
+    prevent.
+    """
+    from tik.trigger.core import shapes
+
+    module_cls = get_module(module_type)
+    for settings in CONTROL_VARIATIONS.get(module_type, [{}]):
+        module = module_cls(name=module_type)
+        module.apply(settings, strict=False)
+        defaults = module_cls.control_shape_defaults(module.values())
+        for role in module_cls.control_names(module.values()):
+            assert role in defaults, f"{module_type}: '{role}' declares no shape"
+            assert shapes.has_shape(
+                defaults[role]
+            ), f"{module_type}: '{role}' names '{defaults[role]}', not in the library"
+
+
+def test_no_module_or_system_passes_a_shape_to_rig_controller():
+    """Rule: the manifest is the only place a default lives.
+
+    ``rig.controller`` has no ``shape`` argument; this catches a call that
+    tries to reintroduce one before it silently becomes a second source.
+    """
+    import inspect
+
+    from tik.trigger.maya.rig import ModuleRig
+
+    assert "shape" not in inspect.signature(ModuleRig.controller).parameters
+
+    # ``maya`` too: rig.py builds the tweak and pivot controllers through the
+    # same method, and a shape= there is the same second source of truth.
+    root = Path(__file__).resolve().parents[3] / "src" / "python" / "tik" / "trigger"
+    offenders = []
+    for folder in ("modules", "systems", "maya"):
+        for py_file in (root / folder).rglob("*.py"):
+            source = py_file.read_text(encoding="utf-8")
+            for node in ast.walk(ast.parse(source)):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                if not (isinstance(func, ast.Attribute) and func.attr == "controller"):
+                    continue
+                if any(kw.arg == "shape" for kw in node.keywords):
+                    offenders.append(f"{py_file.name}:{node.lineno}")
+    assert offenders == [], f"rig.controller(shape=) at {offenders}"
