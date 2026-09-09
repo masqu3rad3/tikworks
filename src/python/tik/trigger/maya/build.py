@@ -247,8 +247,9 @@ class Builder:
         """Build every guide instance in ``scope`` into a rig.
 
         ``test`` builds into the Guide Designer's throwaway rig instead of the
-        real one, one ``dagContainer`` per module, tearing down whatever it is
-        about to rebuild first. A test build is a mock-up the rigger repeats
+        real one, recording each module's nodes in a set of its own, tearing
+        down whatever it is about to rebuild first. A test build is a mock-up
+        the rigger repeats
         while changing settings, so it has to be idempotent; the real build
         path is unchanged.
         """
@@ -358,7 +359,7 @@ class Builder:
 
     @contextmanager
     def _module_scope(self, instance, scaffold):
-        """Build this module inside its own container, on a test build.
+        """Record what this module creates against it, on a test build.
 
         The connect wiring belongs inside the block deliberately: an attach
         constraint belongs to the *consumer*, so tearing the consumer down
@@ -369,10 +370,7 @@ class Builder:
             return
         from . import sandbox
 
-        container = sandbox.module_container(
-            instance.instance_id, instance.key, scaffold.trigger
-        )
-        with sandbox.current(container):
+        with sandbox.capturing(instance.instance_id, instance.key):
             yield
 
     # ------------------------------------------------------------- connect
