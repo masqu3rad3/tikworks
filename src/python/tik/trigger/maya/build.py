@@ -399,12 +399,21 @@ class Builder:
         return producer_ctx.outputs.get(output)
 
     def _connect_one(self, instance, module_cls, inputs, by_key, report) -> None:
-        """Attach every declared input of one already-built instance."""
+        """Attach every declared input of one already-built instance.
+
+        An input with no source is left alone: its socket stands free at its
+        matched guide and the module works in place. So is one whose producer
+        is simply outside this build -- a module the document has but this pass
+        did not build, which is the normal shape of a scoped test build and of
+        a ``kinematics`` action that names a subset. A source that is *named
+        but wrong* still fails -- silence is for "the producer is not here",
+        never for a typo.
+        """
         rig = report.rigs[instance.instance_id]
         for declared in module_cls.inputs:
             source = inputs.get(declared.name)
-            if not source:
-                if declared.optional:
+            if not source or self._out_of_scope(source, by_key):
+                if not declared.required:
                     continue
                 raise AttachError(
                     f"{instance.key}.{declared.name}: required input has no source.",
@@ -468,6 +477,20 @@ class Builder:
                             f"its {mode} space was skipped.",
                             level="warning",
                         )
+
+    def _out_of_scope(self, source: str, by_key: dict) -> bool:
+        """Whether ``source`` names a document module this build did not build.
+
+        Not the same thing as a wrong source. The producer exists, the rigger
+        wired it on purpose, and it is simply not part of this pass -- so the
+        consumer's socket stands free exactly as if nothing were wired, and it
+        attaches on the pass that does build the producer. A producer an
+        *earlier* pass built is found in the scene and is not out of scope.
+        """
+        key, output = split_source(source)
+        if key is None or key in by_key or key not in self._keys_to_ids:
+            return False
+        return self._earlier_pass_output(key, output) is None
 
     def _earlier_pass_output(self, key: Optional[str], output: str):
         """The scene node for ``key``.``output`` when an earlier pass built it."""

@@ -41,9 +41,9 @@ def test_an_unconnected_module_is_its_own_scope():
     assert expand_build_scope(entries, ["id_solo"]) == ["id_solo"]
 
 
-def test_an_unbuilt_producer_is_pulled_in():
-    """Building the arm alone must not fail on a required input."""
-    assert expand_build_scope(_chain(), ["id_arm"]) == ["id_body", "id_arm"]
+def test_an_unbuilt_producer_is_left_alone():
+    """Building the arm alone builds the arm alone: its socket stands free."""
+    assert expand_build_scope(_chain(), ["id_arm"]) == ["id_arm"]
 
 
 def test_an_already_built_producer_is_left_alone():
@@ -81,7 +81,11 @@ def test_the_scope_is_returned_in_document_order():
         entries, ["id_hand"], already_built={"id_body", "id_arm", "id_hand"}
     )
     assert scope == ["id_hand"]
-    scope = expand_build_scope(entries, ["id_hand"])
+    scope = expand_build_scope(
+        entries,
+        ["id_hand", "id_body"],
+        already_built={"id_body", "id_arm", "id_hand"},
+    )
     assert scope == ["id_body", "id_arm", "id_hand"]
 
 
@@ -103,7 +107,10 @@ def test_an_unknown_module_type_treats_every_input_as_structural():
     """A module the registry has never heard of must not crash the scope."""
     body = _entry("id_body", "body", module_type="toy_root")
     arm = _entry("id_arm", "arm", inputs={"root": "id_body.root"}, module_type="ghost")
-    assert expand_build_scope([body, arm], ["id_arm"]) == ["id_body", "id_arm"]
+    scope = expand_build_scope(
+        [body, arm], ["id_body"], already_built={"id_body", "id_arm"}
+    )
+    assert scope == ["id_body", "id_arm"]
 
 
 def test_a_bare_scene_node_source_has_no_producer():

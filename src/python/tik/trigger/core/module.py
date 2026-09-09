@@ -142,13 +142,13 @@ class Module(Schema):
 
     @classmethod
     def space_inputs(cls, settings=None) -> list[Input]:
-        """One optional, space-kind Input per row: ``<control>_<label>``."""
+        """One space-kind Input per row: ``<control>_<label>``."""
         found = []
         for row in cls.space_rows(settings):
             control, label = row.get("control", ""), row.get("label", "")
             if not control or not label:
                 continue
-            found.append(Input(f"{control}_{label}", kind="space", optional=True))
+            found.append(Input(f"{control}_{label}", kind="space"))
         return found
 
     @classmethod

@@ -25,17 +25,7 @@ def _solo(module_type):
     """Build one unconnected instance and return its context."""
     cmds.file(new=True, force=True)
     scene = GuideScene()
-    module = get_module(module_type)(name=module_type)
-    instance = scene.create_guides(module)
-    if get_module(module_type).primary_input() is not None:
-        # A module with a required input needs something to hang from.
-        cmds.file(new=True, force=True)
-        scene = GuideScene()
-        body = scene.create_guides(get_module("base")(name="body"))
-        instance = scene.create_guides(
-            get_module(module_type)(name=module_type),
-            parent=ParentRef(body.instance_id, "root"),
-        )
+    instance = scene.create_guides(get_module(module_type)(name=module_type))
     report = Builder().build(document=scene.document, afterlife="keep")
     return report.rigs[instance.instance_id]
 
@@ -76,7 +66,9 @@ def _built_with(module_type, settings):
         parent=ParentRef(body.instance_id, "root") if primary is not None else None,
     )
     for declared in module_cls.inputs:
-        if declared.optional or (primary is not None and declared.name == primary.name):
+        if not declared.required or (
+            primary is not None and declared.name == primary.name
+        ):
             continue
         scene.set_input(instance.instance_id, declared.name, f"{body.key}.root")
     if settings:
@@ -121,6 +113,30 @@ def test_every_module_declares_exactly_the_controllers_it_builds(module_type):
         assert (
             _built_control_roles(ctx) == declared
         ), f"{module_type} at {settings or 'defaults'}: manifest and build disagree"
+
+
+@pytest.mark.parametrize("module_type", _shipped_module_types())
+def test_every_shipped_module_builds_standalone(module_type):
+    """Anything buildable in the Designer is a valid build.
+
+    No parent, no inputs wired. The module's sockets stand free at their
+    guides and it must still produce exactly what its manifest declares.
+
+    Spec: 2026-09-09-modules-without-required-inputs-design.md, section 8.
+    """
+    cmds.file(new=True, force=True)
+    scene = GuideScene()
+    module_cls = get_module(module_type)
+    instance = scene.create_guides(module_cls(name=module_type))
+    report = Builder().build(document=scene.document, afterlife="keep")
+
+    ctx = report.rigs[instance.instance_id]
+    assert not ctx.instance.inputs, "an unparented module must start unwired"
+    assert _built_control_roles(ctx) == sorted(
+        module_cls.control_names(ctx.instance.settings)
+    )
+    for output in module_cls.output_names(ctx.instance.settings):
+        assert output in ctx.outputs
 
 
 @pytest.fixture
@@ -243,14 +259,7 @@ def test_module_parents_everything_it_creates(module_type):
     scene = GuideScene()
     before = set(cmds.ls(assemblies=True, long=True))
 
-    if get_module(module_type).primary_input() is not None:
-        body = scene.create_guides(get_module("base")(name="body"))
-        scene.create_guides(
-            get_module(module_type)(name=module_type),
-            parent=ParentRef(body.instance_id, "root"),
-        )
-    else:
-        scene.create_guides(get_module(module_type)(name=module_type))
+    scene.create_guides(get_module(module_type)(name=module_type))
     Builder().build(document=scene.document, afterlife="delete")
 
     # trigger_modules_grp holds the guide *document*, which deliberately

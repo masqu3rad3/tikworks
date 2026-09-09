@@ -94,12 +94,14 @@ An attachment point another module, or a scene node, can drive.
    inputs = (
        Input("start", primary=True, help="What the ribbon start pins to"),
        Input("end", help="What the ribbon end pins to"),
-       Input("reference", optional=True, help="Frame the twist is read against"),
+       Input("reference", help="Frame the twist is read against"),
    )
 
 - ``primary``: one per module. The tree shows it as parenting, and drawing a
   module under another pre-fills it.
-- ``optional``: the build succeeds with nothing connected.
+- ``required``: the build *fails* with nothing connected. Almost never wanted
+  -- an unwired input simply leaves its socket standing free at its guide, and
+  the module builds and works in place. Nothing tik.trigger ships sets it.
 - ``kind``: ``transform`` (default), ``joint`` or ``attribute``; ``space`` is
   reserved for the inputs the anim-spaces table generates.
 

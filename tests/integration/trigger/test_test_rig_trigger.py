@@ -283,11 +283,30 @@ def test_build_all_wipes_the_test_rig_first():
     assert not cmds.objExists("trigger_test:stray_marker")
 
 
-def test_a_scoped_build_pulls_in_an_unbuilt_producer():
+def test_a_scoped_build_leaves_an_unbuilt_producer_alone():
+    """A pass builds only what it names; the arm's socket simply stands free.
+
+    The arm stays wired to ``body.root`` throughout -- an out-of-scope
+    producer is not an unwired input and not a bad source, it is a producer
+    that is not here yet.
+
+    Spec: 2026-09-09-modules-without-required-inputs-design.md, sections 4, 6.
+    """
     session, body, arm = _body_and_arm()
     report = session.guides.test_build(arm)
-    assert body.instance_id in report.built
-    assert arm.instance_id in report.built
+    assert report.built == [arm.instance_id]
+    assert sandbox.find_module_record(body.instance_id) is None
+    assert report.connections == []
+
+
+def test_the_out_of_scope_producer_attaches_on_the_pass_that_builds_it():
+    session, body, arm = _body_and_arm()
+    session.guides.test_build(arm)
+
+    report = session.guides.test_build(body)
+
+    assert set(report.built) == {body.instance_id, arm.instance_id}
+    assert ("L_arm.root", "body.root") in report.connections
 
 
 def test_a_scoped_build_leaves_a_sibling_alone():

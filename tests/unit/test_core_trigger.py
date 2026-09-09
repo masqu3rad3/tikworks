@@ -9,6 +9,7 @@ import tik.trigger as trigger
 from tik.trigger.core import (
     DuplicateRegistrationError,
     GuideLayout,
+    Input,
     Module,
     ModuleInstance,
     NotFoundError,
@@ -301,7 +302,16 @@ def test_space_inputs_derive_one_port_per_row():
     derived = module_cls.space_inputs(settings)
     assert [item.name for item in derived] == ["ik_chest", "pole_chest"]
     assert all(item.kind == "space" for item in derived)
-    assert all(item.optional for item in derived)
+    assert not any(item.required for item in derived)
+
+
+def test_an_input_is_not_required_by_default():
+    """Attachment is a connection, not a precondition.
+
+    Spec: 2026-09-09-modules-without-required-inputs-design.md, section 2.
+    """
+    assert Input("root", primary=True).required is False
+    assert Input("anchor", required=True).required is True
 
 
 def test_input_names_include_spaces():

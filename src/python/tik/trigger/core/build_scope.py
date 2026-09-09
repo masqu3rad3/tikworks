@@ -1,6 +1,7 @@
 """Which modules a scoped test build must tear down and rebuild.
 
 Spec: docs/superpowers/specs/2026-09-07-test-rig-sandbox-design.md
+Amended by: docs/superpowers/specs/2026-09-09-modules-without-required-inputs-design.md
 
 Pure Python over the guide document's inputs, so it is unit-testable with no
 Maya. Cross-module parenting is stored *as the primary input*, which makes
@@ -52,15 +53,16 @@ def expand_build_scope(
     that is not built has nothing to dangle and is left alone rather than built
     behind the rigger's back.
 
-    Upstream, to fill gaps: a producer joins the scope only when it is not
-    already built. That keeps the common loop -- body built, tweak the arm,
-    rebuild the arm -- from rebuilding the world, while a first build of an arm
-    on its own still works instead of failing on a required input.
+    Nothing upstream: an unbuilt producer is left alone and the consumer's
+    socket simply stands free at its guide, which is a legal build since
+    2026-09-09. Build the producer later and the downstream half rebuilds the
+    consumer, which attaches then. This is the ``kinematics`` rule -- a pass
+    builds only the modules it names.
 
     Args:
         entries: The guide document's modules, in document order.
         ids: The instance ids the rigger picked.
-        already_built: Instance ids that currently have a container in the
+        already_built: Instance ids that currently have a record set in the
             test rig.
 
     Returns:
@@ -91,13 +93,5 @@ def expand_build_scope(
                 continue
             wanted.add(consumer)
             stack.append(consumer)
-
-    stack = list(wanted)
-    while stack:  # upstream: unbuilt producers only
-        for producer in producers.get(stack.pop(), ()):
-            if producer in wanted or producer in built:
-                continue
-            wanted.add(producer)
-            stack.append(producer)
 
     return [instance_id for instance_id in order if instance_id in wanted]

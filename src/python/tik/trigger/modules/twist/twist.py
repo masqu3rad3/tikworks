@@ -62,7 +62,6 @@ class Twist(Module):
         Input("end", help="Segment end (lowerarm, shin, hub)"),
         Input(
             "reference",
-            optional=True,
             help="What a start-sourced twist is measured against; "
             "defaults to the base socket's parent",
         ),
