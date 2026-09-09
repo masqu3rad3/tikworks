@@ -84,14 +84,28 @@ riggable and animatable, with no body under it.
 
 ## 4. What is still an error
 
-Only *absent* sources go quiet. A source that is **named but wrong** still fails the build,
-and both existing checks stay exactly as they are (`maya/build.py:496-522`):
+A source that is **named but wrong** still fails the build, and both existing checks stay
+exactly as they are (`maya/build.py:496-522`):
 
 - `body.nope` — the producer was built, but has no such output. `AttachError`.
 - `some_jnt` — neither a built module output nor an existing scene node. `AttachError`.
 
-Silence is for "I did not wire this". A typo is not silence, and treating it as one would hide
-the failure the rigger most wants to see.
+Silence is for "the producer is not here". A typo is not silence, and treating it as one would
+hide the failure the rigger most wants to see.
+
+**Two things go quiet, not one.** An absent source is the obvious one. The second was found
+while implementing section 6 and is the reason a scoped build works at all: a source naming a
+module the **document has but this pass did not build**. Select `L_arm` alone and its `root`
+is still wired to `body.root` — the rigger meant that, and the body is simply not in this
+pass. That is neither an unwired input nor a typo, so `_out_of_scope` (`maya/build.py`) reads
+it as a third state and the socket stands free exactly as if nothing were wired. It attaches
+on the pass that does build the body.
+
+The check is `key not in by_key and key in self._keys_to_ids` — a *document* key this build
+did not build — and it deliberately does not apply to a producer an **earlier pass** built,
+which `_earlier_pass_output` finds in the scene and attaches normally. It is not gated on test
+builds: a `kinematics` action naming a subset is the same situation by design, since a rig may
+be split across several passes.
 
 The anim-space warning at `maya/build.py:446` is also unchanged. A space row names a label the
 rigger explicitly authored, so a missing source there is a mistake, not a default.
