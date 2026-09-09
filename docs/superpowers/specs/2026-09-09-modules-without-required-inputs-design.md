@@ -1,7 +1,7 @@
 # Modules Build Without Inputs: attachment is a connection, not a precondition
 
 **Date:** 2026-09-09
-**Status:** designed
+**Status:** implemented
 **Amends:** `2026-08-29-trigger-ui-v3-and-io-graph-design.md` — the `Input` declaration and the
 required/optional distinction. `2026-09-07-test-rig-sandbox-design.md` — the upstream half of
 scope expansion, which existed only to work around the rule this document removes. Everything
@@ -141,9 +141,9 @@ already-built arm, which attaches then.
 - `ribbon.reference` and `twist.reference` drop `optional=True`, which now says nothing.
 - The inputs derived from anim-space rows (`core/module.py:145-151`) drop it for the same
   reason — one per `<control>_<label>` row, already unrequired, now unremarkably so.
-  `tests/unit/test_core_trigger.py:304` asserts `all(item.optional for item in derived)`;
-  with the default inverted there is nothing left to assert there, so the case keeps only
-  its name/kind checks.
+  `tests/unit/test_core_trigger.py` asserted `all(item.optional for item in derived)`; it now
+  asserts `not any(item.required for item in derived)`, which says the same thing about the
+  same rows under the inverted default.
 - `Base`'s docstring — "Root of a rig. Everything else attaches to its `root` plug" — becomes
   a statement of convention. Nothing in the codebase privileges `base`: it is an ordinary
   module with `inputs = ()`, there is no singleton check, and several bases or none already

@@ -1,4 +1,4 @@
-"""Base module: a single root controller + joint every rig starts from."""
+"""Base module: a single root controller + joint a rig conventionally starts from."""
 
 from __future__ import annotations
 
@@ -8,7 +8,11 @@ from tik.trigger.core import FloatField, GuideLayout, Module, register_module
 
 @register_module("base", category="body")
 class Base(Module):
-    """Root of a rig. Everything else attaches to its ``root`` plug."""
+    """Root of a rig, by convention rather than by rule.
+
+    Modules attach to its ``root`` output, but none of them require it: a rig
+    may have several bases for different purposes, or none at all.
+    """
 
     label = "Base"
     sided = False

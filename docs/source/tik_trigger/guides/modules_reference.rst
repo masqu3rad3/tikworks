@@ -264,8 +264,8 @@ A deforming strip pinned between two inputs, built on the
    * - Guides
      - ``start``, ``end``
    * - Inputs
-     - ``start`` (primary), ``end``, ``reference`` (optional: the frame the start
-       twist is read against)
+     - ``start`` (primary), ``end``, ``reference`` (the frame the start twist
+       is read against)
    * - Outputs
      - ``joint0`` … ``joint<N-1>``
    * - Builds
