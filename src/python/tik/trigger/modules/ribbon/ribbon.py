@@ -10,6 +10,8 @@ already uses in ``systems/limb.py``.
 
 from __future__ import annotations
 
+import logging
+
 import tik.maya as tm
 from tik.trigger.core import (
     BoolField,
@@ -22,6 +24,11 @@ from tik.trigger.core import (
     register_module,
 )
 from tik.trigger.systems.twist import twist_plug
+
+logger = logging.getLogger(__name__)
+
+#: Rotate order applying X innermost, so ``rotateX`` is a pure roll about the strip.
+ROTATE_ORDER_XYZ = 0
 
 DEFORMATION = FieldGroup("Deformation", collapsed=True)
 GUIDES = FieldGroup("Guides", collapsed=True)
@@ -36,7 +43,7 @@ class RibbonModule(Module):
     inputs = (
         Input("start", primary=True, help="What the ribbon start pins to"),
         Input("end", help="What the ribbon end pins to"),
-        Input("reference", help="Frame the start twist is read against"),
+        Input("reference", help="Frame both twists are read against"),
     )
     outputs = ("joint0",)
 
@@ -142,23 +149,40 @@ class RibbonModule(Module):
             # The construct exposes twist as bare float plugs and feeds
             # neither; the same extractor the twist module uses fills them, so
             # there is one implementation of swing-twist in the repo.
+            # Both ends are read against the same frame. The construct's up
+            # frame is the start pin with its twist removed, so every joint
+            # roll is that frame plus the interpolated twist: the end twist
+            # therefore has to be the end's roll against the *reference*, not
+            # against the start driver, or a twisted start under-twists the
+            # end by exactly its own roll. Without a reference the sockets'
+            # own group serves, which is static within the module.
             reference = (
                 rig.socket("reference")
                 if rig.instance.inputs.get("reference")
                 else start_socket.parent
             )
-            # Read the *drivers*, not the sockets: with an end controller in
-            # play the socket no longer carries the pinned frame, and reading
-            # it would move the ribbon end without twisting it.
-            if reference is not None:
-                (
-                    twist_plug(start_driver, reference, name=rig.name("startTwist"))
-                    >> ribbon.start_twist
-                )
+            forward = end_guide.world_position - start_guide.world_position
+
+            def pin_twist(role, socket, driver, against):
+                """The socket's roll against ``against``, plus the control's own.
+
+                The socket's share is matrix-derived and bounded to +/-180 by
+                the representation. The controller's share is its ``rotateX``
+                channel, a plain float that winds past 360 without a pop --
+                the pattern the mid controllers already follow, and the only
+                way a ribbon twists beyond 180.
+                """
+                angle = twist_plug(socket, against, name=rig.name(f"{role}Twist"))
+                if driver is socket:
+                    return angle
+                roll = _control_roll(driver, forward, rig.name(role))
+                return angle if roll is None else angle + roll
+
             (
-                twist_plug(end_driver, start_driver, name=rig.name("endTwist"))
-                >> ribbon.end_twist
+                pin_twist("start", start_socket, start_driver, reference)
+                >> ribbon.start_twist
             )
+            pin_twist("end", end_socket, end_driver, reference) >> ribbon.end_twist
 
         # Controllers belong to the module: tagged, side-coloured, in
         # control_grp, with an offset group. The offset rides the swinging
@@ -179,3 +203,22 @@ class RibbonModule(Module):
             joint = rig.bind_joint(f"joint{index}", match=ribbon_joint)
             tm.MatrixConstraint.create(ribbon_joint, joint, maintain_offset=True)
             rig.output(f"joint{index}", joint)
+
+
+def _control_roll(control, forward, name):
+    """``control.rotateX`` as a roll along ``forward``, or None when it is not one.
+
+    The channel is a pure roll about the strip only when the control's X runs
+    along it and X is applied innermost. A control matched to a guide someone
+    reoriented off the strip keeps the bounded matrix twist instead of reading
+    a channel that means something else.
+    """
+    along = control.world_axis("x") * forward.normal()
+    if abs(along) < 0.5:
+        logger.warning(
+            "%s: X does not run along the ribbon; its roll stays bounded.", name
+        )
+        return None
+    control["rotateOrder"].value = ROTATE_ORDER_XYZ
+    channel = control["rotateX"]
+    return channel if along > 0 else channel * -1.0

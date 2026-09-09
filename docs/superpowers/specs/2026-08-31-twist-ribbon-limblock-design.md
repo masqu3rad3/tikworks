@@ -568,3 +568,31 @@ rebuilds the connections over them.
 `maintain_offset=True`, so a base or end guide left at the module default
 bakes that offset in permanently. Snapping base and end onto the segment they
 span is the authored workflow, not a nicety.
+
+### 7.4 The ribbon's end twist was read against the wrong frame, and its controllers were bounded (2026-09-09)
+
+**Wrong frame.** The `ribbon` module read `end_twist` as the end driver's
+roll against the *start driver*. The construct's up frame is the start pin
+with `start_twist` removed, and every joint roll is that frame plus the
+interpolated twist, so the end twist has to be the end's roll against the
+**same reference the start is read against**. Measured against the start
+driver, a twisted start under-twists the end by exactly its own roll: a
+start controller rolled 190 with the end held put the last joint at 136
+instead of 19. Both ends now read against `reference` (the sockets' own
+group when none is wired), which is what the `reference` input's help text
+says.
+
+**Bounded controllers.** With `start_controller` or `end_controller` on, the
+module read the controller's twist through the matrix source, because a
+controller under its offset group is never parented to the reference, so
+`source="auto"` could not pick the channel. Rotating the end controller 190
+about X put the last joint at -153. The fix is the pattern the mid
+controllers already used: the **socket's** roll is matrix-derived and
+bounded, and the controller's own `rotateX` channel is added on top as a
+plain float, so the animator winds past 360 without a pop. This is also
+how the "pure math ribbon" reference rig gets its 360: its end locators are
+the twist source and their `rotateX` floats go through a `plusMinusAverage`,
+never through a matrix. Nothing recovers a winding count from a matrix, so a
+ribbon hung off an IK wrist is still bounded on the socket's share -- see
+7.1. A controller whose X does not run along the strip keeps the bounded
+matrix twist and logs a warning; a reversed X negates the channel.
