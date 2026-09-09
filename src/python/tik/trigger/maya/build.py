@@ -399,12 +399,18 @@ class Builder:
         return producer_ctx.outputs.get(output)
 
     def _connect_one(self, instance, module_cls, inputs, by_key, report) -> None:
-        """Attach every declared input of one already-built instance."""
+        """Attach every declared input of one already-built instance.
+
+        An input with no source is left alone: its socket stands free at its
+        matched guide and the module works in place. A source that is *named
+        but wrong* still fails -- silence is for "I did not wire this", never
+        for a typo.
+        """
         rig = report.rigs[instance.instance_id]
         for declared in module_cls.inputs:
             source = inputs.get(declared.name)
             if not source:
-                if declared.optional:
+                if not declared.required:
                     continue
                 raise AttachError(
                     f"{instance.key}.{declared.name}: required input has no source.",

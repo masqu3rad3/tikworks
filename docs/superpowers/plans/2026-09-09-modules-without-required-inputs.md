@@ -56,6 +56,7 @@ This is one task and one commit on purpose: the rename and the behaviour change 
 - Test: `tests/integration/trigger/test_builder_trigger.py:49-56,198-224`
 - Test: `tests/unit/test_connections_trigger.py:112-125`
 - Test: `tests/helpers/toy_modules.py:31`
+- Test: `tests/integration/trigger/test_module_ground_rules.py:79` — the third and last reader of `declared.optional`; it has to travel with the rename or the integration suite breaks between commits
 - Test: `tests/ui/test_trigger_widgets.py` (new class)
 
 **Interfaces:**
@@ -134,10 +135,17 @@ def test_scene_node_sources_must_exist_and_an_unwired_input_builds(pair):
     report = Builder(events).build(document=scene.document, afterlife="keep")
 
     assert report.connections == []
-    assert logged == []
+    # The build logs its own summary and nothing else: no warning anywhere,
+    # and not a word about the module that went unwired.
+    assert not [item for item in logged if item["level"] == "warning"]
+    assert not [item for item in logged if "L_tail" in item["message"]]
     rig = report.rigs[tail.instance_id]
     assert rig.socket("root").parent.long_name == rig.groups.socket.long_name
 ```
+
+A clean build always emits its own `"Built N module(s)."` at info level, so assert
+what section 5 actually says — nothing is reported *about the unwired input* —
+rather than that the bus stays empty.
 
 `EventBus` is already imported at line 17 of that file, and `"log"` is the correct topic (`core/events.py:10`, emitted by `EventBus.log` at line 45 as `level=`/`message=`). The `logged == []` assertion is what holds spec section 5: no log, no chip, no note.
 
@@ -552,9 +560,9 @@ In `test_module_parents_everything_it_creates` (lines 239-256), replace the `if 
     scene.create_guides(get_module(module_type)(name=module_type))
 ```
 
-- [ ] **Step 5: Make `_built_with`'s wiring conditional on `required`**
+- [ ] **Step 5: Confirm `_built_with`'s wiring is conditional on `required`**
 
-In `_built_with` (lines 67-80), the loop at lines 78-80 wires every non-primary, non-optional input. Change the docstring and the guard:
+Task 1 already inverted this guard — it is the third reader of `declared.optional` and could not be left behind without breaking the integration suite mid-plan. Verify it reads as below and move on; no edit is expected here.
 
 ```python
 def _built_with(module_type, settings):

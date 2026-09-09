@@ -28,7 +28,7 @@ class ToyRoot(Module):
 class ToyChain(Module):
     label = "Toy Chain"
     guides = GuideLayout("root", multi="segment", min=1)
-    inputs = (Input("root", primary=True), Input("space", optional=True))
+    inputs = (Input("root", primary=True), Input("space"))
     outputs = ("root", "end")
     segments = IntField(2, min=1)
 

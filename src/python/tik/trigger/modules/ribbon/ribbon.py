@@ -36,7 +36,7 @@ class RibbonModule(Module):
     inputs = (
         Input("start", primary=True, help="What the ribbon start pins to"),
         Input("end", help="What the ribbon end pins to"),
-        Input("reference", optional=True, help="Frame the start twist is read against"),
+        Input("reference", help="Frame the start twist is read against"),
     )
     outputs = ("joint0",)
 

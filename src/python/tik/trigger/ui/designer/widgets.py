@@ -125,7 +125,7 @@ class InputRow(QtWidgets.QWidget):
         self.line = QtWidgets.QLineEdit()
         self.line.setPlaceholderText(
             "module.output or scene node"
-            + ("  (optional)" if input_decl.optional else "")
+            + ("  (required)" if input_decl.required else "")
         )
         self.pick = QtWidgets.QToolButton()
         self.pick.setText("◦")

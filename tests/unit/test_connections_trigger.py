@@ -110,11 +110,14 @@ def test_guide_parenting_writes_a_real_input(guides):
 
 
 def test_cleared_input_is_not_re_derived_from_the_parent(guides):
-    """Clearing an input means unconnected, even while the guides stay parented."""
+    """Clearing an input means unconnected, even while the guides stay parented.
+
+    Unconnected is not an error: the arm builds standing on its own.
+    """
     body = guides.add("base", name="body")
     arm = guides.add("arm", side="L", name="arm", parent=body)
     arm.set_input("root", "")
 
     assert arm.inputs == {}
-    with pytest.raises(AttachError):
-        Builder().build(document=guides.document, afterlife="keep")
+    report = Builder().build(document=guides.document, afterlife="keep")
+    assert report.connections == []

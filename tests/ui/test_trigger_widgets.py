@@ -325,3 +325,23 @@ class TestLinkedCheckboxClicks:
         delegate.editorEvent(event, model, option, index)
 
         assert model.writes == []
+
+
+class TestInputRowPlaceholder:
+    """The rare required input is what gets marked, not the common one."""
+
+    def test_an_unrequired_input_is_unmarked(self, qapp):
+        from tik.trigger.core import Input
+        from tik.trigger.ui.designer.widgets import InputRow
+
+        row = InputRow(Input("root", primary=True))
+
+        assert row.line.placeholderText() == "module.output or scene node"
+
+    def test_a_required_input_says_so(self, qapp):
+        from tik.trigger.core import Input
+        from tik.trigger.ui.designer.widgets import InputRow
+
+        row = InputRow(Input("anchor", required=True))
+
+        assert row.line.placeholderText().endswith("(required)")

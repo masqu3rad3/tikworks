@@ -76,7 +76,9 @@ def _built_with(module_type, settings):
         parent=ParentRef(body.instance_id, "root") if primary is not None else None,
     )
     for declared in module_cls.inputs:
-        if declared.optional or (primary is not None and declared.name == primary.name):
+        if not declared.required or (
+            primary is not None and declared.name == primary.name
+        ):
             continue
         scene.set_input(instance.instance_id, declared.name, f"{body.key}.root")
     if settings:

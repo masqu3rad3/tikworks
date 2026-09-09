@@ -47,11 +47,11 @@ class ToyRoot(Module):
 
 
 class ToyChain(Module):
-    """A root plus N segments, with one required and one optional input."""
+    """A root plus N segments, neither input required."""
 
     label = "Toy Chain"
     guides = GuideLayout("root", multi="segment", min=1)
-    inputs = (Input("root", primary=True), Input("space", optional=True))
+    inputs = (Input("root", primary=True), Input("space"))
     outputs = ("root", "end")
     controls = ("fk",)
     segments = IntField(2, min=1)
@@ -195,7 +195,7 @@ def test_builds_in_order_and_connects(pair):
     assert rig.name("upper", suffix="jnt") == "L_tail_upper_jnt"
 
 
-def test_scene_node_sources_must_exist_and_optional_inputs_may_be_empty(pair):
+def test_scene_node_sources_must_exist_and_an_unwired_input_builds(pair):
     scene, _body, tail = pair
     tail.set_input("space", "some_jnt")
     with pytest.raises(AttachError) as info:
@@ -215,13 +215,23 @@ def test_scene_node_sources_must_exist_and_optional_inputs_may_be_empty(pair):
         )
     assert "not built" in str(info.value)
 
+    # Nothing wired: the module builds, its socket free-standing at the guide,
+    # and nothing is logged about it -- an unwired input is not a complaint.
     tail.set_input("root", "")
     tail.set_input("space", "")
-    with pytest.raises(AttachError) as info:
-        Builder().build(
-            document=scene.document,
-        )
-    assert "required input" in str(info.value)
+    events = EventBus()
+    logged = []
+    events.subscribe("log", lambda **kw: logged.append(kw))
+
+    report = Builder(events).build(document=scene.document, afterlife="keep")
+
+    assert report.connections == []
+    # The build logs its own summary and nothing else: no warning anywhere,
+    # and not a word about the module that went unwired.
+    assert not [item for item in logged if item["level"] == "warning"]
+    assert not [item for item in logged if "L_tail" in item["message"]]
+    rig = report.rigs[tail.instance_id]
+    assert rig.socket("root").parent.long_name == rig.groups.socket.long_name
 
 
 def test_a_failing_module_is_named_in_the_error(toys):

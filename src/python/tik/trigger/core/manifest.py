@@ -14,18 +14,23 @@ TIERS = ("primary", "secondary", "tertiary")
 class Input:
     """An attachment point another module (or a scene node) can drive.
 
+    Leaving an input unwired is a legal, ordinary state: the socket is created
+    either way and simply stands still at its matched guide, so a module built
+    alone is a rig root of its own. ``required`` is for the rare module that
+    genuinely cannot build without a driver -- nothing this repo ships sets it.
+
     Args:
         name: Input name (unique per module).
         kind: ``transform`` | ``joint`` | ``attribute`` (graph validation).
         primary: The input the tree view shows as parenting (one per module).
-        optional: Build succeeds without a source.
+        required: Build fails without a source. Almost never true.
         help: Tooltip text.
     """
 
     name: str
     kind: str = "transform"
     primary: bool = False
-    optional: bool = False
+    required: bool = False
     help: str = ""
 
 
