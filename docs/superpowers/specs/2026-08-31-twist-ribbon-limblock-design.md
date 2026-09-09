@@ -596,3 +596,12 @@ never through a matrix. Nothing recovers a winding count from a matrix, so a
 ribbon hung off an IK wrist is still bounded on the socket's share -- see
 7.1. A controller whose X does not run along the strip keeps the bounded
 matrix twist and logs a warning; a reversed X negates the channel.
+
+**Mid controllers flipped too.** The module pinned each mid plug to its
+controller through a matrix constraint, and the construct reads the plug's
+`rotateX` as the mid's own roll, so that roll was decomposed back to +/-180
+on the way in. The controller's offset group *is* the mid frame and the plug
+is the frame's child, so the controller's local channels are the plug's
+local channels: they are now connected channel to channel with a matching
+XYZ rotate order, and the roll stays a float. A ribbon's three controller
+kinds -- start, mid, end -- now all wind without a flip.

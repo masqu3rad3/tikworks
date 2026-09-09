@@ -201,3 +201,25 @@ def test_end_controller_twist_stacks_on_the_socket():
     assert _joint_rolls(ctx)[-1] == pytest.approx(27.0, abs=0.5)
     end["rotateX"].value = 400.0
     assert _joint_rolls(ctx)[-1] == pytest.approx(430.0 * 0.9, abs=0.5)
+
+
+def test_mid_controller_twist_winds_past_360():
+    """The mid's roll must reach the strip as a float, never through a matrix.
+
+    Three drivers at degree 2 weight the mid 0.5 on the centre joint.
+    """
+    ctx = _built(joint_count=5, mid_count=1)
+    mid = ctx.controller_by_role("mid0").transform
+    for angle in (190.0, 720.0, -540.0):
+        mid["rotateX"].value = angle
+        rolls = _joint_rolls(ctx)
+        assert rolls[2] == pytest.approx(angle * 0.5, abs=0.5), (angle, rolls)
+
+
+def test_mid_controller_swing_adds_no_twist():
+    ctx = _built(joint_count=5, mid_count=1)
+    mid = ctx.controller_by_role("mid0").transform
+    for rotate_y, rotate_z in ((30.0, 0.0), (0.0, 30.0), (30.0, 30.0)):
+        mid["rotateY"].value = rotate_y
+        mid["rotateZ"].value = rotate_z
+        assert all(abs(roll) < 1e-3 for roll in _joint_rolls(ctx)), _joint_rolls(ctx)

@@ -195,9 +195,17 @@ class RibbonModule(Module):
                 mirror="behaviour",
             )
             tm.MatrixConstraint.create(frame, controller.offset, maintain_offset=False)
-            tm.MatrixConstraint.create(
-                controller, ribbon.mid_plugs[index], maintain_offset=False
-            )
+            # The offset *is* the frame and the plug's parent is the frame, so
+            # the controller's local channels are the plug's local channels.
+            # They are connected channel to channel rather than through a
+            # matrix constraint because the construct reads the plug's
+            # rotateX as the mid's own roll: a matrix would decompose it back
+            # to +/-180 and the mid controller would flip past that.
+            control = controller.transform
+            plug = ribbon.mid_plugs[index]
+            control["rotateOrder"].value = ROTATE_ORDER_XYZ
+            for channel in tm.TRANSFORM_CHANNELS:
+                control[channel] >> plug[channel]
 
         for index, ribbon_joint in enumerate(ribbon.deformer_joints):
             joint = rig.bind_joint(f"joint{index}", match=ribbon_joint)
