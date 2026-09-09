@@ -44,6 +44,7 @@ deprecated.
 ever draws itself when it opens.**
 
 - **creating** a module draws it, when `Draw new modules` is on — the default
+- **mirroring** draws, in both directions: the copy it creates, and the source it has to read
 - importing a `.trg` adds entries and creates **no joints**
 - opening a `.tr` session creates no joints
 - checking the scene out for a session creates no joints
@@ -63,6 +64,13 @@ are no joints for that module yet, so nothing can be moved or discarded. Every o
 automatic draw fails one of those tests — a settings change redraws work the rigger did not
 ask to have rebuilt, and opening a session floods a scene the rigger may have opened for
 something else entirely.
+
+**Mirror passes both tests too, which is why it draws.** The copy it creates is a module
+with no joints, exactly like a creation. The source is subtler: mirroring reflects what the
+scene *shows*, not what the document last recorded, so it reads the source's joints — and a
+source with no joints is not an error to report but the resting state of a session nobody has
+drawn yet. So Mirror draws it, and the rigger gets the pair on screen from one press. Neither
+draw can move work: the copy has no joints and the source has none either.
 
 Creation is also where the *poses* come from. `expand_guides` writes **unposed** records; the
 module's own `draw_guides` is what decides where its guides sit, and the document only learns

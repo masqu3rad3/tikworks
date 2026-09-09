@@ -737,10 +737,21 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         self.set_input(handle.instance_id, primary.name, f"{producer_id}.{output}")
 
     def mirror(self, handle: GuideHandle) -> GuideHandle:
-        """Create (or update) the opposite-side copy of ``handle``."""
-        instance = handle.instance
+        """Create (or update) the opposite-side copy of ``handle``.
+
+        Mirrors what the scene shows, so it needs the source on screen to read
+        -- and draws it when it is not. Nothing draws on open (spec 3.1), so an
+        undrawn module is the resting state of a freshly opened session, not an
+        error to report; and Mirror is a button somebody pressed, which already
+        renders the module it creates. Drawing the other half of the pair is
+        the same act.
+        """
         if handle.side is Side.CENTER:
+            # Before the draw: a center module has no mirror to draw one for.
             raise GuideError("Center guides cannot be mirrored.")
+        if not self.guide_nodes(handle.instance_id):
+            self.draw(scope=[handle.instance_id])
+        instance = handle.instance
         target_side = handle.side.mirror
         existing = self.find(instance.name, target_side.value)
         poses = [

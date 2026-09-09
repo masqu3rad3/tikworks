@@ -77,6 +77,27 @@ def test_mirror_and_test_build(guides):
         guides["ghost"]
 
 
+def test_mirror_draws_an_undrawn_module_first(guides):
+    """Mirror needs joints to read, so it draws what is not on screen.
+
+    Nothing draws on open (spec 3.1), so a freshly opened session is entirely
+    not drawn -- and Mirror used to fail there rather than doing the one draw
+    it needs.
+    """
+    body = guides.add("base", name="body")
+    arm = guides.add("arm", side="L", name="arm", parent=body)
+    cmds.xform(arm.root.long_name, ws=True, t=(3, 12, 1))
+    guides.sync()  # the pose is the session's now
+    guides.clear_rendering()  # ...and nothing is on screen
+    assert arm.root is None
+
+    mirrored = guides.mirror(arm)
+    assert arm.root is not None, "the source was drawn so it could be mirrored"
+    assert mirrored.side.value == "R" and mirrored.name == "arm"
+    assert round(mirrored.root.world_position.x, 3) == -3.0
+    assert mirrored.parent.instance_id == body.instance_id
+
+
 def test_duplicate_copies_everything_with_a_unique_name(guides):
     guides.add("base", name="body")
     arm = guides.add("arm", side="L", name="arm", pole_pin=True)
