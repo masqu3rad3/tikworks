@@ -1,7 +1,11 @@
 # The Test Rig: Guide Designer builds in their own container
 
 **Date:** 2026-09-07
-**Status:** implemented
+**Status:** implemented; **superseded on the container mechanism** by
+`2026-09-09-test-rig-record-sets-design.md`, which replaces decision 2 and rewrites sections
+3, 4 and 5. Containers hijack the Channel Box for every node inside them, so the test rig
+records what a module made with a uuid census and an `objectSet` instead. Everything else
+here — the second scaffold, the namespace, scoped teardown, scope expansion — stands.
 **Amends:** `2026-09-05-rig-scaffold-and-master-controls-design.md` (decision 1 and section 3)
 and `2026-09-05-draw-and-sync-separation-design.md` (section 7, for the Designer's build only
 — a pipeline build is unchanged). Where this document and those disagree, this one wins;

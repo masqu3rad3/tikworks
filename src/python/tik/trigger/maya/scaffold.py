@@ -74,8 +74,7 @@ REAL_NAMES = ScaffoldNames(
     RIG_GRP, TRIGGER_GRP, GEO_GRP, PREFERENCES_CTRL, VISIBILITIES_CTRL
 )
 #: The Guide Designer's throwaway rig. It keeps the real rig's names and takes
-#: them apart with a namespace; its root is a ``dagContainer`` so that deleting
-#: it takes every module container's DG nodes with it.
+#: them apart with a namespace, which is also what ``sandbox.clear`` sweeps.
 TEST_NAMES = ScaffoldNames(
     RIG_GRP,
     TRIGGER_GRP,
@@ -133,15 +132,17 @@ def _lock_channels(node) -> None:
 
 
 def _ensure_group(
-    name: str, parent, kind: str, events, container: bool = False, prefix: str = ""
+    name: str, parent, kind: str, events, prefix: str = ""
 ) -> tm.Transform:
     """The transform ``name`` under ``parent`` (None = world), tagged ``kind``.
 
-    ``container`` creates it as a ``dagContainer`` -- a transform subtype that
-    also *owns* the nodes created while it is current, DG ones included. That
-    ownership is what makes the test rig's teardown complete, and it extends to
-    the container's DAG children, so deleting this root takes the module
-    containers and their utility nodes with it.
+    Both roots are plain transforms, the test rig's included. A
+    ``dagContainer`` root would be tempting -- it owns its DAG children, so
+    deleting it is a complete teardown -- but Maya's Channel Box shows a
+    container in place of anything inside it, and parenting a node under a
+    ``dagContainer`` is enough to put it inside. The whole test rig's channels
+    would read as the root's translate/rotate/scale. ``sandbox`` records what a
+    module made instead, and ``sandbox.clear`` sweeps by namespace.
 
     ``prefix`` is the namespace the node is addressed under. Creation happens
     inside that namespace already, so only the *lookup* needs it spelled out.
@@ -153,9 +154,6 @@ def _ensure_group(
         if node.meta.get(tags.KIND) != kind:
             _log(events, f"Adopted existing '{name}' as the rig's {kind}.")
             node.meta[tags.KIND] = kind
-    elif container:
-        node = tm.resolve(cmds.container(type="dagContainer", name=name))
-        node.meta[tags.KIND] = kind
     else:
         node = tm.Transform.create(
             name=name, parent=parent.long_name if parent is not None else None
@@ -227,14 +225,7 @@ def _ensure(names: ScaffoldNames, events: Optional[Any] = None) -> RigScaffold:
     """The scaffold ``names`` describes, created or healed."""
     prefix = f"{names.namespace}:" if names.namespace else ""
     with namespace(names.namespace):
-        root = _ensure_group(
-            names.root,
-            None,
-            tags.RIG_ROOT,
-            events,
-            container=names.is_test,
-            prefix=prefix,
-        )
+        root = _ensure_group(names.root, None, tags.RIG_ROOT, events, prefix=prefix)
         trigger = _ensure_group(
             names.trigger, root, tags.RIG_TRIGGER, events, prefix=prefix
         )
