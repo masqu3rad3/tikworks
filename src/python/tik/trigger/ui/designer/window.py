@@ -1098,6 +1098,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             menu.addSeparator()
             menu.addAction("Remove From Group", self.remove_current_from_group)
             menu.addAction("Ungroup", self.ungroup_current)
+            menu.addAction("Delete Group…", self.delete_current_group)
         menu.addSeparator()
         menu.addAction("Delete Module", self.delete_current)
         return menu

@@ -338,3 +338,68 @@ def test_mirroring_an_ungrouped_module_is_unchanged(designer):
     designer.mirror_current()
     assert designer.guides.groups() == []
     assert designer.guides.find("index", "R") is not None
+
+
+# ------------------------------------------------------- deleting a group
+def _answer(reply):
+    """Answer the next Feedback question with ``reply``."""
+    from tik.shared.ui import feedback
+
+    return feedback.set_handler(lambda *args, **kwargs: reply)
+
+
+def test_delete_group_offers_both_answers(designer):
+    from tik.shared.ui import feedback
+
+    _scene, _group, _handles = _grouped(designer)
+    seen = {}
+
+    def handler(kind, title, text, details, buttons):
+        seen["buttons"] = list(buttons)
+        return "cancel"
+
+    previous = feedback.set_handler(handler)
+    try:
+        designer.delete_current_group()
+    finally:
+        feedback.set_handler(previous)
+    assert seen["buttons"] == ["ungroup", "delete", "cancel"]
+
+
+def test_delete_group_ungroup_keeps_every_module(designer):
+    from tik.shared.ui import feedback
+
+    _scene, _group, _handles = _grouped(designer)
+    previous = _answer("ungroup")
+    try:
+        designer.delete_current_group()
+    finally:
+        feedback.set_handler(previous)
+    assert designer.guides.groups() == []
+    assert len(designer.guides.instances()) == 3
+
+
+def test_delete_group_delete_removes_the_modules(designer):
+    from tik.shared.ui import feedback
+
+    _scene, _group, _handles = _grouped(designer)
+    previous = _answer("delete")
+    try:
+        designer.delete_current_group()
+    finally:
+        feedback.set_handler(previous)
+    assert designer.guides.groups() == []
+    assert designer.guides.instances() == []
+
+
+def test_cancelling_delete_group_changes_nothing(designer):
+    from tik.shared.ui import feedback
+
+    _scene, group, _handles = _grouped(designer)
+    previous = _answer("cancel")
+    try:
+        designer.delete_current_group()
+    finally:
+        feedback.set_handler(previous)
+    assert designer.guides.group_of(_handles[0].instance_id).group_id == group.group_id
+    assert len(designer.guides.instances()) == 3
