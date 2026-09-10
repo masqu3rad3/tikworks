@@ -1,7 +1,7 @@
 # Module Copies: one module, N repeats of itself
 
 **Date:** 2026-09-10
-**Status:** designed
+**Status:** implemented
 **Supersedes:** `2026-09-10-module-groups-and-tabs-design.md` **in full.** That design was
 implemented, tried, and withdrawn; §1 below says exactly what failed and why. Its two
 incidental bug fixes survive (§11). Nothing else in it stands.
@@ -102,7 +102,9 @@ genuinely invasive, which is why §4 puts the copy in the role name instead.
 
 `copies` is a field on `Module`, hidden from the generated form because the tab bar is its
 editor — the same arrangement `filterable` already uses for the `<name>_only_selected` field it
-injects. Each row is one copy: its identity, its name, and its per-copy values.
+injects. It is deliberately *not* `last=True` like the base tables beside it: `last` decides
+where a field renders, and a hidden field renders nowhere, so marking it would only have pushed
+the three visible tables out of the trailing group. Each row is one copy: its identity, its name, and its per-copy values.
 
 ```python
 settings = {
@@ -127,8 +129,18 @@ A per-copy view is `{**settings, **row}`, which is the whole trick: inside `buil
 `self.segments` is a plain int, and the module author never learns that copies exist.
 
 Every row carries an explicit value for every per-copy field. There is no inheritance and no
-sparse override, because a per-copy field has no module-level value to inherit from — it lives
+sparse override, because a per-copy field has no module-level value to inherit from -- it lives
 in the tabs by declaration, so there is nothing above to revert to.
+
+**A one-copy module stores no list at all.** Found in implementation, and the right rule rather
+than a shortcut. Writing a per-copy value used to materialise a single-row `copies` list, which
+stranded the module-level field: `handle.segments` read 2 while the rig built 4, and every
+existing reader of `settings["segments"]` was quietly wrong. So the list appears only from the
+second copy onward, and removing that copy returns the module to exactly its prior state —
+which is also what keeps the scripting API (`handle.segments = 4`) meaning what it always meant.
+The implicit row is seeded from the module's *current* value, never the field default, and that
+is the whole of the migration: a `.tr` written before copies existed is already a valid one-copy
+module.
 
 ## 4. Slugs, roles, and why the first one is empty
 
@@ -185,6 +197,13 @@ Everything below is `Module` and the builder. No module author writes any of it.
 
 `expand_guides` (`core/guide_document.py:434`) is the only signature change, and it has four
 call sites: `guides/exchange.py:239` and `guides/scene.py` at 324, 499 and 797.
+
+Implementation added two more pieces. A per-copy view is handed its own *slice* of the
+control-keyed tables, de-qualified, or it re-qualifies an already qualified name and derives
+roles like `c1_pivot_c1_fk0_heel`. And `report.rigs` holds a `ModuleBuild` — a `ModuleRig` per
+copy plus the merged output map — which delegates every other attribute to the first copy, so a
+one-copy module behaves exactly as it did when that slot held a `ModuleRig` outright and no
+caller had to learn the type.
 
 **The build loop.** `Builder` iterates the copies of each module and, per copy, constructs the
 per-copy view and a `rig` carrying that copy's name, then calls `build(rig)`. Copies of one
