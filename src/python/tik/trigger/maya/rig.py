@@ -8,6 +8,7 @@ removes naming, tagging, placement or registration boilerplate, so
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
@@ -19,6 +20,7 @@ from tik.maya.roles.controller import Controller
 from tik.trigger.core import shapes as shape_library
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import TIERS
+from tik.trigger.core.module import Module
 from tik.trigger.core.schemas import ModuleInstance
 from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_joint
 
@@ -111,6 +113,25 @@ class GuideDraft:
         self.parent_node = parent_node
         self.created: dict[tuple[str, int], tm.Joint] = {}
         self.root: Optional[tm.Joint] = None
+        #: Slug of the copy currently drawing, and the view drawing it.
+        self._slug = ""
+        self._drawing = module
+
+    @contextmanager
+    def for_copy(self, slug: str, view):
+        """Draw one copy: qualify its roles, and give it its own root.
+
+        ``view`` is the per-copy module, so the joints are named after the
+        copy and ``attrs_for_role`` is asked about bare roles. ``root`` resets
+        because each copy is its own chain -- without that, copy two's first
+        joint would parent under copy one's root.
+        """
+        was = (self._slug, self._drawing, self.root)
+        self._slug, self._drawing, self.root = slug, view, None
+        try:
+            yield self
+        finally:
+            self._slug, self._drawing, self.root = was
 
     def joint(
         self,
@@ -127,27 +148,29 @@ class GuideDraft:
         ``marker`` draws it as a locator cross rather than a bone -- what a
         pivot-preset guide wants.
         """
-        if (role, index) in self.created:
-            raise GuideError(f"Guide '{role}' [{index}] created twice.")
-        is_root = not self.created
+        key = (Module.qualify(self._slug, role), index)
+        if key in self.created:
+            raise GuideError(f"Guide '{key[0]}' [{index}] created twice.")
+        is_root = self.root is None
         if parent is None:
             parent = self.parent_node if is_root else self.root
             if parent is None:
                 parent = self.holder
         joint = create_guide_joint(
-            self.module,
+            self._drawing,
             role,
             position,
             index=index,
             parent=parent,
             radius=radius,
             marker=marker,
+            tag_role=key[0],
         )
-        for declared in self.module.attrs_for_role(role):
+        for declared in self._drawing.attrs_for_role(role):
             joint[declared.name].create(
                 "float", default=declared.default, keyable=declared.keyable
             )
-        self.created[(role, index)] = joint
+        self.created[key] = joint
         if is_root:
             self.root = joint
         return joint

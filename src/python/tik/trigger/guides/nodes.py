@@ -99,12 +99,19 @@ def create_guide_joint(
     parent=None,
     radius: float = 1.0,
     marker: bool = False,
+    tag_role: str = "",
 ) -> tm.Joint:
     """Create one tagged guide joint for ``module``.
 
     ``marker`` draws it as a locator cross instead of a bone -- what a
     pivot-preset guide wants, since it marks a point rather than linking a
     chain.
+
+    ``tag_role`` is the role the *document* keys this guide by, when that
+    differs from the one the node is named after. A module's second copy
+    keys its guides ``c1_root`` while the joint reads ``L_thumb_root_guide``:
+    the slug is bookkeeping and has no business in a name a rigger reads.
+    Defaults to ``role``, which is every non-copy case.
     """
     joint = tm.Joint.create(
         name=naming.format_name(
@@ -124,7 +131,7 @@ def create_guide_joint(
             tags.KIND: tags.GUIDE,
             tags.MODULE: module.module_type,
             tags.INSTANCE: module.instance_id,
-            tags.ROLE: role,
+            tags.ROLE: tag_role or role,
             tags.INDEX: index,
             tags.SIDE: module.side.value,
             # what this rendering was drawn as, so reconcile can notice a

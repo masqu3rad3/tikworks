@@ -614,9 +614,17 @@ class Module(Schema):
         The draw path calls this, not ``draw_guides``: preset guides follow a
         settings table rather than the layout, so no module author should have
         to remember to draw them.
+
+        It is also where copies happen. Each one draws through its own view
+        inside ``draft.for_copy``, which qualifies the roles and hands the
+        copy its own root, so ``draw_guides`` sees an ordinary single-copy
+        module and names its roles bare.
         """
-        self.draw_guides(draft)
-        self._draw_pivot_guides(draft)
+        for slug in self.copy_slugs():
+            view = self.for_copy(slug)
+            with draft.for_copy(slug, view):
+                view.draw_guides(draft)
+                view._draw_pivot_guides(draft)
 
     def _draw_pivot_guides(self, draft) -> None:
         """One marker guide per pivot-preset row, at its control's anchor guide.
