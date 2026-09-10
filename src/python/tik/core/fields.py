@@ -63,6 +63,7 @@ class Field:
         hidden: bool = False,
         group: Optional[Any] = None,  # FieldGroup or a bare label string
         last: bool = False,
+        per_copy: bool = False,
     ) -> None:
         self.default = default
         self.label = label
@@ -77,6 +78,12 @@ class Field:
         self.group: Optional[FieldGroup] = group
         # Renders after every non-trailing field, whichever class declared it.
         self.last = last
+        #: True when this setting belongs to one *copy* of the module rather
+        #: than to the module as a whole -- a chain's length is a property of
+        #: that chain. Declared once by the module author and never inferred
+        #: from values: a panel that reshuffles as the rigger types is a poor
+        #: substitute for a fact the author already knows.
+        self.per_copy = per_copy
         self.name = ""
 
     # --- descriptor protocol -------------------------------------------------
@@ -618,6 +625,16 @@ class Schema:
         ordered = {name: item for name, item in collected.items() if not item.last}
         ordered.update(trailing)
         return ordered
+
+    @classmethod
+    def per_copy_fields(cls) -> dict[str, Field]:
+        """Fields belonging to one copy of the object, in declaration order."""
+        return {name: item for name, item in cls.fields().items() if item.per_copy}
+
+    @classmethod
+    def shared_fields(cls) -> dict[str, Field]:
+        """Fields belonging to the object as a whole, in declaration order."""
+        return {name: item for name, item in cls.fields().items() if not item.per_copy}
 
     @classmethod
     def schema(cls) -> dict:
