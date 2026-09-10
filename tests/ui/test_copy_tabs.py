@@ -107,7 +107,7 @@ def test_removing_a_copy_drops_its_row(designer):
 
 def test_the_last_copy_cannot_be_removed(designer):
     """A module always has at least one copy: itself."""
-    handle = _chain(designer)
+    _chain(designer)
     designer._on_remove_copy()
     assert designer.tab_bar.count() == 1
 
