@@ -78,6 +78,11 @@ def set_handler(handler: Optional[Callable]) -> Optional[Callable]:
 
     Returning ``None`` from the handler falls through to a real dialog, so a
     handler can intercept one kind of question and leave the rest alone.
+
+    ``ask_choice`` goes through the same seam, with ``kind="choice"`` and the
+    options in the ``buttons`` slot: a pick-one question is a question, and a
+    headless test that could answer every message box but not this one would
+    leave a hole in the one-dialog-surface guarantee.
     """
     global _handler
     previous, _handler = _handler, handler
@@ -320,8 +325,18 @@ class Feedback:
         options: Sequence[str] = (),
         current: int = 0,
     ) -> Optional[str]:
-        """Ask the user to pick one of ``options``; ``None`` when they cancel."""
+        """Ask the user to pick one of ``options``; ``None`` when they cancel.
+
+        Routed through the ``set_handler`` seam like every message box, so a
+        headless test can answer it. A handler returning ``None`` falls
+        through to the real dialog, exactly as it does for a message box.
+        """
+        options = list(options)
+        if _handler is not None:
+            answered = _handler("choice", title, label, "", options)
+            if answered is not None:
+                return answered
         picked, accepted = QtWidgets.QInputDialog.getItem(
-            self._host(), title, label, list(options), current, False
+            self._host(), title, label, options, current, False
         )
         return picked if accepted else None
