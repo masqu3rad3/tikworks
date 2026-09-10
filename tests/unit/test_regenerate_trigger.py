@@ -15,7 +15,7 @@ def chain_entry(segments=3, instance_id="id1", name="tail"):
     entry = ModuleEntry(
         instance_id, "fkchain", name, "C", settings={"segments": segments}
     )
-    expand_guides(entry, registry.get_module("fkchain").guides, segments)
+    expand_guides(entry, registry.get_module("fkchain").guides.expand(segments))
     return entry
 
 
@@ -58,7 +58,7 @@ def test_growing_the_chain_keeps_the_poses_of_survivors():
     entry.guide("segment", 0).position = (12.0, 3.0, 0.0)
     regenerate.regenerate(entry)
     entry.settings["segments"] = 4
-    expand_guides(entry, registry.get_module("fkchain").guides, 4)
+    expand_guides(entry, registry.get_module("fkchain").guides.expand(4))
     joints = regenerate.regenerate(entry)
     kept = cmds.xform(
         joints[("segment", 0)].long_name, query=True, worldSpace=True, translation=True
@@ -107,7 +107,7 @@ def test_regenerate_all_builds_producers_first():
 
 def test_regenerate_restores_guide_attrs():
     entry = ModuleEntry("id1", "twist", "twist", "C", settings={"segments": 2})
-    expand_guides(entry, registry.get_module("twist").guides, 2)
+    expand_guides(entry, registry.get_module("twist").guides.expand(2))
     record = entry.guide("twist", 0)
     record.attrs = {"twistWeight": 0.75}
     joints = regenerate.regenerate(entry)
@@ -151,7 +151,7 @@ def test_unauthored_colour_keeps_the_modules_side_colour_on_regenerate():
     from tik.trigger.guides import nodes
 
     entry = ModuleEntry("id1", "fkchain", "arm", "L", settings={"segments": 1})
-    expand_guides(entry, registry.get_module("fkchain").guides, 1)
+    expand_guides(entry, registry.get_module("fkchain").guides.expand(1))
     for record in entry.guides:
         assert record.color is None  # never authored
     joints = regenerate.regenerate(entry)
@@ -198,12 +198,7 @@ def test_preset_guides_draw_under_their_anchor_as_markers():
         cmds.file(new=True, force=True)
         entry = ModuleEntry("pid", "pivoted", "pivoted", "C")
         module = registry.get_module("pivoted")()
-        expand_guides(
-            entry,
-            module.guides,
-            module.guide_count(),
-            extra=module.pivot_guide_roles(module.values()),
-        )
+        expand_guides(entry, module.expected_guides())
 
         created = regenerate.regenerate(entry)
 

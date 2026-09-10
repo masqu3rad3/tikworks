@@ -131,7 +131,7 @@ def test_expand_guides_grows_keeping_existing_poses():
             GuideRecord("segment", 1, position=(10.0, 0.0, 0.0)),
         ],
     )
-    expand_guides(entry, layout, 4)
+    expand_guides(entry, layout.expand(4))
     assert entry.pairs == [
         ("root", 0),
         ("segment", 0),
@@ -158,7 +158,7 @@ def test_expand_guides_shrinks():
             GuideRecord("segment", 1),
         ],
     )
-    expand_guides(entry, layout, 1)
+    expand_guides(entry, layout.expand(1))
     assert entry.pairs == [("root", 0), ("segment", 0)]
 
 
@@ -171,7 +171,7 @@ def test_expand_guides_keeps_fixed_roles():
         "L",
         guides=[GuideRecord("collar", position=(1.0, 0.0, 0.0))],
     )
-    expand_guides(entry, layout, 0)
+    expand_guides(entry, layout.expand(0))
     assert entry.pairs == [("collar", 0), ("shoulder", 0), ("elbow", 0), ("hand", 0)]
     assert entry.guide("collar").position == (1.0, 0.0, 0.0)
 
@@ -179,7 +179,10 @@ def test_expand_guides_keeps_fixed_roles():
 def test_expand_guides_appends_extra_roles_and_keeps_their_poses():
     entry = ModuleEntry(instance_id="one", module_type="toy", name="toy")
     layout = GuideLayout("root", "hand")
-    expand_guides(entry, layout, 0, extra=("pivot_ik_tip", "pivot_ik_ball"))
+    expand_guides(
+        entry,
+        layout.expand(0) + [(role, 0) for role in ("pivot_ik_tip", "pivot_ik_ball")],
+    )
     assert entry.pairs == [
         ("root", 0),
         ("hand", 0),
@@ -189,11 +192,37 @@ def test_expand_guides_appends_extra_roles_and_keeps_their_poses():
 
     entry.guide("pivot_ik_tip", 0).position = (1.0, 2.0, 3.0)
     # dropping the 'ball' row leaves 'tip' untouched
-    expand_guides(entry, layout, 0, extra=("pivot_ik_tip",))
+    expand_guides(entry, layout.expand(0) + [(role, 0) for role in ("pivot_ik_tip",)])
     assert entry.pairs == [("root", 0), ("hand", 0), ("pivot_ik_tip", 0)]
     assert entry.guide("pivot_ik_tip", 0).position == (1.0, 2.0, 3.0)
 
     # re-adding it restores the record, unposed, without disturbing 'tip'
-    expand_guides(entry, layout, 0, extra=("pivot_ik_tip", "pivot_ik_ball"))
+    expand_guides(
+        entry,
+        layout.expand(0) + [(role, 0) for role in ("pivot_ik_tip", "pivot_ik_ball")],
+    )
     assert entry.guide("pivot_ik_tip", 0).position == (1.0, 2.0, 3.0)
     assert entry.guide("pivot_ik_ball", 0).posed is False
+
+
+def test_expand_guides_matches_the_entry_to_the_pairs():
+    entry = ModuleEntry("a", "toy", "arm", "L")
+    entry.guides = [GuideRecord(role="root", position=(1.0, 2.0, 3.0))]
+    expand_guides(entry, [("root", 0), ("c1_root", 0)])
+    assert [record.pair for record in entry.guides] == [("root", 0), ("c1_root", 0)]
+
+
+def test_survivors_keep_their_pose_when_a_copy_is_added():
+    entry = ModuleEntry("a", "toy", "arm", "L")
+    entry.guides = [GuideRecord(role="root", position=(1.0, 2.0, 3.0))]
+    expand_guides(entry, [("root", 0), ("c1_root", 0)])
+    assert entry.guide("root", 0).position == (1.0, 2.0, 3.0)
+    assert entry.guide("c1_root", 0).position is None
+
+
+def test_a_removed_copys_records_go_away():
+    """Which is what makes reusing its slug later provably safe."""
+    entry = ModuleEntry("a", "toy", "arm", "L")
+    entry.guides = [GuideRecord(role="root"), GuideRecord(role="c1_root")]
+    expand_guides(entry, [("root", 0)])
+    assert [record.pair for record in entry.guides] == [("root", 0)]

@@ -395,27 +395,25 @@ class GuideDocument:
         )
 
 
-def expand_guides(
-    entry: ModuleEntry, layout, count: int, extra: Sequence[str] = ()
-) -> None:
-    """Match ``entry.guides`` to ``layout.expand(count)`` plus ``extra``.
+def expand_guides(entry: ModuleEntry, pairs: Sequence[tuple]) -> None:
+    """Match ``entry.guides`` to ``pairs``, keeping every survivor's record.
 
     The document-side answer to a settings change that adds or removes guides
-    (``fkchain.segments`` 3 -> 5, or a pivot-preset row added or dropped).
-    Survivors keep their records untouched; new pairs arrive unposed, so
-    regenerate places them at their ``draw_guides`` position rather than at the
-    origin.
+    -- ``fkchain.segments`` 3 -> 5, a pivot-preset row, or a copy added or
+    removed. Survivors keep their records untouched; new pairs arrive unposed,
+    so regenerate places them at their ``draw_guides`` position rather than at
+    the origin. A pair that is gone takes its record with it, which is what
+    lets a removed copy's slug be handed out again safely.
+
+    Takes the pairs rather than a layout and a count because a module's guides
+    are no longer one layout expanded once: they are its layout expanded once
+    per copy, and only the module can work that out (``expected_guides``).
 
     Args:
         entry: The document entry to rewrite.
-        layout: The module's ``GuideLayout``.
-        count: Number of multi-role guides.
-        extra: Single-index roles appended after the layout's own -- the pivot
-            preset guides, whose set follows a settings table rather than the
-            layout.
+        pairs: ``(role, index)`` pairs the module wants, in order.
     """
     existing = {record.pair: record for record in entry.guides}
-    pairs = layout.expand(count) + [(role, 0) for role in extra]
     entry.guides = [
         existing.get(pair) or GuideRecord(role=pair[0], index=pair[1]) for pair in pairs
     ]

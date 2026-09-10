@@ -235,12 +235,7 @@ class GuideExchangeMixin:
                 side=module.side.value,
                 settings=module.values(),
             )
-            expand_guides(
-                entry,
-                module.guides,
-                module.guide_count(),
-                extra=module.pivot_guide_roles(module.values()),
-            )
+            expand_guides(entry, module.expected_guides())
             # radius/colour/orient aren't captured from the scene (spec 4.2 gap),
             # so the .trg file is their only source -- fill them in directly from
             # what the file recorded, for regenerate to re-apply from here on.
