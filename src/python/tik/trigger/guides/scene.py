@@ -16,6 +16,13 @@ from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.guide_document import GuideDocument
 from tik.trigger.core.manifest import instance_key
+from tik.trigger.core.module_group import (
+    ModuleGroup,
+    dissolve_group,
+    join_group,
+    leave_group,
+    make_group,
+)
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 from tik.trigger.maya import tags
 
@@ -613,6 +620,9 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
                 "unlink the reference."
             )
         with nodes.undo_chunk("Trigger remove module"):
+            # Before anything else: a group that drops to one member dissolves,
+            # and leave_group is the single place that rule lives.
+            leave_group(self.document, instance_id)
             self.delete_guides(instance_id)
             document = self.document
             document.modules = [
@@ -836,6 +846,114 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
             collapse[module.instance_id] = collapse[handle.instance_id]
             self._touch()
         return GuideHandle(self, module.instance_id)
+
+    # ------------------------------------------------------------ groups
+    def groups(self) -> list:
+        """Every module group in the document."""
+        return list(self.document.module_groups)
+
+    def group_of(self, instance_id: str) -> Optional[ModuleGroup]:
+        """The group holding ``instance_id``, or None."""
+        return self.document.group_of(instance_id)
+
+    def group_members(self, group_id: str) -> list:
+        """Handles for a group's members, in tab order."""
+        group = self.document.module_group(group_id)
+        if group is None:
+            return []
+        return [GuideHandle(self, member) for member in group.members]
+
+    def group(self, handles, label: str = "") -> ModuleGroup:
+        """Group ``handles`` under ``label``.
+
+        The label defaults to the first member's name, which is the useful
+        answer for the ``[+]`` path: pressing it on ``index`` gives a group
+        called ``index``, which the rigger renames to ``fingers`` if they care.
+        """
+        handles = list(handles)
+        ids = [handle.instance_id for handle in handles]
+        if not label and handles:
+            label = handles[0].instance.name
+        with nodes.undo_chunk("Trigger group modules"):
+            group = make_group(self.document, label, ids)
+            self._touch()
+        return group
+
+    def ungroup(self, group_id: str) -> None:
+        """Drop the group. Its modules and their guides are untouched."""
+        with nodes.undo_chunk("Trigger ungroup modules"):
+            dissolve_group(self.document, group_id)
+            self._touch()
+
+    def add_copy(self, handle: GuideHandle) -> GuideHandle:
+        """The ``[+]`` verb: duplicate ``handle`` and put the copy beside it.
+
+        An exact duplicate -- settings, inputs and guide poses -- so the copy's
+        joints sit precisely on the original's and the rigger drags them into
+        place. That matches :meth:`duplicate`, and it matches the pivot-preset
+        rule: an unplaced thing should look unplaced.
+
+        If ``handle`` is alone the group springs into existence around the
+        pair. There is no "create a group" concept to learn: a group is simply
+        a module with more than one copy.
+        """
+        with nodes.undo_chunk("Trigger add module copy"):
+            copy = self.duplicate(handle)
+            group = self.document.group_of(handle.instance_id)
+            if group is None:
+                make_group(
+                    self.document,
+                    handle.instance.name,
+                    [handle.instance_id, copy.instance_id],
+                )
+            else:
+                join_group(self.document, group.group_id, copy.instance_id)
+            self._touch()
+        return copy
+
+    def remove_from_group(self, handle: GuideHandle) -> None:
+        """Take a module out of its group, leaving the module in the rig."""
+        with nodes.undo_chunk("Trigger remove from group"):
+            leave_group(self.document, handle.instance_id)
+            self._touch()
+
+    def mirror_group(self, group_id: str) -> ModuleGroup:
+        """Create (or update) the opposite-side copy of a whole group.
+
+        Mirrors every member through :meth:`mirror`, which already handles the
+        update case, the connection remapping and drawing both halves. The
+        group on the far side is found through its *members* rather than by
+        name: a second mirror must update the group it made the first time,
+        not stand a second one beside it.
+        """
+        group = self.document.module_group(group_id)
+        if group is None:
+            raise GuideError(f"No module group '{group_id}'.")
+        with nodes.undo_chunk("Trigger mirror group"):
+            mirrored = [
+                self.mirror(GuideHandle(self, member)) for member in group.members
+            ]
+            existing = next(
+                (
+                    found
+                    for handle in mirrored
+                    for found in [self.document.group_of(handle.instance_id)]
+                    if found is not None
+                ),
+                None,
+            )
+            if existing is None:
+                existing = make_group(
+                    self.document,
+                    group.label,
+                    [handle.instance_id for handle in mirrored],
+                )
+            else:
+                for handle in mirrored:
+                    if handle.instance_id not in existing.members:
+                        join_group(self.document, existing.group_id, handle.instance_id)
+            self._touch()
+        return existing
 
     # ------------------------------------------------------------- build
     def test_build(self, *handles: GuideHandle) -> Any:
