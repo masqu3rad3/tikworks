@@ -77,6 +77,23 @@ class Module(Schema):
     module_type: str = ""  # stamped by @register_module
     category: str = "generic"  # stamped by @register_module
     icon: str = ""  # stamped by @register_module
+    copies = ListField(
+        [],
+        item_type=dict,
+        label="Copies",
+        hidden=True,
+        help="One row per copy of this module.",
+    )
+    """One row per copy: its slug, its name, and its per-copy values.
+
+    Hidden because the tab bar is its editor, the same arrangement
+    ``filterable`` uses for the ``<name>_only_selected`` field it injects.
+    An empty list means one copy -- see ``copy_rows``.
+
+    Not ``last=True`` like the three tables below it: ``last`` decides where a
+    field *renders*, and a hidden field renders nowhere. Marking it would only
+    have pushed the three visible tables out of the trailing group.
+    """
     anim_spaces = TableField(
         [],
         label="Anim Spaces",
@@ -100,20 +117,6 @@ class Module(Schema):
             Column("label", "string"),
         ),
     )
-    copies = ListField(
-        [],
-        item_type=dict,
-        label="Copies",
-        hidden=True,
-        last=True,
-        help="One row per copy of this module.",
-    )
-    """One row per copy: its slug, its name, and its per-copy values.
-
-    Hidden because the tab bar is its editor, the same arrangement
-    ``filterable`` uses for the ``<name>_only_selected`` field it injects.
-    An empty list means one copy -- see ``copy_rows``.
-    """
     control_shape_overrides = TableField(
         [],
         label="Control Shapes",

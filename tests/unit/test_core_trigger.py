@@ -100,6 +100,7 @@ def test_module_instance_roundtrip():
         "anim_spaces": [],
         "pivot_presets": [],
         "control_shape_overrides": [],
+        "copies": [],
     }
     assert restored.side == "R"
     assert restored.parent == ParentRef("abc", "root")

@@ -33,6 +33,7 @@ def test_create_guides_tags_and_parents(scene):
         "anim_spaces": [],
         "pivot_presets": [],
         "control_shape_overrides": [],
+        "copies": [],
     }
     assert joint.parent.name == tags.GUIDE_HOLDER
     assert instance.guide_pairs == [("root", 0)]
@@ -89,6 +90,7 @@ def test_settings_roundtrip_and_delete_keeps_children(scene):
         "anim_spaces": [],
         "pivot_presets": [],
         "control_shape_overrides": [],
+        "copies": [],
     }
     scene.delete_guides(root.instance_id)
     assert scene.find_instances([root.instance_id]) == []
