@@ -1,4 +1,8 @@
-"""The stub's group surface matches GuideScene's, so the designer tests mean something."""
+"""The stub's group surface matches GuideScene's.
+
+A double that has drifted from the real surface tests nothing, so the shapes
+are compared directly rather than trusted.
+"""
 
 import inspect
 
