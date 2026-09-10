@@ -106,3 +106,69 @@ def test_dissolving_the_group_brings_its_members_back(grouped):
     view.rebuild()
     assert {"L_a", "L_b"} <= set(view.graph.nodes)
     assert f"@{group.group_id}" not in view.graph.nodes
+
+
+# ------------------------------------------------ fan-in and the picker
+def test_wiring_a_collapsed_groups_input_wires_every_member(grouped):
+    """'All of these attach to the same place' is a meaningful thing to say."""
+    view, scene, group, handles = grouped
+    other = scene.add("toy_root", name="hand")
+    output = list(other.outputs)[0]
+    view.rebuild()
+    view._connect_to_group(group, "root", f"{other.key}.{output}")
+    for handle in handles:
+        assert handle.instance.inputs["root"] == f"{other.key}.{output}"
+
+
+def test_wiring_a_group_input_skips_a_member_without_that_input(grouped):
+    view, scene, group, handles = grouped
+    other = scene.add("toy_root", name="hand")
+    output = list(other.outputs)[0]
+    view.rebuild()
+    view._connect_to_group(group, "not_an_input", f"{other.key}.{output}")
+    for handle in handles:
+        assert "not_an_input" not in handle.instance.inputs
+
+
+def test_dragging_from_a_group_output_asks_which_member(grouped, monkeypatch):
+    """'Which one of these drives that' has no default answer, so fanning an
+    output out would silently create wires the rigger did not intend."""
+    view, scene, group, handles = grouped
+    asked = {}
+
+    def fake_pick(options, title=""):
+        asked["options"] = list(options)
+        return handles[1].instance_id
+
+    monkeypatch.setattr(view, "_pick_member", fake_pick)
+    assert view._pick_group_output_member(group) == handles[1].instance_id
+    assert len(asked["options"]) == 2
+
+
+def test_cancelling_the_member_picker_makes_no_connection(grouped, monkeypatch):
+    view, scene, group, handles = grouped
+    monkeypatch.setattr(view, "_pick_member", lambda options, title="": None)
+    assert view._pick_group_output_member(group) is None
+
+
+def test_the_member_picker_goes_through_feedback(grouped, monkeypatch):
+    """Every dialog in the repo goes through Feedback; a raw QInputDialog here
+    would fail tests/unit/test_dialog_boundaries.py."""
+    from tik.shared.ui import feedback
+
+    view, scene, group, handles = grouped
+    seen = {}
+
+    def handler(kind, title, text, details, buttons):
+        seen["kind"] = kind
+        seen["options"] = list(buttons)
+        return buttons[1]
+
+    previous = feedback.set_handler(handler)
+    try:
+        picked = view._pick_group_output_member(group)
+    finally:
+        feedback.set_handler(previous)
+    assert seen["kind"] == "choice"
+    assert seen["options"] == ["L_a", "L_b"]
+    assert picked == handles[1].instance_id

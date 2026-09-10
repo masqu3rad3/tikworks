@@ -423,6 +423,43 @@ class GraphView(QtWidgets.QGraphicsView):
         files = {item.ref_id: Path(item.file).name for item in document.references}
         return origin_of, collapsed, files
 
+    def _connect_to_group(self, group, input_name: str, source: str) -> None:
+        """Give every member of ``group`` the same source on ``input_name``.
+
+        Inputs fan in and outputs do not, and the asymmetry is the point:
+        *all of these attach to the same place* is a meaningful thing to say,
+        while *which one of these drives that* is a question with no default
+        answer. A member that has no such input is skipped rather than
+        refused -- the collapsed node advertises the union of its members'
+        ports, so a port only some of them carry is an ordinary state.
+        """
+        for handle in self.guides.group_members(group.group_id):
+            if input_name not in handle.module_class.input_names(handle.settings):
+                continue
+            self.guides.connect(f"{handle.key}.{input_name}", source)
+
+    def _pick_member(self, options, title: str = "Which module?"):
+        """Ask which member; ``options`` is ``[(instance_id, label)]``.
+
+        Goes through ``Feedback``, the one dialog surface: a raw
+        ``QInputDialog`` here would fail ``tests/unit/test_dialog_boundaries``.
+        """
+        from tik.shared.ui.feedback import Feedback
+
+        labels = [label for _item_id, label in options]
+        picked = Feedback(parent=self).ask_choice(
+            title=title, label="Module:", options=labels
+        )
+        if picked is None:
+            return None
+        return next(item_id for item_id, label in options if label == picked)
+
+    def _pick_group_output_member(self, group):
+        """Which member a wire dragged from a collapsed group comes from."""
+        members = self.guides.group_members(group.group_id)
+        options = [(handle.instance_id, handle.key) for handle in members]
+        return self._pick_member(options, title=f"{group.label}: which module?")
+
     def _group_state(self, handles) -> tuple:
         """``({module key: group_id}, {collapsed group ids}, {group_id: key})``.
 
