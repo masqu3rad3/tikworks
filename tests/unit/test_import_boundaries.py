@@ -107,3 +107,53 @@ def test_only_the_publish_action_package_may_import_vcs():
 def test_vcs_never_reads_preferences_and_nothing_imports_tik_manager4():
     assert _violations("trigger/vcs", PREFS) == []
     assert _violations("", ("tik_manager4",)) == []
+
+
+#: Grouping never changes the rig. The build path is therefore forbidden from
+#: naming the group object or touching the document's group list at all --
+#: a stronger and cheaper guarantee than reviewing every read site, and the
+#: same trick the preferences rule above uses.
+#:
+#: ``trigger/guides`` is deliberately absent: the guide layer is not the build
+#: path. It owns the document's rendering and the ``.trg``, which is exactly
+#: where the group operations and the ``.trg`` section have to live. What must
+#: stay blind is the code that turns guides into a rig.
+GROUP_BLIND = ("trigger/maya", "trigger/modules", "trigger/systems")
+
+
+def _group_reads(py_file: Path):
+    """Names and attributes that would let this file see a module group.
+
+    ``.module_groups`` rather than ``.groups`` on purpose: ``rig.groups`` is
+    the four per-module rig groups and is all over the build path, so a bare
+    ``groups`` could not be told apart from it. The distinct name is what
+    makes this check possible at all.
+    """
+    tree = ast.parse(py_file.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == "module_groups":
+            yield f"line {node.lineno}: reads .module_groups"
+        elif isinstance(node, ast.Name) and node.id == "ModuleGroup":
+            yield f"line {node.lineno}: names ModuleGroup"
+        elif isinstance(node, ast.Attribute) and node.attr in (
+            "module_group",
+            "group_of",
+        ):
+            yield f"line {node.lineno}: calls .{node.attr}()"
+
+
+@pytest.mark.parametrize("package", GROUP_BLIND)
+def test_the_build_path_cannot_see_module_groups(package):
+    found = [
+        f"{py_file.relative_to(SRC)} {problem}"
+        for py_file in (SRC / package).rglob("*.py")
+        for problem in _group_reads(py_file)
+    ]
+    assert found == []
+
+
+def test_the_group_guard_would_catch_a_violation(tmp_path):
+    """The guard is only worth having if it fails on the thing it forbids."""
+    offender = tmp_path / "offender.py"
+    offender.write_text("def build(doc):\n    return doc.module_groups\n")
+    assert list(_group_reads(offender)) == ["line 2: reads .module_groups"]
