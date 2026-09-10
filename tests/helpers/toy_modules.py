@@ -33,7 +33,7 @@ class ToyChain(Module):
     segments = IntField(2, min=1)
 
     @classmethod
-    def control_names(cls, settings=None):
+    def controls_for_copy(cls, settings=None):
         """One per segment: this toy stands in for a settings-driven manifest."""
         count = int((settings or {}).get("segments", cls.segments.default))
         return tuple(f"fk{index}" for index in range(count))

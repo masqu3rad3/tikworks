@@ -104,7 +104,7 @@ class Twist(Module):
     )
 
     @classmethod
-    def output_names(cls, settings=None):
+    def outputs_for_copy(cls, settings=None):
         """One output per twist joint."""
         count = int((settings or {}).get("count", cls.count.default))
         return tuple(f"twist{index}" for index in range(count))

@@ -195,49 +195,144 @@ class Module(Schema):
         )
 
     @classmethod
-    def output_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
-        """Outputs an instance exposes.
+    def outputs_for_copy(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Outputs *one copy* exposes.
 
-        Override when a setting adds outputs (chain segments, say).
+        Override when a setting adds outputs (chain segments, say). The public
+        ``output_names`` repeats this across the module's copies and qualifies
+        each name, so an author writes single-copy code and never sees a copy.
         """
         return tuple(cls.outputs)
 
     @classmethod
-    def control_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
-        """Controller roles an instance builds.
+    def controls_for_copy(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Controller roles *one copy* builds.
 
         Override when a setting drives them -- ``fkchain`` builds one per
-        segment. This is the shape of ``output_names`` on purpose: one idiom
-        for a manifest entry whose set depends on settings, not two.
+        segment. This is the shape of ``outputs_for_copy`` on purpose: one
+        idiom for a manifest entry whose set depends on settings, not two.
         """
         return tuple(cls.controls)
 
     @classmethod
-    def pivot_control_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
-        """Controller roles with a movable pivot.
-
-        Override when a setting drives them, exactly as ``control_names`` and
-        ``output_names`` are overridden.
-        """
+    def pivot_controls_for_copy(
+        cls, settings: Optional[dict] = None
+    ) -> tuple[str, ...]:
+        """Controller roles of *one copy* with a movable pivot."""
         return tuple(cls.pivot_controls)
 
     @classmethod
-    def control_shape_defaults(cls, settings: Optional[dict] = None) -> dict[str, str]:
-        """Default shape per control role.
-
-        Override when a setting drives them -- exactly as ``control_names``
-        and ``output_names`` are overridden.
-        """
+    def control_shape_defaults_for_copy(
+        cls, settings: Optional[dict] = None
+    ) -> dict[str, str]:
+        """Default shape per control role, for *one copy*."""
         return dict(cls.control_shapes)
 
     @classmethod
-    def control_orient_defaults(cls, settings: Optional[dict] = None) -> dict:
-        """Shape rotation per control role, in degrees.
-
-        Override when a setting drives them, exactly as
-        ``control_shape_defaults`` is overridden.
-        """
+    def control_orient_defaults_for_copy(cls, settings: Optional[dict] = None) -> dict:
+        """Shape rotation per control role in degrees, for *one copy*."""
         return dict(cls.control_orients)
+
+    # -- the public manifest: the hooks above, repeated across the copies ---
+    @classmethod
+    def _copy_settings(cls, settings: Optional[dict] = None) -> list:
+        """``[(slug, one-copy settings)]`` for a module-level settings dict.
+
+        Each entry is a settings dict a ``*_for_copy`` hook can be called
+        with: the copy's per-copy values folded in, and ``copies`` holding
+        only that row under the empty slug. Tables that address controls by
+        name are sliced to this copy and de-qualified, so a hook never sees
+        another copy's rows and never sees a prefix it would qualify twice.
+        """
+        settings = dict(settings or {})
+        defaults = cls.per_copy_defaults(settings)
+        rows = copy_list.normalise(settings.get("copies"), defaults, "")
+        found = []
+        for row in rows:
+            one = dict(settings)
+            one.update({name: row[name] for name in defaults if name in row})
+            one["copies"] = [dict(row, slug=copy_list.EMPTY_SLUG)]
+            for table in ("anim_spaces", "pivot_presets", "control_shape_overrides"):
+                one[table] = cls.slice_table(settings.get(table), row["slug"])
+            found.append((row["slug"], one))
+        return found
+
+    @classmethod
+    def slice_table(cls, rows, slug: str) -> list:
+        """Rows of a control-keyed table belonging to ``slug``, de-qualified.
+
+        These tables stay module-level -- one table addresses any copy's
+        control -- but a per-copy view must see only its own rows with the
+        prefix stripped. Otherwise the view would re-qualify an already
+        qualified name and derive roles like ``c1_pivot_c1_fk0_heel``.
+        """
+        prefix = f"{slug}_" if slug else ""
+        found = []
+        for row in rows or []:
+            control = row.get("control", "")
+            if slug:
+                if control.startswith(prefix):
+                    trimmed = control[len(prefix) :]
+                    found.append(dict(row, control=trimmed))
+            elif not cls.slug_of(control):
+                found.append(dict(row))
+        return found
+
+    @staticmethod
+    def slug_of(control: str) -> str:
+        """The copy slug a qualified control name carries, or ``""``.
+
+        Recognised by shape (``c`` followed by digits) rather than by looking
+        the copy up, because this has to answer for a settings dict alone --
+        the same dict a classmethod is handed with no instance in sight.
+        """
+        head = control.split("_", 1)[0]
+        return head if head[:1] == "c" and head[1:].isdigit() else ""
+
+    @classmethod
+    def output_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Outputs an instance exposes, qualified per copy."""
+        return tuple(
+            cls.qualify(slug, name)
+            for slug, one in cls._copy_settings(settings)
+            for name in cls.outputs_for_copy(one)
+        )
+
+    @classmethod
+    def control_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Controller roles an instance builds, qualified per copy."""
+        return tuple(
+            cls.qualify(slug, name)
+            for slug, one in cls._copy_settings(settings)
+            for name in cls.controls_for_copy(one)
+        )
+
+    @classmethod
+    def pivot_control_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Controller roles with a movable pivot, qualified per copy."""
+        return tuple(
+            cls.qualify(slug, name)
+            for slug, one in cls._copy_settings(settings)
+            for name in cls.pivot_controls_for_copy(one)
+        )
+
+    @classmethod
+    def control_shape_defaults(cls, settings: Optional[dict] = None) -> dict[str, str]:
+        """Default shape per control role, keyed by the qualified names."""
+        found: dict = {}
+        for slug, one in cls._copy_settings(settings):
+            for name, shape in cls.control_shape_defaults_for_copy(one).items():
+                found[cls.qualify(slug, name)] = shape
+        return found
+
+    @classmethod
+    def control_orient_defaults(cls, settings: Optional[dict] = None) -> dict:
+        """Shape rotation per control role, keyed by the qualified names."""
+        found: dict = {}
+        for slug, one in cls._copy_settings(settings):
+            for name, orient in cls.control_orient_defaults_for_copy(one).items():
+                found[cls.qualify(slug, name)] = orient
+        return found
 
     def shape_rows(self) -> dict[str, dict]:
         """The override rows, keyed by control role. Later rows win."""
@@ -269,15 +364,36 @@ class Module(Schema):
 
     # ------------------------------------------------------------- copies
     @classmethod
-    def per_copy_defaults(cls) -> dict:
-        """``{field name: default}`` for every field declared ``per_copy``."""
-        return {name: item.default for name, item in cls.per_copy_fields().items()}
+    def per_copy_defaults(cls, settings: Optional[dict] = None) -> dict:
+        """``{field name: value}`` to seed a copy row that lacks one.
+
+        The *module's current value* where the settings carry one, and only
+        then the field default. This is what makes an existing document
+        already a valid one-copy module: a ``.tr`` written before copies
+        existed holds ``segments`` at the top level and no ``copies`` at all,
+        and its single implicit copy has to inherit that number rather than
+        silently reverting to the class default.
+        """
+        settings = settings or {}
+        return {
+            name: settings.get(name, item.default)
+            for name, item in cls.per_copy_fields().items()
+        }
 
     def copy_rows(self) -> list[dict]:
         """Well-formed copy rows: at least one, each fully populated."""
         return copy_list.normalise(
-            self.copies, type(self).per_copy_defaults(), self.name
+            self.copies, type(self).per_copy_defaults(self.values()), self.name
         )
+
+    @staticmethod
+    def qualify(slug: str, name: str) -> str:
+        """``("", "root")`` -> ``root``; ``("c1", "root")`` -> ``c1_root``.
+
+        The first copy is bare, which is what makes an existing document
+        already valid and what stops a second copy from disturbing it.
+        """
+        return name if not slug else f"{slug}_{name}"
 
     def copy_slugs(self) -> list[str]:
         """Every copy's slug, in tab order. ``[""]`` for an untouched module."""
@@ -295,15 +411,16 @@ class Module(Schema):
         writes anything. The view is a projection, not a handle: editing it
         does not touch the module it came from.
         """
-        rows = self.copy_rows()
-        row = copy_list.row_for(rows, slug)
+        row = copy_list.row_for(self.copy_rows(), slug)
         if row is None:
             raise copy_list.CopyError(f"There is no copy '{slug}' on '{self.name}'.")
-        settings = self.values()
-        settings.update(
-            {name: row[name] for name in type(self).per_copy_fields() if name in row}
+        # Through _copy_settings, so the view also gets its own slice of the
+        # control-keyed tables rather than the module's whole set.
+        settings = next(
+            one
+            for found, one in type(self)._copy_settings(self.values())
+            if found == slug
         )
-        settings["copies"] = [dict(row, slug=copy_list.EMPTY_SLUG)]
         return type(self)(
             instance_id=self.instance_id,
             name=copy_list.copy_name(row, self.name),
@@ -362,23 +479,49 @@ class Module(Schema):
     def expected_guides(self) -> list[tuple[str, int]]:
         """``(role, index)`` pairs this module wants when drawing fresh guides.
 
-        The layout's pairs first, then one guide per pivot-preset row. A preset
-        guide is an ordinary guide in every respect -- it poses, syncs,
-        reconciles and round-trips through a ``.trg`` -- so the only thing that
-        marks it out is where its role name comes from.
+        Each copy's layout in turn, then that copy's pivot-preset guides, with
+        every role qualified by the copy's slug. A preset guide is an ordinary
+        guide in every respect -- it poses, syncs, reconciles and round-trips
+        through a ``.trg`` -- so the only thing that marks it out is where its
+        role name comes from.
+
+        A one-copy module returns exactly what it always returned: the first
+        slug is empty, so its roles carry no prefix.
         """
-        pairs = self.guides.expand(self.guide_count())
-        pairs.extend((role, 0) for role in self.pivot_guide_roles(self.values()))
+        pairs: list[tuple[str, int]] = []
+        for slug in self.copy_slugs():
+            view = self.for_copy(slug)
+            for role, index in view.guides.expand(view.guide_count()):
+                pairs.append((self.qualify(slug, role), index))
+            for role in view.pivot_guide_roles(view.values()):
+                pairs.append((self.qualify(slug, role), 0))
         return pairs
 
     # ------------------------------------------------------------ lifecycle
     def validate(self) -> list[str]:
-        """Return problems that prevent building (empty list = ok)."""
+        """Return problems that prevent building (empty list = ok).
+
+        Each copy is checked through its own view against the bare layout,
+        which is the only thing that knows what a well-formed copy looks like.
+        """
         pairs = self.guide_pairs or self.expected_guides()
-        pivot_roles = set(self.pivot_guide_roles(self.values()))
-        problems = list(
-            self.guides.validate([p for p in pairs if p[0] not in pivot_roles])
-        )
+        problems: list[str] = []
+        for slug in self.copy_slugs():
+            view = self.for_copy(slug)
+            prefix = f"{slug}_" if slug else ""
+            pivot_roles = {
+                self.qualify(slug, role)
+                for role in view.pivot_guide_roles(view.values())
+            }
+            mine = [
+                (role[len(prefix) :], index)
+                for role, index in pairs
+                if role not in pivot_roles
+                and self.slug_of(role) == slug
+                and role.startswith(prefix)
+            ]
+            for problem in view.guides.validate(mine):
+                problems.append(problem if not slug else f"{view.name}: {problem}")
         problems.extend(self._validate_spaces())
         problems.extend(self._validate_pivots())
         return problems
