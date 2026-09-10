@@ -283,6 +283,34 @@ class Module(Schema):
         """Every copy's slug, in tab order. ``[""]`` for an untouched module."""
         return [row["slug"] for row in self.copy_rows()]
 
+    def for_copy(self, slug: str) -> "Module":
+        """This module as one of its copies sees itself.
+
+        Same class, the copy's per-copy values applied, named after the copy,
+        and holding only that copy's row -- so the view is a well-formed
+        one-copy module and every manifest call on it returns *bare* names.
+
+        That is the whole trick of this feature: ``draw_guides`` and
+        ``build`` receive an ordinary single-copy module, so no module author
+        writes anything. The view is a projection, not a handle: editing it
+        does not touch the module it came from.
+        """
+        rows = self.copy_rows()
+        row = copy_list.row_for(rows, slug)
+        if row is None:
+            raise copy_list.CopyError(f"There is no copy '{slug}' on '{self.name}'.")
+        settings = self.values()
+        settings.update(
+            {name: row[name] for name in type(self).per_copy_fields() if name in row}
+        )
+        settings["copies"] = [dict(row, slug=copy_list.EMPTY_SLUG)]
+        return type(self)(
+            instance_id=self.instance_id,
+            name=copy_list.copy_name(row, self.name),
+            side=self.side,
+            settings=settings,
+        )
+
     @classmethod
     def pivot_rows(cls, settings=None) -> list[dict]:
         """The pivot-preset rows from ``settings`` (or the field default)."""

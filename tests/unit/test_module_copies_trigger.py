@@ -116,3 +116,65 @@ def test_copy_rows_carry_the_per_copy_defaults():
 def test_a_shared_field_is_not_in_the_rows():
     module = _toy()(name="arm")
     assert "size" not in module.copy_rows()[0]
+
+
+# -------------------------------------------------------- the per-copy view
+def test_the_view_resolves_the_copys_per_copy_values():
+    """Inside build(), self.segments is a plain int -- the module author
+    never learns that copies exist."""
+    module = _toy()(name="fingers")
+    module.copies = [
+        {"slug": "", "name": "index", "segments": 4},
+        {"slug": "c1", "name": "thumb", "segments": 3},
+    ]
+    assert module.for_copy("").segments == 4
+    assert module.for_copy("c1").segments == 3
+
+
+def test_the_view_takes_the_copys_name():
+    module = _toy()(name="fingers")
+    module.copies = [{"slug": "", "name": "index", "segments": 4}]
+    assert module.for_copy("").name == "index"
+
+
+def test_a_blank_copy_name_leaves_the_module_name():
+    module = _toy()(name="arm")
+    assert module.for_copy("").name == "arm"
+
+
+def test_the_view_keeps_the_shared_fields():
+    module = _toy()(name="fingers", settings={"size": 7.0})
+    assert module.for_copy("").size == 7.0
+
+
+def test_the_view_is_itself_a_one_copy_module():
+    """So every manifest call on it returns bare, unqualified names."""
+    module = _toy()(name="fingers")
+    module.copies = [
+        {"slug": "", "name": "index", "segments": 4},
+        {"slug": "c1", "name": "thumb", "segments": 3},
+    ]
+    assert module.for_copy("c1").copy_slugs() == [EMPTY_SLUG]
+
+
+def test_the_view_keeps_the_modules_side_and_id():
+    from tik.core.side import Side
+
+    module = _toy()(name="fingers", side=Side.LEFT)
+    view = module.for_copy("")
+    assert view.side is Side.LEFT
+    assert view.instance_id == module.instance_id
+
+
+def test_an_unknown_slug_is_refused():
+    module = _toy()(name="fingers")
+    with pytest.raises(CopyError, match="no copy"):
+        module.for_copy("nope")
+
+
+def test_editing_the_view_does_not_touch_the_module():
+    """The view is a projection, not a handle on the original."""
+    module = _toy()(name="fingers")
+    view = module.for_copy("")
+    view.segments = 11
+    assert module.copy_rows()[0]["segments"] == 2
