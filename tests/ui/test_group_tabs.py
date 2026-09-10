@@ -231,3 +231,48 @@ def test_ungrouping_puts_the_members_back_where_they_were(designer):
         for i in range(designer.tree.topLevelItemCount())
     ]
     assert {"L_f0", "L_f1", "L_f2"} <= set(top)
+
+
+# ------------------------------------------------------- the varies mark
+def test_a_field_the_members_disagree_on_is_marked(designer):
+    from tik.shared.ui.fields import VARIES_MARK
+
+    _scene, _group, handles = _grouped(designer, segments=3)
+    handles[1].segments = 5
+    _select(designer, handles[0])
+    assert designer.form._labels["segments"].text().endswith(VARIES_MARK)
+
+
+def test_a_field_they_agree_on_carries_no_mark(designer):
+    from tik.shared.ui.fields import VARIES_MARK
+
+    _grouped(designer, segments=3)
+    labels = designer.common_form._labels
+    assert not labels["segments"].text().endswith(VARIES_MARK)
+
+
+def test_the_mark_clears_when_they_agree_again(designer):
+    from tik.shared.ui.fields import VARIES_MARK
+
+    _scene, _group, handles = _grouped(designer, segments=3)
+    handles[1].segments = 5
+    _select(designer, handles[0])
+    assert designer.form._labels["segments"].text().endswith(VARIES_MARK)
+    handles[1].segments = 3
+    _select(designer, handles[0])
+    assert not designer.form._labels["segments"].text().endswith(VARIES_MARK)
+
+
+def test_a_lone_module_marks_nothing(designer):
+    from tik.shared.ui.fields import VARIES_MARK
+
+    handle = designer.guides.add("toy_chain", name="index", side="L")
+    _select(designer, handle)
+    assert not designer.form._labels["segments"].text().endswith(VARIES_MARK)
+
+
+def test_the_varies_mark_is_not_the_override_mark(designer):
+    """They sit in the same panel and mean different things."""
+    from tik.shared.ui.fields import VARIES_MARK
+
+    assert "\u25c7" not in VARIES_MARK

@@ -39,7 +39,7 @@ if TYPE_CHECKING:  # the scene layer imports Maya; the UI only needs the name
 
 from tik.shared.ui.feedback import Feedback
 from tik.trigger.core.exceptions import TriggerError
-from tik.trigger.core.module_group import shared_values
+from tik.trigger.core.module_group import shared_values, varying_names
 from tik.trigger.ui.draw_state import (
     DRAWN,
     NOT_DRAWN,
@@ -1044,6 +1044,13 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.form.set_visible_fields([n for n in names if n not in set(common)])
         self.common_caption.setVisible(bool(common))
         self.common_form.setVisible(bool(common))
+        members = self._group_members()
+        varying = (
+            varying_names([handle.entry for handle in members])
+            if len(members) > 1
+            else set()
+        )
+        self.form.mark_varying(varying & set(names))
 
     def _on_tab_changed(self, index: int) -> None:
         members = self._group_members()

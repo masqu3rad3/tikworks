@@ -458,6 +458,13 @@ class _TextEditor(QtWidgets.QWidget):
         self.edit.setPlainText(text)
 
 
+#: Appended to the label of a field the modules sharing a panel disagree on.
+#: Not the reference override's diamond: the two appear in the same panel and
+#: mean different things -- an override differs from an upstream file, this
+#: differs between siblings.
+VARIES_MARK = "  ≠"
+
+
 class FormBuilder(QtWidgets.QWidget):
     """Form generated from a ``Schema`` object.
 
@@ -521,6 +528,7 @@ class FormBuilder(QtWidgets.QWidget):
         self.list_groups = list_groups
         self.file_vcs = file_vcs
         self._overridden: set[str] = set()
+        self._varying: set[str] = set()
         self._reference: dict = {}
         if target is not None:
             self.set_target(target)
@@ -655,6 +663,28 @@ class FormBuilder(QtWidgets.QWidget):
             else:
                 label.setStyleSheet("")
                 label.setToolTip("")
+
+    def mark_varying(self, names) -> None:
+        """Mark fields whose value differs across the modules being edited.
+
+        Deliberately *not* ``mark_overrides``: the two would sit in the same
+        panel and mean different things. An override says "this differs from
+        the file it was referenced from"; this says "the modules sharing this
+        panel disagree", which is why the field is not in the Common fold. It
+        gets a neutral glyph rather than the override's orange.
+        """
+        self._varying = set(names)
+        for name, label in self._labels.items():
+            if name in self._overridden:
+                continue  # an override's mark wins; it is the stronger claim
+            base = label.text().removesuffix(VARIES_MARK)
+            if name in self._varying:
+                label.setText(base + VARIES_MARK)
+                label.setToolTip("The modules in this group differ on this setting.")
+            else:
+                label.setText(base)
+                if not label.toolTip().startswith("override"):
+                    label.setToolTip("")
 
     def set_visible_fields(self, names: Optional[Iterable[str]] = None) -> None:
         """Show only ``names``; ``None`` shows every field again.
