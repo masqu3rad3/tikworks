@@ -410,3 +410,69 @@ def test_snapshot_records_the_key_the_guides_were_drawn_under(guides):
         guide.key for guide in snapshot() if guide.instance_id == handle.instance_id
     }
     assert keys == {"L_arm"}
+
+
+# ------------------------------------------------------------ module groups
+def test_trg_round_trips_a_module_group(guides, tmp_path):
+    from tik.trigger.guides import GuideScene
+
+    handles = [guides.add("fkchain", name=name, side="L") for name in ("a", "b")]
+    guides.group(handles, label="fingers")
+    path = guides.export(tmp_path / "hand.trg")
+
+    fresh = GuideScene()
+    fresh.clear()
+    fresh.import_(path, reset=True)
+    assert len(fresh.document.module_groups) == 1
+    group = fresh.document.module_groups[0]
+    assert group.label == "fingers"
+    assert len(group.members) == 2
+    known = {entry.instance_id for entry in fresh.document.modules}
+    assert set(group.members) <= known
+
+
+def test_importing_a_trg_twice_gives_two_independent_groups(guides, tmp_path):
+    """Member ids are remapped on import, so the second group cannot claim
+    the first one's modules."""
+    from tik.trigger.guides import GuideScene
+
+    handles = [guides.add("fkchain", name=name, side="L") for name in ("a", "b")]
+    guides.group(handles, label="fingers")
+    path = guides.export(tmp_path / "hand.trg")
+
+    fresh = GuideScene()
+    fresh.clear()
+    fresh.import_(path, reset=True)
+    fresh.import_(path)
+    assert len(fresh.document.module_groups) == 2
+    first, second = fresh.document.module_groups
+    assert first.group_id != second.group_id
+    assert set(first.members).isdisjoint(second.members)
+
+
+def test_a_trg_without_groups_imports_as_loose_modules(guides, tmp_path):
+    """A file that predates the section gives modules, the right degraded result."""
+    from tik.trigger.guides import GuideScene
+
+    [guides.add("fkchain", name=name, side="L") for name in ("a", "b")]
+    path = guides.export(tmp_path / "loose.trg")
+
+    fresh = GuideScene()
+    fresh.clear()
+    fresh.import_(path, reset=True)
+    assert fresh.document.module_groups == []
+    assert len(fresh.document.modules) == 2
+
+
+def test_exporting_a_subset_leaves_out_a_group_it_does_not_carry(guides, tmp_path):
+    from tik.trigger.guides import GuideScene
+
+    handles = [guides.add("fkchain", name=name, side="L") for name in ("a", "b")]
+    guides.group(handles, label="fingers")
+    loner = guides.add("fkchain", name="c", side="L")
+    path = guides.export(tmp_path / "one.trg", loner)
+
+    fresh = GuideScene()
+    fresh.clear()
+    fresh.import_(path, reset=True)
+    assert fresh.document.module_groups == []
