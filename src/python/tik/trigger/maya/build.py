@@ -15,8 +15,10 @@ from tik.trigger.core.build_scope import expand_build_scope
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import AttachError, BuildError
 from tik.trigger.core.manifest import TIERS
+from tik.trigger.core.module import Module
 from tik.trigger.core.schemas import (
     AFTERLIFE_MODES,
+    GuidePose,
     ModuleInstance,
     order_by_connections,
     order_instances,
@@ -53,6 +55,44 @@ class BuildReport:
 
 
 # ------------------------------------------------------------------- scene
+class ModuleBuild:
+    """What one module's build produced.
+
+    A module builds once per copy, so there is a ``ModuleRig`` per copy
+    rather than one per module. This holds them, keyed by slug, and the
+    single output map they merge into -- the author registers ``end`` on the
+    copy and the module publishes ``c1_end``.
+
+    ``outputs`` is the whole reason this exists as an object: every consumer
+    in the builder reads ``producer.outputs.get(name)``, and they keep doing
+    exactly that.
+    """
+
+    def __init__(self, contexts, outputs) -> None:
+        #: ``[(slug, ModuleRig)]`` in copy order.
+        self.contexts = list(contexts)
+        #: ``{qualified output name: node}`` across every copy.
+        self.outputs = dict(outputs)
+
+    @property
+    def primary(self):
+        """The first copy's rig -- the one a module-level question means."""
+        return self.contexts[0][1]
+
+    def context_for(self, slug: str):
+        """The rig that built ``slug``, or None."""
+        return next((ctx for found, ctx in self.contexts if found == slug), None)
+
+    def __getattr__(self, name: str):
+        """Anything else is a module-level question: ask the first copy.
+
+        A one-copy module -- which is every module until somebody presses
+        ``[+]`` -- then behaves exactly as it did when ``report.rigs`` held a
+        ``ModuleRig`` outright, so no caller had to learn this type.
+        """
+        return getattr(self.contexts[0][1], name)
+
+
 def build_context(
     module, instance, scaffold: RigScaffold, bind_parent=None
 ) -> ModuleRig:
@@ -393,10 +433,10 @@ class Builder:
             # Built in an earlier pass: found in the scene so this module's
             # bind joints are still created in their final position.
             return self._earlier_pass_output(key, output)
-        producer_ctx = report.rigs.get(by_key[key].instance_id)
-        if producer_ctx is None:
+        producer = report.rigs.get(by_key[key].instance_id)
+        if producer is None:
             return None
-        return producer_ctx.outputs.get(output)
+        return producer.outputs.get(output)
 
     def _connect_one(self, instance, module_cls, inputs, by_key, report) -> None:
         """Attach every declared input of one already-built instance.
@@ -409,7 +449,7 @@ class Builder:
         but wrong* still fails -- silence is for "the producer is not here",
         never for a typo.
         """
-        rig = report.rigs[instance.instance_id]
+        built = report.rigs[instance.instance_id]
         for declared in module_cls.inputs:
             source = inputs.get(declared.name)
             if not source or self._out_of_scope(source, by_key):
@@ -427,7 +467,11 @@ class Builder:
                 where=f"{instance.key}.{declared.name}",
                 instance=instance,
             )
-            connect(rig, declared.name, node)
+            # Every copy attaches to the same source: inputs belong to the
+            # module, not to one copy of it, so each copy's socket is driven
+            # by the one thing the rigger wired.
+            for _slug, ctx in built.contexts:
+                connect(ctx, declared.name, node)
             report.connections.append((f"{instance.key}.{declared.name}", source))
 
     def _connect_spaces(self, instances, report: BuildReport, by_key: dict) -> None:
@@ -439,8 +483,8 @@ class Builder:
         """
         for instance in instances:
             module_cls = registry.get_module(instance.module_type)
-            ctx = report.rigs.get(instance.instance_id)
-            if ctx is None:
+            built = report.rigs.get(instance.instance_id)
+            if built is None:
                 continue
             with self._module_scope(instance, report.scaffold):
                 inputs = dict(instance.inputs)
@@ -471,7 +515,14 @@ class Builder:
                     labels.append(label)
                     report.spaces.append((f"{instance.key}.{control}_{label}", source))
                 for (control, mode), (targets, labels) in groups.items():
-                    if not connect_space(ctx, control, mode, targets, labels):
+                    # A space row names a *qualified* control, so it belongs
+                    # to the copy whose slug that name carries.
+                    slug = Module.slug_of(control)
+                    ctx = built.context_for(slug)
+                    bare = control[len(slug) + 1 :] if slug else control
+                    if ctx is None or not connect_space(
+                        ctx, bare, mode, targets, labels
+                    ):
                         self.events.log(
                             f"{instance.key}: no controller with role '{control}'; "
                             f"its {mode} space was skipped.",
@@ -547,6 +598,38 @@ class Builder:
         return node
 
     # --------------------------------------------------------------- build
+    @staticmethod
+    def _copy_instance(instance, view, slug: str) -> ModuleInstance:
+        """The instance one copy builds from.
+
+        Its *name* is the copy's, which is the whole of the naming decision:
+        ``ModuleRig.name`` reads ``instance.name``, so ``L_index_fk0`` falls
+        out with no change to the naming code. Its guides are this copy's,
+        with the slug stripped, so the module body sees ``root`` and
+        ``segment`` exactly as it always has.
+        """
+        prefix = f"{slug}_" if slug else ""
+        return ModuleInstance(
+            module_type=instance.module_type,
+            instance_id=instance.instance_id,
+            name=view.name,
+            side=instance.side,
+            settings=view.values(),
+            guides=[
+                GuidePose(
+                    pose.role[len(prefix) :],
+                    pose.index,
+                    pose.position,
+                    pose.rotation,
+                    pose.rotate_order,
+                )
+                for pose in instance.guides
+                if pose.role.startswith(prefix) and Module.slug_of(pose.role) == slug
+            ],
+            parent=instance.parent,
+            inputs=dict(instance.inputs),
+        )
+
     def _build_one(self, instance: ModuleInstance, scaffold, bind_parent=None):
         module_cls = registry.get_module(instance.module_type)
         module = module_cls.from_instance(instance)
@@ -560,12 +643,26 @@ class Builder:
         for warning in module.warnings():
             self.events.log(f"{instance.key}: {warning}", level="warning")
         try:
-            ctx = build_context(module, instance, scaffold, bind_parent)
-            module.build(ctx)
+            contexts = []
+            merged: dict = {}
+            for slug in module.copy_slugs():
+                view = module.for_copy(slug)
+                ctx = build_context(
+                    view,
+                    self._copy_instance(instance, view, slug),
+                    scaffold,
+                    bind_parent,
+                )
+                view.build(ctx)
+                contexts.append((slug, ctx))
+                # The module's outputs are its copies' outputs, qualified.
+                for name, node in ctx.outputs.items():
+                    merged[module_cls.qualify(slug, name)] = node
+            built = ModuleBuild(contexts, merged)
             missing = [
                 name
                 for name in module_cls.output_names(instance.settings)
-                if name not in ctx.outputs
+                if name not in merged
             ]
             if missing:
                 raise BuildError(
@@ -574,7 +671,8 @@ class Builder:
                     instance_id=instance.instance_id,
                     module_type=instance.module_type,
                 )
-            finalize(ctx)
+            for _slug, ctx in contexts:
+                finalize(ctx)
         except BuildError:
             raise
         except Exception as error:  # noqa: BLE001 - wrap with context
@@ -584,4 +682,4 @@ class Builder:
                 instance_id=instance.instance_id,
                 module_type=instance.module_type,
             ) from error
-        return ctx
+        return built
