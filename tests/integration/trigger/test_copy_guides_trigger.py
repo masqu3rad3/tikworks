@@ -78,3 +78,46 @@ def test_removing_a_copy_takes_its_guides_with_it(scene):
     handle.copies = [{"slug": "", "name": "index", "segments": 2, "spacing": 5.0}]
     scene.draw()
     assert ("c1_root", 0) not in set(scene.guide_nodes(handle.instance_id))
+
+
+# ------------------------------------------------------------ naming
+def test_a_copy_name_is_taken_for_naming_purposes(scene):
+    """The module name never reaches the rig, so two modules each holding a
+    copy called `index` would build colliding controls."""
+    handle = scene.add("fkchain", name="fingers", side="L")
+    handle.copies = [
+        {"slug": "", "name": "index", "segments": 2, "spacing": 5.0},
+        {"slug": "c1", "name": "thumb", "segments": 2, "spacing": 5.0},
+    ]
+    assert scene.unique_name("index", "L") != "index"
+    assert scene.unique_name("thumb", "L") != "thumb"
+    assert scene.unique_name("index", "R") == "index"
+
+
+def test_a_blank_copy_name_reserves_the_module_name(scene):
+    scene.add("fkchain", name="tail", side="C")
+    assert scene.unique_name("tail", "C") != "tail"
+
+
+def test_two_copies_with_one_name_are_a_warning(scene):
+    from tik.trigger.core import registry
+
+    handle = scene.add("fkchain", name="fingers", side="L")
+    handle.copies = [
+        {"slug": "", "name": "index", "segments": 2, "spacing": 5.0},
+        {"slug": "c1", "name": "index", "segments": 2, "spacing": 5.0},
+    ]
+    module = registry.get_module("fkchain").from_instance(handle.instance)
+    assert any("index" in item for item in module.warnings())
+
+
+def test_distinct_copy_names_warn_about_nothing(scene):
+    from tik.trigger.core import registry
+
+    handle = scene.add("fkchain", name="fingers", side="L")
+    handle.copies = [
+        {"slug": "", "name": "index", "segments": 2, "spacing": 5.0},
+        {"slug": "c1", "name": "thumb", "segments": 2, "spacing": 5.0},
+    ]
+    module = registry.get_module("fkchain").from_instance(handle.instance)
+    assert not [item for item in module.warnings() if "called" in item]

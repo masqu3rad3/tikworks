@@ -536,6 +536,17 @@ class Module(Schema):
         with its wire intact.
         """
         problems = []
+        # A copy name is what its controls are called, and the module name is
+        # not in them, so two copies sharing a name build over each other.
+        seen: set = set()
+        for row in self.copy_rows():
+            name = copy_list.copy_name(row, self.name)
+            if name in seen:
+                problems.append(
+                    f"two copies are both called '{name}': their controls "
+                    f"would collide"
+                )
+            seen.add(name)
         known = type(self).control_names(self.values())
         for row in self.anim_spaces:
             control, label = row.get("control", ""), row.get("label", "")

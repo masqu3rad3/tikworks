@@ -11,6 +11,7 @@ from typing import Any, Iterable, Optional
 from maya import cmds
 
 from tik.core.side import Side
+from tik.trigger.core import copies as copy_list
 from tik.trigger.core import registry
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import GuideError
@@ -580,6 +581,15 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         taken = {entry.key for entry in self.document.modules} | {
             group.name for group in self.document.scene_groups
         }
+        # Copy names reach the rig where the module name does not, so two
+        # modules each holding a copy called `index` would build colliding
+        # controls. Read straight off the entry: no registry round-trip, and
+        # an entry whose type is not registered still reserves its own key.
+        for entry in self.document.modules:
+            for row in entry.settings.get("copies") or [{}]:
+                taken.add(
+                    instance_key(copy_list.copy_name(row, entry.name), entry.side)
+                )
         base = name.rstrip("0123456789") or name
         candidate, index = name, 1
         while instance_key(candidate, side) in taken:
