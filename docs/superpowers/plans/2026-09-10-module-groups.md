@@ -1,5 +1,11 @@
 # Module Groups Implementation Plan
 
+> **SUPERSEDED.** This plan was executed in full and the result was withdrawn; the
+> group model it builds is replaced by
+> `docs/superpowers/specs/2026-09-10-module-copies-design.md`. Do not execute it.
+> Kept because its task breakdown and its notes on the codebase's real APIs are
+> still accurate and the copies plan reuses several of them.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let the Guide Designer treat N same-type module instances as one node and one panel, so a hand is one node instead of five.

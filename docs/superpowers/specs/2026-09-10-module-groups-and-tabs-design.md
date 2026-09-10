@@ -1,7 +1,12 @@
 # Module Groups: many copies of one module, one node and one panel
 
 **Date:** 2026-09-10
-**Status:** designed
+**Status:** SUPERSEDED and withdrawn. Implemented, tried, and reverted the same day.
+**Superseded by:** `2026-09-10-module-copies-design.md`, whose §1 records exactly what failed
+here: a group is a thing you select but is not a module, so the tab bar became a second
+selection model that Draw Selected, the action bar, mirror and the tree all disagreed with.
+Nothing in this document stands. It is kept for the reasoning in its §2.1, which the
+superseding spec corrects.
 **Amends:** nothing. This is additive. `2026-08-29-trigger-ui-v3-and-io-graph-design.md` (the
 module I/O model), `2026-08-31-guide-ownership-and-lockstep-design.md` (the guide document) and
 `2026-09-05-draw-and-sync-separation-design.md` (Draw and Sync) all stand unchanged; this
