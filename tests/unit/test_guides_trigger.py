@@ -410,3 +410,71 @@ def test_snapshot_records_the_key_the_guides_were_drawn_under(guides):
         guide.key for guide in snapshot() if guide.instance_id == handle.instance_id
     }
     assert keys == {"L_arm"}
+
+
+# ------------------------------------------------------------ module copies
+def test_copies_round_trip_through_a_trg(guides, tmp_path):
+    """``copies`` is an ordinary settings field, so the exchange format
+    already carries it. This proves that rather than building it."""
+    from tik.trigger.guides import GuideScene
+
+    handle = guides.add("fkchain", name="fingers", side="L", segments=2)
+    handle.copies = [
+        {"slug": "", "name": "index", "segments": 2, "spacing": 5.0},
+        {"slug": "c1", "name": "thumb", "segments": 1, "spacing": 5.0},
+    ]
+    guides.draw()
+    path = guides.export(tmp_path / "hand.trg")
+
+    fresh = GuideScene()
+    fresh.clear()
+    fresh.import_(path, reset=True)
+    rows = fresh.instances()[0].settings["copies"]
+    assert [row["name"] for row in rows] == ["index", "thumb"]
+    assert [row["segments"] for row in rows] == [2, 1]
+
+
+def test_a_copys_guides_survive_the_round_trip(guides, tmp_path):
+    from tik.trigger.guides import GuideScene
+
+    handle = guides.add("fkchain", name="fingers", side="L", segments=1)
+    handle.copies = [
+        {"slug": "", "name": "index", "segments": 1, "spacing": 5.0},
+        {"slug": "c1", "name": "thumb", "segments": 1, "spacing": 5.0},
+    ]
+    guides.draw()
+    path = guides.export(tmp_path / "hand.trg")
+
+    fresh = GuideScene()
+    fresh.clear()
+    fresh.import_(path, reset=True)
+    entry = fresh.document.modules[0]
+    roles = {record.role for record in entry.guides}
+    assert {"root", "segment", "c1_root", "c1_segment"} <= roles
+
+
+def test_a_pre_copies_module_loads_as_one_copy(guides):
+    """No migration: a module written before copies existed is already valid.
+
+    Its settings hold ``segments`` at the top level and no ``copies`` at all,
+    and its single implicit copy inherits that number.
+    """
+    from tik.trigger.core import registry
+    from tik.trigger.core.guide_document import GuideDocument, ModuleEntry
+
+    document = GuideDocument()
+    document.modules = [ModuleEntry("a", "fkchain", "tail", "C", {"segments": 4})]
+    again = GuideDocument.from_dict(document.to_dict())
+    entry = again.modules[0]
+    assert "copies" not in entry.settings
+
+    module = registry.get_module("fkchain")(
+        instance_id=entry.instance_id,
+        name=entry.name,
+        side=entry.side,
+        settings=entry.settings,
+    )
+    assert module.copy_slugs() == [""]
+    assert module.for_copy("").segments == 4
+    assert module.expected_guides()[0] == ("root", 0)
+    assert len(module.expected_guides()) == 5  # root + 4 segments, unprefixed
