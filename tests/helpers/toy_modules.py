@@ -6,7 +6,7 @@ the real builder in Maya and with the Qt stub scene alike.
 
 from __future__ import annotations
 
-from tik.trigger.core import GuideLayout, Input, IntField, Module
+from tik.trigger.core import FloatField, GuideLayout, Input, IntField, Module
 
 
 class ToyRoot(Module):
@@ -30,7 +30,10 @@ class ToyChain(Module):
     guides = GuideLayout("root", multi="segment", min=1)
     inputs = (Input("root", primary=True), Input("space"))
     outputs = ("root", "end")
-    segments = IntField(2, min=1)
+    # per_copy: a chain's length is a property of that chain.
+    segments = IntField(2, min=1, per_copy=True)
+    # shared: how big the controllers are is a property of the set.
+    controller_size = FloatField(1.0, min=0.01, label="Controller Size")
 
     @classmethod
     def controls_for_copy(cls, settings=None):

@@ -37,6 +37,9 @@ from tik.trigger.core.schemas import split_source
 if TYPE_CHECKING:  # the scene layer imports Maya; the UI only needs the name
     from tik.trigger.guides import GuideHandle
 
+from tik.shared.ui.feedback import Feedback
+from tik.trigger.core import copies as copy_list
+from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.ui.draw_state import DRAWN, TOOLTIPS, states_from
 
 from ..graph import GraphView
@@ -256,6 +259,30 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.graph_pane = pane("Graph", self.graph)
         return self.graph_pane
 
+    def _build_copy_bar(self) -> QtWidgets.QWidget:
+        """One tab per copy of the selected module, plus ``[+]``.
+
+        This edits the ``copies`` *setting*. It is emphatically not a
+        selection surface: the Designer has exactly one selectable thing and
+        the tree owns it, so nothing here may touch ``_current`` or the tree.
+        """
+        holder = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        self.tab_bar = QtWidgets.QTabBar()
+        self.tab_bar.setMovable(True)
+        self.tab_bar.setExpanding(False)
+        self.tab_bar.setDrawBase(False)
+        self.add_copy_button = QtWidgets.QToolButton()
+        self.add_copy_button.setText("+")
+        self.add_copy_button.setAutoRaise(True)
+        self.add_copy_button.setToolTip("Add another copy of this module")
+        row.addWidget(self.tab_bar)
+        row.addWidget(self.add_copy_button)
+        row.addStretch(1)
+        return holder
+
     def _build_properties_pane(self) -> QtWidgets.QWidget:
         self.properties = QtWidgets.QWidget()
         props = QtWidgets.QVBoxLayout(self.properties)
@@ -286,6 +313,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.module_caption.setObjectName("FieldCaption")
         props.addWidget(self.module_caption)
         self.form = FormBuilder()
+        props.addWidget(self._build_copy_bar())
         self.form_scroll = QtWidgets.QScrollArea()
         self.form_scroll.setWidgetResizable(True)
         self.form_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
@@ -377,6 +405,12 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.action_bar.auto_sync_toggled.connect(self.set_auto_sync)
         self.name_edit.editingFinished.connect(self._rename_current)
         self.form.changed.connect(self._on_setting_changed)
+        self.tab_bar.currentChanged.connect(self._on_copy_tab_changed)
+        self.tab_bar.tabMoved.connect(self._on_copy_tabs_reordered)
+        self.tab_bar.tabBarDoubleClicked.connect(self._on_copy_tab_double_clicked)
+        self.tab_bar.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.tab_bar.customContextMenuRequested.connect(self._on_copy_tab_menu)
+        self.add_copy_button.clicked.connect(self._on_add_copy)
         self.form.error.connect(
             lambda _name, message: self.events.log(message, level="warning")
         )
@@ -868,6 +902,136 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         super().showEvent(event)
         self.refresh_drift()
 
+    # --------------------------------------------------------------- copies
+    def current_slug(self) -> str:
+        """Slug of the copy whose tab is showing; ``""`` when there is none."""
+        if self._module_obj is None:
+            return copy_list.EMPTY_SLUG
+        slugs = self._module_obj.copy_slugs()
+        index = self.tab_bar.currentIndex()
+        return slugs[index] if 0 <= index < len(slugs) else slugs[0]
+
+    def _rebuild_copy_tabs(self, current: int = 0) -> None:
+        """One tab per copy. Signals blocked: this reflects state, never sets it."""
+        self.tab_bar.blockSignals(True)
+        try:
+            while self.tab_bar.count():
+                self.tab_bar.removeTab(0)
+            if self._module_obj is not None:
+                for row in self._module_obj.copy_rows():
+                    self.tab_bar.addTab(copy_list.copy_name(row, self._module_obj.name))
+            if 0 <= current < self.tab_bar.count():
+                self.tab_bar.setCurrentIndex(current)
+        finally:
+            self.tab_bar.blockSignals(False)
+        self.add_copy_button.setEnabled(self._module_obj is not None)
+
+    def _write_copies(self, rows, current: int = 0) -> None:
+        """Store the copy list on the module and redraw the bar and form."""
+        if self._current is None or self._module_obj is None:
+            return
+        rows = [dict(row) for row in rows]
+        self._module_obj.copies = rows
+        with self.watcher.mute():
+            self._current.copies = rows
+        # refresh() runs _set_current, which rebuilds the bar at index 0, so
+        # the wanted tab is chosen *after* it rather than before.
+        self.refresh()
+        self._rebuild_copy_tabs(current)
+        self._show_copy_values()
+
+    def _show_copy_values(self) -> None:
+        """Load the current copy's per-copy values into the form's target."""
+        if self._module_obj is None:
+            return
+        row = copy_list.row_for(self._module_obj.copy_rows(), self.current_slug())
+        if row is None:
+            return
+        for name in type(self._module_obj).per_copy_fields():
+            if name in row:
+                setattr(self._module_obj, name, row[name])
+        self.form.refresh()
+
+    def _on_copy_tab_changed(self, _index: int) -> None:
+        """Show another copy's values. Touches no selection, by design."""
+        self._show_copy_values()
+
+    def _on_add_copy(self) -> None:
+        """The ``[+]`` verb: duplicate the current copy and select its tab."""
+        if self._module_obj is None:
+            return
+        rows = self._module_obj.copy_rows()
+        taken = {copy_list.copy_name(row, self._module_obj.name) for row in rows}
+        try:
+            made = copy_list.duplicate_row(
+                rows,
+                self.current_slug(),
+                type(self._module_obj).per_copy_defaults(self._module_obj.values()),
+                taken,
+            )
+        except TriggerError as error:
+            self.events.log(str(error), level="warning")
+            return
+        self._write_copies(rows + [made], current=len(rows))
+
+    def _on_remove_copy(self) -> None:
+        """Drop the current copy. The last one stays: a module is a copy."""
+        if self._module_obj is None:
+            return
+        rows = self._module_obj.copy_rows()
+        if len(rows) < 2:
+            self.events.log("A module always has at least one copy.", level="warning")
+            return
+        slug = self.current_slug()
+        kept = [row for row in rows if row["slug"] != slug]
+        self._write_copies(kept, current=0)
+
+    def _on_copy_tab_double_clicked(self, index: int) -> None:
+        rows = self._module_obj.copy_rows() if self._module_obj else []
+        if not 0 <= index < len(rows):
+            return
+        entered = Feedback(parent=self).ask_text(
+            title="Rename copy",
+            label="Name:",
+            text=copy_list.copy_name(rows[index], self._module_obj.name),
+        )
+        if entered:
+            self._on_copy_renamed(index, entered)
+
+    def _on_copy_renamed(self, index: int, text: str) -> None:
+        if self._module_obj is None or not text:
+            return
+        rows = self._module_obj.copy_rows()
+        if not 0 <= index < len(rows):
+            return
+        rows[index]["name"] = text
+        self._write_copies(rows, current=index)
+
+    def _on_copy_tabs_reordered(self, to_index: int, from_index: int) -> None:
+        """Store the tab order back as the copy order."""
+        if self._module_obj is None:
+            return
+        rows = self._module_obj.copy_rows()
+        if not (0 <= from_index < len(rows) and 0 <= to_index < len(rows)):
+            return
+        rows.insert(to_index, rows.pop(from_index))
+        self._write_copies(rows, current=to_index)
+
+    def copy_tab_menu(self) -> QtWidgets.QMenu:
+        """The tab bar's right-click menu."""
+        menu = QtWidgets.QMenu(self)
+        menu.addAction("Add Copy", self._on_add_copy)
+        rows = self._module_obj.copy_rows() if self._module_obj else []
+        remove = menu.addAction("Remove Copy", self._on_remove_copy)
+        remove.setEnabled(len(rows) > 1)
+        return menu
+
+    def _on_copy_tab_menu(self, point) -> None:
+        index = self.tab_bar.tabAt(point)
+        if index >= 0:
+            self.tab_bar.setCurrentIndex(index)
+        self.copy_tab_menu().exec_(self.tab_bar.mapToGlobal(point))
+
     # ---------------------------------------------------------- properties
     def _set_current(
         self, handle: Optional[GuideHandle], group: Optional[list[GuideHandle]] = None
@@ -895,6 +1059,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self._module_obj = None
             self.reference_strip.setVisible(False)
             self.form.set_target(None)
+            self._rebuild_copy_tabs()
             self.name_edit.setText("")
             self.type_label.setText("")
             self.icon.clear()
@@ -939,6 +1104,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 self._input_rows[declared.name] = row
             self.inputs_caption.setVisible(bool(declared_inputs))
         self.form.set_target(self._module_obj)
+        self._rebuild_copy_tabs()
+        self._show_copy_values()
         self._show_reference_strip(handle)
         if multi:
             self.status.set_activity(
