@@ -105,6 +105,13 @@ class GraphView(QtWidgets.QGraphicsView):
         handles = self.guides.instances()
         by_key = {handle.key: handle for handle in handles}
         origin_of, collapsed, files = self._reference_state(handles)
+        group_of, collapsed_groups, group_titles = self._group_state(handles)
+        # A group frames its members exactly as a reference does, so the two
+        # merge into one map. Nested frames are not a thing: a group inside a
+        # reference draws as the group, which is the tighter of the two.
+        origin_of = {**origin_of, **group_of}
+        collapsed = collapsed | collapsed_groups
+        files = {**files, **group_titles}
         # A collapsed reference is not *hidden*: its members are simply not
         # built, and one node is built in their place. Two builds rather than
         # a hide-and-reroute means there is no second wire path to keep right.
@@ -173,7 +180,7 @@ class GraphView(QtWidgets.QGraphicsView):
             missing = [item for item in groups[name] if exists(item) is None]
             node.subtitle = "scene ✗ missing" if missing else "scene ✓"
         crossings = self._crossings(handles, by_key, origin_of, collapsed)
-        for ref_id in sorted(collapsed):
+        for ref_id in sorted(collapsed - collapsed_groups):
             ports = crossings.get(ref_id, {"inputs": [], "outputs": []})
             rows = max(len(ports["inputs"]), len(ports["outputs"]), 1)
             frame_key = "@" + ref_id
@@ -191,6 +198,46 @@ class GraphView(QtWidgets.QGraphicsView):
                     inputs=list(ports["inputs"]),
                     outputs=list(ports["outputs"]),
                     color="",
+                    reference=True,
+                    mode=MODE_FULL,
+                ),
+                pos=pos,
+            )
+        for group_id in sorted(collapsed_groups):
+            members = [item for item in handles if group_of.get(item.key) == group_id]
+            if not members:
+                continue
+            # Inputs are deduped by name and outputs are kept per member, and
+            # the asymmetry is the point: "all of these attach to the same
+            # place" is a meaningful thing to say, while "which one of these
+            # drives that" is a question with no default answer. A reference
+            # exposes only what crosses its boundary; a group cannot, because
+            # an unwired group would then have no port to wire at all.
+            inputs: list = []
+            outputs: list = []
+            for member in members:
+                for name in member.module_class.input_names(member.settings):
+                    if name not in inputs:
+                        inputs.append(name)
+                for name in member.outputs:
+                    outputs.append(f"{member.key}{MEMBER_SEPARATOR}{name}")
+            rows = max(len(inputs), len(outputs), 1)
+            frame_key = "@" + group_id
+            stored = self.guides.frames.get(group_id, {}).get("position")
+            pos = (
+                tuple(stored)
+                if stored
+                else free_pos(frame_key, HEADER + rows * ROW + 8)
+            )
+            module_cls = members[0].module_class
+            self.graph.add_node(
+                NodeSpec(
+                    key=frame_key,
+                    title=group_titles.get(group_id, "group"),
+                    subtitle=f"{len(members)} × {module_cls.display_label()}",
+                    inputs=inputs,
+                    outputs=outputs,
+                    color=theme.SIDE.get(members[0].side.value, theme.SIDE["C"]),
                     reference=True,
                     mode=MODE_FULL,
                 ),
@@ -234,8 +281,12 @@ class GraphView(QtWidgets.QGraphicsView):
                 else:
                     source_key = f"{node_group.get(source, 'scene')}.{source}"
                 target_key = f"{handle.key}.{input_name}"
-                source_key = self._through_frame(source_key, origin_of, collapsed)
-                target_key = self._through_frame(target_key, origin_of, collapsed)
+                source_key = self._through_frame(
+                    source_key, origin_of, collapsed, collapsed_groups, "output"
+                )
+                target_key = self._through_frame(
+                    target_key, origin_of, collapsed, collapsed_groups, "input"
+                )
                 if source_key.split(".")[0] == target_key.split(".")[0]:
                     continue  # both ends inside one collapsed reference
                 self.graph.add_wire(
@@ -292,7 +343,15 @@ class GraphView(QtWidgets.QGraphicsView):
         placement in the same ``frames`` section, so neither needs its own path.
         """
         frames = getattr(self.guides, "frames", {}) or {}
-        collapsed = bool(frames.get(frame_id, {}).get("collapsed"))
+        # The default differs by kind and has to: a reference with no stored
+        # frame is expanded, a module group with none is collapsed (see
+        # ``_group_state``). Reading one default for both would make the first
+        # click on a group a no-op.
+        _group_of, collapsed_groups, _titles = self._group_state(
+            self.guides.instances()
+        )
+        default = frame_id in collapsed_groups
+        collapsed = bool(frames.get(frame_id, {}).get("collapsed", default))
         self.guides.set_frame(frame_id, collapsed=not collapsed)
         self.rebuild()
 
@@ -364,8 +423,38 @@ class GraphView(QtWidgets.QGraphicsView):
         files = {item.ref_id: Path(item.file).name for item in document.references}
         return origin_of, collapsed, files
 
+    def _group_state(self, handles) -> tuple:
+        """``({module key: group_id}, {collapsed group ids}, {group_id: key})``.
+
+        Deliberately the same shape as :meth:`_reference_state`: a group and a
+        reference are both "a set of modules drawn inside one frame", so the
+        hiding, the frame backdrop and the stored placement are shared code
+        and only the collapsed node's ports differ.
+        """
+        getter = getattr(self.guides, "groups", None)
+        if getter is None:
+            return {}, set(), {}
+        by_id = {handle.instance_id: handle for handle in handles}
+        frames = getattr(self.guides, "frames", {}) or {}
+        group_of, collapsed, titles = {}, set(), {}
+        for group in getter():
+            members = [by_id[item] for item in group.members if item in by_id]
+            if not members:
+                continue
+            for handle in members:
+                group_of[handle.key] = group.group_id
+            titles[group.group_id] = group.key(members[0].instance.side)
+            # A group with no stored frame reads as collapsed. The point of
+            # the feature is fewer nodes, so a group that opened expanded
+            # would make the rigger collapse it on every redraw.
+            if frames.get(group.group_id, {}).get("collapsed", True):
+                collapsed.add(group.group_id)
+        return group_of, collapsed, titles
+
     @staticmethod
-    def _through_frame(port_key: str, origin_of: dict, collapsed: set) -> str:
+    def _through_frame(
+        port_key: str, origin_of: dict, collapsed: set, groups=(), kind: str = "output"
+    ) -> str:
         """Re-address a port that now sits inside a collapsed reference.
 
         The port keeps its member's own key (``L_arm.end``), so a wire still
@@ -376,6 +465,12 @@ class GraphView(QtWidgets.QGraphicsView):
         ref_id = origin_of.get(node)
         if ref_id is None or ref_id not in collapsed:
             return port_key
+        if ref_id in groups and kind == "input":
+            # A group's inputs fan in, so the collapsed node carries one port
+            # per input *name* and every member's wire lands on it. Two
+            # members disagreeing about a source therefore show as two wires
+            # into one port, which is the honest picture.
+            return f"@{ref_id}.{port}"
         # ``:`` and not ``.``: the port name carries its member's key, and a
         # dot inside it would be read as the node/port split by ``add_wire``.
         return f"@{ref_id}.{node}{MEMBER_SEPARATOR}{port}"
