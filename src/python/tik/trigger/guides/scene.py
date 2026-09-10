@@ -880,7 +880,30 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         return group
 
     def ungroup(self, group_id: str) -> None:
-        """Drop the group. Its modules and their guides are untouched."""
+        """Drop the group. Its modules and their guides are untouched.
+
+        Refused for a referenced group, for the same reason ``remove`` is
+        refused for a referenced module: which modules exist, and which of
+        them belong together, is upstream's word. Guarded here rather than in
+        ``dissolve_group`` because that one is also the mechanism behind
+        ``leave_group``'s dissolve-on-one, which must stay unconditional.
+        """
+        group = self.document.module_group(group_id)
+        if group is None:
+            return
+        borrowed = next(
+            (
+                entry
+                for entry in (self.document.module(item) for item in group.members)
+                if entry is not None and entry.origin is not None
+            ),
+            None,
+        )
+        if borrowed is not None:
+            raise GuideError(
+                f"'{group.label}' is referenced from another session and cannot "
+                "be ungrouped here. Unlink the reference to edit its structure."
+            )
         with nodes.undo_chunk("Trigger ungroup modules"):
             dissolve_group(self.document, group_id)
             self._touch()

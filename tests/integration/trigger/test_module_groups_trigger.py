@@ -5,6 +5,7 @@ The ``scene`` fixture comes from ``tests/integration/trigger/conftest.py``.
 
 import pytest
 
+from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.module_group import GroupError
 
 
@@ -107,3 +108,23 @@ def test_mirror_group_twice_updates_rather_than_duplicates(scene):
     second = scene.mirror_group(group.group_id)
     assert first.group_id == second.group_id
     assert len(scene.document.module_groups) == 2
+
+
+def test_ungroup_is_refused_for_a_referenced_group(scene):
+    """Which modules belong together is upstream's word."""
+    handles = _three_chains(scene)
+    group = scene.group(handles[:2], label="fingers")
+    for member in group.members:
+        scene.document.module(member).origin = "ref1"
+    with pytest.raises(GuideError, match="referenced"):
+        scene.ungroup(group.group_id)
+    assert scene.document.module_group(group.group_id) is not None
+
+
+def test_add_copy_is_refused_for_a_referenced_group(scene):
+    handles = _three_chains(scene)
+    group = scene.group(handles[:2], label="fingers")
+    for member in group.members:
+        scene.document.module(member).origin = "ref1"
+    with pytest.raises(GroupError, match="wholly local or wholly referenced"):
+        scene.add_copy(handles[0])
