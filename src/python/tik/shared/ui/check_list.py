@@ -62,11 +62,6 @@ class CheckListEditor(QtWidgets.QWidget):
         self._loading = False
         self._only_selected = False
         self._sort_mode = "document"
-        #: ``[(label, [value, ...])]`` -- bulk edits offered in the menu. A
-        #: group is a way to tick several boxes at once, never a value: it
-        #: adds no row, because a checkable row that is not a value is a row
-        #: every code path here would have to special-case.
-        self._groups: list = []
         #: Values unticked since the last read while "only selected" was on.
         #: They stay on screen so a row never vanishes out from under the
         #: cursor that just clicked it; the next read drops them.
@@ -194,34 +189,6 @@ class CheckListEditor(QtWidgets.QWidget):
         """Untick every option."""
         self._set_all(lambda _value: False)
 
-    def set_groups(self, groups) -> None:
-        """Offer a bulk edit per group. ``groups`` is ``[(label, [value...])]``.
-
-        Display only, in the same sense the sort order is display only:
-        looking at the list, or at what it offers, never dirties the value.
-        """
-        self._groups = [(str(label), list(values)) for label, values in groups]
-
-    def tick_group(self, label: str, on: bool) -> None:
-        """Tick or untick every member of the named group.
-
-        Unknown labels are ignored: the group list is rebuilt from the
-        document whenever the panel refreshes, and a stale menu click must
-        not change the value.
-        """
-        members = next(
-            (set(values) for name, values in self._groups if name == label), None
-        )
-        if members is None:
-            return
-        ticked = set(self._value)
-        wanted = ticked | members if on else ticked - members
-        # Through _set_all, like every other bulk edit here: it pokes the
-        # items and then _recompute emits, so the field actually writes back.
-        # set_value would not -- loading a value must never dirty one, which
-        # is exactly wrong for an edit the user just made.
-        self._set_all(lambda value: value in wanted)
-
     def invert_selection(self) -> None:
         """Tick what is unticked and untick what is ticked."""
         ticked = set(self._value)
@@ -248,13 +215,6 @@ class CheckListEditor(QtWidgets.QWidget):
         menu.addAction("Select All", self.select_all)
         menu.addAction("Select None", self.select_none)
         menu.addAction("Invert Selection", self.invert_selection)
-        if self._groups:
-            menu.addSeparator()
-            for label, _values in self._groups:
-                menu.addAction(
-                    f"Select {label}",
-                    lambda _checked=False, name=label: self.tick_group(name, True),
-                )
         menu.addSeparator()
         group = QtWidgets.QActionGroup(menu)
         group.setExclusive(True)

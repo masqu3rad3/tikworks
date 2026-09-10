@@ -67,22 +67,3 @@ def states_from(diff) -> dict:
         instance_id: state_of(module_diff)
         for instance_id, module_diff in diff.modules.items()
     }
-
-
-#: Most urgent first. A group row shows the worst thing any member is saying,
-#: so one glance at a collapsed hand tells the rigger whether anything inside
-#: it needs redrawing without expanding it.
-_RANK = (STALE, DRAWN, NOT_DRAWN)
-
-
-def worst_state(states) -> str:
-    """The most urgent of ``states``; ``NOT_DRAWN`` when there are none.
-
-    An empty group reads as not drawn rather than drawn: nothing is in the
-    scene, and "drawn" would be a claim about joints that are not there.
-    """
-    present = set(states)
-    for state in _RANK:
-        if state in present:
-            return state
-    return NOT_DRAWN

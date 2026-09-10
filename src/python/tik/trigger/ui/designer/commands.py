@@ -211,88 +211,13 @@ class DesignerCommands:
                 handle.select()
 
     def mirror_current(self) -> None:
-        """Mirror each selected module to the other side.
-
-        A grouped module mirrors as its whole group: the opposite side gets
-        the group entire, members and all. Mirroring one finger of five and
-        leaving the other four behind is never what the rigger meant, and the
-        group is the unit they are working in.
-        """
-        done: set = set()
+        """Mirror each selected module to the other side."""
         with self.watcher.mute():
             for handle in self.selected_handles():
-                group = self.guides.group_of(handle.instance_id)
                 try:
-                    if group is None:
-                        self.guides.mirror(handle)
-                    elif group.group_id not in done:
-                        self.guides.mirror_group(group.group_id)
-                        done.add(group.group_id)
+                    self.guides.mirror(handle)
                 except TriggerError as error:
                     self.events.log(str(error), level="warning")
-        self.refresh()
-
-    def remove_current_from_group(self) -> None:
-        """Take the current module out of its group; the module stays."""
-        if self._current is None:
-            return
-        with self.watcher.mute():
-            try:
-                self.guides.remove_from_group(self._current)
-            except TriggerError as error:
-                self.events.log(str(error), level="warning")
-                return
-        self.refresh()
-
-    def delete_current_group(self) -> None:
-        """Delete the current group, asking what to do with its modules.
-
-        The two answers are genuinely different acts and neither is the
-        obvious default, so this asks rather than guessing: *Ungroup* keeps
-        every module and drops only the grouping, *Delete Modules* takes the
-        whole hand out of the rig. Ungroup leads, because it is the one that
-        loses nothing.
-        """
-        if self._current is None:
-            return
-        group = self.guides.group_of(self._current.instance_id)
-        if group is None:
-            return
-        members = self.guides.group_members(group.group_id)
-        answer = Feedback(parent=self).pop_question(
-            title="Delete group",
-            text=f"Delete the group '{group.label}'?",
-            details=(
-                f"Ungroup keeps all {len(members)} modules and drops only the "
-                f"grouping. Delete Modules removes them from the rig."
-            ),
-            buttons=[("ungroup", "Ungroup"), ("delete", "Delete Modules"), "cancel"],
-        )
-        if answer == "ungroup":
-            self.ungroup_current()
-        elif answer == "delete":
-            with self.watcher.mute():
-                for handle in members:
-                    try:
-                        self.guides.remove(handle)
-                    except TriggerError as error:
-                        self.events.log(str(error), level="warning")
-            self._current, self._multi = None, []
-            self.refresh()
-
-    def ungroup_current(self) -> None:
-        """Dissolve the current module's group; every module stays."""
-        if self._current is None:
-            return
-        group = self.guides.group_of(self._current.instance_id)
-        if group is None:
-            return
-        with self.watcher.mute():
-            try:
-                self.guides.ungroup(group.group_id)
-            except TriggerError as error:
-                self.events.log(str(error), level="warning")
-                return
         self.refresh()
 
     def duplicate_current(self) -> list[GuideHandle]:

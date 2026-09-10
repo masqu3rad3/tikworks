@@ -17,12 +17,6 @@ from tik.trigger.core import registry
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import instance_key
-from tik.trigger.core.module_group import (
-    dissolve_group,
-    join_group,
-    leave_group,
-    make_group,
-)
 from tik.trigger.core.reconcile import GuideDiff
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 from tik.trigger.guides.format import GuideFile
@@ -55,11 +49,6 @@ class StubScene:
         # kept apart from _positions/_collapse for the same reason the real
         # document does: set_layout replaces those wholesale
         self._frames: dict = {}
-        # module groups, stored the way the real document stores them. The
-        # ``document`` property below hands this list out *by reference*, so
-        # the real pure operations mutate it directly and the Qt tests get the
-        # shipping rules rather than a second copy of them.
-        self._module_groups: list = []
         # matches GuideScene's default (spec 3.1): governs whether a scene
         # event may start a sync, nothing else
         self.auto_sync = True
@@ -187,11 +176,6 @@ class StubScene:
         ]
         document.positions = dict(self._positions)
         document.collapse = dict(self._collapse)
-        # by reference, unlike the copies above: the group operations mutate
-        # these in place, and a copy would throw those edits away the next
-        # time the cache was invalidated.
-        document.module_groups = self._module_groups
-        document.frames = self._frames
         self._document_cache = document
         return document
 
@@ -304,9 +288,6 @@ class StubScene:
         return GuideHandle(self, instance.instance_id)
 
     def remove(self, handle: GuideHandle) -> None:
-        # mirrors GuideScene.remove: a group that drops to one member
-        # dissolves, and leave_group is the single place that rule lives
-        leave_group(self.document, handle.instance_id)
         self.delete_guides(handle.instance_id)
 
     def delete_guides(self, instance_id: str) -> None:
@@ -355,82 +336,6 @@ class StubScene:
         self._instances[created.instance_id] = created
         self._invalidate()
         return GuideHandle(self, created.instance_id)
-
-    # ------------------------------------------------------------ groups
-    def groups(self) -> list:
-        """Mirror ``GuideScene.groups``."""
-        return list(self._module_groups)
-
-    def group_of(self, instance_id):
-        """Mirror ``GuideScene.group_of``."""
-        return self.document.group_of(instance_id)
-
-    def group_members(self, group_id) -> list:
-        """Mirror ``GuideScene.group_members``."""
-        group = self.document.module_group(group_id)
-        if group is None:
-            return []
-        return [GuideHandle(self, member) for member in group.members]
-
-    def group(self, handles, label: str = ""):
-        """Mirror ``GuideScene.group``."""
-        handles = list(handles)
-        if not label and handles:
-            label = handles[0].entry.name
-        group = make_group(
-            self.document, label, [handle.instance_id for handle in handles]
-        )
-        self.calls.append(("group", group.group_id, label))
-        return group
-
-    def ungroup(self, group_id: str) -> None:
-        """Mirror ``GuideScene.ungroup``."""
-        dissolve_group(self.document, group_id)
-        self.calls.append(("ungroup", group_id))
-
-    def add_copy(self, handle: GuideHandle) -> GuideHandle:
-        """Mirror ``GuideScene.add_copy``."""
-        copy = self.duplicate(handle)
-        group = self.document.group_of(handle.instance_id)
-        if group is None:
-            make_group(
-                self.document,
-                handle.entry.name,
-                [handle.instance_id, copy.instance_id],
-            )
-        else:
-            join_group(self.document, group.group_id, copy.instance_id)
-        self.calls.append(("add_copy", handle.instance_id, copy.instance_id))
-        return copy
-
-    def remove_from_group(self, handle: GuideHandle) -> None:
-        """Mirror ``GuideScene.remove_from_group``."""
-        leave_group(self.document, handle.instance_id)
-        self.calls.append(("remove_from_group", handle.instance_id))
-
-    def mirror_group(self, group_id: str):
-        """Mirror ``GuideScene.mirror_group``."""
-        group = self.document.module_group(group_id)
-        mirrored = [self.mirror(GuideHandle(self, m)) for m in group.members]
-        existing = next(
-            (
-                found
-                for handle in mirrored
-                for found in [self.document.group_of(handle.instance_id)]
-                if found is not None
-            ),
-            None,
-        )
-        if existing is None:
-            existing = make_group(
-                self.document, group.label, [h.instance_id for h in mirrored]
-            )
-        else:
-            for handle in mirrored:
-                if handle.instance_id not in existing.members:
-                    join_group(self.document, existing.group_id, handle.instance_id)
-        self.calls.append(("mirror_group", group_id))
-        return existing
 
     def reparent(self, handle: GuideHandle, parent) -> None:
         parent_ref = parent
@@ -617,20 +522,8 @@ class StubScene:
         return GuideDocument(), RecoveryReport()
 
     def find_instances(self, scope="scene") -> list:
-        """The one scene scan the handles share; tests count calls to it.
-
-        ``scope`` is honoured, as it is in the real
-        ``nodes.find_instances``: ``"scene"`` (or ``"selection"``) is
-        everything, a collection of instance ids is those. Ignoring it made
-        ``GuideHandle.instance`` -- which asks for exactly one id and takes
-        ``found[0]`` -- hand back the *first module in the scene* for every
-        handle, so any test reading ``handle.instance`` on a scene with more
-        than one module was quietly asserting about the wrong module.
-        """
-        if isinstance(scope, str):
-            return list(self._instances.values())
-        wanted = list(scope)
-        return [self._instances[item] for item in wanted if item in self._instances]
+        """The one scene scan the handles share; tests count calls to it."""
+        return list(self._instances.values())
 
     def install_scene_job(self, event, callback):
         self._scene_jobs[event] = callback

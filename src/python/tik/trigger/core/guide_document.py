@@ -23,9 +23,7 @@ import copy
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
-from .module_group import ModuleGroup
-
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 2
 
 
 def _serialize_references(document) -> list:
@@ -255,13 +253,6 @@ class GuideDocument:
     schema: int = SCHEMA_VERSION
     modules: list = field(default_factory=list)
     scene_groups: list = field(default_factory=list)
-    #: Same-type module instances the Designer draws as one node. Named
-    #: ``module_groups`` rather than ``groups`` for two reasons: it is
-    #: symmetric with ``scene_groups``, and ``rig.groups`` is already the four
-    #: per-module rig groups all over the build path, so a bare ``groups``
-    #: could not be told apart from it by the guard that keeps grouping out
-    #: of the rig.
-    module_groups: list = field(default_factory=list)
     #: Links to other sessions' modules.
     references: list = field(default_factory=list)
     #: Graph frame placement per reference: ``{ref_id: {position, collapsed}}``.
@@ -295,20 +286,6 @@ class GuideDocument:
                 return entry
         return None
 
-    def module_group(self, group_id: str) -> Optional[ModuleGroup]:
-        """The module group with ``group_id``, or None."""
-        for entry in self.module_groups:
-            if entry.group_id == group_id:
-                return entry
-        return None
-
-    def group_of(self, instance_id: str) -> Optional[ModuleGroup]:
-        """The module group ``instance_id`` belongs to, or None."""
-        for entry in self.module_groups:
-            if instance_id in entry.members:
-                return entry
-        return None
-
     def group(self, group_id: str) -> Optional[SceneGroup]:
         """The scene group with ``group_id``, or None."""
         for entry in self.scene_groups:
@@ -324,14 +301,6 @@ class GuideDocument:
         """
         ids = {entry.key: entry.instance_id for entry in self.modules}
         ids.update({group.name: group.group_id for group in self.scene_groups})
-        # A group's key needs its members' side, which only the document can
-        # resolve -- the group record deliberately does not carry a copy.
-        sides = {entry.instance_id: entry.side for entry in self.modules}
-        for group in self.module_groups:
-            side = next(
-                (sides[member] for member in group.members if member in sides), "C"
-            )
-            ids[group.key(side)] = group.group_id
         return ids
 
     def layout_as_keys(self) -> dict:
@@ -391,7 +360,6 @@ class GuideDocument:
                 entry.to_dict() for entry in self.modules if entry.origin is None
             ],
             "scene_groups": [entry.to_dict() for entry in self.scene_groups],
-            "module_groups": [entry.to_dict() for entry in self.module_groups],
             "references": _serialize_references(self),
             "frames": copy.deepcopy(self.frames),
             "positions": {key: list(value) for key, value in self.positions.items()},
@@ -412,10 +380,6 @@ class GuideDocument:
             modules=[ModuleEntry.from_dict(item) for item in data.get("modules", [])],
             scene_groups=[
                 SceneGroup.from_dict(item) for item in data.get("scene_groups", [])
-            ],
-            module_groups=[
-                ModuleGroup.from_dict(item)
-                for item in (data.get("module_groups") or [])
             ],
             references=[
                 ModuleReference.from_dict(item)

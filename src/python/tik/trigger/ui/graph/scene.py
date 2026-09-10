@@ -21,8 +21,8 @@ class GraphScene(QtWidgets.QGraphicsScene):
     external_selected = QtCore.Signal(str)  # scene-nodes group name
     mode_change_requested = QtCore.Signal(str, int)  # node key, mode
     nodes_moved = QtCore.Signal()  # a drag finished and at least one node moved
-    frame_toggle_requested = QtCore.Signal(str)  # frame id
-    frame_selected = QtCore.Signal(str)  # frame id
+    frame_toggle_requested = QtCore.Signal(str)  # reference id
+    frame_selected = QtCore.Signal(str)  # reference id
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -70,7 +70,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
         frame = FrameItem(spec)
         frame.set_extent(rect)
         self.addItem(frame)
-        self.frames[spec.frame_id] = frame
+        self.frames[spec.ref_id] = frame
         return frame
 
     def add_wire(

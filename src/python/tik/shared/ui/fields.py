@@ -458,13 +458,6 @@ class _TextEditor(QtWidgets.QWidget):
         self.edit.setPlainText(text)
 
 
-#: Appended to the label of a field the modules sharing a panel disagree on.
-#: Not the reference override's diamond: the two appear in the same panel and
-#: mean different things -- an override differs from an upstream file, this
-#: differs between siblings.
-VARIES_MARK = "  ≠"
-
-
 class FormBuilder(QtWidgets.QWidget):
     """Form generated from a ``Schema`` object.
 
@@ -485,7 +478,6 @@ class FormBuilder(QtWidgets.QWidget):
         file_extras: Optional[dict] = None,
         base_dir: Optional[Callable[[], str]] = None,
         list_choices: Optional[Callable[[str], list]] = None,
-        list_groups: Optional[Callable[[str], list]] = None,
         file_vcs: Optional[tuple] = None,
     ) -> None:
         """
@@ -495,9 +487,6 @@ class FormBuilder(QtWidgets.QWidget):
             list_choices: ``(choices_from key) -> [(label, value)]``. Supplying
                 it is what turns a ``ListField`` that declares ``choices_from``
                 into a tick list rather than a comma-separated box.
-            list_groups: ``(choices_from key) -> [(label, [value, ...])]``:
-                bulk edits the tick list offers in its menu. Optional, and
-                display only -- a group is never a stored value.
             file_browser: Optional ``(mode, extensions, current) -> path``
                 replacing the dialogs.
             file_extras: ``{extension: (label, callback(path))}``: an extra
@@ -525,10 +514,8 @@ class FormBuilder(QtWidgets.QWidget):
         self.file_extras = file_extras or {}
         self.base_dir = base_dir
         self.list_choices = list_choices
-        self.list_groups = list_groups
         self.file_vcs = file_vcs
         self._overridden: set[str] = set()
-        self._varying: set[str] = set()
         self._reference: dict = {}
         if target is not None:
             self.set_target(target)
@@ -664,28 +651,6 @@ class FormBuilder(QtWidgets.QWidget):
                 label.setStyleSheet("")
                 label.setToolTip("")
 
-    def mark_varying(self, names) -> None:
-        """Mark fields whose value differs across the modules being edited.
-
-        Deliberately *not* ``mark_overrides``: the two would sit in the same
-        panel and mean different things. An override says "this differs from
-        the file it was referenced from"; this says "the modules sharing this
-        panel disagree", which is why the field is not in the Common fold. It
-        gets a neutral glyph rather than the override's orange.
-        """
-        self._varying = set(names)
-        for name, label in self._labels.items():
-            if name in self._overridden:
-                continue  # an override's mark wins; it is the stronger claim
-            base = label.text().removesuffix(VARIES_MARK)
-            if name in self._varying:
-                label.setText(base + VARIES_MARK)
-                label.setToolTip("The modules in this group differ on this setting.")
-            else:
-                label.setText(base)
-                if not label.toolTip().startswith("override"):
-                    label.setToolTip("")
-
     def set_visible_fields(self, names: Optional[Iterable[str]] = None) -> None:
         """Show only ``names``; ``None`` shows every field again.
 
@@ -770,8 +735,6 @@ class FormBuilder(QtWidgets.QWidget):
                 lambda key=source: self.list_choices(key),
                 filterable=getattr(field, "filterable", False),
             )
-            if self.list_groups is not None:
-                widget.set_groups(self.list_groups(source))
             widget.valueChanged.connect(
                 lambda value, field_name=name: self._on_change(field_name, value)
             )

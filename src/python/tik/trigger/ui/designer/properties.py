@@ -7,7 +7,6 @@ write the current selection through ``self.guides``.
 from __future__ import annotations
 
 from tik.trigger.core.exceptions import TriggerError
-from tik.trigger.core.module_group import INPUT_PREFIX
 
 
 class DesignerProperties:
@@ -51,21 +50,11 @@ class DesignerProperties:
     def _on_input_changed(self, input_name: str, source: str) -> None:
         if self._current is None:
             return
-        # An input the whole group agrees on fans in: wiring it once wires
-        # every member. One they disagree on is the current tab's alone.
-        targets = (
-            self._group_members()
-            if self._is_common(f"{INPUT_PREFIX}{input_name}")
-            else [self._current]
-        )
         try:
-            for handle in targets:
-                if input_name not in handle.module_class.input_names(handle.settings):
-                    continue
-                if source:
-                    self.guides.connect(f"{handle.key}.{input_name}", source)
-                else:
-                    self.guides.disconnect(f"{handle.key}.{input_name}")
+            if source:
+                self.guides.connect(f"{self._current.key}.{input_name}", source)
+            else:
+                self.guides.disconnect(f"{self._current.key}.{input_name}")
         except TriggerError as error:
             self.events.log(str(error), level="warning")
             self._input_rows[input_name].set_source(
@@ -90,16 +79,7 @@ class DesignerProperties:
         if self._current is None or self._module_obj is None:
             return
         value = getattr(self._module_obj, name)
-        # The target set is a property of the *field*, not of the panel: the
-        # Common form and the tab form are both on screen at once. A field the
-        # members agree on writes to all of them; one they disagree on writes
-        # to the current tab. Multi-select across ungrouped modules is
-        # unchanged and still goes through ``_multi``.
-        targets = (
-            self._group_members()
-            if self._is_common(name)
-            else (self._multi or [self._current])
-        )
+        targets = self._multi or [self._current]
         before = [self._topology(handle) for handle in targets]
         with self.watcher.mute():
             for handle in targets:

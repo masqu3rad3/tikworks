@@ -8,7 +8,6 @@ from maya import cmds
 
 import tik.maya as tm
 from tik.trigger.core import registry
-from tik.trigger.core.module_group import make_group
 from tik.trigger.core.schemas import ModuleInstance
 from tik.trigger.maya import tags
 from tik.trigger.maya.rig import GuideDraft
@@ -314,45 +313,8 @@ class GuideExchangeMixin:
                 if key in wanted
             },
         }
-        designer["module_groups"] = self._export_module_groups(keys)
         designer = {name: value for name, value in designer.items() if value}
         return GuideFile(records, connections, designer=designer).save(file_path)
-
-    def _export_module_groups(self, keys: set) -> list:
-        """Groups whose members are all in this export, by display key.
-
-        Display keys and not ids, like every other cross-reference in a
-        ``.trg``: the file is an exchange format, and the ids on the far side
-        are new. A group only half-carried by a subset export is left out
-        rather than truncated -- half a hand is not a hand.
-        """
-        by_id = {entry.instance_id: entry for entry in self.document.modules}
-        found = []
-        for group in self.document.module_groups:
-            members = [by_id[item].key for item in group.members if item in by_id]
-            if len(members) < 2 or not set(members) <= keys:
-                continue
-            found.append({"label": group.label, "members": members})
-        return found
-
-    def _import_module_groups(self, guide_file, guide_instances, created) -> None:
-        """Rebuild each exported group over the modules just created.
-
-        Fresh ``group_id``s and remapped members, both required: importing the
-        same file twice has to give two independent groups, and a reused id
-        would make the second import silently overwrite the first.
-        """
-        wanted = guide_file.designer.get("module_groups") or []
-        if not wanted:
-            return
-        remap = {
-            item.key: made.instance_id for item, made in zip(guide_instances, created)
-        }
-        for data in wanted:
-            members = [remap[key] for key in data.get("members", []) if key in remap]
-            if len(members) >= 2:
-                make_group(self.document, data.get("label", "group"), members)
-        self._touch()
 
     def import_(self, file_path, reset: bool = False) -> list[GuideHandle]:
         """Add the modules of a ``.trg`` file; ``reset`` clears the scene first."""
@@ -367,11 +329,8 @@ class GuideExchangeMixin:
             self.clear()
             self.set_layout({})
         created = self.import_guide_instances(instances)
-        self._import_module_groups(guide_file, instances, created)
         if guide_file.designer:
             layout = {} if reset else self.layout
-            # module_groups is handled above: it needs remapping and fresh
-            # ids, not the plain merge the other sections take.
             for section in ("scene_nodes", "positions", "collapse"):
                 merged = dict(layout.get(section, {}))
                 merged.update(guide_file.designer.get(section, {}))

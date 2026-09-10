@@ -27,11 +27,6 @@ OverrideRole = QtCore.Qt.UserRole + 22
 #: True for a referenced module deliberately left out of this rig.
 DisabledRole = QtCore.Qt.UserRole + 23
 
-#: Item role carrying a module group's id, on the group's own parent row.
-#: A member row keeps its instance id in ``Qt.UserRole`` as it always has, so
-#: every existing read of the selection is unaffected by grouping.
-GroupIdRole = QtCore.Qt.UserRole + 24
-
 #: Provenance is information, not a warning, so the chip is muted -- the
 #: accent belongs to the one state that says the scene contradicts the
 #: session. An override *does* earn visible ink: it is the thing that quietly

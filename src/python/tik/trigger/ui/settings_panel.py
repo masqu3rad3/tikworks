@@ -38,7 +38,6 @@ class ActionSettingsPanel(QtWidgets.QWidget):
         file_browser: Optional[Callable] = None,
         base_dir: Optional[Callable[[], str]] = None,
         list_choices: Optional[Callable[[str], list]] = None,
-        list_groups: Optional[Callable[[str], list]] = None,
     ) -> None:
         super().__init__(parent)
         self._handle: Optional[ActionHandle] = None
@@ -76,7 +75,6 @@ class ActionSettingsPanel(QtWidgets.QWidget):
             },
             base_dir=base_dir,
             list_choices=list_choices,
-            list_groups=list_groups,
             file_vcs=vcs_ui.form_vcs_slot(base_dir),
         )
         scroll = QtWidgets.QScrollArea()
