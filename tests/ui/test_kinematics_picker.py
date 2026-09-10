@@ -146,3 +146,29 @@ def test_refresh_pushes_the_companion_back_in(qapp):
     target.modules_only_selected = True
     form.refresh()
     assert form.widget("modules").only_selected is True
+
+
+# --------------------------------------------------------------- groups
+def _groups(_key):
+    return [("L_fingers", ["bbb", "ccc"])]
+
+
+def test_the_picker_offers_a_bulk_edit_per_module_group():
+    form = FormBuilder(Scoped(), list_choices=_choices, list_groups=_groups)
+    picker = form.widget("modules")
+    texts = [action.text() for action in picker.context_menu().actions()]
+    assert any("L_fingers" in text for text in texts)
+
+
+def test_the_bulk_edit_stores_member_ids():
+    target = Scoped()
+    form = FormBuilder(target, list_choices=_choices, list_groups=_groups)
+    picker = form.widget("modules")
+    picker.tick_group("L_fingers", True)
+    assert set(target.modules) == {"bbb", "ccc"}
+
+
+def test_a_form_without_list_groups_still_builds_a_picker():
+    """list_groups is optional; every existing call site omits it."""
+    form = FormBuilder(Scoped(), list_choices=_choices)
+    assert form.widget("modules") is not None

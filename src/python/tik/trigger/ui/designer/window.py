@@ -40,7 +40,13 @@ if TYPE_CHECKING:  # the scene layer imports Maya; the UI only needs the name
 from tik.shared.ui.feedback import Feedback
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.core.module_group import shared_values
-from tik.trigger.ui.draw_state import DRAWN, TOOLTIPS, states_from
+from tik.trigger.ui.draw_state import (
+    DRAWN,
+    NOT_DRAWN,
+    TOOLTIPS,
+    states_from,
+    worst_state,
+)
 
 from ..graph import GraphView
 from ..iconography import icon_for_tile, module_icon
@@ -48,7 +54,13 @@ from ..palette import SearchPalette
 from ..session_view import pane
 from .action_bar import DesignerActionBar
 from .commands import DesignerCommands
-from .delegates import DisabledRole, DrawStateRole, OriginRole, OverrideRole
+from .delegates import (
+    DisabledRole,
+    DrawStateRole,
+    GroupIdRole,
+    OriginRole,
+    OverrideRole,
+)
 from .properties import DesignerProperties
 from .widgets import MIME_MODULE, GuideTree, InputRow, SceneNodesPanel, module_entries
 
@@ -652,6 +664,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 item.setData(0, OverrideRole, overrides)
                 item.setData(0, DisabledRole, entry is not None and not entry.enabled)
                 item.setToolTip(0, _row_tooltip(state, origin, overrides, entry))
+            self._insert_group_rows(items, states)
             self.tree.expandAll()
             self.apply_tree_filter()
             self.graph.set_draw_states(states)
@@ -693,6 +706,67 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 self._show_state(diff)
         finally:
             self._syncing = False
+
+    def _insert_group_rows(self, items: dict, states: dict) -> None:
+        """Put a parent row above each group's members.
+
+        The group row takes the members' own place in the hierarchy -- under
+        whatever their primary input's producer is -- so grouping adds a level
+        and never moves the shape of the rig in the tree. Members keep their
+        instance id in ``Qt.UserRole``, so every existing read of the
+        selection works unchanged.
+        """
+        groups = getattr(self.guides, "groups", None)
+        if groups is None:
+            return
+        document = self.guides.document
+        entries = {entry.instance_id: entry for entry in document.modules}
+        for group in groups():
+            members = [items[item] for item in group.members if item in items]
+            if len(members) < 2:
+                continue
+            entry = entries.get(group.members[0])
+            side = entry.side if entry is not None else "C"
+            module_cls = self.guides.get(group.members[0]).module_class
+            holders = {item.parent() for item in members}
+            holder = members[0].parent() if len(holders) == 1 else None
+            row = QtWidgets.QTreeWidgetItem(
+                [
+                    group.key(side),
+                    f"{len(members)} × {module_cls.display_label()}",
+                    side,
+                    "—",
+                ]
+            )
+            row.setData(0, GroupIdRole, group.group_id)
+            row.setData(
+                0,
+                DrawStateRole,
+                worst_state(states.get(item, NOT_DRAWN) for item in group.members),
+            )
+            row.setIcon(0, module_icon(module_cls, side=side, size=16))
+            for item in members:
+                parent = item.parent()
+                if parent is not None:
+                    parent.takeChild(parent.indexOfChild(item))
+                else:
+                    self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
+            if holder is not None:
+                holder.addChild(row)
+            else:
+                self.tree.addTopLevelItem(row)
+            for item in members:
+                row.addChild(item)
+
+    def item_for_group(self, group_id: str):
+        """The tree row for a module group, or None."""
+        iterator = QtWidgets.QTreeWidgetItemIterator(self.tree)
+        while iterator.value():
+            item = iterator.value()
+            if item.data(0, GroupIdRole) == group_id:
+                return item
+            iterator += 1
+        return None
 
     def _clear_tree(self) -> None:
         """Drop every row without Qt signalling into a half-torn-down tree.

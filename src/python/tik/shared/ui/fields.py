@@ -478,6 +478,7 @@ class FormBuilder(QtWidgets.QWidget):
         file_extras: Optional[dict] = None,
         base_dir: Optional[Callable[[], str]] = None,
         list_choices: Optional[Callable[[str], list]] = None,
+        list_groups: Optional[Callable[[str], list]] = None,
         file_vcs: Optional[tuple] = None,
     ) -> None:
         """
@@ -487,6 +488,9 @@ class FormBuilder(QtWidgets.QWidget):
             list_choices: ``(choices_from key) -> [(label, value)]``. Supplying
                 it is what turns a ``ListField`` that declares ``choices_from``
                 into a tick list rather than a comma-separated box.
+            list_groups: ``(choices_from key) -> [(label, [value, ...])]``:
+                bulk edits the tick list offers in its menu. Optional, and
+                display only -- a group is never a stored value.
             file_browser: Optional ``(mode, extensions, current) -> path``
                 replacing the dialogs.
             file_extras: ``{extension: (label, callback(path))}``: an extra
@@ -514,6 +518,7 @@ class FormBuilder(QtWidgets.QWidget):
         self.file_extras = file_extras or {}
         self.base_dir = base_dir
         self.list_choices = list_choices
+        self.list_groups = list_groups
         self.file_vcs = file_vcs
         self._overridden: set[str] = set()
         self._reference: dict = {}
@@ -735,6 +740,8 @@ class FormBuilder(QtWidgets.QWidget):
                 lambda key=source: self.list_choices(key),
                 filterable=getattr(field, "filterable", False),
             )
+            if self.list_groups is not None:
+                widget.set_groups(self.list_groups(source))
             widget.valueChanged.connect(
                 lambda value, field_name=name: self._on_change(field_name, value)
             )

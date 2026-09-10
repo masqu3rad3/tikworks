@@ -246,6 +246,7 @@ class SessionView(QtWidgets.QWidget):
             file_browser=file_browser,
             base_dir=lambda: self.session.directory,
             list_choices=self._list_choices,
+            list_groups=self._list_groups,
         )
         self.settings.handle_changed.connect(self.handle_changed)
         self.splitter.addWidget(self.settings)
@@ -307,6 +308,25 @@ class SessionView(QtWidgets.QWidget):
             for entry in self.session.document.guides.modules
             if entry.enabled
         ]
+
+    def _list_groups(self, key: str) -> list:
+        """Bulk edits for a picker: one per module group, by display key.
+
+        Display only. The picker stores member ids either way, so nothing in
+        the action layer learns that groups exist.
+        """
+        if key != "modules":
+            return []
+        document = self.session.document.guides
+        sides = {entry.instance_id: entry.side for entry in document.modules}
+        enabled = {entry.instance_id for entry in document.modules if entry.enabled}
+        found = []
+        for group in document.module_groups:
+            members = [item for item in group.members if item in enabled]
+            if not members:
+                continue
+            found.append((group.key(sides.get(members[0], "C")), members))
+        return found
 
     def _build_pipeline_pane(self) -> QtWidgets.QWidget:
         self.tree = self._make_tree(self.model)
