@@ -25,9 +25,10 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from tik.core.fields import Column, FieldGroup, Schema, TableField
+from tik.core.fields import Column, FieldGroup, ListField, Schema, TableField
 from tik.core.side import Side
 
+from . import copies as copy_list
 from . import shapes as shape_library
 from .manifest import GuideAttr, GuideLayout, Input, instance_key
 from .schemas import GuidePose, ModuleInstance, ParentRef
@@ -99,6 +100,20 @@ class Module(Schema):
             Column("label", "string"),
         ),
     )
+    copies = ListField(
+        [],
+        item_type=dict,
+        label="Copies",
+        hidden=True,
+        last=True,
+        help="One row per copy of this module.",
+    )
+    """One row per copy: its slug, its name, and its per-copy values.
+
+    Hidden because the tab bar is its editor, the same arrangement
+    ``filterable`` uses for the ``<name>_only_selected`` field it injects.
+    An empty list means one copy -- see ``copy_rows``.
+    """
     control_shape_overrides = TableField(
         [],
         label="Control Shapes",
@@ -248,6 +263,22 @@ class Module(Schema):
             shape = default
         size = row.get("size", "")
         return shape, float(size) if size != "" else 1.0
+
+    # ------------------------------------------------------------- copies
+    @classmethod
+    def per_copy_defaults(cls) -> dict:
+        """``{field name: default}`` for every field declared ``per_copy``."""
+        return {name: item.default for name, item in cls.per_copy_fields().items()}
+
+    def copy_rows(self) -> list[dict]:
+        """Well-formed copy rows: at least one, each fully populated."""
+        return copy_list.normalise(
+            self.copies, type(self).per_copy_defaults(), self.name
+        )
+
+    def copy_slugs(self) -> list[str]:
+        """Every copy's slug, in tab order. ``[""]`` for an untouched module."""
+        return [row["slug"] for row in self.copy_rows()]
 
     @classmethod
     def pivot_rows(cls, settings=None) -> list[dict]:
