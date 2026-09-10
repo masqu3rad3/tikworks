@@ -156,8 +156,15 @@ def leave_group(document, instance_id: str) -> Optional[str]:
 
 
 def dissolve_group(document, group_id: str) -> None:
-    """Drop the group and its frame. The modules themselves are untouched."""
-    document.module_groups = [
+    """Drop the group and its frame. The modules themselves are untouched.
+
+    The list is edited **in place** rather than rebound. Rebinding works on a
+    real ``GuideDocument``, which owns the attribute, but it silently breaks
+    any holder of the same list -- and there is one: the Qt test double hands
+    its own list to the document so these operations run for real against it.
+    An in-place edit is correct for both and costs nothing.
+    """
+    document.module_groups[:] = [
         group for group in document.module_groups if group.group_id != group_id
     ]
     document.frames.pop(group_id, None)
