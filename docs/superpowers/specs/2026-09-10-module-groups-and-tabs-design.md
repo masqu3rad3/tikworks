@@ -79,7 +79,10 @@ stays a manual per-instance chore, which is half of what makes thirty nodes tiri
 
 ## 3. The document object
 
-`ModuleGroup` joins `SceneGroup` and `ModuleReference` in `core/guide_document.py`:
+`ModuleGroup` gets its own pure module, `core/module_group.py`, holding the dataclass and the
+operations on it. `guide_document.py` imports the dataclass and holds the list; the operations
+take a document duck-typed, so the dependency runs one way and `guide_document.py` does not
+grow a third responsibility:
 
 ```python
 @dataclass
@@ -102,9 +105,15 @@ Three fields, and everything else derives:
 - `key` is `instance_key(label, side)` — the same function `ModuleEntry.key` uses
   (`core/manifest.py`), so a group and a module name themselves by one rule.
 
-`GuideDocument` gains `groups: list`, a `group(group_id)` lookup beside `module()` and
-`reference()`, and group keys join `node_ids()` so the graph can address a group the way it
-addresses a module or a scene group.
+`GuideDocument` gains `module_groups: list`, a `module_group(group_id)` lookup beside
+`module()` and `reference()`, and group keys join `node_ids()` so the graph can address a group
+the way it addresses a module or a scene group.
+
+The field is `module_groups`, not `groups`, for two reasons. It is symmetric with its
+neighbour `scene_groups`, and — decisively — `rig.groups` is already the four per-module rig
+groups all over the build path (`maya/rig.py:179`, `maya/build.py:76`), so a bare `groups`
+would make the §8 guard unenforceable: no static check can tell `document.groups` from
+`rig.groups`. A distinct name is what makes the guarantee checkable.
 
 Membership is stored on the group, not on the member. A `group_id` field on `ModuleEntry` would
 be a second place for the same fact, and the entry is the thing that gets serialized, diffed
@@ -112,7 +121,7 @@ against a reference source and copied by `duplicate` — three chances for the t
 disagree.
 
 **Schema.** The guide document goes 2 → 3. The `.tr` stays at 7: the guide document carries its
-own version inside it. Old files load with `groups: []`; there is no migration.
+own version inside it. Old files load with `module_groups: []`; there is no migration.
 
 ## 4. Graph placement reuses reference frames
 
@@ -264,10 +273,16 @@ these members", resolved at the picker before anything downstream sees it.
 
 Two tests, because the guarantee has two halves.
 
-**Nothing downstream may read it.** `tests/unit/test_import_boundaries.py` gains a case
-forbidding `trigger/maya`, `trigger/modules`, `trigger/systems` and `trigger/guides` from
-reading `document.groups` or importing the group object. This is the mechanical half, and it is
-the one that keeps the guarantee true a year from now.
+**Nothing on the build path may read it.** `tests/unit/test_import_boundaries.py` gains a
+case forbidding `trigger/maya`, `trigger/modules` and `trigger/systems` from naming
+`ModuleGroup` or touching `.module_groups` — an AST scan, like the file's existing import
+check. This is the mechanical half, and it is the one that keeps the guarantee true a year
+from now.
+
+`trigger/guides` is deliberately **not** on that list, and the spec was wrong to put it there.
+The guide layer is not the build path: it owns the document's rendering and the `.trg`, so it
+is exactly where the group operations (§9) and the `.trg` section (§7) have to live. What must
+stay blind is the code that turns guides into a rig.
 
 **The build is identical.** `tests/integration/trigger/test_group_invariant_trigger.py` builds
 five modules, groups them, builds again, and diffs the resulting scene — node names, hierarchy,
@@ -291,13 +306,14 @@ connections. Grouping and ungrouping between builds changes nothing.
 | `tests/ui/test_group_tabs.py` | The tab bar, the `Common`/per-tab split, reflow on divergence, `[+]`, rename, reorder |
 | `tests/ui/test_graph_groups.py` | Collapse and expand, the port union, input fan-in, the output member picker |
 | `tests/integration/trigger/test_group_invariant_trigger.py` | Grouped vs ungrouped build diff |
-| `tests/unit/test_import_boundaries.py` | Added case: the build path never reads `document.groups` |
+| `tests/unit/test_import_boundaries.py` | Added case: the build path never names `ModuleGroup` or `.module_groups` |
 
 ## 11. Files touched
 
 | File | Change |
 |------|--------|
-| `core/guide_document.py` | `ModuleGroup`, `GuideDocument.groups`, `group()`, `node_ids()`, schema 3 |
+| `core/module_group.py` | **New.** `ModuleGroup` and the pure operations |
+| `core/guide_document.py` | `GuideDocument.module_groups`, `module_group()`, `node_ids()`, schema 3 |
 | `guides/scene.py` | `group`, `ungroup`, `join`, `leave`, `mirror_group` |
 | `ui/graph/items.py` | `FrameSpec.ref_id` → `frame_id` |
 | `ui/graph/scene.py` | Signals carry a frame id |
