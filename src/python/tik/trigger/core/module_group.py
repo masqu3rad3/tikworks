@@ -88,7 +88,9 @@ def _check_homogeneous(entries) -> None:
     """Same type, same side, wholly local or wholly borrowed."""
     types = {entry.module_type for entry in entries}
     if len(types) > 1:
-        raise GroupError(f"A group holds modules of the same type; got {sorted(types)}.")
+        raise GroupError(
+            f"A group holds modules of the same type; got {sorted(types)}."
+        )
     sides = {entry.side for entry in entries}
     if len(sides) > 1:
         raise GroupError(
