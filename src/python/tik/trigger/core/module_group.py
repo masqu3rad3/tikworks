@@ -177,11 +177,30 @@ def dissolve_group(document, group_id: str) -> None:
 INPUT_PREFIX = "@input:"
 
 
+def _declared_inputs(entry) -> list:
+    """Every input this entry's module declares, wired or not.
+
+    An unwired input is absent from ``entry.inputs`` -- the document stores
+    connections, not the absence of them -- but leaving one unwired is an
+    ordinary state, not a missing value (*attachment is a connection, not a
+    precondition*). Two members that have both left ``root`` alone agree
+    about it, and the panel must be able to say so.
+    """
+    from .registry import get_module
+
+    try:
+        module_cls = get_module(entry.module_type)
+    except Exception:  # noqa: BLE001 - an unregistered type has nothing to declare
+        return list(entry.inputs)
+    return list(module_cls.input_names(entry.settings))
+
+
 def _value_table(entry) -> dict:
     """One entry's settings and inputs, in a single flat mapping."""
     table = dict(entry.settings)
+    names = list(dict.fromkeys(_declared_inputs(entry) + list(entry.inputs)))
     table.update(
-        {f"{INPUT_PREFIX}{name}": source for name, source in entry.inputs.items()}
+        {f"{INPUT_PREFIX}{name}": entry.inputs.get(name, "") for name in names}
     )
     return table
 

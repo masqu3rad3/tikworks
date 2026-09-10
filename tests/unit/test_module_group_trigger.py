@@ -158,9 +158,13 @@ def test_dissolve_drops_the_groups_frame():
 
 # ---------------------------------------------------------- shared values
 def _members(*settings_and_inputs):
+    """Entries of a type nothing registers, so only the values given here
+    are in play. A real module type would contribute its *declared* inputs
+    too (an unwired one reads as ""), which the two cases at the end of this
+    file cover deliberately -- these are about settings."""
     found = []
     for index, (settings, inputs) in enumerate(settings_and_inputs):
-        entry = ModuleEntry(f"m{index}", "fkchain", f"f{index}", "L")
+        entry = ModuleEntry(f"m{index}", "unregistered_toy", f"f{index}", "L")
         entry.settings = dict(settings)
         entry.inputs = dict(inputs)
         found.append(entry)
@@ -225,3 +229,29 @@ def test_one_member_shares_everything_it_has():
 def test_no_members_share_nothing():
     assert shared_values([]) == {}
     assert varying_names([]) == set()
+
+
+def test_two_members_that_both_left_an_input_unwired_agree_about_it():
+    """An unwired input is absent from entry.inputs, but leaving one alone is
+    an ordinary state -- attachment is a connection, not a precondition -- so
+    two members that have both left it alone share it."""
+    import tik.trigger as trigger
+
+    trigger.load_plugins()
+    members = [
+        ModuleEntry("m0", "fkchain", "f0", "L"),
+        ModuleEntry("m1", "fkchain", "f1", "L"),
+    ]
+    assert shared_values(members)["@input:root"] == ""
+
+
+def test_one_member_wiring_an_input_stops_it_being_shared():
+    import tik.trigger as trigger
+
+    trigger.load_plugins()
+    members = [
+        ModuleEntry("m0", "fkchain", "f0", "L"),
+        ModuleEntry("m1", "fkchain", "f1", "L"),
+    ]
+    members[0].inputs = {"root": "hand.hand"}
+    assert "@input:root" in varying_names(members)

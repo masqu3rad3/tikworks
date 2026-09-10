@@ -37,6 +37,9 @@ from tik.trigger.core.schemas import split_source
 if TYPE_CHECKING:  # the scene layer imports Maya; the UI only needs the name
     from tik.trigger.guides import GuideHandle
 
+from tik.shared.ui.feedback import Feedback
+from tik.trigger.core.exceptions import TriggerError
+from tik.trigger.core.module_group import shared_values
 from tik.trigger.ui.draw_state import DRAWN, TOOLTIPS, states_from
 
 from ..graph import GraphView
@@ -282,6 +285,30 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.inputs_form = QtWidgets.QFormLayout()
         self.inputs_form.setContentsMargins(4, 0, 4, 4)
         props.addLayout(self.inputs_form)
+        self.common_caption = QtWidgets.QLabel("COMMON")
+        self.common_caption.setObjectName("FieldCaption")
+        props.addWidget(self.common_caption)
+        # A second form over the *same* target. Which fields each one shows is
+        # decided per field by ``_is_common``; ``set_visible_fields`` already
+        # hides a fold whose fields are all hidden, so neither side shows an
+        # empty group.
+        self.common_form = FormBuilder()
+        props.addWidget(self.common_form)
+        tabs = QtWidgets.QHBoxLayout()
+        tabs.setContentsMargins(0, 0, 0, 0)
+        tabs.setSpacing(0)
+        self.tab_bar = QtWidgets.QTabBar()
+        self.tab_bar.setMovable(True)
+        self.tab_bar.setExpanding(False)
+        self.tab_bar.setDrawBase(False)
+        self.add_copy_button = QtWidgets.QToolButton()
+        self.add_copy_button.setText("+")
+        self.add_copy_button.setAutoRaise(True)
+        self.add_copy_button.setToolTip("Add another copy of this module")
+        tabs.addWidget(self.tab_bar)
+        tabs.addWidget(self.add_copy_button)
+        tabs.addStretch(1)
+        props.addLayout(tabs)
         self.module_caption = QtWidgets.QLabel("MODULE")
         self.module_caption.setObjectName("FieldCaption")
         props.addWidget(self.module_caption)
@@ -377,6 +404,11 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.action_bar.auto_sync_toggled.connect(self.set_auto_sync)
         self.name_edit.editingFinished.connect(self._rename_current)
         self.form.changed.connect(self._on_setting_changed)
+        self.common_form.changed.connect(self._on_setting_changed)
+        self.tab_bar.currentChanged.connect(self._on_tab_changed)
+        self.tab_bar.tabMoved.connect(self._on_tabs_reordered)
+        self.tab_bar.tabBarDoubleClicked.connect(self._on_tab_double_clicked)
+        self.add_copy_button.clicked.connect(self._on_add_copy)
         self.form.error.connect(
             lambda _name, message: self.events.log(message, level="warning")
         )
@@ -868,6 +900,134 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         super().showEvent(event)
         self.refresh_drift()
 
+    # -------------------------------------------------------------- groups
+    #: Fields that never derive. ``name`` must stay unique per member, and
+    #: ``side`` is enforced homogeneous when a module joins a group.
+    ALWAYS_PER_TAB = ("name", "side")
+
+    def _group_members(self) -> list:
+        """The current module's group members in tab order, or just itself."""
+        if self._current is None:
+            return []
+        group = self.guides.group_of(self._current.instance_id)
+        if group is None:
+            return [self._current]
+        return self.guides.group_members(group.group_id)
+
+    def _is_common(self, name: str) -> bool:
+        """Whether ``name`` renders above the tabs rather than inside one.
+
+        Recomputed on every write. A setting the members agree on is shared;
+        one they disagree on is not. Nothing declares this anywhere, which is
+        what makes the feature land on every module -- the ones that ship and
+        the ones written afterwards -- with no module author doing anything.
+        """
+        if name in self.ALWAYS_PER_TAB:
+            return False
+        members = self._group_members()
+        if len(members) < 2:
+            return False
+        return name in shared_values([handle.entry for handle in members])
+
+    def _rebuild_tabs(self) -> None:
+        """One tab per member, or one for a module standing alone."""
+        members = self._group_members()
+        self.tab_bar.blockSignals(True)
+        try:
+            while self.tab_bar.count():
+                self.tab_bar.removeTab(0)
+            for handle in members:
+                # ``entry``, never ``instance``: the latter goes through
+                # find_instances and scans the scene, and a refresh is
+                # required to read the document alone.
+                self.tab_bar.addTab(handle.entry.name)
+            current = next(
+                (
+                    index
+                    for index, handle in enumerate(members)
+                    if self._current is not None
+                    and handle.instance_id == self._current.instance_id
+                ),
+                0,
+            )
+            self.tab_bar.setCurrentIndex(current)
+        finally:
+            self.tab_bar.blockSignals(False)
+        self.add_copy_button.setEnabled(self._current is not None)
+
+    def _split_forms(self) -> None:
+        """Send each field to the Common form or the per-tab form.
+
+        Both forms are bound to the same module object, so this is purely
+        which side shows which field -- no value is copied and nothing can
+        fall out of step between them.
+        """
+        if self._module_obj is None:
+            return
+        names = list(type(self._module_obj).fields())
+        common = [name for name in names if self._is_common(name)]
+        self.common_form.set_visible_fields(common)
+        self.form.set_visible_fields([n for n in names if n not in set(common)])
+        self.common_caption.setVisible(bool(common))
+        self.common_form.setVisible(bool(common))
+
+    def _on_tab_changed(self, index: int) -> None:
+        members = self._group_members()
+        if 0 <= index < len(members):
+            handle = members[index]
+            if self._current is None or handle.instance_id != self._current.instance_id:
+                self._set_current(handle)
+
+    def _on_add_copy(self) -> None:
+        """The ``[+]`` verb. A group of one is a module, so this may make one."""
+        if self._current is None:
+            return
+        try:
+            copy = self.guides.add_copy(self._current)
+        except TriggerError as error:
+            self.events.log(str(error), level="warning")
+            return
+        self.refresh()
+        self._set_current(copy)
+        self.tab_bar.setCurrentIndex(self.tab_bar.count() - 1)
+
+    def _on_tab_double_clicked(self, index: int) -> None:
+        members = self._group_members()
+        if not 0 <= index < len(members):
+            return
+        entered = Feedback(parent=self).ask_text(
+            title="Rename module",
+            label="Name:",
+            text=members[index].entry.name,
+        )
+        if entered:
+            self._on_tab_renamed(index, entered)
+
+    def _on_tab_renamed(self, index: int, text: str) -> None:
+        members = self._group_members()
+        if not (0 <= index < len(members) and text):
+            return
+        self.guides.rename_instance(members[index].instance_id, text)
+        self.refresh()
+        self._rebuild_tabs()
+
+    def _on_tabs_reordered(self, *_args) -> None:
+        """Store the tab order back as the group's member order."""
+        if self._current is None:
+            return
+        group = self.guides.group_of(self._current.instance_id)
+        if group is None:
+            return
+        by_name = {
+            handle.entry.name: handle.instance_id
+            for handle in self.guides.group_members(group.group_id)
+        }
+        order = [self.tab_bar.tabText(i) for i in range(self.tab_bar.count())]
+        reordered = [by_name[name] for name in order if name in by_name]
+        if len(reordered) == len(group.members):
+            group.members[:] = reordered
+            self.guides._touch()
+
     # ---------------------------------------------------------- properties
     def _set_current(
         self, handle: Optional[GuideHandle], group: Optional[list[GuideHandle]] = None
@@ -895,6 +1055,10 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self._module_obj = None
             self.reference_strip.setVisible(False)
             self.form.set_target(None)
+            self.common_form.set_target(None)
+            self.common_form.setVisible(False)
+            self.common_caption.setVisible(False)
+            self._rebuild_tabs()
             self.name_edit.setText("")
             self.type_label.setText("")
             self.icon.clear()
@@ -939,6 +1103,11 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 self._input_rows[declared.name] = row
             self.inputs_caption.setVisible(bool(declared_inputs))
         self.form.set_target(self._module_obj)
+        # The same target in both forms: only which side shows which field
+        # differs, so no value is copied and the two cannot fall out of step.
+        self.common_form.set_target(self._module_obj)
+        self._rebuild_tabs()
+        self._split_forms()
         self._show_reference_strip(handle)
         if multi:
             self.status.set_activity(

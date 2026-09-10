@@ -480,7 +480,7 @@ class GraphView(QtWidgets.QGraphicsView):
                 continue
             for handle in members:
                 group_of[handle.key] = group.group_id
-            titles[group.group_id] = group.key(members[0].instance.side)
+            titles[group.group_id] = group.key(members[0].entry.side)
             # A group with no stored frame reads as collapsed. The point of
             # the feature is fewer nodes, so a group that opened expanded
             # would make the rigger collapse it on every redraw.

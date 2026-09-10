@@ -873,7 +873,7 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         handles = list(handles)
         ids = [handle.instance_id for handle in handles]
         if not label and handles:
-            label = handles[0].instance.name
+            label = handles[0].entry.name
         with nodes.undo_chunk("Trigger group modules"):
             group = make_group(self.document, label, ids)
             self._touch()
@@ -903,7 +903,7 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
             if group is None:
                 make_group(
                     self.document,
-                    handle.instance.name,
+                    handle.entry.name,
                     [handle.instance_id, copy.instance_id],
                 )
             else:
