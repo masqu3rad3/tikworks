@@ -62,7 +62,7 @@ def _frame(qapp, collapsed=False, rect=None):
     from tik.trigger.ui.graph.scene import GraphScene
 
     graph = GraphScene()
-    spec = FrameSpec(ref_id="r1", title="baseRig.tr", collapsed=collapsed)
+    spec = FrameSpec(frame_id="r1", title="baseRig.tr", collapsed=collapsed)
     item = graph.add_frame(spec, rect or QtCore.QRectF(0, 0, 200, 120))
     assert isinstance(item, FrameItem)
     return graph, item
@@ -80,7 +80,7 @@ def test_a_frame_encloses_what_it_was_given(qapp):
 def test_a_frame_carries_the_reference_name(qapp):
     _graph, item = _frame(qapp)
     assert item.title == "baseRig.tr"
-    assert item.ref_id == "r1"
+    assert item.frame_id == "r1"
 
 
 def test_a_frame_sits_behind_the_nodes(qapp):

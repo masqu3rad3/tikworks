@@ -285,11 +285,15 @@ class GraphView(QtWidgets.QGraphicsView):
         self.rebuild()
         self.fit()
 
-    def toggle_frame(self, ref_id: str) -> None:
-        """Collapse an expanded reference, or expand a collapsed one."""
+    def toggle_frame(self, frame_id: str) -> None:
+        """Collapse an expanded frame, or expand a collapsed one.
+
+        The id belongs to a reference or to a module group; both store their
+        placement in the same ``frames`` section, so neither needs its own path.
+        """
         frames = getattr(self.guides, "frames", {}) or {}
-        collapsed = bool(frames.get(ref_id, {}).get("collapsed"))
-        self.guides.set_frame(ref_id, collapsed=not collapsed)
+        collapsed = bool(frames.get(frame_id, {}).get("collapsed"))
+        self.guides.set_frame(frame_id, collapsed=not collapsed)
         self.rebuild()
 
     def save_positions(self) -> None:
@@ -416,7 +420,7 @@ class GraphView(QtWidgets.QGraphicsView):
             for node in nodes[1:]:
                 extent = extent.united(node.sceneBoundingRect())
             self.graph.add_frame(
-                FrameSpec(ref_id=ref_id, title=files.get(ref_id, "reference")),
+                FrameSpec(frame_id=ref_id, title=files.get(ref_id, "reference")),
                 extent,
             )
 

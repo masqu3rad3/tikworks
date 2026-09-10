@@ -121,9 +121,13 @@ FramePadding = FRAME_PADDING
 
 @dataclass
 class FrameSpec:
-    """Everything a reference frame is drawn from."""
+    """Everything a frame is drawn from.
 
-    ref_id: str
+    A frame comes from a reference or from a module group; the item does not
+    care which, so the id it carries is a frame id rather than a reference id.
+    """
+
+    frame_id: str
     title: str
     collapsed: bool = False
 
@@ -140,7 +144,7 @@ class FrameItem(QtWidgets.QGraphicsItem):
 
     def __init__(self, spec: FrameSpec) -> None:
         super().__init__()
-        self.ref_id = spec.ref_id
+        self.frame_id = spec.frame_id
         self.title = spec.title
         self.collapsed = spec.collapsed
         self._extent = QtCore.QRectF(0, 0, 0, 0)
@@ -173,7 +177,7 @@ class FrameItem(QtWidgets.QGraphicsItem):
         ):
             scene = self.scene()
             if scene is not None:
-                scene.frame_toggle_requested.emit(self.ref_id)
+                scene.frame_toggle_requested.emit(self.frame_id)
             event.accept()
             return
         event.ignore()
