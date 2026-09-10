@@ -420,6 +420,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.tab_bar.currentChanged.connect(self._on_tab_changed)
         self.tab_bar.tabMoved.connect(self._on_tabs_reordered)
         self.tab_bar.tabBarDoubleClicked.connect(self._on_tab_double_clicked)
+        self.tab_bar.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.tab_bar.customContextMenuRequested.connect(self._on_tab_menu)
         self.add_copy_button.clicked.connect(self._on_add_copy)
         self.form.error.connect(
             lambda _name, message: self.events.log(message, level="warning")
@@ -1083,6 +1085,28 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         )
         if entered:
             self._on_tab_renamed(index, entered)
+
+    def tab_menu(self) -> QtWidgets.QMenu:
+        """The tab bar's right-click menu, built fresh from the current group."""
+        menu = QtWidgets.QMenu(self)
+        menu.addAction("Add Copy", self._on_add_copy)
+        grouped = (
+            self._current is not None
+            and self.guides.group_of(self._current.instance_id) is not None
+        )
+        if grouped:
+            menu.addSeparator()
+            menu.addAction("Remove From Group", self.remove_current_from_group)
+            menu.addAction("Ungroup", self.ungroup_current)
+        menu.addSeparator()
+        menu.addAction("Delete Module", self.delete_current)
+        return menu
+
+    def _on_tab_menu(self, point) -> None:
+        index = self.tab_bar.tabAt(point)
+        if index >= 0:
+            self.tab_bar.setCurrentIndex(index)
+        self.tab_menu().exec_(self.tab_bar.mapToGlobal(point))
 
     def _on_tab_renamed(self, index: int, text: str) -> None:
         members = self._group_members()

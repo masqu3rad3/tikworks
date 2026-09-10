@@ -211,13 +211,52 @@ class DesignerCommands:
                 handle.select()
 
     def mirror_current(self) -> None:
-        """Mirror each selected module to the other side."""
+        """Mirror each selected module to the other side.
+
+        A grouped module mirrors as its whole group: the opposite side gets
+        the group entire, members and all. Mirroring one finger of five and
+        leaving the other four behind is never what the rigger meant, and the
+        group is the unit they are working in.
+        """
+        done: set = set()
         with self.watcher.mute():
             for handle in self.selected_handles():
+                group = self.guides.group_of(handle.instance_id)
                 try:
-                    self.guides.mirror(handle)
+                    if group is None:
+                        self.guides.mirror(handle)
+                    elif group.group_id not in done:
+                        self.guides.mirror_group(group.group_id)
+                        done.add(group.group_id)
                 except TriggerError as error:
                     self.events.log(str(error), level="warning")
+        self.refresh()
+
+    def remove_current_from_group(self) -> None:
+        """Take the current module out of its group; the module stays."""
+        if self._current is None:
+            return
+        with self.watcher.mute():
+            try:
+                self.guides.remove_from_group(self._current)
+            except TriggerError as error:
+                self.events.log(str(error), level="warning")
+                return
+        self.refresh()
+
+    def ungroup_current(self) -> None:
+        """Dissolve the current module's group; every module stays."""
+        if self._current is None:
+            return
+        group = self.guides.group_of(self._current.instance_id)
+        if group is None:
+            return
+        with self.watcher.mute():
+            try:
+                self.guides.ungroup(group.group_id)
+            except TriggerError as error:
+                self.events.log(str(error), level="warning")
+                return
         self.refresh()
 
     def duplicate_current(self) -> list[GuideHandle]:

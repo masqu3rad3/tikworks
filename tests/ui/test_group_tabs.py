@@ -276,3 +276,65 @@ def test_the_varies_mark_is_not_the_override_mark(designer):
     from tik.shared.ui.fields import VARIES_MARK
 
     assert "\u25c7" not in VARIES_MARK
+
+
+# ----------------------------------------------------- the tab right-click
+def _menu_texts(designer):
+    return [action.text() for action in designer.tab_menu().actions()]
+
+
+def test_the_tab_menu_offers_the_group_verbs_when_grouped(designer):
+    _grouped(designer)
+    texts = _menu_texts(designer)
+    assert "Remove From Group" in texts
+    assert "Ungroup" in texts
+
+
+def test_the_tab_menu_hides_the_group_verbs_when_alone(designer):
+    handle = designer.guides.add("toy_chain", name="index", side="L")
+    _select(designer, handle)
+    texts = _menu_texts(designer)
+    assert "Remove From Group" not in texts
+    assert "Ungroup" not in texts
+    assert "Add Copy" in texts
+
+
+def test_remove_from_group_keeps_the_module(designer):
+    _scene, group, handles = _grouped(designer)
+    designer.remove_current_from_group()
+    assert designer.guides.group_of(handles[0].instance_id) is None
+    assert designer.guides.get(handles[0].instance_id) is not None
+    assert len(designer.guides.groups()[0].members) == 2
+
+
+def test_ungroup_from_the_tab_menu_keeps_every_module(designer):
+    _scene, group, handles = _grouped(designer)
+    designer.ungroup_current()
+    assert designer.guides.groups() == []
+    assert len(designer.guides.instances()) == 3
+
+
+# --------------------------------------------------------------- mirroring
+def test_mirroring_a_grouped_module_mirrors_the_whole_group(designer):
+    """Mirroring one finger of five and leaving four behind is never meant."""
+    _scene, group, handles = _grouped(designer)
+    designer.mirror_current()
+    groups = designer.guides.groups()
+    assert len(groups) == 2
+    other = next(item for item in groups if item.group_id != group.group_id)
+    assert len(other.members) == 3
+
+
+def test_mirroring_a_group_twice_does_not_stack_up_groups(designer):
+    _scene, _group, _handles = _grouped(designer)
+    designer.mirror_current()
+    designer.mirror_current()
+    assert len(designer.guides.groups()) == 2
+
+
+def test_mirroring_an_ungrouped_module_is_unchanged(designer):
+    handle = designer.guides.add("toy_chain", name="index", side="L")
+    _select(designer, handle)
+    designer.mirror_current()
+    assert designer.guides.groups() == []
+    assert designer.guides.find("index", "R") is not None
