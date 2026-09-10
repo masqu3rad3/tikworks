@@ -314,6 +314,11 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         props.addWidget(self.module_caption)
         self.form = FormBuilder()
         props.addWidget(self._build_copy_bar())
+        # A second form over the same target. Which fields each shows is
+        # decided once by the module author (``per_copy``), so neither side
+        # ever reflows and there is never a question about where a field is.
+        self.copy_form = FormBuilder()
+        props.addWidget(self.copy_form)
         self.form_scroll = QtWidgets.QScrollArea()
         self.form_scroll.setWidgetResizable(True)
         self.form_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
@@ -405,6 +410,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.action_bar.auto_sync_toggled.connect(self.set_auto_sync)
         self.name_edit.editingFinished.connect(self._rename_current)
         self.form.changed.connect(self._on_setting_changed)
+        self.copy_form.changed.connect(self._on_setting_changed)
         self.tab_bar.currentChanged.connect(self._on_copy_tab_changed)
         self.tab_bar.tabMoved.connect(self._on_copy_tabs_reordered)
         self.tab_bar.tabBarDoubleClicked.connect(self._on_copy_tab_double_clicked)
@@ -931,14 +937,42 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         if self._current is None or self._module_obj is None:
             return
         rows = [dict(row) for row in rows]
-        self._module_obj.copies = rows
+        module_cls = type(self._module_obj)
         with self.watcher.mute():
-            self._current.copies = rows
+            if len(rows) == 1:
+                # One copy is just the module. Storing a copies list here
+                # would strand the module-level fields: `handle.segments`
+                # would read 2 while the rig built 4, and every existing
+                # reader of settings["segments"] would be quietly wrong.
+                for name in module_cls.per_copy_fields():
+                    if name in rows[0]:
+                        setattr(self._module_obj, name, rows[0][name])
+                        setattr(self._current, name, rows[0][name])
+                self._module_obj.copies = []
+                self._current.copies = []
+            else:
+                self._module_obj.copies = rows
+                self._current.copies = rows
         # refresh() runs _set_current, which rebuilds the bar at index 0, so
         # the wanted tab is chosen *after* it rather than before.
         self.refresh()
         self._rebuild_copy_tabs(current)
         self._show_copy_values()
+
+    def _split_forms(self) -> None:
+        """Per-copy fields into the tab form, the rest into the module form.
+
+        By declaration, not by comparing values: ``per_copy`` is a fact about
+        what a field *means*, so a field never moves between the two while the
+        rigger is typing.
+        """
+        if self._module_obj is None:
+            return
+        module_cls = type(self._module_obj)
+        per_copy = list(module_cls.per_copy_fields())
+        self.form.set_visible_fields(list(module_cls.shared_fields()))
+        self.copy_form.set_visible_fields(per_copy)
+        self.copy_form.setVisible(bool(per_copy))
 
     def _show_copy_values(self) -> None:
         """Load the current copy's per-copy values into the form's target."""
@@ -950,7 +984,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         for name in type(self._module_obj).per_copy_fields():
             if name in row:
                 setattr(self._module_obj, name, row[name])
-        self.form.refresh()
+        self.copy_form.refresh()
 
     def _on_copy_tab_changed(self, _index: int) -> None:
         """Show another copy's values. Touches no selection, by design."""
@@ -1059,6 +1093,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self._module_obj = None
             self.reference_strip.setVisible(False)
             self.form.set_target(None)
+            self.copy_form.set_target(None)
             self._rebuild_copy_tabs()
             self.name_edit.setText("")
             self.type_label.setText("")
@@ -1104,6 +1139,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 self._input_rows[declared.name] = row
             self.inputs_caption.setVisible(bool(declared_inputs))
         self.form.set_target(self._module_obj)
+        self.copy_form.set_target(self._module_obj)
+        self._split_forms()
         self._rebuild_copy_tabs()
         self._show_copy_values()
         self._show_reference_strip(handle)

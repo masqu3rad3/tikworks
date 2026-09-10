@@ -97,6 +97,7 @@ def test_module_instance_roundtrip():
     # Module, so every module carries all three keys.
     assert restored.settings == {
         "segments": 3,
+        "controller_size": 1.0,
         "anim_spaces": [],
         "pivot_presets": [],
         "control_shape_overrides": [],

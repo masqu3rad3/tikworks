@@ -6,6 +6,7 @@ write the current selection through ``self.guides``.
 
 from __future__ import annotations
 
+from tik.trigger.core import copies as copy_list
 from tik.trigger.core.exceptions import TriggerError
 
 
@@ -79,6 +80,24 @@ class DesignerProperties:
         if self._current is None or self._module_obj is None:
             return
         value = getattr(self._module_obj, name)
+        if name in type(self._module_obj).per_copy_fields():
+            # A per-copy field belongs to the copy whose tab is showing --
+            # decided by the field, not by which form emitted the change.
+            rows = self._module_obj.copy_rows()
+            row = copy_list.row_for(rows, self.current_slug())
+            if row is None:
+                return
+            row[name] = value
+            self._write_copies(rows, current=self.tab_bar.currentIndex())
+            # A multi-selection still edits every selected module together;
+            # on each of the others it is that module's *current* copy, which
+            # for an ungrouped selection is its only one.
+            for handle in self._multi:
+                if handle.instance_id == self._current.instance_id:
+                    continue
+                with self.watcher.mute():
+                    setattr(handle, name, value)
+            return
         targets = self._multi or [self._current]
         before = [self._topology(handle) for handle in targets]
         with self.watcher.mute():
