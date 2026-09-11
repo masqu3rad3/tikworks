@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from tik.shared.ui import theme
+from tik.shared.ui.filter_bar import FilterBar
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.core.schemas import split_source
@@ -17,6 +18,8 @@ from tik.trigger.ui.draw_state import DRAWN
 
 from .constants import (
     COLUMN_GAP,
+    FILTER_MARGIN,
+    FILTER_WIDTH,
     GRID,
     HEADER,
     MODE_FULL,
@@ -65,6 +68,14 @@ class GraphView(QtWidgets.QGraphicsView):
         self.graph.setSceneRect(QtCore.QRectF(-WORLD, -WORLD, 2 * WORLD, 2 * WORLD))
         self._fitted = False
         self._navigated = False  # once the user pans/zooms, resizes stop re-fitting
+        # An overlay on the viewport rather than a widget above the view, the
+        # way Maya's node editor carries its search: the graph keeps the whole
+        # pane, and the bar floats over the corner of it.
+        self.filter_bar = FilterBar(self, placeholder="Find…")
+        self.filter_bar.setObjectName("GraphFilter")
+        self.filter_bar.setFixedWidth(FILTER_WIDTH)
+        self.filter_bar.filter_changed.connect(self.apply_filter)
+        self._place_filter()
         self._nav: Optional[str] = None  # "pan" | "zoom" | "slice"
         self._nav_last = QtCore.QPoint()
         self._zoom_anchor = QtCore.QPointF()
@@ -82,6 +93,38 @@ class GraphView(QtWidgets.QGraphicsView):
         self.graph.mode_change_requested.connect(self.set_mode)
         self.graph.nodes_moved.connect(self.save_positions)
         self.graph.frame_toggle_requested.connect(self.toggle_frame)
+
+    # -------------------------------------------------------------- filter
+    def _place_filter(self) -> None:
+        """Park the bar in the top-left of the viewport."""
+        self.filter_bar.move(FILTER_MARGIN, FILTER_MARGIN)
+        self.filter_bar.adjustSize()
+        self.filter_bar.setFixedWidth(FILTER_WIDTH)
+
+    def apply_filter(self) -> None:
+        """Dim the nodes the filter rules out; never move or hide one.
+
+        Dimmed, not hidden: a hidden node would take its wires with it and
+        leave the graph claiming connections that are not there. Fading is
+        also what lets a match stay readable *in place*, which is the point
+        of searching a graph rather than a list.
+        """
+        keywords = self.filter_bar.keywords or (
+            [self.filter_bar.line_edit.text().strip()]
+            if self.filter_bar.line_edit.text().strip()
+            else []
+        )
+        for key, node in self.graph.nodes.items():
+            if not keywords:
+                node.set_filtered(False)
+                continue
+            haystack = f"{node.title} {node.subtitle} {key}"
+            node.set_filtered(not self.filter_bar.matches(haystack))
+
+    def focus_filter(self) -> None:
+        """Put the cursor in the search box (Ctrl+F)."""
+        self.filter_bar.line_edit.setFocus()
+        self.filter_bar.line_edit.selectAll()
 
     # ------------------------------------------------------------ building
     def set_draw_states(self, states: dict) -> None:
@@ -243,6 +286,7 @@ class GraphView(QtWidgets.QGraphicsView):
                     primary is not None and input_name == primary.name,
                 )
         self.graph.finish_build()
+        self.apply_filter()
         if not self._fitted:
             self.fit()
 
@@ -545,6 +589,7 @@ class GraphView(QtWidgets.QGraphicsView):
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
+        self._place_filter()
         if not self._navigated:
             self.fit()
 

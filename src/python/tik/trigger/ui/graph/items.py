@@ -11,6 +11,7 @@ from tik.trigger.ui.draw_state import DRAWN, NOT_DRAWN, STALE, STALE_INK
 
 from .constants import (
     BADGE,
+    FILTERED_OPACITY,
     FRAME_INK,
     FRAME_PADDING,
     FRAME_TITLE,
@@ -217,6 +218,8 @@ class NodeItem(QtWidgets.QGraphicsItem):
         # absent from the scene: the whole node recedes, which is what
         # "there is nothing here to look at in Maya" should look like
         self.setOpacity(0.45 if self.draw_state == NOT_DRAWN else 1.0)
+        #: True while the graph's search rules this node out.
+        self.filtered = False
         self.inputs: dict[str, Port] = {}
         self.outputs: dict[str, Port] = {}
         self._height = HEADER + 8
@@ -270,6 +273,18 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.update()
         if self.scene() is not None:
             self.scene().update_wires()
+
+    def set_filtered(self, filtered: bool) -> None:
+        """Fade the node when the search rules it out, or restore it.
+
+        Opacity only: the node keeps its place and its wires, so a search
+        never makes the graph claim a connection that is not there.
+        """
+        if bool(filtered) == self.filtered:
+            return
+        self.filtered = bool(filtered)
+        base = 0.45 if self.draw_state == NOT_DRAWN else 1.0
+        self.setOpacity(FILTERED_OPACITY if self.filtered else base)
 
     def set_mode(self, mode: int) -> None:
         """Set the collapse mode (minimal, connected or full) and relayout."""

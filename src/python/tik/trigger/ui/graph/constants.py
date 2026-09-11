@@ -32,3 +32,12 @@ FRAME_TITLE = 20
 # Same family as the tree's provenance chip, so "borrowed" reads identically
 # in both panes rather than being learned twice.
 FRAME_INK = "#6f8fa8"
+
+#: The search overlay's width and its inset from the viewport corner.
+FILTER_WIDTH = 220
+FILTER_MARGIN = 8
+
+#: How far a node fades when the filter rules it out. Not zero: a filtered
+#: node keeps its place and its wires, so the graph never claims a connection
+#: that is not there -- it just stops competing for attention.
+FILTERED_OPACITY = 0.15
