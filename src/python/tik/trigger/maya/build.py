@@ -384,11 +384,11 @@ class Builder:
                 self.events.progress(number, total, f"Building {instance.name}")
                 module_cls = registry.get_module(instance.module_type)
                 inputs = dict(instance.inputs)
-                bind_parent = self._bind_parent_for(
+                bind_parents = self._bind_parents_for(
                     instance, module_cls, inputs, by_key, report
                 )
                 with self._module_scope(instance, report.scaffold):
-                    ctx = self._build_one(instance, report.scaffold, bind_parent)
+                    ctx = self._build_one(instance, report.scaffold, bind_parents)
                     report.rigs[instance.instance_id] = ctx
                     report.built.append(instance.instance_id)
                     by_key[instance.key] = instance
@@ -453,16 +453,37 @@ class Builder:
             yield
 
     # ------------------------------------------------------------- connect
-    def _bind_parent_for(self, instance, module_cls, inputs, by_key, report):
-        """Resolve the bind joint that this module's bind joints hang from.
+    def _bind_parents_for(self, instance, module_cls, inputs, by_key, report):
+        """``{slug: bind joint}`` -- one per copy.
 
-        Returns the primary input's producer output, or ``None`` when the module
+        Each copy carries its own primary input, so each hangs its bind
+        joints off its own producer. Resolving the module's first port once
+        and handing the answer to every copy is how they all ended up under
+        copy one's producer.
+        """
+        module = module_cls.from_instance(instance)
+        return {
+            slug: self._bind_parent_for(
+                instance, module_cls, inputs, by_key, report, slug
+            )
+            for slug in module.copy_slugs()
+        }
+
+    def _bind_parent_for(
+        self, instance, module_cls, inputs, by_key, report, slug: str = ""
+    ):
+        """Resolve the bind joint that one copy's bind joints hang from.
+
+        Returns the primary input's producer output, or ``None`` when the copy
         is unconnected — the context then falls back to its own ``bind_grp``.
         """
         primary = module_cls.primary_input()
         if primary is None or primary.kind == "space":
             return None
-        source = inputs.get(primary.name)
+        port = (
+            primary.name if primary.shared else module_cls.qualify(slug, primary.name)
+        )
+        source = inputs.get(port)
         if not source:
             return None
         key, output = split_source(source)
@@ -690,7 +711,7 @@ class Builder:
             },
         )
 
-    def _build_one(self, instance: ModuleInstance, scaffold, bind_parent=None):
+    def _build_one(self, instance: ModuleInstance, scaffold, bind_parents=None):
         module_cls = registry.get_module(instance.module_type)
         module = module_cls.from_instance(instance)
         problems = module.validate()
@@ -712,7 +733,7 @@ class Builder:
                     view,
                     self._copy_instance(instance, view, slug),
                     scaffold,
-                    bind_parent,
+                    (bind_parents or {}).get(slug),
                     slug=slug,
                     shared=shared,
                     group_name=module.name,

@@ -166,3 +166,59 @@ def test_a_copys_pivot_guide_is_not_parented_into_another_copy(scene):
     scene.draw()
     second = scene.guide_node(handle.instance_id, "c1_pivot_ik_heel")
     assert "c1" in second.parent.name or "arm1" in second.parent.name
+
+
+# ------------------------------------------- a consumer follows its own copy
+def test_a_consumer_parents_under_the_copy_it_names(scene):
+    """Connecting to `c1_hand` must hang the consumer's guides under the
+    *second* copy's hand, not the first copy's root."""
+    arm = scene.add("arm", name="arm", side="L")
+    rows = arm.settings.get("copies") or [{"slug": "", "name": ""}]
+    base = dict(rows[0], slug="", name="arm")
+    arm.copies = [base, dict(base, slug="c1", name="arm1")]
+
+    tail = scene.add("fkchain", name="tail", side="L", segments=1)
+    scene.connect(f"{tail.key}.root", f"{arm.key}.c1_hand")
+    scene.draw()
+
+    root = scene.guide_node(tail.instance_id, "root")
+    wanted = scene.guide_node(arm.instance_id, "c1_hand")
+    assert root.parent.long_name == wanted.long_name
+
+
+def test_a_consumer_of_the_first_copy_is_unchanged(scene):
+    arm = scene.add("arm", name="arm", side="L")
+    rows = arm.settings.get("copies") or [{"slug": "", "name": ""}]
+    base = dict(rows[0], slug="", name="arm")
+    arm.copies = [base, dict(base, slug="c1", name="arm1")]
+
+    tail = scene.add("fkchain", name="tail", side="L", segments=1)
+    scene.connect(f"{tail.key}.root", f"{arm.key}.hand")
+    scene.draw()
+
+    root = scene.guide_node(tail.instance_id, "root")
+    wanted = scene.guide_node(arm.instance_id, "hand")
+    assert root.parent.long_name == wanted.long_name
+
+
+def test_each_copy_of_a_consumer_follows_its_own_producer(scene):
+    """Two copies of one consumer, wired to two different producers."""
+    left = scene.add("base", name="lhand", side="C")
+    right = scene.add("base", name="rhand", side="C")
+    chain = scene.add("fkchain", name="tail", side="L", segments=1)
+    rows = chain.settings.get("copies") or [{"slug": "", "name": ""}]
+    base_row = dict(rows[0], slug="", name="tail")
+    chain.copies = [base_row, dict(base_row, slug="c1", name="tail1")]
+
+    scene.connect(f"{chain.key}.root", f"{left.key}.root")
+    scene.connect(f"{chain.key}.c1_root", f"{right.key}.root")
+    scene.draw()
+
+    first = scene.guide_node(chain.instance_id, "root")
+    second = scene.guide_node(chain.instance_id, "c1_root")
+    assert (
+        first.parent.long_name == scene.guide_node(left.instance_id, "root").long_name
+    )
+    assert (
+        second.parent.long_name == scene.guide_node(right.instance_id, "root").long_name
+    )

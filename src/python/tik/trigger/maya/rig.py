@@ -105,12 +105,16 @@ class RigGroups:
 class GuideDraft:
     """Creates tagged guide joints for ``Module.draw_guides``."""
 
-    def __init__(self, module, holder, parent_node=None) -> None:
+    def __init__(self, module, holder, parent_node=None, parents=None) -> None:
         self.module = module
         self.side = module.side
         self.side_mult = module.side.multiplier
         self.holder = holder
         self.parent_node = parent_node
+        #: ``{slug: joint}`` -- where each copy's root hangs. Each copy has
+        #: its own primary input, so each has its own producer.
+        self._parents = dict(parents or {})
+        self._default_parent = parent_node
         self.created: dict[tuple[str, int], tm.Joint] = {}
         self.root: Optional[tm.Joint] = None
         #: Slug of the copy currently drawing, and the view drawing it.
@@ -126,12 +130,13 @@ class GuideDraft:
         because each copy is its own chain -- without that, copy two's first
         joint would parent under copy one's root.
         """
-        was = (self._slug, self._drawing, self.root)
+        was = (self._slug, self._drawing, self.root, self.parent_node)
         self._slug, self._drawing, self.root = slug, view, None
+        self.parent_node = self._parents.get(slug, self._default_parent)
         try:
             yield self
         finally:
-            self._slug, self._drawing, self.root = was
+            self._slug, self._drawing, self.root, self.parent_node = was
 
     def made(self, role: str, index: int = 0):
         """A joint this draft already created, in the *current copy's* scope.

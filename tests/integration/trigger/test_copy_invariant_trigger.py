@@ -242,3 +242,36 @@ def test_a_copy_owns_every_setting_by_default(scene):
     module_cls = hand.module_class
     for name in ("segments", "spacing", "controller_size"):
         assert name in module_cls.per_copy_fields(), name
+
+
+def test_each_copy_binds_under_its_own_producer(scene):
+    """_bind_parent_for resolved the first copy's port and handed the answer
+    to every copy, so all of them hung off copy one's producer."""
+    left = scene.add("base", name="lhand", side="C")
+    right = scene.add("base", name="rhand", side="C")
+    chain = scene.add("fkchain", name="tail", side="L", segments=1)
+    rows = chain.settings.get("copies") or [{"slug": "", "name": ""}]
+    base_row = dict(rows[0], slug="", name="tail")
+    chain.copies = [base_row, dict(base_row, slug="c1", name="tail1")]
+    scene.connect(f"{chain.key}.root", f"{left.key}.root")
+    scene.connect(f"{chain.key}.c1_root", f"{right.key}.root")
+    scene.draw()
+    scene.test_build()
+
+    # The *bind* joints, not the controllers: controllers live in the
+    # control group and say nothing about where a copy binds.
+    first = [name for name in _built("tail_0_jnt") if "tail1" not in name]
+    second = _built("tail1_0_jnt")
+    assert first and second
+
+    def lineage(node):
+        found, cursor = [], node
+        while cursor:
+            parents = cmds.listRelatives(cursor, parent=True, fullPath=True)
+            cursor = parents[0] if parents else None
+            if cursor:
+                found.append(cursor.rsplit("|", 1)[-1])
+        return found
+
+    assert any("lhand" in name for name in lineage(first[0]))
+    assert any("rhand" in name for name in lineage(second[0]))
