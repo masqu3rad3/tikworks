@@ -220,7 +220,22 @@ class GraphScene(QtWidgets.QGraphicsScene):
             self.disconnect_requested.emit(wire.target_key)
         return [wire.target_key for wire in sliced]
 
+    def typing_in_a_field(self) -> bool:
+        """Whether a text widget embedded in this scene has the keyboard."""
+        item = self.focusItem()
+        return isinstance(item, QtWidgets.QGraphicsProxyWidget) and isinstance(
+            item.widget(), QtWidgets.QLineEdit
+        )
+
     def keyPressEvent(self, event) -> None:  # noqa: N802
+        if self.typing_in_a_field():
+            # A field embedded in the scene is being typed into, so every
+            # key is its own. Without this the branch below claimed Delete
+            # and Backspace first -- and returned even when there was
+            # nothing selected to delete -- so a port filter could be typed
+            # into but never corrected.
+            super().keyPressEvent(event)
+            return
         if event.key() in (QtCore.Qt.Key_Delete, QtCore.Qt.Key_Backspace):
             if self.delete_selected():
                 event.accept()

@@ -677,14 +677,34 @@ class GraphView(QtWidgets.QGraphicsView):
             return isinstance(item.widget(), QtWidgets.QLineEdit)
         return False
 
-    @staticmethod
-    def _is_typed_character(event) -> bool:
-        """A plain printable keystroke, as opposed to a real chord."""
+    #: Keys that belong to a text field being typed into even though they
+    #: type nothing. ``Delete`` is the one that matters: it is a real menu
+    #: shortcut, so without claiming it back, correcting a filter term
+    #: deleted the module.
+    EDITING_KEYS = (
+        QtCore.Qt.Key_Backspace,
+        QtCore.Qt.Key_Delete,
+        QtCore.Qt.Key_Left,
+        QtCore.Qt.Key_Right,
+        QtCore.Qt.Key_Home,
+        QtCore.Qt.Key_End,
+    )
+
+    @classmethod
+    def _belongs_to_the_field(cls, event) -> bool:
+        """Whether a keystroke is the focused text field's rather than ours.
+
+        Printable characters and the editing keys, but never a real chord
+        and never Escape, Tab or Return -- those stay the window's even
+        while something is being typed into.
+        """
         chord = (
             QtCore.Qt.ControlModifier | QtCore.Qt.AltModifier | QtCore.Qt.MetaModifier
         )
         if event.modifiers() & chord:
             return False
+        if event.key() in cls.EDITING_KEYS:
+            return True
         text = event.text()
         return bool(text) and text.isprintable()
 
@@ -700,7 +720,7 @@ class GraphView(QtWidgets.QGraphicsView):
         """
         if (
             event.type() == QtCore.QEvent.ShortcutOverride
-            and self._is_typed_character(event)
+            and self._belongs_to_the_field(event)
             and self.typing_in_a_filter()
         ):
             event.accept()

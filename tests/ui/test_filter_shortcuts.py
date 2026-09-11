@@ -186,3 +186,78 @@ def test_the_view_leaves_a_real_chord_alone(qapp):
         assert event.isAccepted() is False
     finally:
         view.close()
+
+
+# ------------------------------------------------ editing keys in the field
+def _press(qapp, widget, key, text=""):
+    qapp.sendEvent(
+        widget,
+        QtGui.QKeyEvent(QtCore.QEvent.KeyPress, key, QtCore.Qt.NoModifier, text),
+    )
+    qapp.processEvents()
+
+
+def test_backspace_edits_the_port_filter(qapp):
+    """The scene claimed Delete/Backspace for deleting nodes before the
+    focused field could see them, so the filter could be typed but never
+    corrected."""
+    view, node = _crowded_view(qapp)
+    try:
+        edit = node.port_filter_widget
+        node._port_filter_proxy.setFocus()
+        qapp.processEvents()
+        edit.setText("arm1")
+        edit.setCursorPosition(4)
+        _press(qapp, view, QtCore.Qt.Key_Backspace, "\b")
+        assert edit.text() == "arm"
+    finally:
+        view.close()
+
+
+def test_delete_edits_the_port_filter(qapp):
+    view, node = _crowded_view(qapp)
+    try:
+        edit = node.port_filter_widget
+        node._port_filter_proxy.setFocus()
+        qapp.processEvents()
+        edit.setText("arm1")
+        edit.setCursorPosition(0)
+        _press(qapp, view, QtCore.Qt.Key_Delete, "\x7f")
+        assert edit.text() == "rm1"
+    finally:
+        view.close()
+
+
+def test_the_view_claims_delete_from_its_shortcut_while_typing(qapp):
+    """Del is a real QAction, so without claiming it the module would be
+    deleted while the rigger is correcting a filter term."""
+    view, node = _crowded_view(qapp)
+    try:
+        node._port_filter_proxy.setFocus()
+        qapp.processEvents()
+        assert _override(view, QtCore.Qt.Key_Delete, "\x7f") is True
+        assert _override(view, QtCore.Qt.Key_Backspace, "\b") is True
+    finally:
+        view.close()
+
+
+def test_backspace_still_deletes_a_wire_when_nothing_is_being_typed(qapp):
+    view, _node = _crowded_view(qapp)
+    try:
+        view.setFocus()
+        view.graph.clearFocus()
+        qapp.processEvents()
+        assert _override(view, QtCore.Qt.Key_Backspace, "\b") is False
+        assert view.typing_in_a_filter() is False
+    finally:
+        view.close()
+
+
+def test_escape_is_left_to_the_window_even_while_typing(qapp):
+    view, node = _crowded_view(qapp)
+    try:
+        node._port_filter_proxy.setFocus()
+        qapp.processEvents()
+        assert _override(view, QtCore.Qt.Key_Escape, "\x1b") is False
+    finally:
+        view.close()
