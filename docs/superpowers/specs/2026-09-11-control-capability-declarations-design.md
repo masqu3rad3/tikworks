@@ -1,7 +1,7 @@
 # Control Capability Declarations: a module says what each section may offer
 
 **Date:** 2026-09-11
-**Status:** draft
+**Status:** implemented
 **Amends:** `2026-09-07-movable-pivots-and-pivot-presets-design.md` — `pivot_controls` becomes a
 settings-aware hook whose values address a guide by role *and index*, and the pivot controller
 is built by the framework rather than by a call in the module's `build()`. The declaration's
@@ -123,9 +123,16 @@ the per-copy loop (`maya/build.py:744`), for every declared role that has preset
 ```python
 for role in view.pivot_controls_for_copy(view.values()):
     main = ctx.controller_by_role(role)
-    if main is not None and view.pivot_labels(role):
+    if main is None or not view.pivot_labels(role):
+        continue
+    if ctx.controller_by_role(f"{role}_pivot") is None:
         ctx.pivot_control(main)
 ```
+
+**The seam is idempotent, and has to be.** Every module called `rig.pivot_control` itself before
+this existed, and a studio module outside this repo may still. Without the guard it gets a second
+pivot, which fails outright when `showPivot` is created twice on the same control. Skipping a role
+that already has one means the old style keeps working and the new style is simply less code.
 
 **Declaring is what makes it available; a preset row is what builds it.** That is the sentence
 the ground rules already use for sockets — "a socket per declared input is created for you;
@@ -234,10 +241,19 @@ the right thing, and the dead folds were never a declaration problem. Reading th
 `fkchain` and `ribbon` get a `pivot_controls_for_copy` override, the same shape as their existing
 `control_shape_defaults_for_copy`.
 
+`arm`'s anchors come from a new `limb_pivot_controls` in `systems/limb.py` — the third mirror of
+`limb_control_names`, for the reason the other two exist: a module that hardcoded the roles this
+system chose would drift the moment one was renamed. The *guide* roles are passed in, because the
+limb system never names a guide; `arm` holds them in a `LIMB_GUIDES` constant beside `LIMB_LABELS`.
+
 Two controls have no guide of their own. The `arm`'s pole is placed at a computed rest position
 and the `ribbon`'s mids are computed along the surface, so they anchor to `elbow` and `start`
 respectively. Their presets stack there unplaced until the rigger drags them where they belong,
 which is already how an unplaced preset behaves — "an unplaced preset should look unplaced".
+
+A new ground rule, `test_every_control_is_offered_a_movable_pivot`, holds the table above true for
+every module and settings variation. Offering costs nothing — §4 builds nothing until a preset row
+exists — so a control left out of `pivot_controls` is an oversight rather than a decision.
 
 After this, `twist` renders none of the three folds, `ribbon` at zero controllers renders none,
 and every other module renders all three.
