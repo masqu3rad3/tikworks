@@ -44,14 +44,8 @@ class FkChain(Module):
         """Every control here is FK, so every shape wraps its bone."""
         return {role: (0.0, 0.0, -90.0) for role in cls.controls_for_copy(settings)}
 
-    segments = IntField(
-        3, min=1, max=50, per_copy=True, help="Number of joints after the root"
-    )
-    spacing = FloatField(
-        5.0, min=0.01, per_copy=True, help="Default distance between guides"
-    )
-    # Shared: how big the controllers are is a property of the set, not of one
-    # chain in it. Five fingers with five different control sizes is a bug.
+    segments = IntField(3, min=1, max=50, help="Number of joints after the root")
+    spacing = FloatField(5.0, min=0.01, help="Default distance between guides")
     controller_size = FloatField(2.0, min=0.01, label="Controller Size")
 
     def guide_count(self) -> int:

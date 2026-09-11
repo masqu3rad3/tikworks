@@ -909,6 +909,12 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.refresh_drift()
 
     # --------------------------------------------------------------- copies
+    def input_port(self, input_name: str) -> str:
+        """The qualified port on the current copy: ``root`` / ``c1_root``."""
+        if self._module_obj is None:
+            return input_name
+        return type(self._module_obj).qualify(self.current_slug(), input_name)
+
     def current_slug(self) -> str:
         """Slug of the copy whose tab is showing; ``""`` when there is none."""
         if self._module_obj is None:
@@ -917,8 +923,15 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         index = self.tab_bar.currentIndex()
         return slugs[index] if 0 <= index < len(slugs) else slugs[0]
 
-    def _rebuild_copy_tabs(self, current: int = 0) -> None:
-        """One tab per copy. Signals blocked: this reflects state, never sets it."""
+    def _rebuild_copy_tabs(self, current: Optional[int] = None) -> None:
+        """One tab per copy. Signals blocked: this reflects state, never sets it.
+
+        ``current`` defaults to whichever tab is already showing, so a refresh
+        provoked by editing a copy does not throw the rigger back to the first
+        one mid-edit.
+        """
+        if current is None:
+            current = self.tab_bar.currentIndex()
         self.tab_bar.blockSignals(True)
         try:
             while self.tab_bar.count():
@@ -987,8 +1000,26 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.copy_form.refresh()
 
     def _on_copy_tab_changed(self, _index: int) -> None:
-        """Show another copy's values. Touches no selection, by design."""
+        """Show another copy's values and connections.
+
+        Touches no selection, by design: this is a settings field's editor.
+        """
         self._show_copy_values()
+        self._show_copy_inputs()
+
+    def _show_copy_inputs(self) -> None:
+        """Point every input row at the current copy's port."""
+        if self._current is None:
+            return
+        sources = self._current.inputs
+        for name, row in self._input_rows.items():
+            row.blockSignals(True)
+            row.line.blockSignals(True)
+            try:
+                row.set_source(sources.get(self.input_port(name), ""))
+            finally:
+                row.line.blockSignals(False)
+                row.blockSignals(False)
 
     def _on_add_copy(self) -> None:
         """The ``[+]`` verb: duplicate the current copy and select its tab."""
@@ -1094,7 +1125,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self.reference_strip.setVisible(False)
             self.form.set_target(None)
             self.copy_form.set_target(None)
-            self._rebuild_copy_tabs()
+            self._rebuild_copy_tabs(0)
             self.name_edit.setText("")
             self.type_label.setText("")
             self.icon.clear()
@@ -1132,7 +1163,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 row = InputRow(
                     declared, picker=self._pick_source, sources=self._source_choices
                 )
-                row.set_source(handle.inputs.get(declared.name, ""))
+                # The *current copy's* connection: each copy owns its inputs,
+                # so the row shows and writes the port for the tab showing.
+                row.set_source(handle.inputs.get(self.input_port(declared.name), ""))
                 row.changed.connect(self._on_input_changed)
                 label = declared.name + (" ●" if declared.primary else "")
                 self.inputs_form.addRow(label, row)
@@ -1143,6 +1176,10 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self._split_forms()
         self._rebuild_copy_tabs()
         self._show_copy_values()
+        # After the bar, not before: the input rows above were built from
+        # whatever tab was showing a moment ago, and the bar may have landed
+        # on a different one.
+        self._show_copy_inputs()
         self._show_reference_strip(handle)
         if multi:
             self.status.set_activity(

@@ -30,10 +30,10 @@ class ToyChain(Module):
     guides = GuideLayout("root", multi="segment", min=1)
     inputs = (Input("root", primary=True), Input("space"))
     outputs = ("root", "end")
-    # per_copy: a chain's length is a property of that chain.
-    segments = IntField(2, min=1, per_copy=True)
-    # shared: how big the controllers are is a property of the set.
-    controller_size = FloatField(1.0, min=0.01, label="Controller Size")
+    segments = IntField(2, min=1)
+    # The one exception this toy carries, so both sides of the split have
+    # something to test against.
+    controller_size = FloatField(1.0, min=0.01, shared=True, label="Controller Size")
 
     @classmethod
     def controls_for_copy(cls, settings=None):

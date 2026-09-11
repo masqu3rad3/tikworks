@@ -519,20 +519,22 @@ def test_shape_column_is_a_plain_string_column():
 
 
 # ------------------------------------------------------------- per_copy
-def test_a_field_is_shared_unless_it_says_otherwise():
+def test_a_field_belongs_to_a_copy_unless_it_says_otherwise():
+    """A copy is a whole module's worth of settings, so sharing is the
+    exception a module author declares, not the rule they opt out of."""
     from tik.core.fields import IntField
 
-    assert IntField(3).per_copy is False
-    assert IntField(3, per_copy=True).per_copy is True
+    assert IntField(3).shared is False
+    assert IntField(3, shared=True).shared is True
 
 
-def test_a_schema_splits_its_fields_by_per_copy():
+def test_a_schema_splits_its_fields_by_shared():
     from tik.core.fields import FloatField, IntField, Schema
 
     class Toy(Schema):
-        segments = IntField(3, per_copy=True)
-        spacing = FloatField(5.0, per_copy=True)
-        size = FloatField(2.0)
+        segments = IntField(3)
+        spacing = FloatField(5.0)
+        size = FloatField(2.0, shared=True)
 
     assert list(Toy.per_copy_fields()) == ["segments", "spacing"]
     assert list(Toy.shared_fields()) == ["size"]
@@ -543,8 +545,8 @@ def test_the_two_subsets_partition_the_fields():
     from tik.core.fields import FloatField, IntField, Schema
 
     class Toy(Schema):
-        segments = IntField(3, per_copy=True)
-        size = FloatField(2.0)
+        segments = IntField(3)
+        size = FloatField(2.0, shared=True)
 
     every = set(Toy.fields())
     assert set(Toy.per_copy_fields()) | set(Toy.shared_fields()) == every

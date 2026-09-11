@@ -79,6 +79,7 @@ class Module(Schema):
     icon: str = ""  # stamped by @register_module
     copies = ListField(
         [],
+        shared=True,
         item_type=dict,
         label="Copies",
         hidden=True,
@@ -96,6 +97,7 @@ class Module(Schema):
     """
     anim_spaces = TableField(
         [],
+        shared=True,
         label="Anim Spaces",
         group=SPACES,
         help="Each row adds one animation space and one input port.",
@@ -108,6 +110,7 @@ class Module(Schema):
     )
     pivot_presets = TableField(
         [],
+        shared=True,
         label="Pivot Presets",
         group=PIVOTS,
         help="Each row adds one named pivot position and one guide to place it with.",
@@ -119,6 +122,7 @@ class Module(Schema):
     )
     control_shape_overrides = TableField(
         [],
+        shared=True,
         label="Control Shapes",
         group=SHAPES,
         help="Override the shape and relative size of one controller.",
@@ -170,10 +174,26 @@ class Module(Schema):
         return found
 
     @classmethod
-    def input_names(cls, settings=None) -> list[str]:
-        """Declared inputs followed by the space inputs ``settings`` add."""
+    def inputs_for_copy(cls, settings=None) -> list[str]:
+        """One copy's inputs: the declared ones, then its anim-space ports."""
         return [item.name for item in cls.inputs] + [
             item.name for item in cls.space_inputs(settings)
+        ]
+
+    @classmethod
+    def input_names(cls, settings=None) -> list[str]:
+        """Inputs an instance exposes, qualified per copy.
+
+        A copy attaches where it likes -- five fingers may hang off five
+        different things -- so each copy has its own port rather than sharing
+        the module's. Qualified the same way outputs and controls are, which
+        keeps ``entry.inputs`` an ordinary flat dict that every existing
+        reader walks unchanged.
+        """
+        return [
+            cls.qualify(slug, name)
+            for slug, one in cls._copy_settings(settings)
+            for name in cls.inputs_for_copy(one)
         ]
 
     @classmethod
@@ -186,7 +206,17 @@ class Module(Schema):
 
     @classmethod
     def get_input(cls, name: str, settings=None) -> Optional[Input]:
-        """Find a declared input, or one derived from an anim-space row."""
+        """Find a declared input, or one derived from an anim-space row.
+
+        ``name`` may be qualified (``c1_root``); the copy prefix is stripped
+        first, and an unknown copy resolves to nothing.
+        """
+        slug = cls.slug_of(name)
+        if slug:
+            known = {item[0] for item in cls._copy_settings(settings)}
+            if slug not in known:
+                return None
+            name = name[len(slug) + 1 :]
         found = next((item for item in cls.inputs if item.name == name), None)
         if found is not None:
             return found

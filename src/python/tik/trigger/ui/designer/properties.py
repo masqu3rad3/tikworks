@@ -49,18 +49,22 @@ class DesignerProperties:
         return name or ""
 
     def _on_input_changed(self, input_name: str, source: str) -> None:
+        """Wire the input of the copy whose tab is showing.
+
+        Each copy owns its connections, so the port is qualified: five
+        fingers may hang off five different things.
+        """
         if self._current is None:
             return
+        port = self.input_port(input_name)
         try:
             if source:
-                self.guides.connect(f"{self._current.key}.{input_name}", source)
+                self.guides.connect(f"{self._current.key}.{port}", source)
             else:
-                self.guides.disconnect(f"{self._current.key}.{input_name}")
+                self.guides.disconnect(f"{self._current.key}.{port}")
         except TriggerError as error:
             self.events.log(str(error), level="warning")
-            self._input_rows[input_name].set_source(
-                self._current.inputs.get(input_name, "")
-            )
+            self._input_rows[input_name].set_source(self._current.inputs.get(port, ""))
             return
         self.refresh()
 

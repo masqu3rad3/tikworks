@@ -212,3 +212,33 @@ def test_a_copys_controls_still_carry_its_own_name(scene):
     scene.test_build()
     assert _built("index_fk0_ctrl")
     assert _built("thumb_fk0_ctrl")
+
+
+def test_two_copies_can_hang_off_different_parents(scene):
+    """Each copy owns its input, so five fingers may attach to five things."""
+    left = scene.add("base", name="lhand", side="C")
+    right = scene.add("base", name="rhand", side="C")
+    hand = scene.add("fkchain", name="fingers", side="L", segments=1)
+    hand.copies = [
+        {"slug": "", "name": "index", "segments": 1, "spacing": 5.0},
+        {"slug": "c1", "name": "thumb", "segments": 1, "spacing": 5.0},
+    ]
+    assert hand.module_class.input_names(hand.settings) == ["root", "c1_root"]
+
+    scene.connect(f"{hand.key}.root", f"{left.key}.root")
+    scene.connect(f"{hand.key}.c1_root", f"{right.key}.root")
+    assert hand.instance.inputs["root"] == f"{left.key}.root"
+    assert hand.instance.inputs["c1_root"] == f"{right.key}.root"
+
+    scene.draw()
+    scene.test_build()
+    assert _built("index_fk0_ctrl")
+    assert _built("thumb_fk0_ctrl")
+
+
+def test_a_copy_owns_every_setting_by_default(scene):
+    """Not just segments: spacing and controller size are the copy's too."""
+    hand = scene.add("fkchain", name="fingers", side="L", segments=1)
+    module_cls = hand.module_class
+    for name in ("segments", "spacing", "controller_size"):
+        assert name in module_cls.per_copy_fields(), name

@@ -232,3 +232,53 @@ def test_the_graph_node_exposes_every_copys_outputs(designer):
     designer.refresh()
     node = designer.graph.graph.nodes[handle.key]
     assert any(name.startswith("c1_") for name in node.outputs)
+
+
+# ---------------------------------------------------- per-copy connections
+def test_each_copy_shows_its_own_input_row(designer):
+    handle = _chain(designer)
+    other = designer.guides.add("toy_root", name="hand")
+    output = list(other.outputs)[0]
+    _select(designer, handle)
+    designer._on_add_copy()
+
+    designer.tab_bar.setCurrentIndex(1)
+    designer._on_input_changed("root", f"{other.key}.{output}")
+    assert handle.instance.inputs.get("c1_root") == f"{other.key}.{output}"
+    assert "root" not in handle.instance.inputs
+
+
+def test_the_first_copys_input_stays_unqualified(designer):
+    handle = _chain(designer)
+    other = designer.guides.add("toy_root", name="hand")
+    output = list(other.outputs)[0]
+    _select(designer, handle)
+    designer._on_add_copy()
+
+    designer.tab_bar.setCurrentIndex(0)
+    designer._on_input_changed("root", f"{other.key}.{output}")
+    assert handle.instance.inputs.get("root") == f"{other.key}.{output}"
+
+
+def test_the_input_row_shows_the_current_copys_source(designer):
+    handle = _chain(designer)
+    other = designer.guides.add("toy_root", name="hand")
+    output = list(other.outputs)[0]
+    _select(designer, handle)
+    designer._on_add_copy()
+    designer.tab_bar.setCurrentIndex(1)
+    designer._on_input_changed("root", f"{other.key}.{output}")
+
+    designer.tab_bar.setCurrentIndex(0)
+    assert designer._input_rows["root"].line.text() == ""
+    designer.tab_bar.setCurrentIndex(1)
+    assert designer._input_rows["root"].line.text() == f"{other.key}.{output}"
+
+
+def test_the_graph_node_offers_a_port_per_copy(designer):
+    handle = _chain(designer)
+    designer._on_add_copy()
+    designer.refresh()
+    node = designer.graph.graph.nodes[handle.key]
+    assert "root" in node.inputs
+    assert "c1_root" in node.inputs

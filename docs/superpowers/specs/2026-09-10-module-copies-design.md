@@ -57,27 +57,50 @@ and `build(rig)`. `FkChain.build()` does not change by a line, and neither does 
 module. Repetition lands on every module, the ones that ship and the ones written later, for
 free.
 
-**`per_copy=True` declares which settings vary, and only that.** A field says once, in the
-module, whether it belongs to a copy or to the set:
+**A copy owns everything unless the module says otherwise.** A copy is a whole module's worth
+of settings *and connections*: its fields, and its inputs. Sharing is the exception a module
+author declares:
 
 ```python
 class FkChain(Module):
-    segments        = IntField(3, min=1, max=50, per_copy=True)
-    spacing         = FloatField(5.0, per_copy=True)
-    controller_size = FloatField(2.0)                    # one value for the set
+    segments        = IntField(3, min=1, max=50)   # the copy's
+    spacing         = FloatField(5.0)              # the copy's
+    controller_size = FloatField(2.0)              # the copy's
 ```
 
-A per-copy field always renders inside the tabs, even when every copy holds the same value. An
-ordinary field always renders above them. The panel never infers and never reflows.
+Only `shared=True` opts out, and on `Module` itself only four things take it: `copies`, and the
+three tables (`anim_spaces`, `pivot_presets`, `control_shape_overrides`) that address controls
+by their already-qualified names, so one table serves every copy.
+
+A per-copy field always renders inside the tabs; a shared one always renders above them. The
+panel never infers and never reflows.
+
+**Inputs are per copy too.** `input_names` qualifies them the way outputs and controls are
+qualified, so a two-copy module exposes `root` and `c1_root` and five fingers may hang off five
+different things. `entry.inputs` stays an ordinary flat dict, which is what keeps every existing
+reader of it working untouched.
+
+### 2.0 A correction, recorded
+
+This started the other way round: `per_copy=True` marked the exceptions and everything else was
+shared. It shipped and was wrong in use — on `fkchain` and `arm` only `segments` varied and the
+copies were otherwise locked together, which is not what a copy is. The default is now
+per-copy, which was the option rejected when this was first designed. Recording it because the
+reasoning that lost is instructive: sharing looked like the safe default because it is the
+smaller change, but a copy that cannot differ is not a copy.
 
 ### 2.1 What was rejected, and a correction
 
-**Deriving common-versus-per-copy from the values.** The previous design compared members and
-put the fields they agreed on above the tabs. It is what the panel did, and it is wrong for a
-reason worth recording: `segments` is not shared because five fingers happen to hold 4 today.
-A chain's length is a property of that chain. Asked who decided `segments` was common, the
-honest answer was *nobody, the panel inferred it from values* — and an inference that reshuffles
-the form as the rigger types is a poor substitute for a fact the module author already knows.
+**Deriving common-versus-per-copy from the values.** An earlier design compared members and put
+the fields they agreed on above the tabs. It is wrong for a reason worth recording: `segments`
+is not shared because five fingers happen to hold 4 today. A chain's length is a property of
+that chain. Asked who decided `segments` was common, the honest answer was *nobody, the panel
+inferred it from values* — and an inference that reshuffles the form as the rigger types is a
+poor substitute for a fact the module author already knows.
+
+**Declaring the per-copy fields rather than the shared ones.** The first cut of this design.
+See §2.0: it makes the common case the one an author has to remember, and every module they
+forget ships copies that cannot differ.
 
 **Groups of separate modules, with the selection fixed.** Making the tab bar drive the tree
 selection and dropping the group row would have addressed §1's symptoms. It keeps two
@@ -236,16 +259,17 @@ is the rule §1 was written to enforce, and §10 tests it directly.
 
 ## 8. What stays module-level
 
-The module name and side; the input connections; and the three tables the base class
-declares — `anim_spaces`, `pivot_presets` and `control_shape_overrides`.
+The module name and side, the copy list itself, and the three tables the base class declares —
+`anim_spaces`, `pivot_presets` and `control_shape_overrides`.
 
 Those three are keyed by control name, and control names are already copy-qualified (§6), so
 one module-level table addresses any copy's control without becoming per-copy itself. A space
 on `thumb_fk0` and a shape override on `index_fk2` are ordinary rows.
 
-Inputs are shared deliberately. Five fingers attach to one hand; that is the common case and
-the whole reason the graph collapses. A copy that genuinely needs its own parent is a separate
-module, which remains available and is the right answer for it.
+Inputs are **not** shared: see §2. Each copy carries its own, qualified the way its outputs
+are, so the collapsed node offers `root` and `c1_root` and the rigger wires each. Five fingers
+attaching to one hand is then five identical wires rather than a constraint of the model, which
+is the right way round — the model should not decide that for them.
 
 ## 9. What this gives up
 
@@ -266,9 +290,18 @@ Two integration tests carry the design, and each one makes a decision above fals
 empty slug and §5's blank-name fallback, and it is what licenses "no migration, no schema
 bump".
 
-**A five-copy `fkchain` builds what five separate `fkchain` modules build**, node for node.
+**A five-copy `fkchain` builds the same *control names* as five separate `fkchain` modules.**
 This is §5's naming decision, and it is the promise that an existing rig can be rebuilt this
 way without renaming a single control.
+
+Control names only, deliberately. The *hierarchy* differs and is meant to: five separate
+modules stand up five group trees, while five copies of one module share its single
+`L_fingers_grp`. The four groups and the preferences wiring belong to the module — the first
+copy creates them and the rest build into them — because a rigger looking at `trigger_grp`
+wants one entry per module, not one per finger. Sockets stay per copy inside the shared
+`socket_grp`: `rig.socket(match=...)` aligns a socket to that copy's guide, so a single shared
+socket is dragged to the last copy's guide and takes every rig already parented under it
+along.
 
 Plus unit tests for the per-copy view, role expansion, manifest qualification, copy-name
 uniqueness, and an existing `.tr` loading as a one-copy module unchanged.

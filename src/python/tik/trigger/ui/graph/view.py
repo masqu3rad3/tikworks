@@ -203,9 +203,8 @@ class GraphView(QtWidgets.QGraphicsView):
             space_names = [
                 item.name for item in module_cls.space_inputs(handle.settings)
             ]
-            rows = max(
-                len(module_cls.inputs) + len(space_names), len(handle.outputs), 1
-            )
+            port_names = module_cls.input_names(handle.settings)
+            rows = max(len(port_names), len(handle.outputs), 1)
             pos = free_pos(handle.key, HEADER + rows * ROW + 8)
             primary = module_cls.primary_input()
             self.graph.add_node(
@@ -213,7 +212,7 @@ class GraphView(QtWidgets.QGraphicsView):
                     key=handle.key,
                     title=handle.key,
                     subtitle=module_cls.display_label(),
-                    inputs=[item.name for item in module_cls.inputs],
+                    inputs=list(port_names),
                     outputs=list(handle.outputs),
                     color=theme.SIDE.get(handle.side.value, theme.SIDE["C"]),
                     primary_input=primary.name if primary else None,

@@ -489,29 +489,29 @@ class Builder:
         never for a typo.
         """
         built = report.rigs[instance.instance_id]
-        for declared in module_cls.inputs:
-            source = inputs.get(declared.name)
-            if not source or self._out_of_scope(source, by_key):
-                if not declared.required:
-                    continue
-                raise AttachError(
-                    f"{instance.key}.{declared.name}: required input has no source.",
-                    instance_id=instance.instance_id,
-                    module_type=instance.module_type,
+        # Per copy: each one has its own port and its own socket, so five
+        # fingers may hang off five different things.
+        for slug, ctx in built.contexts:
+            for declared in module_cls.inputs:
+                port = module_cls.qualify(slug, declared.name)
+                source = inputs.get(port)
+                if not source or self._out_of_scope(source, by_key):
+                    if not declared.required:
+                        continue
+                    raise AttachError(
+                        f"{instance.key}.{port}: required input has no source.",
+                        instance_id=instance.instance_id,
+                        module_type=instance.module_type,
+                    )
+                node = self.resolve(
+                    source,
+                    by_key,
+                    report,
+                    where=f"{instance.key}.{port}",
+                    instance=instance,
                 )
-            node = self.resolve(
-                source,
-                by_key,
-                report,
-                where=f"{instance.key}.{declared.name}",
-                instance=instance,
-            )
-            # Every copy attaches to the same source: inputs belong to the
-            # module, not to one copy of it, so each copy's socket is driven
-            # by the one thing the rigger wired.
-            for _slug, ctx in built.contexts:
                 connect(ctx, declared.name, node)
-            report.connections.append((f"{instance.key}.{declared.name}", source))
+                report.connections.append((f"{instance.key}.{port}", source))
 
     def _connect_spaces(self, instances, report: BuildReport, by_key: dict) -> None:
         """Build one space switch per (control, mode), after all modules exist.
@@ -666,7 +666,11 @@ class Builder:
                 if pose.role.startswith(prefix) and Module.slug_of(pose.role) == slug
             ],
             parent=instance.parent,
-            inputs=dict(instance.inputs),
+            inputs={
+                name[len(prefix) :]: source
+                for name, source in instance.inputs.items()
+                if name.startswith(prefix) and Module.slug_of(name) == slug
+            },
         )
 
     def _build_one(self, instance: ModuleInstance, scaffold, bind_parent=None):

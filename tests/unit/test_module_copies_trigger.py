@@ -89,8 +89,8 @@ def _toy():
         guides = GuideLayout("root", multi="segment", min=1)
         outputs = ("root", "end")
         controls = ("fk",)
-        segments = IntField(2, per_copy=True)
-        size = FloatField(1.0)
+        segments = IntField(2)
+        size = FloatField(1.0, shared=True)
 
         def guide_count(self):
             return self.segments
@@ -315,3 +315,49 @@ def test_a_pre_copies_fkchain_keeps_its_outputs():
         "segment2",
         "end",
     )
+
+
+# ------------------------------------------------------------- per-copy inputs
+def test_every_setting_is_per_copy_by_default():
+    """A copy is a whole module's worth of settings."""
+    Toy = _toy()
+    assert "segments" in Toy.per_copy_fields()
+    assert "size" in Toy.shared_fields()  # the one exception this toy declares
+
+
+def test_the_base_tables_stay_shared():
+    """They address controls by qualified name, so one table serves every
+    copy; making them per-copy would break that addressing."""
+    Toy = _toy()
+    for name in ("anim_spaces", "pivot_presets", "control_shape_overrides"):
+        assert name in Toy.shared_fields(), name
+    assert "copies" in Toy.shared_fields()
+
+
+def test_inputs_are_qualified_per_copy():
+    """Each copy attaches where it likes, so each has its own port."""
+    Toy = _toy()
+    settings = {
+        "copies": [{"slug": "", "name": "index"}, {"slug": "c1", "name": "thumb"}]
+    }
+    assert Toy.input_names(settings) == ["root", "c1_root"]
+
+
+def test_one_copy_leaves_the_input_bare():
+    assert _toy().input_names({}) == ["root"]
+
+
+def test_get_input_resolves_a_qualified_name():
+    Toy = _toy()
+    settings = {
+        "copies": [{"slug": "", "name": "index"}, {"slug": "c1", "name": "thumb"}]
+    }
+    assert Toy.get_input("c1_root", settings).name == "root"
+    assert Toy.get_input("root", settings).name == "root"
+    assert Toy.get_input("c9_root", settings) is None
+
+
+def test_the_primary_input_is_still_the_first_copys():
+    """One module, one tree row, one parent: the first copy's."""
+    Toy = _toy()
+    assert Toy.primary_input().name == "root"
