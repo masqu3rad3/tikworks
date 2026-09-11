@@ -658,7 +658,24 @@ class GraphView(QtWidgets.QGraphicsView):
     def focusNextPrevChild(self, next_child: bool) -> bool:  # noqa: N802
         return False  # keep Tab for the palette
 
+    def typing_in_a_filter(self) -> bool:
+        """Whether the keyboard currently belongs to a text field in here.
+
+        The shortcut side is handled by ``FilterLineEdit`` claiming its keys
+        back; this is the other path -- the view's own key handler, which
+        would otherwise swallow a keystroke meant for a search box.
+        """
+        focused = QtWidgets.QApplication.focusWidget()
+        if focused is None:
+            return False
+        if isinstance(focused, QtWidgets.QLineEdit):
+            return True
+        return False
+
     def keyPressEvent(self, event) -> None:  # noqa: N802
+        if self.typing_in_a_filter():
+            super().keyPressEvent(event)
+            return
         key = event.key()
         if key == QtCore.Qt.Key_Tab:
             self.palette_requested.emit()

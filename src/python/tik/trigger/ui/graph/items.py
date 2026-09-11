@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from tik.shared.ui import theme
+from tik.shared.ui.filter_bar import FilterLineEdit
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
 from tik.trigger.ui.draw_state import DRAWN, NOT_DRAWN, STALE, STALE_INK
 
@@ -281,7 +282,10 @@ class NodeItem(QtWidgets.QGraphicsItem):
         gets editing, selection and a clear button for nothing, and only
         crowded nodes carry one, so the scene does not fill with widgets.
         """
-        edit = QtWidgets.QLineEdit()
+        # FilterLineEdit, not a plain QLineEdit: the window binds 1, 2 and 3
+        # to the display modes, and a QAction shortcut pre-empts the focused
+        # widget, so typing a copy name here changed the node's collapse mode.
+        edit = FilterLineEdit()
         edit.setPlaceholderText("filter ports…")
         edit.setClearButtonEnabled(True)
         edit.setText(self.port_filter)
