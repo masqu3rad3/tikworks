@@ -612,15 +612,15 @@ class Module(Schema):
                 )
                 problems.extend(f"{label}: {item}" for item in view.warnings())
             return problems
-        known = type(self).control_names(self.values())
+        spaceable = type(self).space_control_names(self.values())
         for row in self.anim_spaces:
             control, label = row.get("control", ""), row.get("label", "")
             if not control or not label:
                 continue
-            if control not in known:
+            if control not in spaceable:
                 problems.append(
                     f"anim space '{control}_{label}': control '{control}' is "
-                    f"not built with the current settings"
+                    f"not offered an animation space with the current settings"
                 )
         movable = type(self).pivot_control_names(self.values())
         for row in self.pivot_presets:
@@ -632,11 +632,12 @@ class Module(Schema):
                     f"pivot preset '{control}.{label}': control '{control}' has "
                     f"no movable pivot with the current settings"
                 )
+        shapeable = type(self).shape_control_names(self.values())
         for row in self.control_shape_overrides:
             control, shape = row.get("control", ""), row.get("shape", "")
             if not control:
                 continue
-            if control not in known:
+            if control not in shapeable:
                 problems.append(
                     f"control shape '{control}': control is not built with the "
                     f"current settings"

@@ -642,6 +642,9 @@ def test_an_unresolvable_shape_name_warns_but_does_not_invalidate():
     class ShapeToy(Module):
         module_type = "shapetoy"
         controls = ("root",)
+        # A declared default is what makes a control shape-editable, so a toy
+        # without one offers no row to put an unresolvable shape on.
+        control_shapes = {"root": "Circle"}
 
     toy = ShapeToy()
     toy.control_shape_overrides = [{"control": "root", "shape": "NotAShape"}]
@@ -707,3 +710,18 @@ def test_shape_control_names_keep_control_order():
         control_shapes = {"c": "Cube", "a": "Circle", "b": "Diamond"}
 
     assert Ordered.shape_control_names({}) == ("a", "b", "c")
+
+
+def test_a_space_row_on_a_narrowed_out_control_warns():
+    """A control the module does not offer a space is a stale row, not a rig."""
+
+    class Narrow(Module):
+        controls = ("a", "b")
+        space_controls = ("a",)
+        control_shapes = {"a": "Circle", "b": "Circle"}
+
+    module = Narrow()
+    module.anim_spaces = [{"control": "b", "mode": "parent", "label": "world"}]
+    problems = module.warnings()
+    assert len(problems) == 1
+    assert "'b'" in problems[0]
