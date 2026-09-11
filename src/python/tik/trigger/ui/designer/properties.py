@@ -6,6 +6,7 @@ write the current selection through ``self.guides``.
 
 from __future__ import annotations
 
+from tik.trigger.core import copies as copy_list
 from tik.trigger.core.exceptions import TriggerError
 
 
@@ -48,37 +49,77 @@ class DesignerProperties:
         return name or ""
 
     def _on_input_changed(self, input_name: str, source: str) -> None:
+        """Wire the input of the copy whose tab is showing.
+
+        Each copy owns its connections, so the port is qualified: five
+        fingers may hang off five different things.
+        """
         if self._current is None:
             return
+        port = self.input_port(input_name)
         try:
             if source:
-                self.guides.connect(f"{self._current.key}.{input_name}", source)
+                self.guides.connect(f"{self._current.key}.{port}", source)
             else:
-                self.guides.disconnect(f"{self._current.key}.{input_name}")
+                self.guides.disconnect(f"{self._current.key}.{port}")
         except TriggerError as error:
             self.events.log(str(error), level="warning")
-            self._input_rows[input_name].set_source(
-                self._current.inputs.get(input_name, "")
-            )
+            self._input_rows[input_name].set_source(self._current.inputs.get(port, ""))
             return
         self.refresh()
 
     @staticmethod
     def _topology(handle) -> tuple:
-        """What a settings change might alter: ports, controls and guide count."""
+        """What a settings change might alter: ports, controls and guide count.
+
+        The three candidate sets are here as well as ``control_names``,
+        because a module may narrow one of them without changing the controls
+        it builds -- and a section that empties has to leave the screen.
+        """
         module_cls = handle.module_class
         settings = handle.settings
         return (
             tuple(module_cls.input_names(settings)),
             tuple(module_cls.output_names(settings)),
             tuple(module_cls.control_names(settings)),
+            tuple(module_cls.space_control_names(settings)),
+            tuple(module_cls.pivot_control_names(settings)),
+            tuple(module_cls.shape_control_names(settings)),
             len(handle.instance.guides),
         )
 
-    def _on_setting_changed(self, name: str, _value) -> None:
+    def _on_setting_changed(self, name: str, _value, source=None) -> None:
+        """A field changed on ``source`` -- the object whose form emitted it.
+
+        The value is re-read from the object rather than taken from the
+        signal, because the field descriptor coerces on assignment and the
+        coerced value is the one to store. ``source`` says *which* object:
+        the module form edits the module, the copy form edits the current
+        copy, and reading the wrong one silently stores a stale value.
+        """
         if self._current is None or self._module_obj is None:
             return
-        value = getattr(self._module_obj, name)
+        source = source if source is not None else self._module_obj
+        if name in type(self._module_obj).per_copy_fields():
+            value = getattr(source, name)
+            # A per-copy field belongs to the copy whose tab is showing --
+            # decided by the field, not by which form emitted the change.
+            rows = self._module_obj.copy_rows()
+            row = copy_list.row_for(rows, self.current_slug())
+            if row is None:
+                return
+            row[name] = value
+            self._write_copies(rows, current=self.tab_bar.currentIndex())
+            # A multi-selection still edits every selected module together;
+            # on each of the others it is that module's *current* copy, which
+            # for an ungrouped selection is its only one.
+            for handle in self._multi:
+                if handle.instance_id == self._current.instance_id:
+                    continue
+                with self.watcher.mute():
+                    setattr(handle, name, value)
+            return
+        value = getattr(source, name)
         targets = self._multi or [self._current]
         before = [self._topology(handle) for handle in targets]
         with self.watcher.mute():

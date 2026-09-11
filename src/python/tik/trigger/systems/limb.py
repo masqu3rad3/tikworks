@@ -513,6 +513,32 @@ def limb_control_orients(
     return {_role(name, "fk", label): (0.0, 0.0, -90.0) for label in labels}
 
 
+def limb_pivot_controls(
+    name: str = "", labels: Sequence[str] = (), guides: Sequence[str] = ()
+) -> dict[str, str]:
+    """The guide each role's pivot presets anchor to.
+
+    The third mirror of ``limb_control_names``, and for the same reason: a
+    module that hardcoded the names this system chose would drift the moment a
+    role was renamed. ``guides`` is the limb's own three guide roles in order
+    (shoulder, elbow, hand), which the *module* owns -- this system never names
+    a guide.
+
+    Every role is offered one. Offering is free: nothing is built until the
+    rigger adds a preset row. The pole is placed at a computed rest position
+    and has no guide of its own, so it anchors to the mid guide and its
+    presets stack there unplaced until the rigger drags them.
+    """
+    return {
+        _role(name, "ik"): guides[-1],
+        **{
+            _role(name, "fk", label): guides[index]
+            for index, label in enumerate(labels)
+        },
+        _role(name, "pole"): guides[1],
+    }
+
+
 def _derive_size(joints: Sequence) -> float:
     """Base controller size from the chain's rest length."""
     total = 0.0

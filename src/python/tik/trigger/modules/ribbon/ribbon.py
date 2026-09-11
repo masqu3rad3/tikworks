@@ -69,13 +69,13 @@ class RibbonModule(Module):
     )
 
     @classmethod
-    def output_names(cls, settings=None):
+    def outputs_for_copy(cls, settings=None):
         """One output per ribbon joint."""
         count = int((settings or {}).get("joint_count", cls.joint_count.default))
         return tuple(f"joint{index}" for index in range(count))
 
     @classmethod
-    def control_names(cls, settings=None):
+    def controls_for_copy(cls, settings=None):
         """The end controls, when asked for, around one control per mid."""
         settings = settings or {}
         count = int(settings.get("mid_count", cls.mid_count.default))
@@ -88,9 +88,37 @@ class RibbonModule(Module):
         )
 
     @classmethod
-    def control_shape_defaults(cls, settings=None):
+    def control_shape_defaults_for_copy(cls, settings=None):
         """A circle for every control the settings ask for."""
-        return {role: "Circle" for role in cls.control_names(settings)}
+        return {role: "Circle" for role in cls.controls_for_copy(settings)}
+
+    @classmethod
+    def pivot_controls_for_copy(cls, settings=None):
+        """Only the end controls; a mid gets no movable pivot.
+
+        A mid rides the surface rather than sitting on a guide, and moving its
+        pivot does not behave the way a moved pivot should -- so offering one
+        would be offering something that does not work. The ends pin to a
+        guide each and behave normally.
+        """
+        return {
+            role: (role, 0)
+            for role in cls.controls_for_copy(settings)
+            if role in ("start", "end")
+        }
+
+    @classmethod
+    def pivot_exempt_for_copy(cls, settings=None):
+        """The mids, on purpose: a moved pivot does not behave there.
+
+        A mid control rides the ribbon surface rather than sitting on a guide
+        of its own, so a pivot moved away from it does not rotate about where
+        the animator put it. Offering the preset would be offering something
+        that does not work.
+        """
+        return tuple(
+            role for role in cls.controls_for_copy(settings) if role.startswith("mid")
+        )
 
     # --------------------------------------------------------------- guides
     def draw_guides(self, guides) -> None:

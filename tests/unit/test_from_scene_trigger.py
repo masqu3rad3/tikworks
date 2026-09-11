@@ -15,7 +15,7 @@ def drawn_chain(segments=2, instance_id="id1", name="tail", side="L", **settings
     entry = ModuleEntry(
         instance_id, "fkchain", name, side, settings={"segments": segments, **settings}
     )
-    expand_guides(entry, registry.get_module("fkchain").guides, segments)
+    expand_guides(entry, registry.get_module("fkchain").guides.expand(segments))
     regenerate.regenerate(entry)
     return entry
 

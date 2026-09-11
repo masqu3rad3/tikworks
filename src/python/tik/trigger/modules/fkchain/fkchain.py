@@ -23,26 +23,39 @@ class FkChain(Module):
     outputs = ("root", "end")  # plus one "segment<N>" output per joint after the root
 
     @classmethod
-    def output_names(cls, settings=None):
+    def outputs_for_copy(cls, settings=None):
         """``root``, one output per segment, then ``end``."""
         count = int((settings or {}).get("segments", cls.segments.default))
         return ("root", *(f"segment{index + 1}" for index in range(count)), "end")
 
     @classmethod
-    def control_names(cls, settings=None):
+    def controls_for_copy(cls, settings=None):
         """One FK controller per segment: ``build`` skips the last joint."""
         count = int((settings or {}).get("segments", cls.segments.default))
         return tuple(f"fk{index}" for index in range(count))
 
     @classmethod
-    def control_shape_defaults(cls, settings=None):
+    def control_shape_defaults_for_copy(cls, settings=None):
         """One circle per FK controller."""
-        return {role: "Circle" for role in cls.control_names(settings)}
+        return {role: "Circle" for role in cls.controls_for_copy(settings)}
 
     @classmethod
-    def control_orient_defaults(cls, settings=None):
+    def control_orient_defaults_for_copy(cls, settings=None):
         """Every control here is FK, so every shape wraps its bone."""
-        return {role: (0.0, 0.0, -90.0) for role in cls.control_names(settings)}
+        return {role: (0.0, 0.0, -90.0) for role in cls.controls_for_copy(settings)}
+
+    @classmethod
+    def pivot_controls_for_copy(cls, settings=None):
+        """Each FK control anchors to the guide it is matched to.
+
+        ``build`` matches ``fk0`` to the root guide and ``fk{i}`` to
+        ``segment{i-1}``, so the anchors carry the index rather than a bare
+        role -- a bare ``"segment"`` would stack every preset on the first.
+        """
+        found = {"fk0": ("root", 0)}
+        for index in range(1, len(cls.controls_for_copy(settings))):
+            found[f"fk{index}"] = ("segment", index - 1)
+        return found
 
     segments = IntField(3, min=1, max=50, help="Number of joints after the root")
     spacing = FloatField(5.0, min=0.01, help="Default distance between guides")

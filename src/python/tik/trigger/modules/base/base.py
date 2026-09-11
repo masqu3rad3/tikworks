@@ -21,6 +21,7 @@ class Base(Module):
     outputs = ("root",)
     controls = ("root",)
     control_shapes = {"root": "Circle"}
+    pivot_controls = {"root": "root"}
 
     controller_size = FloatField(10.0, min=0.01, label="Controller Size")
 

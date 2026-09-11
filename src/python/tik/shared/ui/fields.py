@@ -619,6 +619,10 @@ class FormBuilder(QtWidgets.QWidget):
                 self._layout.addWidget(fold)
                 self._groups[group.label] = fold
             for name, field in rows[key]:
+                if field.type_name == "table" and self._table_is_dead(name, field):
+                    # No widget and no label, so the fold pass below finds
+                    # nothing in this group and closes it.
+                    continue
                 widget = self._make_widget(name, field)
                 widget.setToolTip(field.help or "")
                 self._widgets[name] = widget
@@ -631,6 +635,15 @@ class FormBuilder(QtWidgets.QWidget):
                     form.addRow(widget)
                 else:
                     form.addRow(label, widget)
+        for label_text, fold in self._groups.items():
+            # A fold whose every field was skipped has nothing to open.
+            fold.setVisible(
+                any(
+                    field.group and field.group.label == label_text
+                    for name, field in target.fields().items()
+                    if name in self._widgets
+                )
+            )
         self._layout.addStretch(1)
         self.refresh()
 
@@ -669,12 +682,16 @@ class FormBuilder(QtWidgets.QWidget):
             if label is not None:
                 label.setVisible(visible)
         for group_label, group in self._groups.items():
+            # ``self._widgets``, not every declared field: a field ``set_target``
+            # skipped -- a table nobody could fill -- has no widget, and
+            # counting it here put back every fold ``set_target`` had closed.
             group.setVisible(
-                target is None
-                or any(
-                    name in target
+                any(
+                    target is None or name in target
                     for name, field in fields.items()
-                    if field.group and field.group.label == group_label
+                    if name in self._widgets
+                    and field.group
+                    and field.group.label == group_label
                 )
             )
 
@@ -818,6 +835,25 @@ class FormBuilder(QtWidgets.QWidget):
                 )
             )
         return widget
+
+    def _table_is_dead(self, name: str, field) -> bool:
+        """A table nobody could add a row to, that holds no rows to remove.
+
+        The test is per *column*: a column whose options are fixed and empty
+        is what makes a row unfillable, and a table may carry a static column
+        beside a resolved one. A table holding rows always renders, whatever
+        its options say -- otherwise a setting that narrows the candidates
+        would strand a row where the rigger cannot reach it.
+        """
+        if getattr(self._target, name, None):
+            return False
+        source = getattr(field, "rows_from", "")
+        if source and not self._resolve_choices(source):
+            return True
+        return any(
+            column.choices_from and not self._resolve_choices(column.choices_from)
+            for column in getattr(field, "columns", ())
+        )
 
     def _resolve_choices(self, attr: str) -> tuple:
         """The options a column's ``choices_from`` names on the current target.

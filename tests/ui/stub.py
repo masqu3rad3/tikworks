@@ -522,8 +522,19 @@ class StubScene:
         return GuideDocument(), RecoveryReport()
 
     def find_instances(self, scope="scene") -> list:
-        """The one scene scan the handles share; tests count calls to it."""
-        return list(self._instances.values())
+        """The one scene scan the handles share; tests count calls to it.
+
+        ``scope`` is honoured, as it is in the real ``nodes.find_instances``:
+        ``"scene"`` (or ``"selection"``) is everything, a collection of
+        instance ids is those. Ignoring it made ``GuideHandle.instance`` --
+        which asks for exactly one id and takes ``found[0]`` -- hand back the
+        *first module in the scene* for every handle, so any test reading
+        ``handle.instance`` against a scene with more than one module was
+        quietly asserting about the wrong module.
+        """
+        if isinstance(scope, str):
+            return list(self._instances.values())
+        return [self._instances[item] for item in scope if item in self._instances]
 
     def install_scene_job(self, event, callback):
         self._scene_jobs[event] = callback

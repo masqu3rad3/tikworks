@@ -32,7 +32,10 @@ def _structural_producers(entry) -> list:
         # scope would turn a build error into an unrelated crash here.
         module_cls = None
     if module_cls is not None:
-        skip = {item.name for item in module_cls.space_inputs(entry.settings)}
+        # Qualified: ``entry.inputs`` keys carry the copy slug, so the bare
+        # names ``space_inputs`` returns skipped only the first copy's port
+        # and a later copy's space connection read as structural.
+        skip = set(module_cls.space_input_names(entry.settings))
     found = []
     for name, source in (entry.inputs or {}).items():
         if name in skip or not source:

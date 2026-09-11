@@ -8,6 +8,7 @@ removes naming, tagging, placement or registration boilerplate, so
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
@@ -18,7 +19,8 @@ from tik.maya import naming
 from tik.maya.roles.controller import Controller
 from tik.trigger.core import shapes as shape_library
 from tik.trigger.core.exceptions import GuideError
-from tik.trigger.core.manifest import TIERS
+from tik.trigger.core.manifest import TIERS, instance_key
+from tik.trigger.core.module import Module
 from tik.trigger.core.schemas import ModuleInstance
 from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_joint
 
@@ -103,14 +105,48 @@ class RigGroups:
 class GuideDraft:
     """Creates tagged guide joints for ``Module.draw_guides``."""
 
-    def __init__(self, module, holder, parent_node=None) -> None:
+    def __init__(self, module, holder, parent_node=None, parents=None) -> None:
         self.module = module
         self.side = module.side
         self.side_mult = module.side.multiplier
         self.holder = holder
         self.parent_node = parent_node
+        #: ``{slug: joint}`` -- where each copy's root hangs. Each copy has
+        #: its own primary input, so each has its own producer.
+        self._parents = dict(parents or {})
+        self._default_parent = parent_node
         self.created: dict[tuple[str, int], tm.Joint] = {}
         self.root: Optional[tm.Joint] = None
+        #: Slug of the copy currently drawing, and the view drawing it.
+        self._slug = ""
+        self._drawing = module
+
+    @contextmanager
+    def for_copy(self, slug: str, view):
+        """Draw one copy: qualify its roles, and give it its own root.
+
+        ``view`` is the per-copy module, so the joints are named after the
+        copy and ``attrs_for_role`` is asked about bare roles. ``root`` resets
+        because each copy is its own chain -- without that, copy two's first
+        joint would parent under copy one's root.
+        """
+        was = (self._slug, self._drawing, self.root, self.parent_node)
+        self._slug, self._drawing, self.root = slug, view, None
+        self.parent_node = self._parents.get(slug, self._default_parent)
+        try:
+            yield self
+        finally:
+            self._slug, self._drawing, self.root, self.parent_node = was
+
+    def made(self, role: str, index: int = 0):
+        """A joint this draft already created, in the *current copy's* scope.
+
+        ``created`` is keyed by the qualified role, so looking one up by its
+        bare name finds the first copy's joint whichever copy is drawing --
+        which is how every copy's pivot guides ended up piled under copy
+        one's anchor.
+        """
+        return self.created.get((Module.qualify(self._slug, role), index))
 
     def joint(
         self,
@@ -127,27 +163,29 @@ class GuideDraft:
         ``marker`` draws it as a locator cross rather than a bone -- what a
         pivot-preset guide wants.
         """
-        if (role, index) in self.created:
-            raise GuideError(f"Guide '{role}' [{index}] created twice.")
-        is_root = not self.created
+        key = (Module.qualify(self._slug, role), index)
+        if key in self.created:
+            raise GuideError(f"Guide '{key[0]}' [{index}] created twice.")
+        is_root = self.root is None
         if parent is None:
             parent = self.parent_node if is_root else self.root
             if parent is None:
                 parent = self.holder
         joint = create_guide_joint(
-            self.module,
+            self._drawing,
             role,
             position,
             index=index,
             parent=parent,
             radius=radius,
             marker=marker,
+            tag_role=key[0],
         )
-        for declared in self.module.attrs_for_role(role):
+        for declared in self._drawing.attrs_for_role(role):
             joint[declared.name].create(
                 "float", default=declared.default, keyable=declared.keyable
             )
-        self.created[(role, index)] = joint
+        self.created[key] = joint
         if is_root:
             self.root = joint
         return joint
@@ -163,6 +201,8 @@ class ModuleRig:
         scaffold,
         guide_nodes: dict,
         bind_parent=None,
+        shared=None,
+        group_name: str = "",
     ) -> None:
         self.module = module
         self.instance = instance
@@ -176,11 +216,22 @@ class ModuleRig:
         self.attachments: dict[str, Any] = {}
         self.controllers: list[Controller] = []
         self.deform_joints: list[tm.Joint] = []
-        self.groups = self._create_groups()
+        #: The name the four groups are built under. A module's copies share
+        #: one set of groups, so this is the *module's* name while
+        #: ``instance.name`` is the copy's -- which is what keeps the groups
+        #: ``L_fkchain_grp`` while the controls stay ``L_index_fk0``.
+        self.group_name = group_name or instance.name
+        # The four groups belong to the *module*, so a later copy builds into
+        # the ones already standing rather than a second set beside them.
+        # Its sockets do not: a socket is a copy's attach frame, and
+        # ``rig.socket(match=...)`` aligns it to that copy's own guide -- one
+        # shared socket would be dragged to wherever the last copy's guide
+        # is, taking every rig already parented under it along.
+        self.groups = self._create_groups() if shared is None else shared
+        self._create_sockets()
         # Resolved by the builder from the connected input's producer, so bind
         # joints are created in their final hierarchy position.
         self.bind_parent = bind_parent if bind_parent is not None else self.groups.bind
-        self._create_sockets()
 
     def _create_sockets(self) -> None:
         """One transform per declared input, in ``socket_grp``.
@@ -203,21 +254,37 @@ class ModuleRig:
             )
 
     # ------------------------------------------------------------- groups
+    @property
+    def group_key(self) -> str:
+        """The *module's* display key, as the visibilities enum names it."""
+        return instance_key(self.group_name, self.side.value)
+
+    def group_label(self, *tokens, suffix=None) -> str:
+        """A name in the *module's* namespace rather than the copy's.
+
+        The four groups and the sockets belong to the module and are shared
+        by its copies, so they cannot be named after whichever copy happened
+        to build first.
+        """
+        return naming.format_name(
+            *tokens, side=self.side.value, prefix=self.group_name, suffix=suffix
+        )
+
     def _create_groups(self) -> RigGroups:
         limb = tm.Transform.create(
-            name=self.name(suffix="grp"), parent=self.rig_root.long_name
+            name=self.group_label(suffix="grp"), parent=self.rig_root.long_name
         )
         socket = tm.Transform.create(
-            name=self.name("socket", suffix="grp"), parent=limb.long_name
+            name=self.group_label("socket", suffix="grp"), parent=limb.long_name
         )
         control = tm.Transform.create(
-            name=self.name("control", suffix="grp"), parent=limb.long_name
+            name=self.group_label("control", suffix="grp"), parent=limb.long_name
         )
         rig = tm.Transform.create(
-            name=self.name("rig", suffix="grp"), parent=limb.long_name
+            name=self.group_label("rig", suffix="grp"), parent=limb.long_name
         )
         bind = tm.Transform.create(
-            name=self.name("bind", suffix="grp"), parent=limb.long_name
+            name=self.group_label("bind", suffix="grp"), parent=limb.long_name
         )
 
         self.separator(limb, "visibility_")
@@ -235,7 +302,7 @@ class ModuleRig:
                 tags.KIND: tags.RIG,
                 tags.MODULE: self.module.module_type,
                 tags.INSTANCE: self.instance.instance_id,
-                tags.NAME: self.instance.name,
+                tags.NAME: self.group_name,
                 tags.SIDE: self.side.value,
             },
         )
@@ -474,7 +541,7 @@ class ModuleRig:
                 would leave the rigger's preset rows pointing at nothing.
         """
         role = main.transform.meta.get(tags.ROLE, main.transform.name)
-        if role not in self.module.pivot_controls:
+        if role not in self.module.pivot_controls_for_copy(self.module.values()):
             raise GuideError(
                 f"'{self.module.module_type}' does not declare a movable pivot "
                 f"for control '{role}'."
@@ -507,11 +574,7 @@ class ModuleRig:
 
     def _pivot_labels(self, role: str) -> list[str]:
         """Preset labels declared for ``role``, in row order."""
-        return [
-            row["label"]
-            for row in self.module.pivot_rows(self.module.values())
-            if row.get("control") == role and row.get("label")
-        ]
+        return self.module.pivot_labels(role)
 
     def _wire_pivot_presets(
         self, main: Controller, pivot: Controller, role: str, labels: list[str]

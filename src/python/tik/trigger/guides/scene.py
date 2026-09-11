@@ -11,6 +11,7 @@ from typing import Any, Iterable, Optional
 from maya import cmds
 
 from tik.core.side import Side
+from tik.trigger.core import copies as copy_list
 from tik.trigger.core import registry
 from tik.trigger.core.events import EventBus
 from tik.trigger.core.exceptions import GuideError
@@ -314,12 +315,7 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
             settings=module.values(),
             inputs=resolved,
         )
-        expand_guides(
-            entry,
-            module.guides,
-            module.guide_count(),
-            extra=module.pivot_guide_roles(module.values()),
-        )
+        expand_guides(entry, module.expected_guides())
         for pose in poses or []:
             record = entry.guide(pose.role, pose.index)
             if record is not None:
@@ -489,12 +485,7 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         )
         with nodes.undo_chunk("Trigger module settings"):
             entry.settings = module.values()
-            expand_guides(
-                entry,
-                module.guides,
-                module.guide_count(),
-                extra=module.pivot_guide_roles(module.values()),
-            )
+            expand_guides(entry, module.expected_guides())
             self._apply(entry)
 
     def _root_node(self, instance_id: str):
@@ -590,6 +581,15 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         taken = {entry.key for entry in self.document.modules} | {
             group.name for group in self.document.scene_groups
         }
+        # Copy names reach the rig where the module name does not, so two
+        # modules each holding a copy called `index` would build colliding
+        # controls. Read straight off the entry: no registry round-trip, and
+        # an entry whose type is not registered still reserves its own key.
+        for entry in self.document.modules:
+            for row in entry.settings.get("copies") or [{}]:
+                taken.add(
+                    instance_key(copy_list.copy_name(row, entry.name), entry.side)
+                )
         base = name.rstrip("0123456789") or name
         candidate, index = name, 1
         while instance_key(candidate, side) in taken:
@@ -784,12 +784,7 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
                 settings=instance.settings,
             )
             existing_entry.settings = module.values()
-            expand_guides(
-                existing_entry,
-                module.guides,
-                module.guide_count(),
-                extra=module.pivot_guide_roles(module.values()),
-            )
+            expand_guides(existing_entry, module.expected_guides())
             existing_entry.inputs = {
                 name: self.source_as_id(
                     mirror_source(source, handle.side.value, target_side.value)

@@ -38,11 +38,21 @@ def _module_for(entry: ModuleEntry):
     )
 
 
-def _producer_guide(entry: ModuleEntry, document: Optional[GuideDocument]):
-    """The guide joint this module's root should hang under, or None.
+def _producer_guide(
+    entry: ModuleEntry, document: Optional[GuideDocument], slug: str = ""
+):
+    """The guide joint one copy's root should hang under, or None.
 
     The DAG is a rendering of the primary input connection, rebuilt every time,
     so the joint hierarchy and the connection graph cannot diverge (spec 4.4).
+
+    ``slug`` says *which copy* is asking: each carries its own primary input,
+    so each hangs under its own producer. And the output it names is itself
+    qualified -- ``c1_hand`` is the second copy's hand -- so the slug has to
+    come off before the role is recognised and go back on before the joint is
+    looked up. Without that, ``c1_hand`` matched no layout role, fell back to
+    the producer's root, and every consumer of every copy piled onto the
+    first copy's root joint.
     """
     if document is None:
         return None
@@ -50,7 +60,8 @@ def _producer_guide(entry: ModuleEntry, document: Optional[GuideDocument]):
     primary = module_cls.primary_input()
     if primary is None:
         return None
-    source = entry.inputs.get(primary.name)
+    port = primary.name if primary.shared else module_cls.qualify(slug, primary.name)
+    source = entry.inputs.get(port)
     if not source or "." not in source:
         return None
     producer_id, _dot, output = source.rpartition(".")
@@ -58,11 +69,13 @@ def _producer_guide(entry: ModuleEntry, document: Optional[GuideDocument]):
     if producer is None:
         return None
     producer_cls = registry.get_module(producer.module_type)
-    role = (
-        output if output in producer_cls.guides.all_roles else producer_cls.guides.root
-    )
+    out_slug = producer_cls.slug_of(output)
+    bare = output[len(out_slug) + 1 :] if out_slug else output
+    role = bare if bare in producer_cls.guides.all_roles else producer_cls.guides.root
     found = nodes.guide_nodes(producer_id)
-    return found.get((role, 0)) or found.get((producer_cls.guides.root, 0))
+    return found.get((producer_cls.qualify(out_slug, role), 0)) or found.get(
+        (producer_cls.qualify(out_slug, producer_cls.guides.root), 0)
+    )
 
 
 def _primary_producer_id(entry: ModuleEntry) -> Optional[str]:
@@ -151,7 +164,13 @@ def regenerate(entry: ModuleEntry, document: Optional[GuideDocument] = None) -> 
         if existing:
             cmds.delete([node.long_name for node in existing.values() if node.exists()])
 
-        draft = GuideDraft(module, holder, _producer_guide(entry, document))
+        # One parent per copy: each copy carries its own primary input, so
+        # each hangs under its own producer rather than all of them under
+        # whatever the first copy happens to be wired to.
+        parents = {
+            slug: _producer_guide(entry, document, slug) for slug in module.copy_slugs()
+        }
+        draft = GuideDraft(module, holder, parents.get(""), parents=parents)
         module.draw_all_guides(draft)
         created = draft.created
         for record in entry.guides:

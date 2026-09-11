@@ -309,6 +309,32 @@ def test_space_inputs_do_not_feed_build_order(toys):
     assert report.count == 2
 
 
+def test_a_later_copys_space_does_not_feed_build_order(toys):
+    """The same rig, with the spaces hanging off a second copy.
+
+    ``space_inputs`` names are bare while ``entry.inputs`` keys are qualified,
+    so only the first copy's space port was excluded from the topological
+    sort. A second copy's reached it and the two modules looked like a cycle,
+    failing the build outright.
+    """
+    pair = [
+        toys.add(
+            "toy_root",
+            name=name,
+            copies=[{"slug": "", "name": name}, {"slug": "c1", "name": f"{name}1"}],
+        )
+        for name in ("a", "b")
+    ]
+    first, second = pair
+    _rows(first, [{"control": "root", "mode": "parent", "label": "b"}])
+    _rows(second, [{"control": "root", "mode": "parent", "label": "a"}])
+    first.set_input("c1_root_b", "b.root")
+    second.set_input("c1_root_a", "a.root")
+
+    report = Builder().build(document=toys.document, afterlife="keep")
+    assert report.count == 2
+
+
 def test_space_connections_are_grouped_by_control_and_mode(toys):
     toys.add("toy_root", name="body")
     toys.add("toy_root", name="head")

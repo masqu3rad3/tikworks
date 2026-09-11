@@ -478,7 +478,7 @@ def test_scene_node_groups_and_side_combo(designer):
 def test_properties_binding_rename_mirror_delete(designer):
     designer.set_side("L")
     chain = designer.create_guides("toy_chain")[0]
-    designer.form.widget("segments").setValue(4)
+    designer.copy_form.widget("segments").setValue(4)
     # settings are the session's; the form writes them through write_settings,
     # with no Maya plug in between any more
     assert designer.guides.settings[chain.instance_id]["segments"] == 4
@@ -603,10 +603,10 @@ def test_multi_selection_edits_same_type_together(designer, qapp):
     )
     assert not designer.name_edit.isEnabled()
     qapp.processEvents()  # Qt shows freshly added children on the next event round
-    assert designer.form.widget(
+    assert designer.copy_form.widget(
         "segments"
     ).isVisible()  # the fields really are there to edit
-    designer.form.widget("segments").setValue(5)
+    designer.copy_form.widget("segments").setValue(5)
     assert all(
         designer.guides.settings[chain.instance_id]["segments"] == 5 for chain in chains
     )
@@ -755,8 +755,8 @@ def test_tree_filter_and_ctrl_click_toggle(designer, qapp):
     }
     assert len(designer.selected_handles()) == 2 and designer.multi_label.isVisible()
     qapp.processEvents()
-    assert designer.form.widget("segments").isVisible()
-    designer.form.widget("segments").setValue(9)
+    assert designer.copy_form.widget("segments").isVisible()
+    designer.copy_form.widget("segments").setValue(9)
     assert all(
         designer.guides.settings[chain.instance_id]["segments"] == 9 for chain in chains
     )
@@ -1001,7 +1001,7 @@ def test_changing_segments_repaints_the_control_choices(designer):
     """The anim-space combo must not offer controls the module stopped building."""
     designer.set_side("L")
     designer.create_guides("toy_chain")
-    designer.form.widget("segments").setValue(4)
+    designer.copy_form.widget("segments").setValue(4)
     # through add_row, so the row reaches the session the way the rigger's
     # click does -- setValue only repaints the widget
     designer.form.widget("anim_spaces").add_row(
@@ -1009,7 +1009,7 @@ def test_changing_segments_repaints_the_control_choices(designer):
     )
     assert _control_items(designer) == ("fk0", "fk1", "fk2", "fk3")
 
-    designer.form.widget("segments").setValue(2)
+    designer.copy_form.widget("segments").setValue(2)
     # the row survives, marked, and the combo offers only what is built now
     assert _control_items(designer) == ("fk0", "fk1", "fk3 (missing)")
     assert designer.form.widget("anim_spaces").value() == [

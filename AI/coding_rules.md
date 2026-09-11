@@ -236,17 +236,68 @@ offset group.
 ### The Control Manifest
 
 `controls` lists **every controller the module builds** — not a curated subset.
-Every one of them can host an animation space, and it is the rigger, not the
-module author, who decides which deserve one. When a setting drives the set,
-override `control_names(settings)`, exactly as `output_names(settings)` does
-for outputs:
+What each rigger-facing section then *offers* is named separately, so a module
+states it rather than the table assuming it:
+
+| Attribute | Question it answers | Default |
+|---|---|---|
+| `controls` | What controllers do I build? | `()` |
+| `space_controls` | Which may host an animation space? | **all of `controls`** |
+| `pivot_controls` | Which get a movable pivot, anchored where? | `{}` |
+| `control_shapes` | Which have a definable shape, defaulting to what? | `{}` |
+
+`space_controls` is the one whose default is "all", and the asymmetry is the
+point: hosting a space is something any controller *can* do, so a module
+narrows rather than opts in. A pivot and a shape are offers a module makes.
+`control_shapes`' **keys are the Shapes section's candidate set** — there is no
+`shape_controls` list, because it would repeat `controls` line for line and then
+drift from it.
+
+A pivot anchor is a guide *reference*: `"hand"` means that role at index 0, and
+`("segment", 2)` addresses the third guide of a multi — which is what lets a
+module whose controls depend on a setting declare a pivot for each of them.
+
+**Declaring a pivot offers it; a preset row builds it.** The builder makes the
+pivot controller after `build()` returns, for every declared role that has rows,
+the same way a socket is made per declared input — so no module contains pivot
+code. It skips a role that already has one, so a module still calling
+`rig.pivot_control` itself gets one pivot rather than a second that fails.
+Every control a module builds must be offered a pivot: offering is free, so
+leaving one out is an oversight, not a decision. When it *is* a decision, say so
+in `pivot_exempt_for_copy` and give the reason in its docstring — the ribbon's
+mids are exempt because a mid rides the surface and a moved pivot does not
+behave there. A control may not be both offered and exempt.
+
+**A section with no candidates and no rows does not render.** A fold the rigger
+cannot use is worse than a missing one — it claims an offer the module does not
+make.
+
+When a setting drives any of these sets, override the matching `*_for_copy`
+hook — `controls_for_copy`, `space_controls_for_copy`, `pivot_controls_for_copy`,
+`control_shape_defaults_for_copy` — exactly as `outputs_for_copy` does for
+outputs:
 
 ```python
 @classmethod
-def control_names(cls, settings=None):
+def controls_for_copy(cls, settings=None):
     count = int((settings or {}).get("segments", cls.segments.default))
     return tuple(f"fk{index}" for index in range(count))
+
+@classmethod
+def pivot_controls_for_copy(cls, settings=None):
+    """Each FK control anchors to the guide it is matched to.
+
+    The anchors carry an index rather than a bare role -- a bare "segment"
+    would stack every preset on the first guide.
+    """
+    found = {"fk0": ("root", 0)}
+    for index in range(1, len(cls.controls_for_copy(settings))):
+        found[f"fk{index}"] = ("segment", index - 1)
+    return found
 ```
+
+The base class repeats each hook across the module's copies and qualifies the
+names, so an author writes single-copy code and never sees a copy.
 
 Two rules keep the manifest honest:
 

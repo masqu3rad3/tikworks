@@ -32,3 +32,24 @@ FRAME_TITLE = 20
 # Same family as the tree's provenance chip, so "borrowed" reads identically
 # in both panes rather than being learned twice.
 FRAME_INK = "#6f8fa8"
+
+#: The search overlay's width and its inset from the viewport corner.
+FILTER_WIDTH = 220
+FILTER_MARGIN = 8
+
+#: How far a node fades when the filter rules it out. Not zero: a filtered
+#: node keeps its place and its wires, so the graph never claims a connection
+#: that is not there -- it just stops competing for attention.
+FILTERED_OPACITY = 0.15
+
+#: Ink for a port group's heading -- the copy's name, drawn once above its
+#: ports instead of prefixed onto every one of them.
+PORT_GROUP_INK = "#8a8a8a"
+
+#: A node earns its own port filter at this many ports. Below it the list is
+#: readable at a glance and a search box would be clutter; above it, hunting
+#: for one port among forty is the whole problem.
+PORT_FILTER_MIN = 8
+
+#: Height of a node's port-filter row.
+PORT_FILTER_ROW = 18

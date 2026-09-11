@@ -10,13 +10,17 @@ from pathlib import Path
 from typing import Optional
 
 from tik.shared.ui import theme
+from tik.shared.ui.filter_bar import FilterBar
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
+from tik.trigger.core import copies as copy_list
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.core.schemas import split_source
 from tik.trigger.ui.draw_state import DRAWN
 
 from .constants import (
     COLUMN_GAP,
+    FILTER_MARGIN,
+    FILTER_WIDTH,
     GRID,
     HEADER,
     MODE_FULL,
@@ -65,6 +69,21 @@ class GraphView(QtWidgets.QGraphicsView):
         self.graph.setSceneRect(QtCore.QRectF(-WORLD, -WORLD, 2 * WORLD, 2 * WORLD))
         self._fitted = False
         self._navigated = False  # once the user pans/zooms, resizes stop re-fitting
+        # An overlay on the viewport rather than a widget above the view, the
+        # way Maya's node editor carries its search: the graph keeps the whole
+        # pane, and the bar floats over the corner of it.
+        self.filter_bar = FilterBar(self, placeholder="Find…")
+        self.filter_bar.setObjectName("GraphFilter")
+        self.filter_bar.filter_changed.connect(self.apply_filter)
+        # Committing a keyword adds a pill, which needs more room than an
+        # empty box, so the overlay is re-sized on every change rather than
+        # pinned to one width.
+        self.filter_bar.filter_changed.connect(self._resize_filter_soon)
+        #: ``{node key: term}`` -- each node's own port search. View state,
+        #: not rig data, so it lives here rather than in the ``.tr``.
+        self._port_filters: dict = {}
+        self.graph.port_filter_changed.connect(self._remember_port_filter)
+        self._place_filter()
         self._nav: Optional[str] = None  # "pan" | "zoom" | "slice"
         self._nav_last = QtCore.QPoint()
         self._zoom_anchor = QtCore.QPointF()
@@ -82,6 +101,71 @@ class GraphView(QtWidgets.QGraphicsView):
         self.graph.mode_change_requested.connect(self.set_mode)
         self.graph.nodes_moved.connect(self.save_positions)
         self.graph.frame_toggle_requested.connect(self.toggle_frame)
+
+    # -------------------------------------------------------------- filter
+    def _place_filter(self) -> None:
+        """Size the bar to its contents and park it in the viewport corner.
+
+        Sized rather than fixed: Enter commits a keyword into a pill, and a
+        pinned width left the pills hanging outside the box. It still has a
+        floor, so an empty bar is not a stub, and a ceiling of the viewport,
+        so a fistful of keywords cannot push it off the canvas.
+        """
+        bar = self.filter_bar
+        room = max(FILTER_WIDTH, self.viewport().width() - FILTER_MARGIN * 2)
+        bar.setMinimumWidth(FILTER_WIDTH)
+        bar.setMaximumWidth(room)
+        # Dropping a pill leaves the cached hint at the width it had, so the
+        # box would grow and never shrink back. Both layouts are invalidated
+        # because the pills live in the inner one.
+        for layout in (bar.layout(), bar._pill_row.layout()):
+            if layout is not None:
+                layout.invalidate()
+                layout.activate()
+        bar.adjustSize()
+        bar.move(FILTER_MARGIN, FILTER_MARGIN)
+
+    def _remember_port_filter(self, key: str, term: str) -> None:
+        """Keep a node's port search across rebuilds."""
+        if term:
+            self._port_filters[key] = term
+        else:
+            self._port_filters.pop(key, None)
+
+    def _resize_filter_soon(self) -> None:
+        """Re-size the overlay once the new pill exists.
+
+        A pill is a child widget created inside the signal that brings us
+        here, and an unshown child contributes nothing to a size hint yet --
+        measuring now re-sizes the box to the width it already had. One turn
+        of the event loop later it is laid out and the hint is real.
+        """
+        QtCore.QTimer.singleShot(0, self._place_filter)
+
+    def apply_filter(self) -> None:
+        """Dim the nodes the filter rules out; never move or hide one.
+
+        Dimmed, not hidden: a hidden node would take its wires with it and
+        leave the graph claiming connections that are not there. Fading is
+        also what lets a match stay readable *in place*, which is the point
+        of searching a graph rather than a list.
+        """
+        keywords = self.filter_bar.keywords or (
+            [self.filter_bar.line_edit.text().strip()]
+            if self.filter_bar.line_edit.text().strip()
+            else []
+        )
+        for key, node in self.graph.nodes.items():
+            if not keywords:
+                node.set_filtered(False)
+                continue
+            haystack = f"{node.title} {node.subtitle} {key}"
+            node.set_filtered(not self.filter_bar.matches(haystack))
+
+    def focus_filter(self) -> None:
+        """Put the cursor in the search box (Ctrl+F)."""
+        self.filter_bar.line_edit.setFocus()
+        self.filter_bar.line_edit.selectAll()
 
     # ------------------------------------------------------------ building
     def set_draw_states(self, states: dict) -> None:
@@ -200,11 +284,15 @@ class GraphView(QtWidgets.QGraphicsView):
             drawn, key=lambda item: (depth.get(item.key, 1), item.key)
         ):
             module_cls = handle.module_class
-            space_names = [
-                item.name for item in module_cls.space_inputs(handle.settings)
-            ]
-            rows = max(
-                len(module_cls.inputs) + len(space_names), len(handle.outputs), 1
+            # Qualified: these are matched against ``input_names``, which
+            # qualifies, so bare names would mark only the first copy's.
+            space_names = list(module_cls.space_input_names(handle.settings))
+            port_names = module_cls.input_names(handle.settings)
+            # Not ``groups``: that name already means the scene-node groups
+            # in this function, and shadowing it here silently emptied them.
+            port_labels, port_groups = self._port_groups(handle, port_names)
+            rows = max(len(port_names), len(handle.outputs), 1) + (
+                len(port_groups) if len(port_groups) > 1 else 0
             )
             pos = free_pos(handle.key, HEADER + rows * ROW + 8)
             primary = module_cls.primary_input()
@@ -213,12 +301,15 @@ class GraphView(QtWidgets.QGraphicsView):
                     key=handle.key,
                     title=handle.key,
                     subtitle=module_cls.display_label(),
-                    inputs=[item.name for item in module_cls.inputs],
+                    inputs=list(port_names),
                     outputs=list(handle.outputs),
                     color=theme.SIDE.get(handle.side.value, theme.SIDE["C"]),
                     primary_input=primary.name if primary else None,
                     mode=collapse.get(handle.key, MODE_FULL),
                     spaces=space_names,
+                    port_labels=port_labels,
+                    port_groups=port_groups,
+                    port_filter=self._port_filters.get(handle.key, ""),
                     draw_state=self.draw_states.get(handle.instance_id, DRAWN),
                 ),
                 pos=pos,
@@ -244,6 +335,7 @@ class GraphView(QtWidgets.QGraphicsView):
                     primary is not None and input_name == primary.name,
                 )
         self.graph.finish_build()
+        self.apply_filter()
         if not self._fitted:
             self.fit()
 
@@ -339,6 +431,48 @@ class GraphView(QtWidgets.QGraphicsView):
         self._fitted = True
 
     # ---------------------------------------------------------- references
+    def _port_groups(self, handle, port_names) -> tuple:
+        """``({port key: label}, [(copy name, [port key, ...])])`` for a node.
+
+        A copy's ports are stored qualified -- ``c1_start`` -- because the
+        slug is what makes renaming a copy free. The slug is bookkeeping
+        though, so the node shows the copy's *name* once as a heading and its
+        ports bare beneath it, which is shorter than prefixing every one and
+        survives a rename without touching a stored key. A one-copy module
+        has a single group, draws no heading, and reads exactly as it always
+        has.
+        """
+        module_cls = handle.module_class
+        try:
+            # ``entry``, never ``instance``: the latter goes through
+            # find_instances and scans the scene, and a refresh must read the
+            # document alone.
+            rows = module_cls(
+                name=handle.entry.name, settings=handle.settings
+            ).copy_rows()
+        except Exception:  # noqa: BLE001 - an unregistered or odd module
+            return {}, []
+        keys = list(port_names) + list(handle.outputs)
+        labels: dict = {}
+        groups: list = []
+        for row in rows:
+            slug = row["slug"]
+            prefix = f"{slug}_" if slug else ""
+            mine = [
+                key
+                for key in keys
+                if module_cls.slug_of(key) == slug and key.startswith(prefix)
+            ]
+            for key in mine:
+                labels[key] = key[len(prefix) :] if prefix else key
+            groups.append((copy_list.copy_name(row, handle.entry.name), mine))
+        # A shared port belongs to no copy, so it heads the list on its own.
+        claimed = {key for _label, group in groups for key in group}
+        loose = [key for key in keys if key not in claimed]
+        if loose:
+            groups.insert(0, ("", loose))
+        return labels, groups
+
     def _reference_state(self, handles) -> tuple:
         """``({module key: ref_id}, {collapsed ref ids}, {ref id: file name})``."""
         document = getattr(self.guides, "document", None)
@@ -546,13 +680,86 @@ class GraphView(QtWidgets.QGraphicsView):
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
+        self._place_filter()
         if not self._navigated:
             self.fit()
 
     def focusNextPrevChild(self, next_child: bool) -> bool:  # noqa: N802
         return False  # keep Tab for the palette
 
+    def typing_in_a_filter(self) -> bool:
+        """Whether the keyboard currently belongs to a text field in here.
+
+        Two cases, and the second is the one that matters. The corner search
+        box is an ordinary child widget, so it turns up in
+        ``QApplication.focusWidget()``. A node's port filter is *embedded in
+        the scene* through a proxy, and for those the focus widget Qt reports
+        is this view -- the embedded line edit never appears there. Checking
+        only the focus widget therefore missed exactly the field this was
+        written for.
+        """
+        focused = QtWidgets.QApplication.focusWidget()
+        if isinstance(focused, QtWidgets.QLineEdit):
+            return True
+        item = self.graph.focusItem() if self.graph is not None else None
+        if isinstance(item, QtWidgets.QGraphicsProxyWidget):
+            return isinstance(item.widget(), QtWidgets.QLineEdit)
+        return False
+
+    #: Keys that belong to a text field being typed into even though they
+    #: type nothing. ``Delete`` is the one that matters: it is a real menu
+    #: shortcut, so without claiming it back, correcting a filter term
+    #: deleted the module.
+    EDITING_KEYS = (
+        QtCore.Qt.Key_Backspace,
+        QtCore.Qt.Key_Delete,
+        QtCore.Qt.Key_Left,
+        QtCore.Qt.Key_Right,
+        QtCore.Qt.Key_Home,
+        QtCore.Qt.Key_End,
+    )
+
+    @classmethod
+    def _belongs_to_the_field(cls, event) -> bool:
+        """Whether a keystroke is the focused text field's rather than ours.
+
+        Printable characters and the editing keys, but never a real chord
+        and never Escape, Tab or Return -- those stay the window's even
+        while something is being typed into.
+        """
+        chord = (
+            QtCore.Qt.ControlModifier | QtCore.Qt.AltModifier | QtCore.Qt.MetaModifier
+        )
+        if event.modifiers() & chord:
+            return False
+        if event.key() in cls.EDITING_KEYS:
+            return True
+        text = event.text()
+        return bool(text) and text.isprintable()
+
+    def event(self, event) -> bool:
+        """Claim plain keystrokes back from the window's shortcuts.
+
+        Qt sends ``ShortcutOverride`` to the focus *widget* before firing a
+        matching ``QAction``, and for a field embedded in the scene that
+        widget is this view rather than the field. So the claim has to be
+        made here: without it the window's bare ``1``/``2``/``3``/``F``
+        bindings swallowed every one of those characters before a node's
+        port filter could see them.
+        """
+        if (
+            event.type() == QtCore.QEvent.ShortcutOverride
+            and self._belongs_to_the_field(event)
+            and self.typing_in_a_filter()
+        ):
+            event.accept()
+            return True
+        return super().event(event)
+
     def keyPressEvent(self, event) -> None:  # noqa: N802
+        if self.typing_in_a_filter():
+            super().keyPressEvent(event)
+            return
         key = event.key()
         if key == QtCore.Qt.Key_Tab:
             self.palette_requested.emit()

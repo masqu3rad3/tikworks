@@ -85,14 +85,47 @@ class _Pill(QtWidgets.QFrame):
         return self._keyword
 
 
-class _FilterLineEdit(QtWidgets.QLineEdit):
+class FilterLineEdit(QtWidgets.QLineEdit):
+    """A text field that keeps the keys it is being typed into.
+
+    Qt routes a key to a matching ``QAction`` shortcut *before* the focused
+    widget, so a window that binds single keys -- the graph binds 1, 2 and 3
+    to the node display modes and F to Fit -- steals them from every text
+    field in the window. Typing ``arm1`` in a filter changed the selected
+    node's collapse mode.
+
+    A widget answers that by accepting ``ShortcutOverride``, which tells Qt
+    "this keystroke is mine". Claimed only for plain text: a real chord like
+    Ctrl+S still saves while the cursor is in here, and Escape and Tab still
+    do what the window means by them.
+    """
+
     backspace_on_empty = QtCore.Signal()
+
+    def event(self, event) -> bool:
+        if event.type() == QtCore.QEvent.ShortcutOverride:
+            bare = not (
+                event.modifiers()
+                & (
+                    QtCore.Qt.ControlModifier
+                    | QtCore.Qt.AltModifier
+                    | QtCore.Qt.MetaModifier
+                )
+            )
+            if bare and event.text() and event.text().isprintable():
+                event.accept()
+                return True
+        return super().event(event)
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         if event.key() == QtCore.Qt.Key_Backspace and not self.text():
             self.backspace_on_empty.emit()
             return
         super().keyPressEvent(event)
+
+
+#: The old private name, kept so nothing that imported it breaks.
+_FilterLineEdit = FilterLineEdit
 
 
 class FilterBar(QtWidgets.QWidget):

@@ -387,3 +387,118 @@ def test_pivot_switch_reports_a_range():
         _context_for(main), "tip", key=True, times=(1.0, 5.0, 9.0)
     )
     assert "over 3 keys" in report
+
+
+# ------------------------------------------------ the anchor is addressable
+def test_pivot_anchor_normalises_a_bare_role_to_index_zero():
+    class Simple(Module):
+        guides = GuideLayout("root")
+        controls = ("root",)
+        control_shapes = {"root": "Circle"}
+        pivot_controls = {"root": "root"}
+
+    assert Simple.pivot_anchor("root", {}) == ("root", 0)
+
+
+def test_pivot_anchor_carries_an_explicit_index():
+    class Chain(Module):
+        guides = GuideLayout("root", multi="segment", min=1, max=10)
+        controls = ("fk0", "fk1")
+        control_shapes = {"fk0": "Circle", "fk1": "Circle"}
+        pivot_controls = {"fk0": ("root", 0), "fk1": ("segment", 1)}
+
+    assert Chain.pivot_anchor("fk1", {}) == ("segment", 1)
+
+
+def test_pivot_anchor_is_none_for_a_control_without_one():
+    class Simple(Module):
+        guides = GuideLayout("root")
+        controls = ("root", "other")
+        control_shapes = {"root": "Circle", "other": "Circle"}
+        pivot_controls = {"root": "root"}
+
+    assert Simple.pivot_anchor("other", {}) is None
+
+
+def test_pivot_controls_for_copy_returns_the_anchors_not_just_the_names():
+    """The hook dropped its anchors, so no computed module could declare one."""
+    from tik.core.fields import IntField
+
+    class Chain(Module):
+        guides = GuideLayout("root", multi="segment", min=1, max=10)
+        count = IntField(2)
+
+        @classmethod
+        def controls_for_copy(cls, settings=None):
+            number = int((settings or {}).get("count", 2))
+            return tuple(f"fk{index}" for index in range(number))
+
+        @classmethod
+        def control_shape_defaults_for_copy(cls, settings=None):
+            return {role: "Circle" for role in cls.controls_for_copy(settings)}
+
+        @classmethod
+        def pivot_controls_for_copy(cls, settings=None):
+            found = {"fk0": ("root", 0)}
+            for index in range(1, len(cls.controls_for_copy(settings))):
+                found[f"fk{index}"] = ("segment", index - 1)
+            return found
+
+    assert Chain.pivot_control_names({"count": 3}) == ("fk0", "fk1", "fk2")
+    assert Chain.pivot_anchor("fk2", {"count": 3}) == ("segment", 1)
+
+
+def test_pivot_labels_lists_one_controls_rows_in_order():
+    class Simple(Module):
+        guides = GuideLayout("root")
+        controls = ("root", "other")
+        control_shapes = {"root": "Circle", "other": "Circle"}
+        pivot_controls = {"root": "root", "other": "root"}
+
+    module = Simple()
+    module.pivot_presets = [
+        {"control": "root", "label": "tip"},
+        {"control": "other", "label": "ignored"},
+        {"control": "root", "label": "heel"},
+    ]
+    assert module.pivot_labels("root") == ["tip", "heel"]
+    assert module.pivot_labels("nobody") == []
+
+
+def test_a_module_that_builds_its_own_pivot_gets_exactly_one():
+    """The builder's seam skips a role that already has a pivot.
+
+    Every module called rig.pivot_control itself before the seam existed and
+    a studio module may still, so a second one -- which would fail on its
+    showPivot attribute -- must never be made. PivotToy is that module.
+    """
+    ctx = _build("pivot_toy")
+    pivots = [
+        controller
+        for controller in ctx.controllers
+        if controller.transform.name.endswith("_pivot_ctrl")
+    ]
+    assert len(pivots) == 1
+
+
+def test_a_ribbon_mid_is_offered_no_movable_pivot():
+    """A mid rides the surface, so a moved pivot does not behave there.
+
+    Exempt rather than merely absent: the ground rules treat a control with
+    no pivot as an oversight unless the module says it meant it.
+    """
+    import tik.trigger as trigger
+    from tik.trigger.core import get_module
+
+    trigger.load_plugins()
+    ribbon = get_module("ribbon")
+    settings = {"mid_count": 2, "start_controller": True, "end_controller": True}
+    module = ribbon(name="ribbon")
+    module.apply(settings, strict=False)
+    values = module.values()
+
+    assert sorted(ribbon.pivot_control_names(values)) == ["end", "start"]
+    assert sorted(ribbon.pivot_exempt_names(values)) == ["mid0", "mid1"]
+    # The picker offers exactly the pivot-capable controls.
+    assert ribbon.pivot_anchor("mid0", values) is None
+    assert ribbon.pivot_anchor("start", values) == ("start", 0)

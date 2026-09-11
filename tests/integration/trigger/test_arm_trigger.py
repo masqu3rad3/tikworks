@@ -73,6 +73,7 @@ def test_has_only_the_behaviour_fields():
         "anim_spaces",
         "pivot_presets",
         "control_shape_overrides",
+        "copies",
         "limb_lock",
         "lock_from",
         "auto_collar",

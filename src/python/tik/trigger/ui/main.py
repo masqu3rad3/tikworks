@@ -435,6 +435,12 @@ class TriggerWindow(MayaToolWindow):
             "Ctrl+L",
         )
         self._action(layout_menu, "Fit Graph", lambda: self._graph_call("fit"), "F")
+        self._action(
+            layout_menu,
+            "Find in Graph…",
+            lambda: self._graph_call("focus_filter"),
+            "Ctrl+F",
+        )
         layout_menu.addSeparator()
         self._action(
             layout_menu,

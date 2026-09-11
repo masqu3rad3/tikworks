@@ -37,6 +37,9 @@ from tik.trigger.core.schemas import split_source
 if TYPE_CHECKING:  # the scene layer imports Maya; the UI only needs the name
     from tik.trigger.guides import GuideHandle
 
+from tik.shared.ui.feedback import Feedback
+from tik.trigger.core import copies as copy_list
+from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.ui.draw_state import DRAWN, TOOLTIPS, states_from
 
 from ..graph import GraphView
@@ -143,6 +146,11 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         )  # every selected module when they share a type
         self._external: Optional[str] = None  # selected scene-nodes group (graph only)
         self._module_obj = None
+        #: The current copy, as a one-copy module of its own. The copy form
+        #: edits *this*, which is what keeps every control-keyed choice list
+        #: inside the copy: ``control_names`` on a one-copy module returns
+        #: ``ik``, not ``ik``/``c1_ik``/``c2_ik``.
+        self._copy_obj = None
         self._input_rows: dict[str, InputRow] = {}
         self._syncing = False
         self._torn_down = False
@@ -256,6 +264,30 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.graph_pane = pane("Graph", self.graph)
         return self.graph_pane
 
+    def _build_copy_bar(self) -> QtWidgets.QWidget:
+        """One tab per copy of the selected module, plus ``[+]``.
+
+        This edits the ``copies`` *setting*. It is emphatically not a
+        selection surface: the Designer has exactly one selectable thing and
+        the tree owns it, so nothing here may touch ``_current`` or the tree.
+        """
+        holder = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(0)
+        self.tab_bar = QtWidgets.QTabBar()
+        self.tab_bar.setMovable(True)
+        self.tab_bar.setExpanding(False)
+        self.tab_bar.setDrawBase(False)
+        self.add_copy_button = QtWidgets.QToolButton()
+        self.add_copy_button.setText("+")
+        self.add_copy_button.setAutoRaise(True)
+        self.add_copy_button.setToolTip("Add another copy of this module")
+        row.addWidget(self.tab_bar)
+        row.addWidget(self.add_copy_button)
+        row.addStretch(1)
+        return holder
+
     def _build_properties_pane(self) -> QtWidgets.QWidget:
         self.properties = QtWidgets.QWidget()
         props = QtWidgets.QVBoxLayout(self.properties)
@@ -276,20 +308,44 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.multi_label.setVisible(False)
         props.addWidget(self.multi_label)
         props.addWidget(self._build_reference_strip())
-        self.inputs_caption = QtWidgets.QLabel("INPUTS")
-        self.inputs_caption.setObjectName("FieldCaption")
-        props.addWidget(self.inputs_caption)
-        self.inputs_form = QtWidgets.QFormLayout()
-        self.inputs_form.setContentsMargins(4, 0, 4, 4)
-        props.addLayout(self.inputs_form)
+        # Everything below here scrolls as one column, and its order is the
+        # panel's whole claim about ownership: what is above the tab bar
+        # belongs to the module, what is below belongs to the copy whose tab
+        # is showing. Getting a widget on the wrong side of the bar is a lie
+        # about the data, so the two captions name the halves explicitly.
+        body = QtWidgets.QWidget()
+        column = QtWidgets.QVBoxLayout(body)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(8)
+
         self.module_caption = QtWidgets.QLabel("MODULE")
         self.module_caption.setObjectName("FieldCaption")
-        props.addWidget(self.module_caption)
+        column.addWidget(self.module_caption)
         self.form = FormBuilder()
+        column.addWidget(self.form)
+
+        column.addWidget(self._build_copy_bar())
+
+        self.copy_caption = QtWidgets.QLabel("COPY")
+        self.copy_caption.setObjectName("FieldCaption")
+        column.addWidget(self.copy_caption)
+        self.inputs_caption = QtWidgets.QLabel("INPUTS")
+        self.inputs_caption.setObjectName("FieldCaption")
+        column.addWidget(self.inputs_caption)
+        self.inputs_form = QtWidgets.QFormLayout()
+        self.inputs_form.setContentsMargins(4, 0, 4, 4)
+        column.addLayout(self.inputs_form)
+        # A second form over the same target, showing the fields the module
+        # author left to the copy -- which is all of them unless they said
+        # ``shared=True``.
+        self.copy_form = FormBuilder()
+        column.addWidget(self.copy_form)
+        column.addStretch(1)
+
         self.form_scroll = QtWidgets.QScrollArea()
         self.form_scroll.setWidgetResizable(True)
         self.form_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
-        self.form_scroll.setWidget(self.form)
+        self.form_scroll.setWidget(body)
         props.addWidget(self.form_scroll, 1)
         self.scene_panel = SceneNodesPanel(picker=self._selected_scene_nodes)
         self.scene_panel.setVisible(False)
@@ -376,7 +432,20 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.action_bar.sync_requested.connect(self.sync_now)
         self.action_bar.auto_sync_toggled.connect(self.set_auto_sync)
         self.name_edit.editingFinished.connect(self._rename_current)
-        self.form.changed.connect(self._on_setting_changed)
+        # Each form names the object it edits, so the handler never has to
+        # guess which one a field came from.
+        self.form.changed.connect(
+            lambda name, value: self._on_setting_changed(name, value, self._module_obj)
+        )
+        self.copy_form.changed.connect(
+            lambda name, value: self._on_setting_changed(name, value, self._copy_obj)
+        )
+        self.tab_bar.currentChanged.connect(self._on_copy_tab_changed)
+        self.tab_bar.tabMoved.connect(self._on_copy_tabs_reordered)
+        self.tab_bar.tabBarDoubleClicked.connect(self._on_copy_tab_double_clicked)
+        self.tab_bar.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.tab_bar.customContextMenuRequested.connect(self._on_copy_tab_menu)
+        self.add_copy_button.clicked.connect(self._on_add_copy)
         self.form.error.connect(
             lambda _name, message: self.events.log(message, level="warning")
         )
@@ -771,7 +840,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.name_edit.setPlaceholderText("scene nodes group name")
         self.type_label.setText("Scene nodes")
         self.icon.setPixmap(glyph_icon("SN", MODULE_COLORS["scene"], 24).pixmap(24, 24))
-        for widget in (self.inputs_caption, self.module_caption, self.form_scroll):
+        # A scene-nodes group is not a module: it has no fields, no copies
+        # and no inputs, so the whole scrolling column goes away.
+        for widget in (self.inputs_caption, self.copy_caption, self.form_scroll):
             widget.setVisible(False)
         self.scene_panel.set_nodes(self.guides.scene_groups().get(name, []))
         self.scene_panel.setVisible(True)
@@ -868,6 +939,235 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         super().showEvent(event)
         self.refresh_drift()
 
+    # --------------------------------------------------------------- copies
+    def input_port(self, input_name: str) -> str:
+        """The qualified port on the current copy: ``root`` / ``c1_root``."""
+        if self._module_obj is None:
+            return input_name
+        return type(self._module_obj).qualify(self.current_slug(), input_name)
+
+    def current_slug(self) -> str:
+        """Slug of the copy whose tab is showing; ``""`` when there is none."""
+        if self._module_obj is None:
+            return copy_list.EMPTY_SLUG
+        slugs = self._module_obj.copy_slugs()
+        index = self.tab_bar.currentIndex()
+        return slugs[index] if 0 <= index < len(slugs) else slugs[0]
+
+    def _rebuild_copy_tabs(self, current: Optional[int] = None) -> None:
+        """One tab per copy. Signals blocked: this reflects state, never sets it.
+
+        ``current`` defaults to whichever tab is already showing, so a refresh
+        provoked by editing a copy does not throw the rigger back to the first
+        one mid-edit.
+        """
+        if current is None:
+            current = self.tab_bar.currentIndex()
+        self.tab_bar.blockSignals(True)
+        try:
+            while self.tab_bar.count():
+                self.tab_bar.removeTab(0)
+            if self._module_obj is not None:
+                for row in self._module_obj.copy_rows():
+                    self.tab_bar.addTab(copy_list.copy_name(row, self._module_obj.name))
+            if 0 <= current < self.tab_bar.count():
+                self.tab_bar.setCurrentIndex(current)
+        finally:
+            self.tab_bar.blockSignals(False)
+        self.add_copy_button.setEnabled(self._module_obj is not None)
+
+    def _write_copies(self, rows, current: int = 0) -> None:
+        """Store the copy list on the module and redraw the bar and form."""
+        if self._current is None or self._module_obj is None:
+            return
+        rows = [dict(row) for row in rows]
+        module_cls = type(self._module_obj)
+        with self.watcher.mute():
+            if len(rows) == 1:
+                # One copy is just the module. Storing a copies list here
+                # would strand the module-level fields: `handle.segments`
+                # would read 2 while the rig built 4, and every existing
+                # reader of settings["segments"] would be quietly wrong.
+                for name in module_cls.per_copy_fields():
+                    if name in rows[0]:
+                        setattr(self._module_obj, name, rows[0][name])
+                        setattr(self._current, name, rows[0][name])
+                self._module_obj.copies = []
+                self._current.copies = []
+            else:
+                self._module_obj.copies = rows
+                self._current.copies = rows
+        # refresh() runs _set_current, which rebuilds the bar at index 0, so
+        # the wanted tab is chosen *after* it rather than before.
+        self.refresh()
+        self._rebuild_copy_tabs(current)
+        self._show_copy_values()
+
+    def _split_forms(self) -> None:
+        """Per-copy fields into the tab form, the rest into the module form.
+
+        By declaration, not by comparing values: ``per_copy`` is a fact about
+        what a field *means*, so a field never moves between the two while the
+        rigger is typing.
+        """
+        if self._module_obj is None:
+            return
+        module_cls = type(self._module_obj)
+        per_copy = list(module_cls.per_copy_fields())
+        # ``copies`` is hidden and always shared, so it never counts as
+        # something to show: a module that shares nothing else hides the
+        # whole MODULE half rather than captioning an empty box.
+        shared = [
+            name
+            for name, field in module_cls.shared_fields().items()
+            if not field.hidden
+        ]
+        self.form.set_visible_fields(shared)
+        self.form.setVisible(bool(shared))
+        self.module_caption.setVisible(bool(shared))
+        self.copy_form.setVisible(bool(per_copy))
+
+    def _show_copy_values(self) -> None:
+        """Point the copy form at the current copy, as a module of its own.
+
+        A *view* rather than the module with values poked into it, because
+        the form asks its target to resolve ``choices_from``: on the module
+        that yields every copy's controls (``ik``, ``c1_ik``, ``c2_ik``), and
+        on the view it yields the copy's own (``ik``). A control list that
+        grows with every copy is the same scope leak in the panel that the
+        qualified roles were in the scene.
+        """
+        if self._module_obj is None:
+            self._copy_obj = None
+            return
+        try:
+            self._copy_obj = self._module_obj.for_copy(self.current_slug())
+        except TriggerError:
+            self._copy_obj = None
+            return
+        self.copy_form.set_target(self._copy_obj)
+        self.copy_form.set_visible_fields(
+            list(type(self._module_obj).per_copy_fields())
+        )
+
+    def _on_copy_tab_changed(self, _index: int) -> None:
+        """Show another copy's values and connections.
+
+        Touches no selection, by design: this is a settings field's editor.
+        """
+        self._show_copy_values()
+        self._show_copy_inputs()
+
+    def _show_copy_inputs(self) -> None:
+        """Point every input row at the current copy's port."""
+        if self._current is None:
+            return
+        sources = self._current.inputs
+        for name, row in self._input_rows.items():
+            row.blockSignals(True)
+            row.line.blockSignals(True)
+            try:
+                row.set_source(sources.get(self.input_port(name), ""))
+            finally:
+                row.line.blockSignals(False)
+                row.blockSignals(False)
+
+    def _on_add_copy(self) -> None:
+        """The ``[+]`` verb: duplicate the current copy and select its tab."""
+        if self._module_obj is None:
+            return
+        rows = self._module_obj.copy_rows()
+        taken = {copy_list.copy_name(row, self._module_obj.name) for row in rows}
+        try:
+            made = copy_list.duplicate_row(
+                rows,
+                self.current_slug(),
+                type(self._module_obj).per_copy_defaults(self._module_obj.values()),
+                taken,
+                base=self._module_obj.name,
+            )
+        except TriggerError as error:
+            self.events.log(str(error), level="warning")
+            return
+        self._write_copies(rows + [made], current=len(rows))
+
+    def _on_remove_copy(self) -> None:
+        """Drop the current copy. The last one stays: a module is a copy."""
+        if self._module_obj is None:
+            return
+        rows = self._module_obj.copy_rows()
+        if len(rows) < 2:
+            self.events.log("A module always has at least one copy.", level="warning")
+            return
+        slug = self.current_slug()
+        kept = [row for row in rows if row["slug"] != slug]
+        self._write_copies(kept, current=0)
+
+    def _on_copy_tab_double_clicked(self, index: int) -> None:
+        rows = self._module_obj.copy_rows() if self._module_obj else []
+        if not 0 <= index < len(rows):
+            return
+        entered = Feedback(parent=self).ask_text(
+            title="Rename copy",
+            label="Name:",
+            text=copy_list.copy_name(rows[index], self._module_obj.name),
+        )
+        if entered:
+            self._on_copy_renamed(index, entered)
+
+    def _on_copy_renamed(self, index: int, text: str) -> None:
+        """Rename one copy, refusing a name another copy already holds.
+
+        Refused here rather than caught at build time: two copies with one
+        name build their controls over each other, and the rigger should
+        hear about it while they are typing, not three steps later.
+        """
+        if self._module_obj is None or not text:
+            return
+        rows = self._module_obj.copy_rows()
+        if not 0 <= index < len(rows):
+            return
+        taken = {
+            copy_list.copy_name(row, self._module_obj.name)
+            for position, row in enumerate(rows)
+            if position != index
+        }
+        if text in taken:
+            self.events.log(
+                f"'{text}' is already the name of another copy of "
+                f"'{self._module_obj.name}'.",
+                level="warning",
+            )
+            self._rebuild_copy_tabs(index)
+            return
+        rows[index]["name"] = text
+        self._write_copies(rows, current=index)
+
+    def _on_copy_tabs_reordered(self, to_index: int, from_index: int) -> None:
+        """Store the tab order back as the copy order."""
+        if self._module_obj is None:
+            return
+        rows = self._module_obj.copy_rows()
+        if not (0 <= from_index < len(rows) and 0 <= to_index < len(rows)):
+            return
+        rows.insert(to_index, rows.pop(from_index))
+        self._write_copies(rows, current=to_index)
+
+    def copy_tab_menu(self) -> QtWidgets.QMenu:
+        """The tab bar's right-click menu."""
+        menu = QtWidgets.QMenu(self)
+        menu.addAction("Add Copy", self._on_add_copy)
+        rows = self._module_obj.copy_rows() if self._module_obj else []
+        remove = menu.addAction("Remove Copy", self._on_remove_copy)
+        remove.setEnabled(len(rows) > 1)
+        return menu
+
+    def _on_copy_tab_menu(self, point) -> None:
+        index = self.tab_bar.tabAt(point)
+        if index >= 0:
+            self.tab_bar.setCurrentIndex(index)
+        self.copy_tab_menu().exec_(self.tab_bar.mapToGlobal(point))
+
     # ---------------------------------------------------------- properties
     def _set_current(
         self, handle: Optional[GuideHandle], group: Optional[list[GuideHandle]] = None
@@ -886,7 +1186,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 item.widget().deleteLater()
         self._input_rows.clear()
         self.scene_panel.setVisible(False)
-        for widget in (self.module_caption, self.form_scroll):
+        for widget in (self.copy_caption, self.form_scroll):
             widget.setVisible(True)
         self.multi_label.setVisible(False)
         self.name_edit.setEnabled(True)
@@ -895,6 +1195,8 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self._module_obj = None
             self.reference_strip.setVisible(False)
             self.form.set_target(None)
+            self.copy_form.set_target(None)
+            self._rebuild_copy_tabs(0)
             self.name_edit.setText("")
             self.type_label.setText("")
             self.icon.clear()
@@ -932,13 +1234,22 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 row = InputRow(
                     declared, picker=self._pick_source, sources=self._source_choices
                 )
-                row.set_source(handle.inputs.get(declared.name, ""))
+                # The *current copy's* connection: each copy owns its inputs,
+                # so the row shows and writes the port for the tab showing.
+                row.set_source(handle.inputs.get(self.input_port(declared.name), ""))
                 row.changed.connect(self._on_input_changed)
                 label = declared.name + (" ●" if declared.primary else "")
                 self.inputs_form.addRow(label, row)
                 self._input_rows[declared.name] = row
             self.inputs_caption.setVisible(bool(declared_inputs))
         self.form.set_target(self._module_obj)
+        self._split_forms()
+        self._rebuild_copy_tabs()
+        self._show_copy_values()
+        # After the bar, not before: the input rows above were built from
+        # whatever tab was showing a moment ago, and the bar may have landed
+        # on a different one.
+        self._show_copy_inputs()
         self._show_reference_strip(handle)
         if multi:
             self.status.set_activity(

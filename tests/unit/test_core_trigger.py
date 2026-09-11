@@ -97,9 +97,11 @@ def test_module_instance_roundtrip():
     # Module, so every module carries all three keys.
     assert restored.settings == {
         "segments": 3,
+        "controller_size": 1.0,
         "anim_spaces": [],
         "pivot_presets": [],
         "control_shape_overrides": [],
+        "copies": [],
     }
     assert restored.side == "R"
     assert restored.parent == ParentRef("abc", "root")
@@ -640,8 +642,86 @@ def test_an_unresolvable_shape_name_warns_but_does_not_invalidate():
     class ShapeToy(Module):
         module_type = "shapetoy"
         controls = ("root",)
+        # A declared default is what makes a control shape-editable, so a toy
+        # without one offers no row to put an unresolvable shape on.
+        control_shapes = {"root": "Circle"}
 
     toy = ShapeToy()
     toy.control_shape_overrides = [{"control": "root", "shape": "NotAShape"}]
     assert any("NotAShape" in text for text in toy.warnings())
     assert toy.validate() == []
+
+
+# --------------------------------------------- candidate sets per section
+def test_space_controls_defaults_to_every_control():
+    """Hosting a space is something any controller can do; a module narrows."""
+
+    class Everything(Module):
+        controls = ("a", "b", "c")
+
+    assert Everything.space_control_names({}) == ("a", "b", "c")
+
+
+def test_space_controls_narrows_when_declared():
+    class Narrow(Module):
+        controls = ("a", "b", "c")
+        space_controls = ("b",)
+
+    assert Narrow.space_control_names({}) == ("b",)
+
+
+def test_space_controls_follows_a_settings_driven_control_set():
+    """The hook sees one copy's settings, like every other *_for_copy."""
+    from tik.core.fields import IntField
+
+    class Dynamic(Module):
+        count = IntField(2)
+
+        @classmethod
+        def controls_for_copy(cls, settings=None):
+            number = int((settings or {}).get("count", 2))
+            return tuple(f"fk{index}" for index in range(number))
+
+    assert Dynamic.space_control_names({"count": 3}) == ("fk0", "fk1", "fk2")
+
+
+def test_shape_control_names_come_from_the_declared_defaults():
+    """A control with a declared default shape is shape-editable."""
+
+    class Partial(Module):
+        controls = ("a", "b")
+        control_shapes = {"a": "Circle"}
+
+    assert Partial.shape_control_names({}) == ("a",)
+
+
+def test_a_module_with_no_controls_offers_no_shape_rows():
+    class Nothing(Module):
+        controls = ()
+
+    assert Nothing.shape_control_names({}) == ()
+
+
+def test_shape_control_names_keep_control_order():
+    """Row order follows the manifest, not dict insertion luck."""
+
+    class Ordered(Module):
+        controls = ("a", "b", "c")
+        control_shapes = {"c": "Cube", "a": "Circle", "b": "Diamond"}
+
+    assert Ordered.shape_control_names({}) == ("a", "b", "c")
+
+
+def test_a_space_row_on_a_narrowed_out_control_warns():
+    """A control the module does not offer a space is a stale row, not a rig."""
+
+    class Narrow(Module):
+        controls = ("a", "b")
+        space_controls = ("a",)
+        control_shapes = {"a": "Circle", "b": "Circle"}
+
+    module = Narrow()
+    module.anim_spaces = [{"control": "b", "mode": "parent", "label": "world"}]
+    problems = module.warnings()
+    assert len(problems) == 1
+    assert "'b'" in problems[0]

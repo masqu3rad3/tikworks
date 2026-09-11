@@ -6,7 +6,7 @@ the real builder in Maya and with the Qt stub scene alike.
 
 from __future__ import annotations
 
-from tik.trigger.core import GuideLayout, Input, IntField, Module
+from tik.trigger.core import FloatField, GuideLayout, Input, IntField, Module
 
 
 class ToyRoot(Module):
@@ -31,9 +31,12 @@ class ToyChain(Module):
     inputs = (Input("root", primary=True), Input("space"))
     outputs = ("root", "end")
     segments = IntField(2, min=1)
+    # The one exception this toy carries, so both sides of the split have
+    # something to test against.
+    controller_size = FloatField(1.0, min=0.01, shared=True, label="Controller Size")
 
     @classmethod
-    def control_names(cls, settings=None):
+    def controls_for_copy(cls, settings=None):
         """One per segment: this toy stands in for a settings-driven manifest."""
         count = int((settings or {}).get("segments", cls.segments.default))
         return tuple(f"fk{index}" for index in range(count))

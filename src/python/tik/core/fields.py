@@ -63,6 +63,7 @@ class Field:
         hidden: bool = False,
         group: Optional[Any] = None,  # FieldGroup or a bare label string
         last: bool = False,
+        shared: bool = False,
     ) -> None:
         self.default = default
         self.label = label
@@ -77,6 +78,12 @@ class Field:
         self.group: Optional[FieldGroup] = group
         # Renders after every non-trailing field, whichever class declared it.
         self.last = last
+        #: True when this setting belongs to the object as a whole rather
+        #: than to one *copy* of it. The default is per-copy: a copy is a
+        #: whole module's worth of settings, and the copies of a hand differ
+        #: in nearly everything, so sharing is the exception a module author
+        #: declares rather than the rule they opt out of.
+        self.shared = shared
         self.name = ""
 
     # --- descriptor protocol -------------------------------------------------
@@ -618,6 +625,20 @@ class Schema:
         ordered = {name: item for name, item in collected.items() if not item.last}
         ordered.update(trailing)
         return ordered
+
+    @classmethod
+    def per_copy_fields(cls) -> dict[str, Field]:
+        """Fields belonging to one copy of the object, in declaration order.
+
+        Everything the author did not mark ``shared``: by default a copy owns
+        all of its settings and each can be adjusted on its own.
+        """
+        return {name: item for name, item in cls.fields().items() if not item.shared}
+
+    @classmethod
+    def shared_fields(cls) -> dict[str, Field]:
+        """Fields the author declared ``shared``, in declaration order."""
+        return {name: item for name, item in cls.fields().items() if item.shared}
 
     @classmethod
     def schema(cls) -> dict:

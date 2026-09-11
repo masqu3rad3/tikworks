@@ -70,7 +70,13 @@ def test_the_table_is_sparse_and_round_trips():
 
 
 def test_the_field_declares_its_row_source():
-    assert Toy.control_shape_overrides.rows_from == "control_names"
+    """The rows are the controls that declare a default shape, not every one.
+
+    A control with a declared default is shape-editable; the keys are the
+    candidate set rather than a second list that would repeat ``controls``
+    line for line and then drift from it.
+    """
+    assert Toy.control_shape_overrides.rows_from == "shape_control_names"
     kinds = {c.name: c.kind for c in Toy.control_shape_overrides.columns}
     assert kinds == {"control": "choice", "shape": "shape", "size": "float"}
 
