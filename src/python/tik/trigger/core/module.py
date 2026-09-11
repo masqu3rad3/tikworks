@@ -57,6 +57,11 @@ class Module(Schema):
     #: animation space; tweak controllers are excluded by construction, since
     #: ``rig.tweak_control`` parents them under their main.
     controls: tuple[str, ...] = ()
+    #: Controller roles that may host an animation space. Empty means *every*
+    #: control -- the one manifest entry whose default is "all", because
+    #: hosting a space is something any controller can do, so a module narrows
+    #: rather than opts in. A pivot and a shape are offers a module makes.
+    space_controls: tuple[str, ...] = ()
     #: Controller roles that get a movable pivot, mapped to the guide their
     #: preset guides hang under. Declaring an entry is what makes the control
     #: movable, the way declaring an input is what makes its socket. The anchor
@@ -106,7 +111,7 @@ class Module(Schema):
         help="Each row adds one animation space and one input port.",
         last=True,
         columns=(
-            Column("control", "choice", choices_from="control_names"),
+            Column("control", "choice", choices_from="space_control_names"),
             Column("mode", "choice", choices=("parent", "point", "orient")),
             Column("label", "string"),
         ),
@@ -254,6 +259,19 @@ class Module(Schema):
         return tuple(cls.controls)
 
     @classmethod
+    def space_controls_for_copy(
+        cls, settings: Optional[dict] = None
+    ) -> tuple[str, ...]:
+        """Controller roles of *one copy* that may host an animation space.
+
+        Falls back to every control the copy builds, which is what makes an
+        undeclared module behave exactly as it did before this hook existed.
+        """
+        if cls.space_controls:
+            return tuple(cls.space_controls)
+        return tuple(cls.controls_for_copy(settings))
+
+    @classmethod
     def pivot_controls_for_copy(
         cls, settings: Optional[dict] = None
     ) -> tuple[str, ...]:
@@ -321,6 +339,15 @@ class Module(Schema):
             cls.qualify(slug, name)
             for slug, one in cls._copy_settings(settings)
             for name in cls.controls_for_copy(one)
+        )
+
+    @classmethod
+    def space_control_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Controller roles that may host an animation space, qualified per copy."""
+        return tuple(
+            cls.qualify(slug, name)
+            for slug, one in cls._copy_settings(settings)
+            for name in cls.space_controls_for_copy(one)
         )
 
     @classmethod

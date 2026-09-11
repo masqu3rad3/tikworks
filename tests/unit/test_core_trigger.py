@@ -647,3 +647,36 @@ def test_an_unresolvable_shape_name_warns_but_does_not_invalidate():
     toy.control_shape_overrides = [{"control": "root", "shape": "NotAShape"}]
     assert any("NotAShape" in text for text in toy.warnings())
     assert toy.validate() == []
+
+
+# --------------------------------------------- candidate sets per section
+def test_space_controls_defaults_to_every_control():
+    """Hosting a space is something any controller can do; a module narrows."""
+
+    class Everything(Module):
+        controls = ("a", "b", "c")
+
+    assert Everything.space_control_names({}) == ("a", "b", "c")
+
+
+def test_space_controls_narrows_when_declared():
+    class Narrow(Module):
+        controls = ("a", "b", "c")
+        space_controls = ("b",)
+
+    assert Narrow.space_control_names({}) == ("b",)
+
+
+def test_space_controls_follows_a_settings_driven_control_set():
+    """The hook sees one copy's settings, like every other *_for_copy."""
+    from tik.core.fields import IntField
+
+    class Dynamic(Module):
+        count = IntField(2)
+
+        @classmethod
+        def controls_for_copy(cls, settings=None):
+            number = int((settings or {}).get("count", 2))
+            return tuple(f"fk{index}" for index in range(number))
+
+    assert Dynamic.space_control_names({"count": 3}) == ("fk0", "fk1", "fk2")
