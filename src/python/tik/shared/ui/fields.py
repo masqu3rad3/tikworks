@@ -682,12 +682,16 @@ class FormBuilder(QtWidgets.QWidget):
             if label is not None:
                 label.setVisible(visible)
         for group_label, group in self._groups.items():
+            # ``self._widgets``, not every declared field: a field ``set_target``
+            # skipped -- a table nobody could fill -- has no widget, and
+            # counting it here put back every fold ``set_target`` had closed.
             group.setVisible(
-                target is None
-                or any(
-                    name in target
+                any(
+                    target is None or name in target
                     for name, field in fields.items()
-                    if field.group and field.group.label == group_label
+                    if name in self._widgets
+                    and field.group
+                    and field.group.label == group_label
                 )
             )
 

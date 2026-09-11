@@ -94,16 +94,31 @@ class RibbonModule(Module):
 
     @classmethod
     def pivot_controls_for_copy(cls, settings=None):
-        """Start and end anchor to their own guides; the mids have none.
+        """Only the end controls; a mid gets no movable pivot.
 
-        A mid is computed along the surface and has no guide of its own, so
-        its presets stack on ``start`` until the rigger drags them where they
-        belong -- which is how an unplaced preset already behaves.
+        A mid rides the surface rather than sitting on a guide, and moving its
+        pivot does not behave the way a moved pivot should -- so offering one
+        would be offering something that does not work. The ends pin to a
+        guide each and behave normally.
         """
         return {
-            role: ("end" if role == "end" else "start", 0)
+            role: (role, 0)
             for role in cls.controls_for_copy(settings)
+            if role in ("start", "end")
         }
+
+    @classmethod
+    def pivot_exempt_for_copy(cls, settings=None):
+        """The mids, on purpose: a moved pivot does not behave there.
+
+        A mid control rides the ribbon surface rather than sitting on a guide
+        of its own, so a pivot moved away from it does not rotate about where
+        the animator put it. Offering the preset would be offering something
+        that does not work.
+        """
+        return tuple(
+            role for role in cls.controls_for_copy(settings) if role.startswith("mid")
+        )
 
     # --------------------------------------------------------------- guides
     def draw_guides(self, guides) -> None:

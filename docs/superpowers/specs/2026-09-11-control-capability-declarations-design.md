@@ -210,8 +210,14 @@ def _table_is_dead(self, name, field) -> bool:
     )
 ```
 
-`set_target` skips such a field entirely — no widget, no label — and the existing rule *"a group
-whose fields are all hidden hides too"* closes the fold for free.
+`set_target` skips such a field entirely — no widget, no label — and a pass over the folds closes
+any group left with nothing in it.
+
+**`set_visible_fields` has to agree, and did not.** It decided a fold's visibility from every
+*declared* field rather than the ones that got a widget, so it put back every fold `set_target` had
+just closed. The designer calls it after every `set_target` — that is what splits the MODULE and
+COPY halves — so in the running app the empty folds came back every time, which is exactly what was
+reported. Both now count only fields present in `self._widgets`.
 
 The test is **per column**, not per table: a column whose options are fixed and empty is what
 makes a row unfillable. `anim_spaces` has a static `mode` column beside its `control` column, and
@@ -255,6 +261,19 @@ A new ground rule, `test_every_control_is_offered_a_movable_pivot`, holds the ta
 every module and settings variation. Offering costs nothing — §4 builds nothing until a preset row
 exists — so a control left out of `pivot_controls` is an oversight rather than a decision.
 
+### 7.1 When it is a decision: `pivot_exempt_for_copy`
+
+The rule as first written assumed a missing pivot is *always* an oversight. It is not. A ribbon's
+**mid** controls ride the ribbon surface rather than sitting on a guide of their own, and a pivot
+moved away from one does not rotate about where the animator put it — so offering the preset would
+be offering something that does not work.
+
+`pivot_exempt_for_copy` is how a module says it meant it: the ground rule reads
+`controls - movable - exempt`, and separately refuses a control that is both offered and exempt.
+That keeps the rule's whole value — an oversight still fails CI — while turning a silent omission
+into a decision on the record, next to the declaration, with the reason in its docstring. `ribbon`
+is the only module that declares one.
+
 After this, `twist` renders none of the three folds, `ribbon` at zero controllers renders none,
 and every other module renders all three.
 
@@ -282,3 +301,32 @@ Nothing about how a space, a pivot or a shape *works* changes. The modes, the po
 guides, the switch compensation, the resolution chain, the pinned library and the sparse override
 table are all untouched. This document is about which controls each section offers and what a
 module has to write to say so.
+
+## 10. Two defects the first pass left behind
+
+Recorded here because both were reported against this work and both were one root cause each.
+
+**The folds came back.** §6 skips a dead table in `set_target`, and a pass over the folds closes any
+group left with nothing in it. But `set_visible_fields` — which the designer calls after *every*
+`set_target`, to split the MODULE and COPY halves — decided a fold's visibility from every
+*declared* field rather than the ones that got a widget. So it put back every fold `set_target` had
+just closed, and in the running app the three empty folds were still there. Both passes now count
+only fields present in `self._widgets`.
+
+**A phantom port on the graph.** Adding an anim space drew a dead input plug in the node's top-left
+corner. `input_names` already carries every anim-space port, so a node that *also* walked
+`spec.spaces` built a second `Port` for each and overwrote the dict entry; the first stayed a child
+item nothing indexed, and since `relayout` walks `inputs` it was never positioned or hidden.
+`spaces` now marks a port rather than adding one.
+
+Its root cause reached two more places, because `Module.space_inputs` answers for *one copy* and
+returns bare names while every caller matched them against qualified keys:
+
+- `maya/build.py` let a later copy's space connection reach the topological sort, so two multi-copy
+  modules in each other's space failed the build outright with a spurious
+  `ValueError: Cyclic module connection`.
+- `core/build_scope.py` registered such a connection as structural, so rebuilding a producer tore
+  down and rebuilt a consumer that only borrowed a space from it — the thing that module's own
+  docstring exists to prevent.
+
+`Module.space_input_names` qualifies per copy, and all three read it.

@@ -314,6 +314,18 @@ class Module(Schema):
         return dict(cls.pivot_controls)
 
     @classmethod
+    def pivot_exempt_for_copy(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Controller roles of *one copy* deliberately offered no movable pivot.
+
+        Offering a pivot is free -- nothing is built until the rigger adds a
+        preset row -- so a control missing from ``pivot_controls`` is an
+        oversight, and the ground rules say so. A module that means it names
+        the control here and gives the reason in the docstring, which turns a
+        silent omission into a decision on the record.
+        """
+        return ()
+
+    @classmethod
     def control_shape_defaults_for_copy(
         cls, settings: Optional[dict] = None
     ) -> dict[str, str]:
@@ -404,6 +416,15 @@ class Module(Schema):
             cls.qualify(slug, name)
             for slug, one in cls._copy_settings(settings)
             for name in cls.pivot_controls_for_copy(one)
+        )
+
+    @classmethod
+    def pivot_exempt_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Controller roles deliberately offered no pivot, qualified per copy."""
+        return tuple(
+            cls.qualify(slug, name)
+            for slug, one in cls._copy_settings(settings)
+            for name in cls.pivot_exempt_for_copy(one)
         )
 
     @classmethod

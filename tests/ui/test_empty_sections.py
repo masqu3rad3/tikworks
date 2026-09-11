@@ -45,7 +45,31 @@ def test_a_table_with_no_options_renders_no_widget(qapp):
 def test_its_fold_hides_with_it(qapp):
     form = _form(Toy(), qapp)
     fold = form._groups.get("Rows")
-    assert fold is None or not fold.isVisible()
+    # isHidden, not isVisible: nothing here is shown, so isVisible is False
+    # for every fold and the assertion would pass without hiding anything.
+    assert fold is None or fold.isHidden()
+
+
+def test_the_fold_stays_hidden_through_set_visible_fields(qapp):
+    """The designer calls it after every set_target, so it is the real path.
+
+    It decided a fold's visibility from every *declared* field rather than
+    the ones that got a widget, so it put back every fold set_target had
+    just closed.
+    """
+    form = _form(Toy(), qapp)
+    form.set_visible_fields(["table"])
+    fold = form._groups.get("Rows")
+    assert fold is None or fold.isHidden()
+
+
+def test_a_live_fold_survives_set_visible_fields(qapp):
+    """The other direction: a fold with something in it must stay open."""
+    target = Toy()
+    target.options = ("a", "b")
+    form = _form(target, qapp)
+    form.set_visible_fields(["table"])
+    assert not form._groups["Rows"].isHidden()
 
 
 def test_a_table_with_options_renders(qapp):
@@ -97,6 +121,32 @@ def test_twist_renders_none_of_the_three_sections(qapp):
         assert name not in form._widgets
 
 
+def test_twist_hides_all_three_folds_the_way_the_designer_builds_them(qapp):
+    """The whole sequence the properties panel runs, not just set_target.
+
+    An empty fold is the visible half of the complaint: three boxes that open
+    onto nothing.
+    """
+    from tik.trigger.core import get_module
+
+    module = get_module("twist")(name="twist")
+    form = FormBuilder(module)
+    form.set_visible_fields(list(type(module).per_copy_fields()))
+    for label in ("Spaces", "Pivots", "Shapes"):
+        fold = form._groups.get(label)
+        assert fold is None or fold.isHidden(), f"{label} fold is still shown"
+
+
+def test_arm_keeps_all_three_folds_through_the_same_sequence(qapp):
+    from tik.trigger.core import get_module
+
+    module = get_module("arm")(name="arm")
+    form = FormBuilder(module)
+    form.set_visible_fields(list(type(module).per_copy_fields()))
+    for label in ("Spaces", "Pivots", "Shapes"):
+        assert not form._groups[label].isHidden(), f"{label} fold went missing"
+
+
 def test_arm_renders_all_three(qapp):
     form = _module_form("arm", qapp)
     for name in SECTIONS:
@@ -113,8 +163,22 @@ def test_a_ribbon_with_no_controllers_renders_none(qapp):
         assert name not in form._widgets
 
 
-def test_a_ribbon_with_controllers_renders_all_three(qapp):
+def test_a_ribbon_of_mids_alone_offers_spaces_and_shapes_but_no_pivots(qapp):
+    """A mid is exempt from pivots, so that one section has no candidates.
+
+    The three sections answer separately, which is the whole point of naming
+    them separately.
+    """
     form = _module_form("ribbon", qapp, {"mid_count": 2})
+    assert form.widget("anim_spaces") is not None
+    assert form.widget("control_shape_overrides") is not None
+    assert "pivot_presets" not in form._widgets
+    assert form._groups["Pivots"].isHidden()
+
+
+def test_a_ribbon_with_an_end_controller_renders_all_three(qapp):
+    """The ends do take a pivot, so the fold comes back with one."""
+    form = _module_form("ribbon", qapp, {"mid_count": 2, "end_controller": True})
     for name in SECTIONS:
         assert form.widget(name) is not None
 

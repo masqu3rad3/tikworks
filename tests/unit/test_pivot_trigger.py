@@ -479,3 +479,26 @@ def test_a_module_that_builds_its_own_pivot_gets_exactly_one():
         if controller.transform.name.endswith("_pivot_ctrl")
     ]
     assert len(pivots) == 1
+
+
+def test_a_ribbon_mid_is_offered_no_movable_pivot():
+    """A mid rides the surface, so a moved pivot does not behave there.
+
+    Exempt rather than merely absent: the ground rules treat a control with
+    no pivot as an oversight unless the module says it meant it.
+    """
+    import tik.trigger as trigger
+    from tik.trigger.core import get_module
+
+    trigger.load_plugins()
+    ribbon = get_module("ribbon")
+    settings = {"mid_count": 2, "start_controller": True, "end_controller": True}
+    module = ribbon(name="ribbon")
+    module.apply(settings, strict=False)
+    values = module.values()
+
+    assert sorted(ribbon.pivot_control_names(values)) == ["end", "start"]
+    assert sorted(ribbon.pivot_exempt_names(values)) == ["mid0", "mid1"]
+    # The picker offers exactly the pivot-capable controls.
+    assert ribbon.pivot_anchor("mid0", values) is None
+    assert ribbon.pivot_anchor("start", values) == ("start", 0)

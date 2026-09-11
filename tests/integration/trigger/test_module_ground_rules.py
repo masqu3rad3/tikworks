@@ -390,18 +390,25 @@ def test_every_movable_pivot_names_a_control_and_a_guide_the_module_has(module_t
 
 @pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_every_control_is_offered_a_movable_pivot(module_type):
-    """Rule: a rigger can put a pivot on any controller a module builds.
+    """Rule: a rigger can put a pivot on any controller a module builds,
+    unless the module says otherwise and says why.
 
     Offering is free -- nothing is built until a preset row exists -- so a
-    control left out of pivot_controls is an oversight, not a decision.
+    control left out of pivot_controls is an oversight rather than a decision,
+    *unless* pivot_exempt_for_copy names it. That hook is what turns a silent
+    omission into a decision on the record: the ribbon's mids are exempt
+    because a mid rides the surface and a moved pivot does not behave there.
     """
     module_cls = get_module(module_type)
     for settings in CONTROL_VARIATIONS.get(module_type, [{}]):
         instance = module_cls(settings=settings)
         controls = set(module_cls.control_names(instance.values()))
         movable = set(module_cls.pivot_control_names(instance.values()))
-        missing = sorted(controls - movable)
+        exempt = set(module_cls.pivot_exempt_names(instance.values()))
+        missing = sorted(controls - movable - exempt)
         assert not missing, f"{module_type}: {missing} have no movable pivot"
+        overlap = sorted(movable & exempt)
+        assert not overlap, f"{module_type}: {overlap} are both offered and exempt"
 
 
 @pytest.mark.parametrize("module_type", _shipped_module_types())

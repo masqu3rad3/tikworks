@@ -263,7 +263,10 @@ the same way a socket is made per declared input — so no module contains pivot
 code. It skips a role that already has one, so a module still calling
 `rig.pivot_control` itself gets one pivot rather than a second that fails.
 Every control a module builds must be offered a pivot: offering is free, so
-leaving one out is an oversight, not a decision.
+leaving one out is an oversight, not a decision. When it *is* a decision, say so
+in `pivot_exempt_for_copy` and give the reason in its docstring — the ribbon's
+mids are exempt because a mid rides the surface and a moved pivot does not
+behave there. A control may not be both offered and exempt.
 
 **A section with no candidates and no rows does not render.** A fold the rigger
 cannot use is worse than a missing one — it claims an offer the module does not
