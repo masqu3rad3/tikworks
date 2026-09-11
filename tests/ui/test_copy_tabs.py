@@ -282,3 +282,73 @@ def test_the_graph_node_offers_a_port_per_copy(designer):
     node = designer.graph.graph.nodes[handle.key]
     assert "root" in node.inputs
     assert "c1_root" in node.inputs
+
+
+# --------------------------------------------------- the panel tells the truth
+def _order(designer):
+    """Top-to-bottom order of the panel's landmarks inside the scroll column."""
+    column = designer.form_scroll.widget().layout()
+    names = {
+        id(designer.module_caption): "MODULE",
+        id(designer.form): "shared fields",
+        id(designer.tab_bar.parent()): "tab bar",
+        id(designer.copy_caption): "COPY",
+        id(designer.inputs_caption): "INPUTS",
+        id(designer.copy_form): "per-copy fields",
+    }
+    found = []
+    for index in range(column.count()):
+        item = column.itemAt(index)
+        widget = item.widget()
+        if widget is not None and id(widget) in names:
+            found.append(names[id(widget)])
+        elif item.layout() is designer.inputs_form:
+            found.append("input rows")
+    return found
+
+
+def test_everything_per_copy_sits_below_the_tab_bar(designer):
+    """The layout is the panel's claim about ownership. Inputs are the
+    copy's, so an input row above the bar would be a lie about the data."""
+    _chain(designer)
+    order = _order(designer)
+    bar = order.index("tab bar")
+    assert order.index("MODULE") < bar
+    assert order.index("shared fields") < bar
+    for below in ("COPY", "INPUTS", "input rows", "per-copy fields"):
+        assert order.index(below) > bar, below
+
+
+def test_the_module_half_hides_when_nothing_is_shared(designer):
+    """fkchain shares nothing, so captioning an empty box would be noise."""
+    handle = designer.guides.add("toy_root", name="spine")
+    _select(designer, handle)
+    module_cls = type(designer._module_obj)
+    visible_shared = [
+        name for name, f in module_cls.shared_fields().items() if not f.hidden
+    ]
+    assert visible_shared == []
+    assert not designer.module_caption.isVisible()
+
+
+def test_the_three_tables_are_the_copys(designer):
+    """They sit below the bar because that is where they belong."""
+    _chain(designer)
+    module_cls = type(designer._module_obj)
+    for name in ("anim_spaces", "pivot_presets", "control_shape_overrides"):
+        assert name in module_cls.per_copy_fields(), name
+
+
+def test_a_table_edited_on_one_tab_leaves_the_other_alone(designer):
+    """The behaviour the layout was promising all along."""
+    handle = _chain(designer)
+    designer._on_add_copy()
+    designer.tab_bar.setCurrentIndex(1)
+    designer._module_obj.control_shape_overrides = [
+        {"control": "fk0", "shape": "Cube", "size": ""}
+    ]
+    designer._on_setting_changed("control_shape_overrides", None)
+
+    rows = _rows(handle)
+    assert rows[1]["control_shape_overrides"][0]["shape"] == "Cube"
+    assert rows[0]["control_shape_overrides"] == []

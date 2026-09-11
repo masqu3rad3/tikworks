@@ -272,19 +272,27 @@ def test_validate_still_catches_a_missing_guide():
     assert any("root" in problem for problem in module.validate())
 
 
-def test_a_control_table_row_reaches_only_its_own_copy():
-    """One module-level table addresses any copy's control; a view sees its
-    own rows, de-qualified, so it cannot qualify a name twice."""
-    Toy = _toy()
-    rows = [
-        {"control": "fk", "shape": "Circle", "size": ""},
-        {"control": "c1_fk", "shape": "Cube", "size": ""},
+def test_a_control_table_belongs_to_its_copy():
+    """Each copy carries its own table, naming its own controls by their
+    bare role -- so a tab shows four shape rows, not twenty."""
+    module = _toy()(name="fingers")
+    module.copies = [
+        {
+            "slug": "",
+            "name": "index",
+            "segments": 1,
+            "control_shape_overrides": [{"control": "fk", "shape": "Circle"}],
+        },
+        {
+            "slug": "c1",
+            "name": "thumb",
+            "segments": 1,
+            "control_shape_overrides": [{"control": "fk", "shape": "Cube"}],
+        },
     ]
-    sliced = Toy.slice_table(rows, "c1")
-    assert sliced == [{"control": "fk", "shape": "Cube", "size": ""}]
-    assert Toy.slice_table(rows, "") == [
-        {"control": "fk", "shape": "Circle", "size": ""}
-    ]
+    assert module.for_copy("").control_shape_overrides[0]["shape"] == "Circle"
+    assert module.for_copy("c1").control_shape_overrides[0]["shape"] == "Cube"
+    assert module.for_copy("c1").control_shape_overrides[0]["control"] == "fk"
 
 
 def test_the_implicit_first_copy_inherits_the_modules_own_value():
@@ -325,13 +333,16 @@ def test_every_setting_is_per_copy_by_default():
     assert "size" in Toy.shared_fields()  # the one exception this toy declares
 
 
-def test_the_base_tables_stay_shared():
-    """They address controls by qualified name, so one table serves every
-    copy; making them per-copy would break that addressing."""
+def test_the_copy_list_is_the_only_shared_field_on_module():
+    """A copy is a whole module's worth of authoring -- settings, inputs,
+    spaces, pivots and shapes -- and the list itself is the one thing that
+    cannot belong to a copy."""
+    from tik.trigger.core import Module
+
+    assert list(Module.shared_fields()) == ["copies"]
     Toy = _toy()
     for name in ("anim_spaces", "pivot_presets", "control_shape_overrides"):
-        assert name in Toy.shared_fields(), name
-    assert "copies" in Toy.shared_fields()
+        assert name in Toy.per_copy_fields(), name
 
 
 def test_inputs_are_qualified_per_copy():

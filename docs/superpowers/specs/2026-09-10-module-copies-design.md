@@ -68,9 +68,11 @@ class FkChain(Module):
     controller_size = FloatField(2.0)              # the copy's
 ```
 
-Only `shared=True` opts out, and on `Module` itself only four things take it: `copies`, and the
-three tables (`anim_spaces`, `pivot_presets`, `control_shape_overrides`) that address controls
-by their already-qualified names, so one table serves every copy.
+Only `shared=True` opts out, and on `Module` itself exactly one thing takes it: `copies`. The
+three tables (`anim_spaces`, `pivot_presets`, `control_shape_overrides`) are the copy's too, so
+a tab shows four shape rows rather than the hand's twenty, and the rule has no exceptions worth
+remembering — *a copy owns everything; the list of copies is the one thing that cannot belong
+to one.*
 
 A per-copy field always renders inside the tabs; a shared one always renders above them. The
 panel never infers and never reflows.
@@ -235,6 +237,12 @@ schedulable and nothing outside the module can wire to "copy 3" as a unit.
 
 ## 7. The panel
 
+**The layout is the panel's claim about ownership, and it has to be true.** What sits above the
+tab bar belongs to the module; what sits below belongs to the copy whose tab is showing. A
+widget on the wrong side is a lie about the data, and the two captions — `MODULE` and `COPY` —
+name the halves so the claim is explicit rather than implied by position alone. The `MODULE`
+half hides entirely when a module shares nothing, which for everything that ships is always.
+
 ```
 name [fingers]   side [L]
 root ◀── L_hand.hand
@@ -259,8 +267,7 @@ is the rule §1 was written to enforce, and §10 tests it directly.
 
 ## 8. What stays module-level
 
-The module name and side, the copy list itself, and the three tables the base class declares —
-`anim_spaces`, `pivot_presets` and `control_shape_overrides`.
+The module name and side, and the copy list itself. That is all.
 
 Those three are keyed by control name, and control names are already copy-qualified (§6), so
 one module-level table addresses any copy's control without becoming per-copy itself. A space

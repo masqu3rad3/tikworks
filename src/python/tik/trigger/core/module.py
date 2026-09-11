@@ -79,6 +79,10 @@ class Module(Schema):
     icon: str = ""  # stamped by @register_module
     copies = ListField(
         [],
+        #: The only shared field on ``Module``. Everything else -- settings,
+        #: inputs, spaces, pivots and shapes -- belongs to a copy, so a copy
+        #: is a whole module's worth of authoring and the list itself is the
+        #: one thing that cannot be.
         shared=True,
         item_type=dict,
         label="Copies",
@@ -97,7 +101,6 @@ class Module(Schema):
     """
     anim_spaces = TableField(
         [],
-        shared=True,
         label="Anim Spaces",
         group=SPACES,
         help="Each row adds one animation space and one input port.",
@@ -110,7 +113,6 @@ class Module(Schema):
     )
     pivot_presets = TableField(
         [],
-        shared=True,
         label="Pivot Presets",
         group=PIVOTS,
         help="Each row adds one named pivot position and one guide to place it with.",
@@ -122,7 +124,6 @@ class Module(Schema):
     )
     control_shape_overrides = TableField(
         [],
-        shared=True,
         label="Control Shapes",
         group=SHAPES,
         help="Override the shape and relative size of one controller.",
@@ -282,30 +283,7 @@ class Module(Schema):
             one = dict(settings)
             one.update({name: row[name] for name in defaults if name in row})
             one["copies"] = [dict(row, slug=copy_list.EMPTY_SLUG)]
-            for table in ("anim_spaces", "pivot_presets", "control_shape_overrides"):
-                one[table] = cls.slice_table(settings.get(table), row["slug"])
             found.append((row["slug"], one))
-        return found
-
-    @classmethod
-    def slice_table(cls, rows, slug: str) -> list:
-        """Rows of a control-keyed table belonging to ``slug``, de-qualified.
-
-        These tables stay module-level -- one table addresses any copy's
-        control -- but a per-copy view must see only its own rows with the
-        prefix stripped. Otherwise the view would re-qualify an already
-        qualified name and derive roles like ``c1_pivot_c1_fk0_heel``.
-        """
-        prefix = f"{slug}_" if slug else ""
-        found = []
-        for row in rows or []:
-            control = row.get("control", "")
-            if slug:
-                if control.startswith(prefix):
-                    trimmed = control[len(prefix) :]
-                    found.append(dict(row, control=trimmed))
-            elif not cls.slug_of(control):
-                found.append(dict(row))
         return found
 
     @staticmethod
@@ -577,6 +555,16 @@ class Module(Schema):
                     f"would collide"
                 )
             seen.add(name)
+        if len(self.copy_rows()) > 1:
+            # Each copy carries its own tables naming its own controls, so
+            # each is checked through its own view and told apart by name.
+            for slug in self.copy_slugs():
+                view = self.for_copy(slug)
+                label = copy_list.copy_name(
+                    copy_list.row_for(self.copy_rows(), slug), self.name
+                )
+                problems.extend(f"{label}: {item}" for item in view.warnings())
+            return problems
         known = type(self).control_names(self.values())
         for row in self.anim_spaces:
             control, label = row.get("control", ""), row.get("label", "")

@@ -303,26 +303,44 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.multi_label.setVisible(False)
         props.addWidget(self.multi_label)
         props.addWidget(self._build_reference_strip())
-        self.inputs_caption = QtWidgets.QLabel("INPUTS")
-        self.inputs_caption.setObjectName("FieldCaption")
-        props.addWidget(self.inputs_caption)
-        self.inputs_form = QtWidgets.QFormLayout()
-        self.inputs_form.setContentsMargins(4, 0, 4, 4)
-        props.addLayout(self.inputs_form)
+        # Everything below here scrolls as one column, and its order is the
+        # panel's whole claim about ownership: what is above the tab bar
+        # belongs to the module, what is below belongs to the copy whose tab
+        # is showing. Getting a widget on the wrong side of the bar is a lie
+        # about the data, so the two captions name the halves explicitly.
+        body = QtWidgets.QWidget()
+        column = QtWidgets.QVBoxLayout(body)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(8)
+
         self.module_caption = QtWidgets.QLabel("MODULE")
         self.module_caption.setObjectName("FieldCaption")
-        props.addWidget(self.module_caption)
+        column.addWidget(self.module_caption)
         self.form = FormBuilder()
-        props.addWidget(self._build_copy_bar())
-        # A second form over the same target. Which fields each shows is
-        # decided once by the module author (``per_copy``), so neither side
-        # ever reflows and there is never a question about where a field is.
+        column.addWidget(self.form)
+
+        column.addWidget(self._build_copy_bar())
+
+        self.copy_caption = QtWidgets.QLabel("COPY")
+        self.copy_caption.setObjectName("FieldCaption")
+        column.addWidget(self.copy_caption)
+        self.inputs_caption = QtWidgets.QLabel("INPUTS")
+        self.inputs_caption.setObjectName("FieldCaption")
+        column.addWidget(self.inputs_caption)
+        self.inputs_form = QtWidgets.QFormLayout()
+        self.inputs_form.setContentsMargins(4, 0, 4, 4)
+        column.addLayout(self.inputs_form)
+        # A second form over the same target, showing the fields the module
+        # author left to the copy -- which is all of them unless they said
+        # ``shared=True``.
         self.copy_form = FormBuilder()
-        props.addWidget(self.copy_form)
+        column.addWidget(self.copy_form)
+        column.addStretch(1)
+
         self.form_scroll = QtWidgets.QScrollArea()
         self.form_scroll.setWidgetResizable(True)
         self.form_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
-        self.form_scroll.setWidget(self.form)
+        self.form_scroll.setWidget(body)
         props.addWidget(self.form_scroll, 1)
         self.scene_panel = SceneNodesPanel(picker=self._selected_scene_nodes)
         self.scene_panel.setVisible(False)
@@ -811,7 +829,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.name_edit.setPlaceholderText("scene nodes group name")
         self.type_label.setText("Scene nodes")
         self.icon.setPixmap(glyph_icon("SN", MODULE_COLORS["scene"], 24).pixmap(24, 24))
-        for widget in (self.inputs_caption, self.module_caption, self.form_scroll):
+        # A scene-nodes group is not a module: it has no fields, no copies
+        # and no inputs, so the whole scrolling column goes away.
+        for widget in (self.inputs_caption, self.copy_caption, self.form_scroll):
             widget.setVisible(False)
         self.scene_panel.set_nodes(self.guides.scene_groups().get(name, []))
         self.scene_panel.setVisible(True)
@@ -983,8 +1003,18 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             return
         module_cls = type(self._module_obj)
         per_copy = list(module_cls.per_copy_fields())
-        self.form.set_visible_fields(list(module_cls.shared_fields()))
+        # ``copies`` is hidden and always shared, so it never counts as
+        # something to show: a module that shares nothing else hides the
+        # whole MODULE half rather than captioning an empty box.
+        shared = [
+            name
+            for name, field in module_cls.shared_fields().items()
+            if not field.hidden
+        ]
+        self.form.set_visible_fields(shared)
         self.copy_form.set_visible_fields(per_copy)
+        self.form.setVisible(bool(shared))
+        self.module_caption.setVisible(bool(shared))
         self.copy_form.setVisible(bool(per_copy))
 
     def _show_copy_values(self) -> None:
@@ -1115,7 +1145,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 item.widget().deleteLater()
         self._input_rows.clear()
         self.scene_panel.setVisible(False)
-        for widget in (self.module_caption, self.form_scroll):
+        for widget in (self.copy_caption, self.form_scroll):
             widget.setVisible(True)
         self.multi_label.setVisible(False)
         self.name_edit.setEnabled(True)
