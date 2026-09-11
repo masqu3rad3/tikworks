@@ -446,3 +446,20 @@ def test_pivot_controls_for_copy_returns_the_anchors_not_just_the_names():
 
     assert Chain.pivot_control_names({"count": 3}) == ("fk0", "fk1", "fk2")
     assert Chain.pivot_anchor("fk2", {"count": 3}) == ("segment", 1)
+
+
+def test_pivot_labels_lists_one_controls_rows_in_order():
+    class Simple(Module):
+        guides = GuideLayout("root")
+        controls = ("root", "other")
+        control_shapes = {"root": "Circle", "other": "Circle"}
+        pivot_controls = {"root": "root", "other": "root"}
+
+    module = Simple()
+    module.pivot_presets = [
+        {"control": "root", "label": "tip"},
+        {"control": "other", "label": "ignored"},
+        {"control": "root", "label": "heel"},
+    ]
+    assert module.pivot_labels("root") == ["tip", "heel"]
+    assert module.pivot_labels("nobody") == []

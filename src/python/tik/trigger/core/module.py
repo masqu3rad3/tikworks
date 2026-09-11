@@ -527,6 +527,19 @@ class Module(Schema):
             return [dict(row) for row in cls.pivot_presets.default]
         return [dict(row) for row in (settings.get("pivot_presets") or [])]
 
+    def pivot_labels(self, role: str) -> list[str]:
+        """Preset labels declared for ``role``, in row order.
+
+        On ``Module`` rather than on ``ModuleRig`` because the builder asks
+        the same question to decide whether to make a pivot at all, and that
+        is a question about settings, not about a scene.
+        """
+        return [
+            row["label"]
+            for row in self.pivot_rows(self.values())
+            if row.get("control") == role and row.get("label")
+        ]
+
     @classmethod
     def pivot_guide_roles(cls, settings=None) -> tuple[str, ...]:
         """``pivot_<control>_<label>`` per well-formed row, in row order.

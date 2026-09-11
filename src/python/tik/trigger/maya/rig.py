@@ -574,11 +574,7 @@ class ModuleRig:
 
     def _pivot_labels(self, role: str) -> list[str]:
         """Preset labels declared for ``role``, in row order."""
-        return [
-            row["label"]
-            for row in self.module.pivot_rows(self.module.values())
-            if row.get("control") == role and row.get("label")
-        ]
+        return self.module.pivot_labels(role)
 
     def _wire_pivot_presets(
         self, main: Controller, pivot: Controller, role: str, labels: list[str]
