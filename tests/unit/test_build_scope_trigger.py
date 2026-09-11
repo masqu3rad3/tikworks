@@ -103,6 +103,33 @@ def test_space_inputs_do_not_pull_a_module_into_scope():
     assert expand_build_scope([body, arm], ["id_arm"]) == ["id_arm"]
 
 
+def test_a_later_copys_space_input_does_not_pull_a_module_into_scope():
+    """``space_inputs`` names are bare; ``entry.inputs`` keys are qualified.
+
+    So only the first copy's space port was ever skipped, and a second copy's
+    registered the arm as a structural consumer of the body -- rebuilding the
+    body then tore the arm down and rebuilt it for a space connection, which
+    is the thing this module exists to prevent.
+    """
+    body = _entry("id_body", "body", module_type="toy_root")
+    arm = _entry(
+        "id_arm",
+        "arm",
+        inputs={"c1_fk0_world": "id_body.root"},
+        settings={
+            "copies": [
+                {"slug": "", "name": "a", "segments": 2},
+                {"slug": "c1", "name": "b", "segments": 2},
+            ],
+            "anim_spaces": [{"control": "fk0", "label": "world", "mode": "parent"}],
+        },
+    )
+    scope = expand_build_scope(
+        [body, arm], ["id_body"], already_built={"id_body", "id_arm"}
+    )
+    assert scope == ["id_body"]
+
+
 def test_an_unknown_module_type_treats_every_input_as_structural():
     """A module the registry has never heard of must not crash the scope."""
     body = _entry("id_body", "body", module_type="toy_root")

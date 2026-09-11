@@ -284,9 +284,9 @@ class GraphView(QtWidgets.QGraphicsView):
             drawn, key=lambda item: (depth.get(item.key, 1), item.key)
         ):
             module_cls = handle.module_class
-            space_names = [
-                item.name for item in module_cls.space_inputs(handle.settings)
-            ]
+            # Qualified: these are matched against ``input_names``, which
+            # qualifies, so bare names would mark only the first copy's.
+            space_names = list(module_cls.space_input_names(handle.settings))
             port_names = module_cls.input_names(handle.settings)
             # Not ``groups``: that name already means the scene-node groups
             # in this function, and shadowing it here silently emptied them.

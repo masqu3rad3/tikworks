@@ -248,17 +248,20 @@ class NodeItem(QtWidgets.QGraphicsItem):
         )
         self.setZValue(2)
         labels = dict(spec.port_labels or {})
+        # ``spaces`` *marks* ports, it does not add them: ``input_names``
+        # already carries every anim-space port. Building a second Port for
+        # each and overwriting the dict entry left the first one a child item
+        # nothing indexed -- so ``relayout``, which walks ``inputs``, never
+        # positioned or hid it and it drew at the node's own origin.
+        spaces = set(spec.spaces or [])
         for name in spec.inputs:
             self.inputs[name] = Port(
                 self,
                 name,
                 False,
                 primary=(name == spec.primary_input),
+                space=name in spaces,
                 label=labels.get(name, name),
-            )
-        for name in spec.spaces or []:
-            self.inputs[name] = Port(
-                self, name, False, space=True, label=labels.get(name, name)
             )
         for name in spec.outputs:
             self.outputs[name] = Port(self, name, True, label=labels.get(name, name))

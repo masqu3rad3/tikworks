@@ -319,9 +319,18 @@ def _graph_scene():
     scene = GraphScene()
     scene.add_node(NodeSpec("body", "body", "Base", [], ["root"], "#888888"))
     scene.add_node(NodeSpec("head", "head", "Base", [], ["root"], "#888888"))
+    # ``spaces`` marks ports rather than adding them, so an anim-space port
+    # appears in ``inputs`` too -- which is what ``input_names`` really hands
+    # the view, space ports included.
     scene.add_node(
         NodeSpec(
-            "L_arm", "L_arm", "Arm", ["root"], ["hand"], "#888888", spaces=["ik_hand"]
+            "L_arm",
+            "L_arm",
+            "Arm",
+            ["root", "ik_hand"],
+            ["hand"],
+            "#888888",
+            spaces=["ik_hand"],
         )
     )
     return scene

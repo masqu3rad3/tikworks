@@ -221,6 +221,23 @@ class Module(Schema):
         return found
 
     @classmethod
+    def space_input_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """The anim-space ports, qualified per copy.
+
+        ``space_inputs`` answers for *one copy* and returns bare names, so a
+        caller matching them against ``input_names`` -- which qualifies --
+        sees only the first copy's, whose slug is empty. Anything comparing
+        the two sets wants these.
+        """
+        found: list[str] = []
+        for slug, one in cls._copy_settings(settings):
+            for item in cls.space_inputs(one):
+                port = cls.qualify(slug, item.name)
+                if port not in found:
+                    found.append(port)
+        return tuple(found)
+
+    @classmethod
     def primary_input(cls) -> Optional[Input]:
         """The input marked primary, else the first declared one, else None."""
         for item in cls.inputs:

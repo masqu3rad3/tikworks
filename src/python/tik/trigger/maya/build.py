@@ -292,8 +292,14 @@ def apply_afterlife(instances, mode: str) -> None:
 
 
 def space_input_names(module_cls, settings) -> set:
-    """Names of the inputs derived from anim-space rows."""
-    return {item.name for item in module_cls.space_inputs(settings)}
+    """Names of the inputs derived from anim-space rows, qualified per copy.
+
+    Through the module rather than off ``space_inputs`` directly: that one
+    answers for a single copy and returns bare names, so a caller matching
+    them against ``entry.inputs`` -- whose keys carry the copy slug -- saw
+    only the first copy's and let the rest through as structural.
+    """
+    return set(module_cls.space_input_names(settings))
 
 
 class Builder:
