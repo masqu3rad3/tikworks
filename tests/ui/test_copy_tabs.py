@@ -428,7 +428,7 @@ def test_the_module_still_knows_every_copys_controls(designer):
 
 
 def test_the_copy_form_edits_the_copy_not_the_module(designer):
-    handle = _chain(designer, name="arm")
+    _chain(designer, name="arm")
     designer._on_add_copy()
     designer.tab_bar.setCurrentIndex(1)
     assert designer._copy_obj is not None
