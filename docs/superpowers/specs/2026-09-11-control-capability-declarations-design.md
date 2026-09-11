@@ -1,0 +1,240 @@
+# Control Capability Declarations: a module says what each section may offer
+
+**Date:** 2026-09-11
+**Status:** draft
+**Amends:** `2026-09-07-movable-pivots-and-pivot-presets-design.md` — `pivot_controls` becomes a
+settings-aware hook whose values address a guide by role *and index*, and the pivot controller
+is built by the framework rather than by a call in the module's `build()`. The declaration's
+meaning, the preset guides and the switch compensation all stand.
+`2026-09-08-definable-control-shapes-design.md` — the Shapes section's candidate set becomes the
+keys of `control_shapes` rather than every declared control. The resolution chain, the sparse
+override table and the pinned library stand.
+
+---
+
+## 1. Why
+
+Open a `twist` module in the Guide Designer and three folds greet you — **Spaces**, **Pivots**,
+**Control Shapes** — and not one of them can be used. `twist` builds no controllers at all
+(`controls = ()`; the joints ride an aimed frame), so every table in all three is unfillable.
+Open a `base` or an `fkchain` and the Pivots fold is dead for a different reason: `arm` is the
+only module in the repo that declares `pivot_controls`.
+
+That is the visible half. The invisible half is why the declarations are the way they are.
+
+**Spaces and Shapes read the wrong set.** The `anim_spaces` table's `control` column and the
+`control_shape_overrides` table's `rows_from` both name `control_names` — *every* control the
+module builds. Neither is wrong today, because every module that builds a control happens to
+want both for all of them, but neither is a statement the module made. A module cannot say
+"this control has a shape you may change but no space to switch", because nothing reads such a
+statement.
+
+**Pivots cannot be declared by a settings-driven module at all.** `pivot_controls_for_copy`
+exists and returns `tuple(cls.pivot_controls)` — the keys, with the anchors dropped on the
+floor. Both places that need an anchor read past the hook to the raw class attribute:
+
+```python
+anchor_role = self.pivot_controls.get(control)      # core/module.py:677
+if role not in self.module.pivot_controls:          # maya/rig.py:544
+```
+
+So an `fkchain` whose control set depends on `segments` has no way to express "each `fk{i}`
+anchors to `segment{i-1}`" — the hook that would compute it is not consulted, and the anchor is
+a bare role string that `draft.made(role)` resolves at index 0 regardless. A pivot on `fk2`
+would stack its preset markers on `segment0`.
+
+**Declaring is only half of a pivot.** `arm` declares `pivot_controls = {"ik": "hand"}` *and*
+calls `rig.pivot_control(limb.ik_control)` in `build`. The declaration makes the rigger's preset
+rows appear and draws the marker guides; the call is what wires them. Miss the call and the
+rigger fills in rows that build nothing. Every module that wanted pivots would repeat that
+pairing by hand.
+
+## 2. Decision
+
+**A module names the candidate set for each section, and the framework does the rest.**
+
+Four attributes, each answering exactly one question, each with a `*_for_copy` hook for the
+settings-driven case — the same idiom `outputs_for_copy` established:
+
+| Attribute | Question | Default on `Module` |
+|---|---|---|
+| `controls` | What controllers do I build? | `()` |
+| `space_controls` | Which of them may host an anim space? | **all of `controls`** |
+| `pivot_controls` | Which get a movable pivot, anchored where? | `{}` |
+| `control_shapes` | Which have a definable shape, defaulting to what? | `{}` |
+
+`space_controls` is the one whose default is "all", and the asymmetry is the point: hosting a
+space is something any controller *can* do, so a module narrows rather than opts in. A pivot and
+a shape are things a module chooses to offer.
+
+`control_shapes` picks up a second job. **Its keys are the Shapes section's candidate set.** A
+control with a declared default shape is shape-editable; one without is not offered. There is no
+`shape_controls` list, because it would duplicate `controls` line for line in every module and
+then drift from it — the exact maintenance burden this document exists to remove.
+
+### 2.1 The consequence of that second job
+
+A module author who adds a control and forgets its shape default silently loses that control's
+override row. That is the price of not keeping a duplicated list, and §5's test guards the
+reverse direction — every key must name a control the module actually builds — because a typo
+there is the failure that would otherwise reach a rigger as a missing row.
+
+## 3. The pivot anchor becomes addressable
+
+`pivot_controls` values become a guide *reference* rather than a role:
+
+```python
+pivot_controls = {"ik": "hand"}                 # role, index 0
+pivot_controls = {"fk2": ("segment", 1)}        # role and index
+```
+
+A bare string means index 0, so every existing declaration reads unchanged.
+
+`pivot_controls_for_copy` returns the **whole dict**, computed from settings:
+
+```python
+@classmethod
+def pivot_controls_for_copy(cls, settings=None) -> dict[str, object]:
+    """Controller roles of one copy with a movable pivot, mapped to their anchor."""
+    return dict(cls.pivot_controls)
+```
+
+`pivot_control_names` is unchanged — iterating a dict yields its keys, which is what it already
+does.
+
+Both readers stop reaching past the hook. `Module._draw_pivot_guides` resolves the anchor
+through `pivot_controls_for_copy(self.values())` and unpacks `(role, index)` before calling
+`draft.made(role, index)`; `rig.pivot_control`'s membership check goes through the same hook.
+That single change is what makes a settings-driven module able to declare a pivot at all.
+
+## 4. The framework builds the pivot
+
+`rig.controllers` and `rig.controller_by_role` already exist. Directly after `view.build(ctx)` in
+the per-copy loop (`maya/build.py:744`), for every declared role that has preset rows:
+
+```python
+for role in view.pivot_controls_for_copy(view.values()):
+    main = ctx.controller_by_role(role)
+    if main is not None and view.pivot_labels(role):
+        ctx.pivot_control(main)
+```
+
+**Declaring is what makes it available; a preset row is what builds it.** That is the sentence
+the ground rules already use for sockets — "a socket per declared input is created for you;
+declaring the input is what makes it" — and a pivot now reads the same way. No module contains
+pivot code; `arm` **loses** its `rig.pivot_control(limb.ik_control)` line.
+
+`pivot_labels(role)` moves from `ModuleRig._pivot_labels` to `Module`, since the builder needs it
+and `core` is where the rows live. `ModuleRig._pivot_labels` delegates.
+
+### 4.1 What this changes for an existing arm
+
+An `arm` today gets its hand pivot unconditionally. Under this rule an arm whose rigger deleted
+every preset row loses it. `arm` ships three default rows (`tip`, `ball`, `wrist`), so a fresh
+arm is byte-identical; a deliberately emptied one now means "no pivot", which is the reading that
+makes the rule uniform. A movable-by-hand pivot with no presets is still available — the rigger
+adds a row and clears its label, or simply keeps one preset.
+
+## 5. Validation, in two layers
+
+**Test-time**, in `tests/integration/trigger/test_module_ground_rules.py`, for every registered
+module across a spread of settings: every name in `space_controls`, `pivot_controls` and
+`control_shapes` must be a control that module actually builds, and every pivot anchor must name
+a guide role the module's layout declares. A typo fails CI rather than a rigger's build.
+
+**Runtime**, for studio modules that never run this suite. `Module.space_rows()` becomes the
+single filter point — it already feeds both `space_inputs()` (the ports) and the builder's space
+loop, so filtering there means an ineligible row creates no phantom port *and* builds nothing:
+
+```python
+logger.warning(
+    "%s: anim space row names control %r, which this module does not offer; skipped.",
+    cls.__name__, control,
+)
+```
+
+`rig.pivot_control` already raises `GuideError` on an undeclared role, so pivots need nothing
+new beyond routing that check through the hook.
+
+## 6. The UI: a table nobody can fill renders nothing
+
+Generic, in `tik/shared/ui/fields.py`, stated as a property of the *table* rather than of
+Trigger:
+
+```python
+def _table_is_dead(self, name, field) -> bool:
+    """A table nobody could add a row to, that holds no rows to remove."""
+    if getattr(self._target, name, None):
+        return False                       # has rows -- show them
+    source = getattr(field, "rows_from", "")
+    if source and not self._resolve_choices(source):
+        return True
+    return any(
+        column.choices_from and not self._resolve_choices(column.choices_from)
+        for column in getattr(field, "columns", ())
+    )
+```
+
+`set_target` skips such a field entirely — no widget, no label — and the existing rule *"a group
+whose fields are all hidden hides too"* closes the fold for free.
+
+The test is **per column**, not per table: a column whose options are fixed and empty is what
+makes a row unfillable. `anim_spaces` has a static `mode` column beside its `control` column, and
+only the latter can empty out.
+
+The `or bool(current rows)` clause is the stale-row escape. A rigger who adds a mid controller to
+a ribbon, gives it an anim space, then sets Mid Controllers back to 0 still sees the Spaces fold
+holding that one row, and can delete it. Put the mid back and nothing was lost either way.
+
+Re-rendering is covered by extending `_topology` in `ui/designer/properties.py` with
+`space_control_names` and `shape_control_names`, so changing a setting that empties or refills a
+candidate set rebuilds the panel.
+
+## 7. What each module declares
+
+Spaces and shapes need no module changes at all: every module's existing declarations already say
+the right thing, and the dead folds were never a declaration problem. Reading them against §2:
+
+| Module | Spaces | Shapes | `pivot_controls` |
+|---|---|---|---|
+| `base` | `root` | `root` | `{"root": "root"}` |
+| `fkchain` | per segment | per segment | computed: `fk0 → ("root", 0)`, `fk{i} → ("segment", i-1)` |
+| `ribbon` | as configured | as configured | computed: `start → "start"`, `mid{i} → "start"`, `end → "end"` |
+| `arm` | all six | all six | `collar → "collar"`, `fk_upper → "shoulder"`, `fk_lower → "elbow"`, `fk_hand → "hand"`, `ik → "hand"`, `pole → "elbow"` |
+| `twist` | — hidden | — hidden | `{}` — it builds no controls |
+
+`fkchain` and `ribbon` get a `pivot_controls_for_copy` override, the same shape as their existing
+`control_shape_defaults_for_copy`.
+
+Two controls have no guide of their own. The `arm`'s pole is placed at a computed rest position
+and the `ribbon`'s mids are computed along the surface, so they anchor to `elbow` and `start`
+respectively. Their presets stack there unplaced until the rigger drags them where they belong,
+which is already how an unplaced preset behaves — "an unplaced preset should look unplaced".
+
+After this, `twist` renders none of the three folds, `ribbon` at zero controllers renders none,
+and every other module renders all three.
+
+## 8. Testing
+
+- `tests/unit/test_core_trigger.py` — `space_control_names` defaults to all and narrows when
+  declared; `shape_control_names` comes from `control_shapes` keys; `space_rows` drops an
+  ineligible row and warns, so `space_inputs` grows no phantom port.
+- `tests/unit/test_module_copies_trigger.py` — both new name sets repeat across copies and
+  qualify (`c1_ik`); `pivot_controls_for_copy` returns a dict whose keys qualify the same way.
+- `tests/unit/test_pivot_trigger.py` — a tuple anchor resolves to the right multi-guide index;
+  an `fkchain` with presets on `fk2` draws its markers on `segment1`, not `segment0`.
+- `tests/integration/trigger/test_module_ground_rules.py` — §5's subset and anchor assertions,
+  over every registered module.
+- `tests/integration/trigger/test_pivot_build_trigger.py` (new) — the post-build hook builds a
+  pivot exactly where preset rows exist and nowhere else; `arm` builds the same hand pivot it does
+  today with its explicit line removed.
+- `tests/ui/test_empty_sections.py` (new) — `twist` renders none of the three folds; `ribbon` at
+  zero controllers renders none; a `ribbon` holding a stale space row keeps its Spaces fold;
+  `arm` renders all three.
+
+## 9. Out of scope
+
+Nothing about how a space, a pivot or a shape *works* changes. The modes, the ports, the preset
+guides, the switch compensation, the resolution chain, the pinned library and the sparse override
+table are all untouched. This document is about which controls each section offers and what a
+module has to write to say so.
