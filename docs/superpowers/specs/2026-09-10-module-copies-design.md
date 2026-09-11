@@ -297,6 +297,20 @@ Shorter than prefixing every port, and free under a rename because only a label 
 one-copy module has a single group, draws no heading at all, and reads exactly as it always
 has — which matters because one copy is the overwhelming majority of modules.
 
+### 7.2 Finding a port on a crowded node
+
+A node with eight or more ports draws its own small filter under the header. Per node, not per
+graph: you narrow the one crowded module while the rest stay as they were, and each remembers
+its own term across rebuilds.
+
+It matches what the node *shows* — the port's label and its copy's heading — and deliberately
+not the stored key. Typing `c1` finds nothing, because the slug is never on screen and a search
+that only works if you know the bookkeeping is not a search.
+
+The threshold earns its keep both ways: below it a port list is readable at a glance and a
+search box would be clutter, and only nodes above it carry a widget, so a large rig does not
+fill the scene with text fields.
+
 ## 8. What stays module-level
 
 The module name and side, and the copy list itself. That is all.

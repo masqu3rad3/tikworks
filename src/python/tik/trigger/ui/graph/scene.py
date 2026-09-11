@@ -23,6 +23,7 @@ class GraphScene(QtWidgets.QGraphicsScene):
     nodes_moved = QtCore.Signal()  # a drag finished and at least one node moved
     frame_toggle_requested = QtCore.Signal(str)  # reference id
     frame_selected = QtCore.Signal(str)  # reference id
+    port_filter_changed = QtCore.Signal(str, str)  # node key, term
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)

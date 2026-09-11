@@ -76,6 +76,10 @@ class GraphView(QtWidgets.QGraphicsView):
         self.filter_bar.setObjectName("GraphFilter")
         self.filter_bar.setFixedWidth(FILTER_WIDTH)
         self.filter_bar.filter_changed.connect(self.apply_filter)
+        #: ``{node key: term}`` -- each node's own port search. View state,
+        #: not rig data, so it lives here rather than in the ``.tr``.
+        self._port_filters: dict = {}
+        self.graph.port_filter_changed.connect(self._remember_port_filter)
         self._place_filter()
         self._nav: Optional[str] = None  # "pan" | "zoom" | "slice"
         self._nav_last = QtCore.QPoint()
@@ -101,6 +105,13 @@ class GraphView(QtWidgets.QGraphicsView):
         self.filter_bar.move(FILTER_MARGIN, FILTER_MARGIN)
         self.filter_bar.adjustSize()
         self.filter_bar.setFixedWidth(FILTER_WIDTH)
+
+    def _remember_port_filter(self, key: str, term: str) -> None:
+        """Keep a node's port search across rebuilds."""
+        if term:
+            self._port_filters[key] = term
+        else:
+            self._port_filters.pop(key, None)
 
     def apply_filter(self) -> None:
         """Dim the nodes the filter rules out; never move or hide one.
@@ -269,6 +280,7 @@ class GraphView(QtWidgets.QGraphicsView):
                     spaces=space_names,
                     port_labels=port_labels,
                     port_groups=port_groups,
+                    port_filter=self._port_filters.get(handle.key, ""),
                     draw_state=self.draw_states.get(handle.instance_id, DRAWN),
                 ),
                 pos=pos,

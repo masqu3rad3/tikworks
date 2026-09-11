@@ -22,6 +22,8 @@ from .constants import (
     MODE_FULL,
     MODE_MINIMAL,
     NODE_WIDTH,
+    PORT_FILTER_MIN,
+    PORT_FILTER_ROW,
     PORT_GROUP_INK,
     PORT_RADIUS,
     PORT_SPACE,
@@ -125,6 +127,8 @@ class NodeSpec:
     #: ``[(group label, [port key, ...])]`` in draw order. A single group
     #: draws no header, so a one-copy module reads exactly as it always has.
     port_groups: Optional[list] = None
+    #: This node's own port search, restored across rebuilds by the view.
+    port_filter: str = ""
     #: NOT_DRAWN / DRAWN / STALE -- the same states the guide tree paints
     draw_state: str = DRAWN
 
@@ -259,6 +263,62 @@ class NodeItem(QtWidgets.QGraphicsItem):
             self.outputs[name] = Port(self, name, True, label=labels.get(name, name))
         #: ``[(label, [port key, ...])]``; one group draws no header.
         self.port_groups: list = list(spec.port_groups or [])
+        #: This node's own port search. Per node rather than per graph: you
+        #: narrow one crowded node while the rest stay as they were.
+        self.port_filter: str = spec.port_filter or ""
+        self.port_filter_widget = None
+        self._group_of: dict = {
+            key: label for label, keys in self.port_groups for key in keys
+        }
+        if len(self.inputs) + len(self.outputs) >= PORT_FILTER_MIN:
+            self._build_port_filter()
+        self.relayout()
+
+    def _build_port_filter(self) -> None:
+        """A small search box under the header, for this node's ports only.
+
+        A real ``QLineEdit`` through a proxy rather than hand-drawn text: it
+        gets editing, selection and a clear button for nothing, and only
+        crowded nodes carry one, so the scene does not fill with widgets.
+        """
+        edit = QtWidgets.QLineEdit()
+        edit.setPlaceholderText("filter ports…")
+        edit.setClearButtonEnabled(True)
+        edit.setText(self.port_filter)
+        edit.setFixedHeight(PORT_FILTER_ROW)
+        edit.setFixedWidth(int(NODE_WIDTH - 16))
+        edit.textChanged.connect(self.set_port_filter)
+        proxy = QtWidgets.QGraphicsProxyWidget(self)
+        proxy.setWidget(edit)
+        proxy.setPos(8, HEADER + 3)
+        proxy.setZValue(4)
+        self.port_filter_widget = edit
+        self._port_filter_proxy = proxy
+
+    def matches_filter(self, port) -> bool:
+        """Whether ``port`` survives this node's search.
+
+        Matched on what the node *shows* -- the port's label and its group's
+        heading -- rather than the stored key, because the key carries a copy
+        slug the rigger never sees.
+        """
+        term = (self.port_filter or "").strip().lower()
+        if not term:
+            return True
+        group = self._group_of.get(port.name, "")
+        return term in port.label.lower() or term in group.lower()
+
+    def set_port_filter(self, text: str) -> None:
+        """Narrow this node to the ports matching ``text``."""
+        self.port_filter = text or ""
+        if (
+            self.port_filter_widget is not None
+            and self.port_filter_widget.text() != self.port_filter
+        ):
+            self.port_filter_widget.setText(self.port_filter)
+        scene = self.scene()
+        if scene is not None and hasattr(scene, "port_filter_changed"):
+            scene.port_filter_changed.emit(self.key, self.port_filter)
         self.relayout()
 
     # --------------------------------------------------------------- layout
@@ -268,10 +328,21 @@ class NodeItem(QtWidgets.QGraphicsItem):
             return [], []
         if self.mode == MODE_CONNECTED:
             return (
-                [port for port in self.inputs.values() if port.connected],
-                [port for port in self.outputs.values() if port.connected],
+                [
+                    port
+                    for port in self.inputs.values()
+                    if port.connected and self.matches_filter(port)
+                ],
+                [
+                    port
+                    for port in self.outputs.values()
+                    if port.connected and self.matches_filter(port)
+                ],
             )
-        return list(self.inputs.values()), list(self.outputs.values())
+        return (
+            [port for port in self.inputs.values() if self.matches_filter(port)],
+            [port for port in self.outputs.values() if self.matches_filter(port)],
+        )
 
     def row_plan(self) -> list:
         """``[(kind, label, in port, out port)]`` -- the node's rows in order.
@@ -322,7 +393,9 @@ class NodeItem(QtWidgets.QGraphicsItem):
         self.prepareGeometryChange()
         ins, outs = self.visible_ports()
         plan = self.row_plan()
-        self._height = HEADER + (len(plan) * ROW + 8 if plan else 6)
+        top = HEADER + (PORT_FILTER_ROW + 6 if self.port_filter_widget else 0)
+        self._height = top + (len(plan) * ROW + 8 if plan else 6)
+        self._rows_top = top
         for port in self.inputs.values():
             port.setVisible(port in ins)
             port.setPos(0, HEADER / 2)
@@ -332,7 +405,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
         for index, (kind, _label, port_in, port_out) in enumerate(plan):
             if kind != "ports":
                 continue
-            centre = HEADER + 6 + index * ROW + ROW / 2
+            centre = self._rows_top + 6 + index * ROW + ROW / 2
             if port_in is not None:
                 port_in.setPos(0, centre)
             if port_out is not None:
@@ -483,7 +556,7 @@ class NodeItem(QtWidgets.QGraphicsItem):
                 QtCore.QPointF(x0, line_y), QtCore.QPointF(x0 + GLYPH_WIDTH - 4, line_y)
             )
         for index, (kind, group_label, port_in, port_out) in enumerate(self.row_plan()):
-            top = HEADER + 6 + index * ROW
+            top = getattr(self, "_rows_top", HEADER) + 6 + index * ROW
             if kind == "group":
                 painter.setPen(QtGui.QColor(PORT_GROUP_INK))
                 painter.drawText(
