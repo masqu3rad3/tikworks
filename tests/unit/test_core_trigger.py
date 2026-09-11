@@ -680,3 +680,30 @@ def test_space_controls_follows_a_settings_driven_control_set():
             return tuple(f"fk{index}" for index in range(number))
 
     assert Dynamic.space_control_names({"count": 3}) == ("fk0", "fk1", "fk2")
+
+
+def test_shape_control_names_come_from_the_declared_defaults():
+    """A control with a declared default shape is shape-editable."""
+
+    class Partial(Module):
+        controls = ("a", "b")
+        control_shapes = {"a": "Circle"}
+
+    assert Partial.shape_control_names({}) == ("a",)
+
+
+def test_a_module_with_no_controls_offers_no_shape_rows():
+    class Nothing(Module):
+        controls = ()
+
+    assert Nothing.shape_control_names({}) == ()
+
+
+def test_shape_control_names_keep_control_order():
+    """Row order follows the manifest, not dict insertion luck."""
+
+    class Ordered(Module):
+        controls = ("a", "b", "c")
+        control_shapes = {"c": "Cube", "a": "Circle", "b": "Diamond"}
+
+    assert Ordered.shape_control_names({}) == ("a", "b", "c")

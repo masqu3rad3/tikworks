@@ -133,9 +133,9 @@ class Module(Schema):
         group=SHAPES,
         help="Override the shape and relative size of one controller.",
         last=True,
-        rows_from="control_names",
+        rows_from="shape_control_names",
         columns=(
-            Column("control", "choice", choices_from="control_names"),
+            Column("control", "choice", choices_from="shape_control_names"),
             Column("shape", "shape"),
             Column("size", "float"),
         ),
@@ -349,6 +349,18 @@ class Module(Schema):
             for slug, one in cls._copy_settings(settings)
             for name in cls.space_controls_for_copy(one)
         )
+
+    @classmethod
+    def shape_control_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
+        """Controller roles with a definable shape, qualified per copy.
+
+        The keys of ``control_shape_defaults`` rather than a list of its own:
+        a control with a declared default is shape-editable, and a second list
+        would repeat ``controls`` line for line and then drift from it.
+        Ordered by the control manifest so the table's rows are stable.
+        """
+        defaults = cls.control_shape_defaults(settings)
+        return tuple(name for name in cls.control_names(settings) if name in defaults)
 
     @classmethod
     def pivot_control_names(cls, settings: Optional[dict] = None) -> tuple[str, ...]:
