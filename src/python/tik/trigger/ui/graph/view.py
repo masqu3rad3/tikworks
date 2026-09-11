@@ -74,8 +74,11 @@ class GraphView(QtWidgets.QGraphicsView):
         # pane, and the bar floats over the corner of it.
         self.filter_bar = FilterBar(self, placeholder="Find…")
         self.filter_bar.setObjectName("GraphFilter")
-        self.filter_bar.setFixedWidth(FILTER_WIDTH)
         self.filter_bar.filter_changed.connect(self.apply_filter)
+        # Committing a keyword adds a pill, which needs more room than an
+        # empty box, so the overlay is re-sized on every change rather than
+        # pinned to one width.
+        self.filter_bar.filter_changed.connect(self._resize_filter_soon)
         #: ``{node key: term}`` -- each node's own port search. View state,
         #: not rig data, so it lives here rather than in the ``.tr``.
         self._port_filters: dict = {}
@@ -101,10 +104,26 @@ class GraphView(QtWidgets.QGraphicsView):
 
     # -------------------------------------------------------------- filter
     def _place_filter(self) -> None:
-        """Park the bar in the top-left of the viewport."""
-        self.filter_bar.move(FILTER_MARGIN, FILTER_MARGIN)
-        self.filter_bar.adjustSize()
-        self.filter_bar.setFixedWidth(FILTER_WIDTH)
+        """Size the bar to its contents and park it in the viewport corner.
+
+        Sized rather than fixed: Enter commits a keyword into a pill, and a
+        pinned width left the pills hanging outside the box. It still has a
+        floor, so an empty bar is not a stub, and a ceiling of the viewport,
+        so a fistful of keywords cannot push it off the canvas.
+        """
+        bar = self.filter_bar
+        room = max(FILTER_WIDTH, self.viewport().width() - FILTER_MARGIN * 2)
+        bar.setMinimumWidth(FILTER_WIDTH)
+        bar.setMaximumWidth(room)
+        # Dropping a pill leaves the cached hint at the width it had, so the
+        # box would grow and never shrink back. Both layouts are invalidated
+        # because the pills live in the inner one.
+        for layout in (bar.layout(), bar._pill_row.layout()):
+            if layout is not None:
+                layout.invalidate()
+                layout.activate()
+        bar.adjustSize()
+        bar.move(FILTER_MARGIN, FILTER_MARGIN)
 
     def _remember_port_filter(self, key: str, term: str) -> None:
         """Keep a node's port search across rebuilds."""
@@ -112,6 +131,16 @@ class GraphView(QtWidgets.QGraphicsView):
             self._port_filters[key] = term
         else:
             self._port_filters.pop(key, None)
+
+    def _resize_filter_soon(self) -> None:
+        """Re-size the overlay once the new pill exists.
+
+        A pill is a child widget created inside the signal that brings us
+        here, and an unshown child contributes nothing to a size hint yet --
+        measuring now re-sizes the box to the width it already had. One turn
+        of the event loop later it is laid out and the hint is real.
+        """
+        QtCore.QTimer.singleShot(0, self._place_filter)
 
     def apply_filter(self) -> None:
         """Dim the nodes the filter rules out; never move or hide one.
