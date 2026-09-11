@@ -80,11 +80,20 @@ class DesignerProperties:
             len(handle.instance.guides),
         )
 
-    def _on_setting_changed(self, name: str, _value) -> None:
+    def _on_setting_changed(self, name: str, _value, source=None) -> None:
+        """A field changed on ``source`` -- the object whose form emitted it.
+
+        The value is re-read from the object rather than taken from the
+        signal, because the field descriptor coerces on assignment and the
+        coerced value is the one to store. ``source`` says *which* object:
+        the module form edits the module, the copy form edits the current
+        copy, and reading the wrong one silently stores a stale value.
+        """
         if self._current is None or self._module_obj is None:
             return
-        value = getattr(self._module_obj, name)
+        source = source if source is not None else self._module_obj
         if name in type(self._module_obj).per_copy_fields():
+            value = getattr(source, name)
             # A per-copy field belongs to the copy whose tab is showing --
             # decided by the field, not by which form emitted the change.
             rows = self._module_obj.copy_rows()
@@ -102,6 +111,7 @@ class DesignerProperties:
                 with self.watcher.mute():
                     setattr(handle, name, value)
             return
+        value = getattr(source, name)
         targets = self._multi or [self._current]
         before = [self._topology(handle) for handle in targets]
         with self.watcher.mute():

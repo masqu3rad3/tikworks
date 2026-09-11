@@ -121,3 +121,48 @@ def test_distinct_copy_names_warn_about_nothing(scene):
     ]
     module = registry.get_module("fkchain").from_instance(handle.instance)
     assert not [item for item in module.warnings() if "called" in item]
+
+
+# ------------------------------------------------- copy scope for pivots
+def _two_armed(scene):
+    handle = scene.add("arm", name="arm", side="L")
+    rows = handle.settings.get("copies") or [{"slug": "", "name": ""}]
+    base = dict(rows[0])
+    base.update(
+        {
+            "slug": "",
+            "name": "arm",
+            "pivot_presets": [{"control": "ik", "label": "heel"}],
+        }
+    )
+    second = dict(base, slug="c1", name="arm1")
+    handle.copies = [base, second]
+    return handle
+
+
+def test_each_copy_draws_its_pivot_guide_under_its_own_anchor(scene):
+    """draft.created is keyed by the *qualified* role, so looking an anchor
+    up by its bare name found the first copy's -- and every copy's preset
+    guides piled onto it."""
+    handle = _two_armed(scene)
+    scene.draw()
+    pairs = set(scene.guide_nodes(handle.instance_id))
+    assert ("pivot_ik_heel", 0) in pairs
+    assert ("c1_pivot_ik_heel", 0) in pairs
+
+    first = scene.guide_node(handle.instance_id, "pivot_ik_heel")
+    second = scene.guide_node(handle.instance_id, "c1_pivot_ik_heel")
+    assert (
+        first.parent.long_name == scene.guide_node(handle.instance_id, "hand").long_name
+    )
+    assert (
+        second.parent.long_name
+        == scene.guide_node(handle.instance_id, "c1_hand").long_name
+    )
+
+
+def test_a_copys_pivot_guide_is_not_parented_into_another_copy(scene):
+    handle = _two_armed(scene)
+    scene.draw()
+    second = scene.guide_node(handle.instance_id, "c1_pivot_ik_heel")
+    assert "c1" in second.parent.name or "arm1" in second.parent.name

@@ -155,8 +155,8 @@ def test_editing_a_per_copy_field_writes_to_the_current_copy(designer):
     handle = _chain(designer)
     designer._on_add_copy()
     designer.tab_bar.setCurrentIndex(1)
-    designer._module_obj.segments = 9
-    designer._on_setting_changed("segments", 9)
+    designer._copy_obj.segments = 9
+    designer._on_setting_changed("segments", 9, designer._copy_obj)
     rows = _rows(handle)
     assert rows[1]["segments"] == 9
     assert rows[0]["segments"] != 9
@@ -172,15 +172,18 @@ def test_editing_a_shared_field_writes_to_the_module(designer):
 
 
 def test_switching_tabs_shows_that_copys_values(designer):
+    """The copy form's target *is* the copy, so switching tabs swaps the
+    object rather than poking new values into a module-shaped stand-in."""
     _chain(designer)
     designer._on_add_copy()
     designer.tab_bar.setCurrentIndex(1)
-    designer._module_obj.segments = 9
-    designer._on_setting_changed("segments", 9)
+    designer._copy_obj.segments = 9
+    designer._on_setting_changed("segments", 9, designer._copy_obj)
+
     designer.tab_bar.setCurrentIndex(0)
-    assert designer._module_obj.segments != 9
+    assert designer._copy_obj.segments != 9
     designer.tab_bar.setCurrentIndex(1)
-    assert designer._module_obj.segments == 9
+    assert designer._copy_obj.segments == 9
 
 
 # ---------------------------------------------- the rule that broke before
@@ -344,10 +347,10 @@ def test_a_table_edited_on_one_tab_leaves_the_other_alone(designer):
     handle = _chain(designer)
     designer._on_add_copy()
     designer.tab_bar.setCurrentIndex(1)
-    designer._module_obj.control_shape_overrides = [
+    designer._copy_obj.control_shape_overrides = [
         {"control": "fk0", "shape": "Cube", "size": ""}
     ]
-    designer._on_setting_changed("control_shape_overrides", None)
+    designer._on_setting_changed("control_shape_overrides", None, designer._copy_obj)
 
     rows = _rows(handle)
     assert rows[1]["control_shape_overrides"][0]["shape"] == "Cube"
@@ -398,3 +401,49 @@ def test_a_refused_rename_says_why(designer):
     designer.events.subscribe(events.LOG, lambda **kw: seen.append(kw))
     designer._on_copy_renamed(1, "arm")
     assert any("already the name" in str(item.get("message")) for item in seen)
+
+
+# ------------------------------------------------ controls stay in their copy
+def test_the_control_list_does_not_grow_with_every_copy(designer):
+    """An `ik` in a tab means that tab's `ik`. The list used to read
+    ik / c1_ik / c2_ik, which is the scope leak the tabs exist to avoid."""
+    _chain(designer, name="arm")
+    designer._on_add_copy()
+    designer._on_add_copy()
+    designer.tab_bar.setCurrentIndex(2)
+
+    choices = designer.copy_form._resolve_choices("control_names")
+    assert list(choices) == ["fk0", "fk1"]
+    assert not [name for name in choices if name.startswith("c")]
+
+
+def test_the_module_still_knows_every_copys_controls(designer):
+    """The scoping is the panel's, not the model's: the build and the graph
+    still need the qualified set."""
+    handle = _chain(designer, name="arm")
+    designer._on_add_copy()
+    every = type(designer._module_obj).control_names(handle.settings)
+    assert "fk0" in every
+    assert "c1_fk0" in every
+
+
+def test_the_copy_form_edits_the_copy_not_the_module(designer):
+    handle = _chain(designer, name="arm")
+    designer._on_add_copy()
+    designer.tab_bar.setCurrentIndex(1)
+    assert designer._copy_obj is not None
+    assert designer._copy_obj.name == "arm1"
+    assert designer.copy_form.target is designer._copy_obj
+
+
+def test_a_shape_row_names_the_copys_own_control(designer):
+    handle = _chain(designer, name="arm")
+    designer._on_add_copy()
+    designer.tab_bar.setCurrentIndex(1)
+    designer._copy_obj.control_shape_overrides = [
+        {"control": "fk0", "shape": "Cube", "size": ""}
+    ]
+    designer._on_setting_changed("control_shape_overrides", None, designer._copy_obj)
+    row = _rows(handle)[1]["control_shape_overrides"][0]
+    assert row["control"] == "fk0"
+    assert row["shape"] == "Cube"

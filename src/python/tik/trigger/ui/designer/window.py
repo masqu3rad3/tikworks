@@ -146,6 +146,11 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         )  # every selected module when they share a type
         self._external: Optional[str] = None  # selected scene-nodes group (graph only)
         self._module_obj = None
+        #: The current copy, as a one-copy module of its own. The copy form
+        #: edits *this*, which is what keeps every control-keyed choice list
+        #: inside the copy: ``control_names`` on a one-copy module returns
+        #: ``ik``, not ``ik``/``c1_ik``/``c2_ik``.
+        self._copy_obj = None
         self._input_rows: dict[str, InputRow] = {}
         self._syncing = False
         self._torn_down = False
@@ -427,8 +432,14 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.action_bar.sync_requested.connect(self.sync_now)
         self.action_bar.auto_sync_toggled.connect(self.set_auto_sync)
         self.name_edit.editingFinished.connect(self._rename_current)
-        self.form.changed.connect(self._on_setting_changed)
-        self.copy_form.changed.connect(self._on_setting_changed)
+        # Each form names the object it edits, so the handler never has to
+        # guess which one a field came from.
+        self.form.changed.connect(
+            lambda name, value: self._on_setting_changed(name, value, self._module_obj)
+        )
+        self.copy_form.changed.connect(
+            lambda name, value: self._on_setting_changed(name, value, self._copy_obj)
+        )
         self.tab_bar.currentChanged.connect(self._on_copy_tab_changed)
         self.tab_bar.tabMoved.connect(self._on_copy_tabs_reordered)
         self.tab_bar.tabBarDoubleClicked.connect(self._on_copy_tab_double_clicked)
@@ -1012,22 +1023,32 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             if not field.hidden
         ]
         self.form.set_visible_fields(shared)
-        self.copy_form.set_visible_fields(per_copy)
         self.form.setVisible(bool(shared))
         self.module_caption.setVisible(bool(shared))
         self.copy_form.setVisible(bool(per_copy))
 
     def _show_copy_values(self) -> None:
-        """Load the current copy's per-copy values into the form's target."""
+        """Point the copy form at the current copy, as a module of its own.
+
+        A *view* rather than the module with values poked into it, because
+        the form asks its target to resolve ``choices_from``: on the module
+        that yields every copy's controls (``ik``, ``c1_ik``, ``c2_ik``), and
+        on the view it yields the copy's own (``ik``). A control list that
+        grows with every copy is the same scope leak in the panel that the
+        qualified roles were in the scene.
+        """
         if self._module_obj is None:
+            self._copy_obj = None
             return
-        row = copy_list.row_for(self._module_obj.copy_rows(), self.current_slug())
-        if row is None:
+        try:
+            self._copy_obj = self._module_obj.for_copy(self.current_slug())
+        except TriggerError:
+            self._copy_obj = None
             return
-        for name in type(self._module_obj).per_copy_fields():
-            if name in row:
-                setattr(self._module_obj, name, row[name])
-        self.copy_form.refresh()
+        self.copy_form.set_target(self._copy_obj)
+        self.copy_form.set_visible_fields(
+            list(type(self._module_obj).per_copy_fields())
+        )
 
     def _on_copy_tab_changed(self, _index: int) -> None:
         """Show another copy's values and connections.
@@ -1222,7 +1243,6 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 self._input_rows[declared.name] = row
             self.inputs_caption.setVisible(bool(declared_inputs))
         self.form.set_target(self._module_obj)
-        self.copy_form.set_target(self._module_obj)
         self._split_forms()
         self._rebuild_copy_tabs()
         self._show_copy_values()

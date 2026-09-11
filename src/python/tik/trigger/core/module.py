@@ -675,7 +675,10 @@ class Module(Schema):
             if not control or not label:
                 continue
             anchor_role = self.pivot_controls.get(control)
-            anchor = draft.created.get((anchor_role, 0)) if anchor_role else None
+            # Through ``made``, which qualifies with the copy currently
+            # drawing: a bare lookup finds the first copy's anchor whichever
+            # copy is asking.
+            anchor = draft.made(anchor_role) if anchor_role else None
             if anchor is None:
                 continue  # a stale row; Module.warnings() reports it
             draft.joint(

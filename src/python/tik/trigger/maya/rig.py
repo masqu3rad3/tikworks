@@ -133,6 +133,16 @@ class GuideDraft:
         finally:
             self._slug, self._drawing, self.root = was
 
+    def made(self, role: str, index: int = 0):
+        """A joint this draft already created, in the *current copy's* scope.
+
+        ``created`` is keyed by the qualified role, so looking one up by its
+        bare name finds the first copy's joint whichever copy is drawing --
+        which is how every copy's pivot guides ended up piled under copy
+        one's anchor.
+        """
+        return self.created.get((Module.qualify(self._slug, role), index))
+
     def joint(
         self,
         role: str,
