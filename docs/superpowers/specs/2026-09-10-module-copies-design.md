@@ -274,6 +274,29 @@ single tab and a `[+]`, and the panel reads as it does today.
 change `_current`, must not touch the tree, and must leave `selected_handles()` untouched. That
 is the rule §1 was written to enforce, and §10 tests it directly.
 
+### 7.1 Port labels: the slug is storage, not a name
+
+A copy's ports are stored qualified — `c1_start` — and that is not negotiable: keying on the
+slug is precisely what lets a rigger rename a copy without breaking every wire into it. Naming
+the port after the copy instead (`myRibbon_start`) reads better right up until the first
+rename, which would then have to re-point every connection.
+
+So the graph node **groups ports by copy and labels the group with the copy's name**, drawing
+the ports bare beneath it:
+
+```
+  ribbon              <- the copy's name, once
+    start
+    end
+    reference
+  myRibbon
+    start
+```
+
+Shorter than prefixing every port, and free under a rename because only a label changes. A
+one-copy module has a single group, draws no heading at all, and reads exactly as it always
+has — which matters because one copy is the overwhelming majority of modules.
+
 ## 8. What stays module-level
 
 The module name and side, and the copy list itself. That is all.

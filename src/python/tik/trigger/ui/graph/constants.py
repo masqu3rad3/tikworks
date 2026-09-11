@@ -41,3 +41,7 @@ FILTER_MARGIN = 8
 #: node keeps its place and its wires, so the graph never claims a connection
 #: that is not there -- it just stops competing for attention.
 FILTERED_OPACITY = 0.15
+
+#: Ink for a port group's heading -- the copy's name, drawn once above its
+#: ports instead of prefixed onto every one of them.
+PORT_GROUP_INK = "#8a8a8a"

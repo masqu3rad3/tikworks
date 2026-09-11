@@ -22,6 +22,7 @@ from .constants import (
     MODE_FULL,
     MODE_MINIMAL,
     NODE_WIDTH,
+    PORT_GROUP_INK,
     PORT_RADIUS,
     PORT_SPACE,
     ROW,
@@ -41,12 +42,18 @@ class Port(QtWidgets.QGraphicsEllipseItem):
         is_output: bool,
         primary: bool = False,
         space: bool = False,
+        label: str = "",
     ) -> None:
         super().__init__(
             -PORT_RADIUS, -PORT_RADIUS, PORT_RADIUS * 2, PORT_RADIUS * 2, node
         )
         self.node = node
         self.name = name
+        #: What the node draws for this port. Apart from ``name`` because the
+        #: name is the stored key -- ``c1_start`` -- and the slug in it is
+        #: bookkeeping. Keying on the slug is what makes renaming a copy free;
+        #: showing it is what made the graph unreadable.
+        self.label = label or name
         self.is_output = is_output
         self.primary = primary
         self.space = space  # an animation-space port: coloured apart
@@ -112,6 +119,12 @@ class NodeSpec:
     primary_input: Optional[str] = None
     mode: int = MODE_FULL
     spaces: Optional[list] = None
+    #: ``{port key: label}`` where the two differ -- a copy's ports are
+    #: stored qualified and shown bare.
+    port_labels: Optional[dict] = None
+    #: ``[(group label, [port key, ...])]`` in draw order. A single group
+    #: draws no header, so a one-copy module reads exactly as it always has.
+    port_groups: Optional[list] = None
     #: NOT_DRAWN / DRAWN / STALE -- the same states the guide tree paints
     draw_state: str = DRAWN
 
@@ -229,14 +242,23 @@ class NodeItem(QtWidgets.QGraphicsItem):
             | QtWidgets.QGraphicsItem.ItemSendsGeometryChanges
         )
         self.setZValue(2)
+        labels = dict(spec.port_labels or {})
         for name in spec.inputs:
             self.inputs[name] = Port(
-                self, name, False, primary=(name == spec.primary_input)
+                self,
+                name,
+                False,
+                primary=(name == spec.primary_input),
+                label=labels.get(name, name),
             )
         for name in spec.spaces or []:
-            self.inputs[name] = Port(self, name, False, space=True)
+            self.inputs[name] = Port(
+                self, name, False, space=True, label=labels.get(name, name)
+            )
         for name in spec.outputs:
-            self.outputs[name] = Port(self, name, True)
+            self.outputs[name] = Port(self, name, True, label=labels.get(name, name))
+        #: ``[(label, [port key, ...])]``; one group draws no header.
+        self.port_groups: list = list(spec.port_groups or [])
         self.relayout()
 
     # --------------------------------------------------------------- layout
@@ -251,6 +273,47 @@ class NodeItem(QtWidgets.QGraphicsItem):
             )
         return list(self.inputs.values()), list(self.outputs.values())
 
+    def row_plan(self) -> list:
+        """``[(kind, label, in port, out port)]`` -- the node's rows in order.
+
+        ``kind`` is ``"group"`` for a copy heading or ``"ports"`` for a pair
+        of dots. A module with one copy has one group and draws no heading,
+        so it reads exactly as it always has; a module with five draws the
+        copy's name once rather than stamping it onto every port.
+        """
+        ins, outs = self.visible_ports()
+        shown_in = {port.name: port for port in ins}
+        shown_out = {port.name: port for port in outs}
+        if len(self.port_groups) < 2:
+            plan = []
+            for index in range(max(len(ins), len(outs))):
+                plan.append(
+                    (
+                        "ports",
+                        "",
+                        ins[index] if index < len(ins) else None,
+                        outs[index] if index < len(outs) else None,
+                    )
+                )
+            return plan
+        plan = []
+        for label, keys in self.port_groups:
+            group_in = [shown_in[key] for key in keys if key in shown_in]
+            group_out = [shown_out[key] for key in keys if key in shown_out]
+            if not group_in and not group_out:
+                continue
+            plan.append(("group", label, None, None))
+            for index in range(max(len(group_in), len(group_out))):
+                plan.append(
+                    (
+                        "ports",
+                        "",
+                        group_in[index] if index < len(group_in) else None,
+                        group_out[index] if index < len(group_out) else None,
+                    )
+                )
+        return plan
+
     def relayout(self) -> None:
         """Place ports for the current mode.
 
@@ -258,18 +321,22 @@ class NodeItem(QtWidgets.QGraphicsItem):
         """
         self.prepareGeometryChange()
         ins, outs = self.visible_ports()
-        rows = max(len(ins), len(outs))
-        self._height = HEADER + (rows * ROW + 8 if rows else 6)
+        plan = self.row_plan()
+        self._height = HEADER + (len(plan) * ROW + 8 if plan else 6)
         for port in self.inputs.values():
             port.setVisible(port in ins)
             port.setPos(0, HEADER / 2)
         for port in self.outputs.values():
             port.setVisible(port in outs)
             port.setPos(NODE_WIDTH, HEADER / 2)
-        for index, port in enumerate(ins):
-            port.setPos(0, HEADER + 6 + index * ROW + ROW / 2)
-        for index, port in enumerate(outs):
-            port.setPos(NODE_WIDTH, HEADER + 6 + index * ROW + ROW / 2)
+        for index, (kind, _label, port_in, port_out) in enumerate(plan):
+            if kind != "ports":
+                continue
+            centre = HEADER + 6 + index * ROW + ROW / 2
+            if port_in is not None:
+                port_in.setPos(0, centre)
+            if port_out is not None:
+                port_out.setPos(NODE_WIDTH, centre)
         self.update()
         if self.scene() is not None:
             self.scene().update_wires()
@@ -415,21 +482,30 @@ class NodeItem(QtWidgets.QGraphicsItem):
             painter.drawLine(
                 QtCore.QPointF(x0, line_y), QtCore.QPointF(x0 + GLYPH_WIDTH - 4, line_y)
             )
-        painter.setPen(QtGui.QColor("#bdbdbd"))
-        ins, outs = self.visible_ports()
-        for port in ins:
-            label = port.name + ("  ●" if port.primary else "")
-            painter.drawText(
-                QtCore.QRectF(12, port.pos().y() - ROW / 2, NODE_WIDTH - 24, ROW),
-                QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft,
-                label,
-            )
-        for port in outs:
-            painter.drawText(
-                QtCore.QRectF(12, port.pos().y() - ROW / 2, NODE_WIDTH - 24, ROW),
-                QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight,
-                port.name,
-            )
+        for index, (kind, group_label, port_in, port_out) in enumerate(self.row_plan()):
+            top = HEADER + 6 + index * ROW
+            if kind == "group":
+                painter.setPen(QtGui.QColor(PORT_GROUP_INK))
+                painter.drawText(
+                    QtCore.QRectF(8, top, NODE_WIDTH - 16, ROW),
+                    QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft,
+                    group_label,
+                )
+                continue
+            painter.setPen(QtGui.QColor("#bdbdbd"))
+            indent = 12 if len(self.port_groups) < 2 else 20
+            if port_in is not None:
+                painter.drawText(
+                    QtCore.QRectF(indent, top, NODE_WIDTH - indent - 12, ROW),
+                    QtCore.Qt.AlignVCenter | QtCore.Qt.AlignLeft,
+                    port_in.label + ("  ●" if port_in.primary else ""),
+                )
+            if port_out is not None:
+                painter.drawText(
+                    QtCore.QRectF(12, top, NODE_WIDTH - indent - 12, ROW),
+                    QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight,
+                    port_out.label,
+                )
 
     # ------------------------------------------------------------- events
     def itemChange(self, change, value):  # noqa: N802

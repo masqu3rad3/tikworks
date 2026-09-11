@@ -447,3 +447,66 @@ def test_a_shape_row_names_the_copys_own_control(designer):
     row = _rows(handle)[1]["control_shape_overrides"][0]
     assert row["control"] == "fk0"
     assert row["shape"] == "Cube"
+
+
+# ------------------------------------------------- port labels in the graph
+def _node(designer, handle):
+    designer.refresh()
+    return designer.graph.graph.nodes[handle.key]
+
+
+def test_a_single_copy_node_reads_exactly_as_before(designer):
+    """One group draws no heading, so nothing gets longer for the case that
+    is the overwhelming majority."""
+    handle = _chain(designer, name="arm")
+    node = _node(designer, handle)
+    assert [label for kind, label, _i, _o in node.row_plan() if kind == "group"] == []
+    assert node.inputs["root"].label == "root"
+
+
+def test_a_copys_ports_are_labelled_bare_under_its_name(designer):
+    """`c1_root` is stored -- that is what makes a rename free -- but the
+    node shows the copy's name once and the port bare beneath it."""
+    handle = _chain(designer, name="arm")
+    designer._on_add_copy()
+    node = _node(designer, handle)
+
+    headings = [label for kind, label, _i, _o in node.row_plan() if kind == "group"]
+    assert headings == ["arm", "arm1"]
+    assert node.inputs["c1_root"].label == "root"
+    assert node.inputs["root"].label == "root"
+
+
+def test_renaming_a_copy_relabels_its_heading_and_moves_no_key(designer):
+    """The decisive reason the slug is not the port name."""
+    handle = _chain(designer, name="arm")
+    designer._on_add_copy()
+    designer._on_copy_renamed(1, "myArm")
+    node = _node(designer, handle)
+
+    headings = [label for kind, label, _i, _o in node.row_plan() if kind == "group"]
+    assert headings == ["arm", "myArm"]
+    assert "c1_root" in node.inputs  # the stored key did not move
+
+
+def test_a_copys_outputs_group_with_its_inputs(designer):
+    handle = _chain(designer, name="arm")
+    designer._on_add_copy()
+    node = _node(designer, handle)
+    plan = node.row_plan()
+    second = plan.index(("group", "arm1", None, None))
+    under = [
+        (row[2].name if row[2] else None, row[3].name if row[3] else None)
+        for row in plan[second + 1 :]
+        if row[0] == "ports"
+    ]
+    assert any(name and name.startswith("c1_") for pair in under for name in pair)
+
+
+def test_the_heading_count_matches_the_copy_count(designer):
+    handle = _chain(designer, name="arm")
+    designer._on_add_copy()
+    designer._on_add_copy()
+    node = _node(designer, handle)
+    headings = [label for kind, label, _i, _o in node.row_plan() if kind == "group"]
+    assert headings == ["arm", "arm1", "arm2"]

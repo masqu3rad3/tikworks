@@ -12,6 +12,7 @@ from typing import Optional
 from tik.shared.ui import theme
 from tik.shared.ui.filter_bar import FilterBar
 from tik.shared.ui.Qt import QtCore, QtGui, QtWidgets
+from tik.trigger.core import copies as copy_list
 from tik.trigger.core.exceptions import TriggerError
 from tik.trigger.core.schemas import split_source
 from tik.trigger.ui.draw_state import DRAWN
@@ -247,7 +248,12 @@ class GraphView(QtWidgets.QGraphicsView):
                 item.name for item in module_cls.space_inputs(handle.settings)
             ]
             port_names = module_cls.input_names(handle.settings)
-            rows = max(len(port_names), len(handle.outputs), 1)
+            # Not ``groups``: that name already means the scene-node groups
+            # in this function, and shadowing it here silently emptied them.
+            port_labels, port_groups = self._port_groups(handle, port_names)
+            rows = max(len(port_names), len(handle.outputs), 1) + (
+                len(port_groups) if len(port_groups) > 1 else 0
+            )
             pos = free_pos(handle.key, HEADER + rows * ROW + 8)
             primary = module_cls.primary_input()
             self.graph.add_node(
@@ -261,6 +267,8 @@ class GraphView(QtWidgets.QGraphicsView):
                     primary_input=primary.name if primary else None,
                     mode=collapse.get(handle.key, MODE_FULL),
                     spaces=space_names,
+                    port_labels=port_labels,
+                    port_groups=port_groups,
                     draw_state=self.draw_states.get(handle.instance_id, DRAWN),
                 ),
                 pos=pos,
@@ -382,6 +390,48 @@ class GraphView(QtWidgets.QGraphicsView):
         self._fitted = True
 
     # ---------------------------------------------------------- references
+    def _port_groups(self, handle, port_names) -> tuple:
+        """``({port key: label}, [(copy name, [port key, ...])])`` for a node.
+
+        A copy's ports are stored qualified -- ``c1_start`` -- because the
+        slug is what makes renaming a copy free. The slug is bookkeeping
+        though, so the node shows the copy's *name* once as a heading and its
+        ports bare beneath it, which is shorter than prefixing every one and
+        survives a rename without touching a stored key. A one-copy module
+        has a single group, draws no heading, and reads exactly as it always
+        has.
+        """
+        module_cls = handle.module_class
+        try:
+            # ``entry``, never ``instance``: the latter goes through
+            # find_instances and scans the scene, and a refresh must read the
+            # document alone.
+            rows = module_cls(
+                name=handle.entry.name, settings=handle.settings
+            ).copy_rows()
+        except Exception:  # noqa: BLE001 - an unregistered or odd module
+            return {}, []
+        keys = list(port_names) + list(handle.outputs)
+        labels: dict = {}
+        groups: list = []
+        for row in rows:
+            slug = row["slug"]
+            prefix = f"{slug}_" if slug else ""
+            mine = [
+                key
+                for key in keys
+                if module_cls.slug_of(key) == slug and key.startswith(prefix)
+            ]
+            for key in mine:
+                labels[key] = key[len(prefix) :] if prefix else key
+            groups.append((copy_list.copy_name(row, handle.entry.name), mine))
+        # A shared port belongs to no copy, so it heads the list on its own.
+        claimed = {key for _label, group in groups for key in group}
+        loose = [key for key in keys if key not in claimed]
+        if loose:
+            groups.insert(0, ("", loose))
+        return labels, groups
+
     def _reference_state(self, handles) -> tuple:
         """``({module key: ref_id}, {collapsed ref ids}, {ref id: file name})``."""
         document = getattr(self.guides, "document", None)
