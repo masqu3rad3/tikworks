@@ -346,120 +346,21 @@ git commit -m "Stale-row warnings check the set each table actually offers"
 
 ---
 
-### Task 4: `space_rows` filters an ineligible row
+### Task 4: WITHDRAWN — `space_rows` must not filter
 
-**Files:**
-- Modify: `src/python/tik/trigger/core/module.py` (add `logging` import at top; `space_rows` near line 157)
-- Test: `tests/unit/test_core_trigger.py`
+**Status:** withdrawn during execution. Do not implement.
 
-**Interfaces:**
-- Consumes: `space_controls_for_copy` (Task 1).
-- Produces: `Module.space_rows(settings=None)` keeps its `list[dict]` return but drops rows naming a control the module does not offer, logging a warning.
+The plan called for filtering `Module.space_rows()` so an ineligible row grew no port and built
+nothing. Implementing it broke `test_a_stale_control_keeps_its_row_and_its_port`, and that test is
+right: **the port is what carries the wire.** Connections are keyed by port name, so dropping the
+port of a row whose control is temporarily gone loses the rigger's connection permanently —
+lowering `segments` and raising it back would no longer restore the setup.
 
-**Why here:** `space_rows` is the single source for `space_inputs()` (the ports) and for the builder's space loop at `maya/build.py:559`. Filtering here means a stale row grows no phantom port *and* builds nothing, in one place.
+A stale row is already safe without a filter. `warnings()` reports it (Task 3), and the builder
+skips it at `maya/build.py:592` with *"no controller with role 'X'; its space was skipped"*.
 
-- [ ] **Step 1: Write the failing tests**
-
-```python
-def test_space_rows_drop_a_control_the_module_does_not_offer(caplog):
-    class Narrow(Module):
-        controls = ("a", "b")
-        space_controls = ("a",)
-
-    settings = {
-        "anim_spaces": [
-            {"control": "a", "mode": "parent", "label": "world"},
-            {"control": "b", "mode": "parent", "label": "world"},
-        ]
-    }
-    rows = Narrow.space_rows(settings)
-    assert [row["control"] for row in rows] == ["a"]
-
-
-def test_a_dropped_space_row_grows_no_port():
-    class Narrow(Module):
-        controls = ("a", "b")
-        space_controls = ("a",)
-
-    settings = {
-        "anim_spaces": [{"control": "b", "mode": "parent", "label": "world"}]
-    }
-    assert [item.name for item in Narrow.space_inputs(settings)] == []
-```
-
-`space_rows` is called with `settings=None` in `warnings()`-adjacent paths; the filter must not fire on the field default, which is checked by the existing suite.
-
-- [ ] **Step 2: Run the tests to verify they fail**
-
-Run: `mayapy -m pytest tests/unit/test_core_trigger.py -k "does_not_offer or grows_no_port" -v`
-Expected: FAIL — both rows come back and `b_world` is a port.
-
-- [ ] **Step 3: Add the logger**
-
-At the top of `module.py`, after `import uuid`:
-
-```python
-import logging
-```
-
-and after the imports, beside the `SPACES` / `PIVOTS` / `SHAPES` group constants:
-
-```python
-logger = logging.getLogger(__name__)
-```
-
-- [ ] **Step 4: Filter in `space_rows`**
-
-```python
-    @classmethod
-    def space_rows(cls, settings=None) -> list[dict]:
-        """The anim-space rows from ``settings`` (or the field default).
-
-        A row naming a control this module does not offer a space is dropped
-        here rather than at either consumer, because this is what feeds both
-        ``space_inputs`` (the ports) and the builder's space loop: filtering
-        once means a stale row can neither grow a phantom port nor build.
-        The row is kept in the document -- widening the set restores it with
-        its wire intact -- and ``warnings()`` is what tells the rigger.
-        """
-        if settings is None:
-            return [dict(row) for row in cls.anim_spaces.default]
-        offered = set(cls.space_controls_for_copy(settings))
-        found = []
-        for row in settings.get("anim_spaces") or []:
-            control = row.get("control", "")
-            if control and control not in offered:
-                logger.warning(
-                    "%s: anim space row names control %r, which this module "
-                    "does not offer; skipped.",
-                    cls.__name__,
-                    control,
-                )
-                continue
-            found.append(dict(row))
-        return found
-```
-
-**Note on qualification:** `space_rows` is called both on a whole module and on a `for_copy` view. `space_controls_for_copy` returns *bare* roles, and the rows of a copy view carry bare roles too (`_copy_settings` de-qualifies them). On a whole multi-copy module the rows are also bare, because each copy's tables are per-copy. So comparing bare to bare is correct on both paths.
-
-- [ ] **Step 5: Run the tests to verify they pass**
-
-Run: `mayapy -m pytest tests/unit/test_core_trigger.py -k "does_not_offer or grows_no_port" -v`
-Expected: PASS
-
-- [ ] **Step 6: Run the unit, copies and integration suites**
-
-Run: `make tests-unit`
-Then: `mayapy -m pytest tests/integration/trigger/test_builder_trigger.py -v`
-Expected: PASS
-
-- [ ] **Step 7: Lint and commit**
-
-```bash
-make lint
-git add src/python/tik/trigger/core/module.py tests/unit/test_core_trigger.py
-git commit -m "An anim space row on an unoffered control builds nothing and warns"
-```
+`space_rows` keeps its original body; its docstring now records why it is deliberately unfiltered.
+See the spec's §5, amended to match.
 
 ---
 

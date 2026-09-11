@@ -53,9 +53,10 @@ class Module(Schema):
     #: Per-guide authored attributes, keyed by guide role. Roles absent from
     #: the mapping carry none, so existing modules are unaffected.
     guide_attrs: dict[str, tuple[GuideAttr, ...]] = {}
-    #: Controller roles this module builds. Every one of them can host an
-    #: animation space; tweak controllers are excluded by construction, since
-    #: ``rig.tweak_control`` parents them under their main.
+    #: Controller roles this module builds. What each rigger-facing section
+    #: offers is named separately below; tweak controllers are excluded from
+    #: all of them by construction, since ``rig.tweak_control`` parents them
+    #: under their main.
     controls: tuple[str, ...] = ()
     #: Controller roles that may host an animation space. Empty means *every*
     #: control -- the one manifest entry whose default is "all", because
@@ -163,7 +164,15 @@ class Module(Schema):
 
     @classmethod
     def space_rows(cls, settings=None) -> list[dict]:
-        """The anim-space rows from ``settings`` (or the field default)."""
+        """The anim-space rows from ``settings`` (or the field default).
+
+        Deliberately unfiltered. A row naming a control the module no longer
+        offers keeps its port, because **the port is what carries the wire**:
+        lowering ``segments`` and raising it again has to restore the setup
+        intact. ``warnings()`` tells the rigger, and the builder skips the row
+        with a warning when no controller turns up for it -- neither of which
+        costs the connection.
+        """
         if settings is None:
             return [dict(row) for row in cls.anim_spaces.default]
         return [dict(row) for row in (settings.get("anim_spaces") or [])]

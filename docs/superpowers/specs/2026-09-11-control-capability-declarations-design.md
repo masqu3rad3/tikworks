@@ -150,19 +150,26 @@ module across a spread of settings: every name in `space_controls`, `pivot_contr
 `control_shapes` must be a control that module actually builds, and every pivot anchor must name
 a guide role the module's layout declares. A typo fails CI rather than a rigger's build.
 
-**Runtime**, for studio modules that never run this suite. `Module.space_rows()` becomes the
-single filter point — it already feeds both `space_inputs()` (the ports) and the builder's space
-loop, so filtering there means an ineligible row creates no phantom port *and* builds nothing:
+**Runtime** — and here the obvious design is wrong, so it is worth writing down why.
 
-```python
-logger.warning(
-    "%s: anim space row names control %r, which this module does not offer; skipped.",
-    cls.__name__, control,
-)
-```
+The tempting move is to filter `Module.space_rows()`: it feeds both `space_inputs()` (the ports)
+and the builder's space loop, so dropping an ineligible row there would stop it growing a phantom
+port *and* stop it building, in one place. **That filter must not exist.** The port is what
+carries the wire. A rigger who lowers `segments` from 6 to 2 and raises it again has to get the
+setup back intact, and the connection is keyed by port name — remove the port and the wire is
+gone for good. The existing guarantee is pinned by
+`test_a_stale_control_keeps_its_row_and_its_port`: *"ports come from rows, not from controls, so
+the wire survives."*
 
-`rig.pivot_control` already raises `GuideError` on an undeclared role, so pivots need nothing
-new beyond routing that check through the hook.
+A stale row is already safe at both ends without any filter:
+
+- `warnings()` tells the rigger, which is §5's advisory layer below.
+- The builder skips it: `connect_space` returns falsy when no controller carries the role, and
+  `maya/build.py:592` logs *"no controller with role 'X'; its space was skipped"*.
+
+So `space_rows` stays deliberately unfiltered, and its docstring says so. `rig.pivot_control`
+already raises `GuideError` on an undeclared role, so pivots need nothing new beyond routing that
+check through the hook.
 
 **The advisory layer already exists** and needs only to read the right sets. `Module.warnings()`
 reports a stale row in all three tables, and two of its three checks are written against
