@@ -114,3 +114,75 @@ def test_the_graph_handles_keys_when_nothing_is_being_typed(qapp):
         assert view.typing_in_a_filter() is False
     finally:
         view.close()
+
+
+# --------------------------------------- a field embedded in the scene
+def _crowded_view(qapp):
+    scene = StubScene()
+    handle = scene.add("toy_chain", name="arm", side="L")
+    handle.copies = [
+        {"slug": "", "name": "arm", "segments": 2},
+        {"slug": "c1", "name": "arm1", "segments": 2},
+        {"slug": "c2", "name": "arm2", "segments": 2},
+    ]
+    view = GraphView(guides=scene)
+    view.rebuild()
+    view.show()
+    qapp.setActiveWindow(view)
+    return view, view.graph.nodes[handle.key]
+
+
+def test_focus_through_the_proxy_counts_as_typing(qapp):
+    """The realistic path: clicking the field focuses the scene *item*, and
+    Qt then reports the view as the focus widget -- not the line edit."""
+    view, node = _crowded_view(qapp)
+    try:
+        view.setFocus()
+        node._port_filter_proxy.setFocus()
+        qapp.processEvents()
+        from tik.shared.ui.Qt import QtWidgets as _qtw
+
+        assert isinstance(_qtw.QApplication.focusWidget(), GraphView)
+        assert view.typing_in_a_filter() is True
+    finally:
+        view.close()
+
+
+def test_the_view_claims_a_digit_while_a_port_filter_is_focused(qapp):
+    view, node = _crowded_view(qapp)
+    try:
+        node._port_filter_proxy.setFocus()
+        qapp.processEvents()
+        assert _override(view, QtCore.Qt.Key_1, "1") is True
+        assert _override(view, QtCore.Qt.Key_F, "f") is True
+    finally:
+        view.close()
+
+
+def test_the_view_leaves_the_keys_alone_when_nothing_is_focused(qapp):
+    """Otherwise 1/2/3 and F would stop working in the graph entirely."""
+    view, _node = _crowded_view(qapp)
+    try:
+        view.setFocus()
+        view.graph.clearFocus()
+        qapp.processEvents()
+        assert _override(view, QtCore.Qt.Key_1, "1") is False
+    finally:
+        view.close()
+
+
+def test_the_view_leaves_a_real_chord_alone(qapp):
+    view, node = _crowded_view(qapp)
+    try:
+        node._port_filter_proxy.setFocus()
+        qapp.processEvents()
+        event = QtGui.QKeyEvent(
+            QtCore.QEvent.ShortcutOverride,
+            QtCore.Qt.Key_S,
+            QtCore.Qt.ControlModifier,
+            "s",
+        )
+        view.event(event)
+        assert event.isAccepted() is False
+    finally:
+        view.close()

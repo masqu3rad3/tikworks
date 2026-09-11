@@ -661,16 +661,51 @@ class GraphView(QtWidgets.QGraphicsView):
     def typing_in_a_filter(self) -> bool:
         """Whether the keyboard currently belongs to a text field in here.
 
-        The shortcut side is handled by ``FilterLineEdit`` claiming its keys
-        back; this is the other path -- the view's own key handler, which
-        would otherwise swallow a keystroke meant for a search box.
+        Two cases, and the second is the one that matters. The corner search
+        box is an ordinary child widget, so it turns up in
+        ``QApplication.focusWidget()``. A node's port filter is *embedded in
+        the scene* through a proxy, and for those the focus widget Qt reports
+        is this view -- the embedded line edit never appears there. Checking
+        only the focus widget therefore missed exactly the field this was
+        written for.
         """
         focused = QtWidgets.QApplication.focusWidget()
-        if focused is None:
-            return False
         if isinstance(focused, QtWidgets.QLineEdit):
             return True
+        item = self.graph.focusItem() if self.graph is not None else None
+        if isinstance(item, QtWidgets.QGraphicsProxyWidget):
+            return isinstance(item.widget(), QtWidgets.QLineEdit)
         return False
+
+    @staticmethod
+    def _is_typed_character(event) -> bool:
+        """A plain printable keystroke, as opposed to a real chord."""
+        chord = (
+            QtCore.Qt.ControlModifier | QtCore.Qt.AltModifier | QtCore.Qt.MetaModifier
+        )
+        if event.modifiers() & chord:
+            return False
+        text = event.text()
+        return bool(text) and text.isprintable()
+
+    def event(self, event) -> bool:
+        """Claim plain keystrokes back from the window's shortcuts.
+
+        Qt sends ``ShortcutOverride`` to the focus *widget* before firing a
+        matching ``QAction``, and for a field embedded in the scene that
+        widget is this view rather than the field. So the claim has to be
+        made here: without it the window's bare ``1``/``2``/``3``/``F``
+        bindings swallowed every one of those characters before a node's
+        port filter could see them.
+        """
+        if (
+            event.type() == QtCore.QEvent.ShortcutOverride
+            and self._is_typed_character(event)
+            and self.typing_in_a_filter()
+        ):
+            event.accept()
+            return True
+        return super().event(event)
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
         if self.typing_in_a_filter():
