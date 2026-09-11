@@ -68,7 +68,12 @@ class Module(Schema):
     #: movable, the way declaring an input is what makes its socket. The anchor
     #: is the module author's business, never the rigger's, so it is a class
     #: attribute rather than a table column.
-    pivot_controls: dict[str, str] = {}
+    #:
+    #: A value is a guide *reference*: ``"hand"`` means that role at index 0,
+    #: and ``("segment", 2)`` addresses the third guide of a multi -- which is
+    #: what lets a module whose controls depend on a setting declare a pivot
+    #: for each of them.
+    pivot_controls: dict[str, object] = {}
     #: Default shape per controller role, keyed by the names ``control_names``
     #: returns. The manifest is the only place a default lives -- which is why
     #: ``rig.controller`` has no ``shape`` argument to hide a second one in.
@@ -281,11 +286,15 @@ class Module(Schema):
         return tuple(cls.controls_for_copy(settings))
 
     @classmethod
-    def pivot_controls_for_copy(
-        cls, settings: Optional[dict] = None
-    ) -> tuple[str, ...]:
-        """Controller roles of *one copy* with a movable pivot."""
-        return tuple(cls.pivot_controls)
+    def pivot_controls_for_copy(cls, settings: Optional[dict] = None) -> dict:
+        """Controller roles of *one copy* with a movable pivot, and their anchors.
+
+        Returns the whole mapping rather than its keys: an anchor a computed
+        module works out from its settings has nowhere else to come from, and
+        dropping it here is what stopped ``fkchain`` and ``ribbon`` declaring
+        a pivot at all.
+        """
+        return dict(cls.pivot_controls)
 
     @classmethod
     def control_shape_defaults_for_copy(
@@ -379,6 +388,25 @@ class Module(Schema):
             for slug, one in cls._copy_settings(settings)
             for name in cls.pivot_controls_for_copy(one)
         )
+
+    @classmethod
+    def pivot_anchor(cls, control: str, settings: Optional[dict] = None):
+        """The ``(guide role, index)`` a control's preset guides hang under.
+
+        ``None`` if the control has no movable pivot. ``control`` may be
+        qualified (``c1_ik``); the copy's own anchors are consulted, because
+        two copies of a chain anchor to different guides.
+        """
+        slug = cls.slug_of(control)
+        bare = control[len(slug) + 1 :] if slug else control
+        for found, one in cls._copy_settings(settings):
+            if found != slug:
+                continue
+            anchor = cls.pivot_controls_for_copy(one).get(bare)
+            if anchor is None:
+                return None
+            return (anchor, 0) if isinstance(anchor, str) else tuple(anchor)
+        return None
 
     @classmethod
     def control_shape_defaults(cls, settings: Optional[dict] = None) -> dict[str, str]:
@@ -723,11 +751,11 @@ class Module(Schema):
             control, label = row.get("control", ""), row.get("label", "")
             if not control or not label:
                 continue
-            anchor_role = self.pivot_controls.get(control)
+            anchor_ref = type(self).pivot_anchor(control, settings)
             # Through ``made``, which qualifies with the copy currently
             # drawing: a bare lookup finds the first copy's anchor whichever
             # copy is asking.
-            anchor = draft.made(anchor_role) if anchor_role else None
+            anchor = draft.made(*anchor_ref) if anchor_ref else None
             if anchor is None:
                 continue  # a stale row; Module.warnings() reports it
             draft.joint(

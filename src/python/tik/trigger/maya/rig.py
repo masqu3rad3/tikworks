@@ -541,7 +541,7 @@ class ModuleRig:
                 would leave the rigger's preset rows pointing at nothing.
         """
         role = main.transform.meta.get(tags.ROLE, main.transform.name)
-        if role not in self.module.pivot_controls:
+        if role not in self.module.pivot_controls_for_copy(self.module.values()):
             raise GuideError(
                 f"'{self.module.module_type}' does not declare a movable pivot "
                 f"for control '{role}'."
