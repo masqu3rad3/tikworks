@@ -370,16 +370,38 @@ def test_every_movable_pivot_names_a_control_and_a_guide_the_module_has(module_t
     """Rule: pivot_controls points at real controls and real guide roles.
 
     A typo here is invisible until a rigger opens the properties table and
-    finds a preset row pointing at nothing.
+    finds a preset row pointing at nothing. Read through the hook, because a
+    computed module works its anchors out from its settings rather than
+    declaring them on the class.
     """
     module_cls = get_module(module_type)
     for settings in CONTROL_VARIATIONS.get(module_type, [{}]):
         instance = module_cls(settings=settings)
         controls = set(module_cls.control_names(instance.values()))
         roles = set(module_cls.guides.all_roles)
-        for control, anchor in module_cls.pivot_controls.items():
+        for control in module_cls.pivot_control_names(instance.values()):
             assert control in controls, f"{module_type}: '{control}' is not a control"
-            assert anchor in roles, f"{module_type}: anchor '{anchor}' is not a guide"
+            anchor = module_cls.pivot_anchor(control, instance.values())
+            assert anchor is not None, f"{module_type}: '{control}' has no anchor"
+            role, index = anchor
+            assert role in roles, f"{module_type}: anchor '{role}' is not a guide"
+            assert index >= 0, f"{module_type}: anchor index {index} is negative"
+
+
+@pytest.mark.parametrize("module_type", _shipped_module_types())
+def test_every_control_is_offered_a_movable_pivot(module_type):
+    """Rule: a rigger can put a pivot on any controller a module builds.
+
+    Offering is free -- nothing is built until a preset row exists -- so a
+    control left out of pivot_controls is an oversight, not a decision.
+    """
+    module_cls = get_module(module_type)
+    for settings in CONTROL_VARIATIONS.get(module_type, [{}]):
+        instance = module_cls(settings=settings)
+        controls = set(module_cls.control_names(instance.values()))
+        movable = set(module_cls.pivot_control_names(instance.values()))
+        missing = sorted(controls - movable)
+        assert not missing, f"{module_type}: {missing} have no movable pivot"
 
 
 @pytest.mark.parametrize("module_type", _shipped_module_types())

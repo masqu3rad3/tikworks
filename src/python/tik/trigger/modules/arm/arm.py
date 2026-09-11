@@ -29,6 +29,7 @@ from tik.trigger.systems.limb import (
     limb_control_names,
     limb_control_orients,
     limb_control_shapes,
+    limb_pivot_controls,
 )
 from tik.trigger.systems.limb_lock import build_limb_lock
 from tik.trigger.systems.reach import ReachAxis, build_reach
@@ -39,6 +40,10 @@ AUTO_COLLAR = FieldGroup("Auto Collar", collapsed=True)
 #: The FK labels ``build()`` passes to ``build_ikfk_limb``. Named once so the
 #: manifest and the build cannot disagree.
 LIMB_LABELS = ("upper", "lower", "hand")
+
+#: The limb's own three guides, in chain order. The limb system never names a
+#: guide, so the anchors for its pivot presets come from here.
+LIMB_GUIDES = ("shoulder", "elbow", "hand")
 
 
 @register_module("arm", category="limbs")
@@ -55,7 +60,10 @@ class Arm(Module):
         **limb_control_shapes(labels=LIMB_LABELS),
     }
     control_orients = limb_control_orients(labels=LIMB_LABELS)
-    pivot_controls = {"ik": "hand"}
+    pivot_controls = {
+        "collar": "collar",
+        **limb_pivot_controls(labels=LIMB_LABELS, guides=LIMB_GUIDES),
+    }
     pivot_presets = Module.pivot_presets.with_default(
         [{"control": "ik", "label": label} for label in ("tip", "ball", "wrist")]
     )

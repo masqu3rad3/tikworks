@@ -44,6 +44,19 @@ class FkChain(Module):
         """Every control here is FK, so every shape wraps its bone."""
         return {role: (0.0, 0.0, -90.0) for role in cls.controls_for_copy(settings)}
 
+    @classmethod
+    def pivot_controls_for_copy(cls, settings=None):
+        """Each FK control anchors to the guide it is matched to.
+
+        ``build`` matches ``fk0`` to the root guide and ``fk{i}`` to
+        ``segment{i-1}``, so the anchors carry the index rather than a bare
+        role -- a bare ``"segment"`` would stack every preset on the first.
+        """
+        found = {"fk0": ("root", 0)}
+        for index in range(1, len(cls.controls_for_copy(settings))):
+            found[f"fk{index}"] = ("segment", index - 1)
+        return found
+
     segments = IntField(3, min=1, max=50, help="Number of joints after the root")
     spacing = FloatField(5.0, min=0.01, help="Default distance between guides")
     controller_size = FloatField(2.0, min=0.01, label="Controller Size")

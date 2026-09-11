@@ -463,3 +463,19 @@ def test_pivot_labels_lists_one_controls_rows_in_order():
     ]
     assert module.pivot_labels("root") == ["tip", "heel"]
     assert module.pivot_labels("nobody") == []
+
+
+def test_a_module_that_builds_its_own_pivot_gets_exactly_one():
+    """The builder's seam skips a role that already has a pivot.
+
+    Every module called rig.pivot_control itself before the seam existed and
+    a studio module may still, so a second one -- which would fail on its
+    showPivot attribute -- must never be made. PivotToy is that module.
+    """
+    ctx = _build("pivot_toy")
+    pivots = [
+        controller
+        for controller in ctx.controllers
+        if controller.transform.name.endswith("_pivot_ctrl")
+    ]
+    assert len(pivots) == 1

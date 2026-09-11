@@ -745,9 +745,16 @@ class Builder:
                 # A pivot per declared role the rigger gave preset rows:
                 # declaring is what makes it available, a row is what builds
                 # it -- the same arrangement as a socket per declared input.
+                #
+                # Skips a role that already has one, so a module still calling
+                # rig.pivot_control itself -- every module did before this
+                # seam existed, and a studio module may still -- gets one
+                # pivot rather than a second that fails on its showPivot attr.
                 for role in view.pivot_controls_for_copy(view.values()):
                     main = ctx.controller_by_role(role)
-                    if main is not None and view.pivot_labels(role):
+                    if main is None or not view.pivot_labels(role):
+                        continue
+                    if ctx.controller_by_role(f"{role}_pivot") is None:
                         ctx.pivot_control(main)
                 contexts.append((slug, ctx))
                 # The module's outputs are its copies' outputs, qualified.

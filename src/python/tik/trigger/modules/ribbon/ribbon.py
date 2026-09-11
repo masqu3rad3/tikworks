@@ -92,6 +92,19 @@ class RibbonModule(Module):
         """A circle for every control the settings ask for."""
         return {role: "Circle" for role in cls.controls_for_copy(settings)}
 
+    @classmethod
+    def pivot_controls_for_copy(cls, settings=None):
+        """Start and end anchor to their own guides; the mids have none.
+
+        A mid is computed along the surface and has no guide of its own, so
+        its presets stack on ``start`` until the rigger drags them where they
+        belong -- which is how an unplaced preset already behaves.
+        """
+        return {
+            role: ("end" if role == "end" else "start", 0)
+            for role in cls.controls_for_copy(settings)
+        }
+
     # --------------------------------------------------------------- guides
     def draw_guides(self, guides) -> None:
         """A start and an end joint along X."""
