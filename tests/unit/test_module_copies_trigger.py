@@ -438,3 +438,44 @@ def test_the_base_wins_over_the_source_copys_name():
     rows = normalise([{"slug": "", "name": "thumb"}], DEFAULTS, "arm")
     made = duplicate_row(rows, "", DEFAULTS, taken_names={"thumb"}, base="arm")
     assert made["name"] == "arm"
+
+
+# ------------------------------------ the three candidate sets, per copy
+def test_space_control_names_qualify_per_copy():
+    from tik.trigger.core import get_module
+
+    module = get_module("base")(name="base")
+    module.copies = [{"slug": "", "name": "a"}, {"slug": "c1", "name": "b"}]
+    assert type(module).space_control_names(module.values()) == ("root", "c1_root")
+
+
+def test_shape_control_names_qualify_per_copy():
+    from tik.trigger.core import get_module
+
+    module = get_module("base")(name="base")
+    module.copies = [{"slug": "", "name": "a"}, {"slug": "c1", "name": "b"}]
+    assert type(module).shape_control_names(module.values()) == ("root", "c1_root")
+
+
+def test_pivot_anchor_resolves_per_copy():
+    """Two copies of a chain anchor to their own guides, not copy one's."""
+    from tik.trigger.core import get_module
+
+    module = get_module("fkchain")(name="chain")
+    module.copies = [
+        {"slug": "", "name": "a", "segments": 2},
+        {"slug": "c1", "name": "b", "segments": 3},
+    ]
+    values = module.values()
+    assert type(module).pivot_anchor("c1_fk2", values) == ("segment", 1)
+    # Copy one has two segments, so it builds no fk2 and offers no anchor.
+    assert type(module).pivot_anchor("fk2", values) is None
+
+
+def test_a_copy_view_sees_only_its_own_candidates():
+    from tik.trigger.core import get_module
+
+    module = get_module("base")(name="base")
+    module.copies = [{"slug": "", "name": "a"}, {"slug": "c1", "name": "b"}]
+    view = module.for_copy("c1")
+    assert type(view).space_control_names(view.values()) == ("root",)
