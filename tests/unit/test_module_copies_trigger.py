@@ -372,3 +372,69 @@ def test_the_primary_input_is_still_the_first_copys():
     """One module, one tree row, one parent: the first copy's."""
     Toy = _toy()
     assert Toy.primary_input().name == "root"
+
+
+# ---------------------------------------------------- a shared input
+def _shared_input_toy():
+    from tik.core.fields import IntField
+    from tik.trigger.core import GuideLayout, Input, Module
+
+    class Anchored(Module):
+        module_type = "anchored"
+        guides = GuideLayout("root")
+        inputs = (
+            Input("root", primary=True),
+            Input("world", shared=True),
+        )
+        outputs = ("root",)
+        segments = IntField(1)
+
+        def draw_guides(self, guides):
+            guides.joint("root", (0, 0, 0))
+
+        def build(self, rig):
+            pass
+
+    return Anchored
+
+
+def test_an_input_is_per_copy_unless_it_says_otherwise():
+    from tik.trigger.core import Input
+
+    assert Input("root").shared is False
+    assert Input("world", shared=True).shared is True
+
+
+def test_a_shared_input_keeps_one_unqualified_port():
+    """One declaration, one port, however many copies: the whole hand hangs
+    off the same thing and the rigger wires it once."""
+    Anchored = _shared_input_toy()
+    settings = {"copies": [{"slug": "", "name": "a"}, {"slug": "c1", "name": "b"}]}
+    assert Anchored.input_names(settings) == ["root", "world", "c1_root"]
+
+
+def test_a_shared_input_resolves_unqualified():
+    Anchored = _shared_input_toy()
+    settings = {"copies": [{"slug": ""}, {"slug": "c1"}]}
+    assert Anchored.get_input("world", settings).name == "world"
+    assert Anchored.get_input("c1_world", settings) is None
+
+
+# ------------------------------------------------------- naming a new copy
+def test_a_new_copy_is_the_module_name_plus_a_number():
+    """arm / arm1 / arm2, the way Maya names a duplicate."""
+    rows = normalise([{"slug": "", "name": ""}], DEFAULTS, "arm")
+    made = duplicate_row(rows, "", DEFAULTS, taken_names={"arm"}, base="arm")
+    assert made["name"] == "arm1"
+
+    rows.append(made)
+    again = duplicate_row(rows, "", DEFAULTS, taken_names={"arm", "arm1"}, base="arm")
+    assert again["name"] == "arm2"
+
+
+def test_the_base_wins_over_the_source_copys_name():
+    """Duplicating `thumb` on an `arm` module still gives arm1, not thumb1:
+    the numbering belongs to the module, as it does in Maya."""
+    rows = normalise([{"slug": "", "name": "thumb"}], DEFAULTS, "arm")
+    made = duplicate_row(rows, "", DEFAULTS, taken_names={"thumb"}, base="arm")
+    assert made["name"] == "arm"

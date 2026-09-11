@@ -191,11 +191,15 @@ class Module(Schema):
         keeps ``entry.inputs`` an ordinary flat dict that every existing
         reader walks unchanged.
         """
-        return [
-            cls.qualify(slug, name)
-            for slug, one in cls._copy_settings(settings)
-            for name in cls.inputs_for_copy(one)
-        ]
+        shared = {item.name for item in cls.inputs if item.shared}
+        found: list[str] = []
+        for slug, one in cls._copy_settings(settings):
+            for name in cls.inputs_for_copy(one):
+                # A shared input is the module's: one port, wired once.
+                port = name if name in shared else cls.qualify(slug, name)
+                if port not in found:
+                    found.append(port)
+        return found
 
     @classmethod
     def primary_input(cls) -> Optional[Input]:
@@ -212,6 +216,8 @@ class Module(Schema):
         ``name`` may be qualified (``c1_root``); the copy prefix is stripped
         first, and an unknown copy resolves to nothing.
         """
+        if any(item.name == name and item.shared for item in cls.inputs):
+            return next(item for item in cls.inputs if item.name == name)
         slug = cls.slug_of(name)
         if slug:
             known = {item[0] for item in cls._copy_settings(settings)}
@@ -220,7 +226,9 @@ class Module(Schema):
             name = name[len(slug) + 1 :]
         found = next((item for item in cls.inputs if item.name == name), None)
         if found is not None:
-            return found
+            # A shared input has no qualified form: ``c1_world`` names no
+            # port, and resolving it would let a wire land nowhere.
+            return None if (slug and found.shared) else found
         return next(
             (item for item in cls.space_inputs(settings) if item.name == name), None
         )

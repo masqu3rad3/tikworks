@@ -490,10 +490,15 @@ class Builder:
         """
         built = report.rigs[instance.instance_id]
         # Per copy: each one has its own port and its own socket, so five
-        # fingers may hang off five different things.
-        for slug, ctx in built.contexts:
-            for declared in module_cls.inputs:
-                port = module_cls.qualify(slug, declared.name)
+        # fingers may hang off five different things. A ``shared`` input is
+        # the exception -- one port, wired once, driving every copy's socket.
+        for declared in module_cls.inputs:
+            for slug, ctx in built.contexts:
+                port = (
+                    declared.name
+                    if declared.shared
+                    else module_cls.qualify(slug, declared.name)
+                )
                 source = inputs.get(port)
                 if not source or self._out_of_scope(source, by_key):
                     if not declared.required:
@@ -511,7 +516,9 @@ class Builder:
                     instance=instance,
                 )
                 connect(ctx, declared.name, node)
-                report.connections.append((f"{instance.key}.{port}", source))
+                pair = (f"{instance.key}.{port}", source)
+                if pair not in report.connections:
+                    report.connections.append(pair)
 
     def _connect_spaces(self, instances, report: BuildReport, by_key: dict) -> None:
         """Build one space switch per (control, mode), after all modules exist.
@@ -648,6 +655,7 @@ class Builder:
         ``segment`` exactly as it always has.
         """
         prefix = f"{slug}_" if slug else ""
+        shared_ports = {item.name for item in type(view).inputs if item.shared}
         return ModuleInstance(
             module_type=instance.module_type,
             instance_id=instance.instance_id,
@@ -667,9 +675,18 @@ class Builder:
             ],
             parent=instance.parent,
             inputs={
-                name[len(prefix) :]: source
-                for name, source in instance.inputs.items()
-                if name.startswith(prefix) and Module.slug_of(name) == slug
+                **{
+                    name: source
+                    for name, source in instance.inputs.items()
+                    if name in shared_ports
+                },
+                **{
+                    name[len(prefix) :]: source
+                    for name, source in instance.inputs.items()
+                    if name not in shared_ports
+                    and name.startswith(prefix)
+                    and Module.slug_of(name) == slug
+                },
             },
         )
 

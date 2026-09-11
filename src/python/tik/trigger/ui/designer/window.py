@@ -1063,6 +1063,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
                 self.current_slug(),
                 type(self._module_obj).per_copy_defaults(self._module_obj.values()),
                 taken,
+                base=self._module_obj.name,
             )
         except TriggerError as error:
             self.events.log(str(error), level="warning")
@@ -1094,10 +1095,29 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
             self._on_copy_renamed(index, entered)
 
     def _on_copy_renamed(self, index: int, text: str) -> None:
+        """Rename one copy, refusing a name another copy already holds.
+
+        Refused here rather than caught at build time: two copies with one
+        name build their controls over each other, and the rigger should
+        hear about it while they are typing, not three steps later.
+        """
         if self._module_obj is None or not text:
             return
         rows = self._module_obj.copy_rows()
         if not 0 <= index < len(rows):
+            return
+        taken = {
+            copy_list.copy_name(row, self._module_obj.name)
+            for position, row in enumerate(rows)
+            if position != index
+        }
+        if text in taken:
+            self.events.log(
+                f"'{text}' is already the name of another copy of "
+                f"'{self._module_obj.name}'.",
+                level="warning",
+            )
+            self._rebuild_copy_tabs(index)
             return
         rows[index]["name"] = text
         self._write_copies(rows, current=index)

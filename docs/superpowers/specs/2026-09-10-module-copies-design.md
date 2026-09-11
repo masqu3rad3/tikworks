@@ -82,6 +82,11 @@ qualified, so a two-copy module exposes `root` and `c1_root` and five fingers ma
 different things. `entry.inputs` stays an ordinary flat dict, which is what keeps every existing
 reader of it working untouched.
 
+An input shares by the same one word: `Input("world", shared=True)` keeps a single unqualified
+port however many copies there are, wired once and driving every copy's socket. A qualified
+form of it (`c1_world`) names no port and `get_input` refuses one, so a wire cannot land
+nowhere.
+
 ### 2.0 A correction, recorded
 
 This started the other way round: `per_copy=True` marked the exceptions and everything else was
@@ -145,7 +150,11 @@ The list **is** the count. `[+]` appends, closing a tab removes one; there is no
 number to keep in step with it.
 
 `[+]` **duplicates the current copy** — its per-copy values and its guide poses — rather than
-seeding from the field defaults. A fifth finger wants the fourth finger's settings, not the
+seeding from the field defaults. Its *name*, though, comes from the module and is numbered up
+from there (`arm`, `arm1`, `arm2`), which is how Maya names a duplicate; the numbering belongs
+to the module rather than to whichever copy happened to be showing. A rename that collides with
+another copy is refused in the panel, because two copies with one name build their controls
+over each other and the rigger should hear about it while typing rather than at build time. A fifth finger wants the fourth finger's settings, not the
 module's. The new copy's guides therefore land exactly on the copy they were made from, and
 the rigger drags them into place: the same answer as the pivot-preset rule that an unplaced
 thing should look unplaced, and the same answer the superseded design reached for `[+]`.

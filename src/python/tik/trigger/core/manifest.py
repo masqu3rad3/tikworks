@@ -24,6 +24,10 @@ class Input:
         kind: ``transform`` | ``joint`` | ``attribute`` (graph validation).
         primary: The input the tree view shows as parenting (one per module).
         required: Build fails without a source. Almost never true.
+        shared: One port for the whole module rather than one per copy. An
+            input belongs to a copy by default -- five fingers may hang off
+            five different things -- so this is for the input every copy
+            genuinely shares, wired once and driving all of their sockets.
         help: Tooltip text.
     """
 
@@ -31,6 +35,7 @@ class Input:
     kind: str = "transform"
     primary: bool = False
     required: bool = False
+    shared: bool = False
     help: str = ""
 
 

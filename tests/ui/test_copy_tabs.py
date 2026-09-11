@@ -352,3 +352,49 @@ def test_a_table_edited_on_one_tab_leaves_the_other_alone(designer):
     rows = _rows(handle)
     assert rows[1]["control_shape_overrides"][0]["shape"] == "Cube"
     assert rows[0]["control_shape_overrides"] == []
+
+
+# ------------------------------------------------------------ naming copies
+def test_a_new_copy_is_the_module_name_numbered_up(designer):
+    """arm / arm1 / arm2, the way Maya names a duplicate."""
+    handle = designer.guides.add("toy_chain", name="arm", side="L")
+    _select(designer, handle)
+    designer._on_add_copy()
+    designer._on_add_copy()
+    assert [designer.tab_bar.tabText(i) for i in range(3)] == ["arm", "arm1", "arm2"]
+
+
+def test_the_number_follows_the_module_not_the_showing_tab(designer):
+    handle = designer.guides.add("toy_chain", name="arm", side="L")
+    _select(designer, handle)
+    designer._on_add_copy()
+    designer._on_copy_renamed(1, "thumb")
+    designer._on_add_copy()
+    assert designer.tab_bar.tabText(2) == "arm1"
+
+
+def test_renaming_a_tab_to_an_existing_name_is_refused(designer):
+    """It used to be allowed and blew up at build time instead."""
+    handle = _chain(designer, name="arm")
+    designer._on_add_copy()
+    designer._on_copy_renamed(1, "arm")
+    assert designer.tab_bar.tabText(1) == "arm1"
+    assert [row["name"] for row in _rows(handle)][1] == "arm1"
+
+
+def test_renaming_a_tab_to_its_own_name_is_fine(designer):
+    _chain(designer, name="arm")
+    designer._on_add_copy()
+    designer._on_copy_renamed(1, "arm1")
+    assert designer.tab_bar.tabText(1) == "arm1"
+
+
+def test_a_refused_rename_says_why(designer):
+    from tik.trigger.core import events
+
+    _chain(designer, name="arm")
+    designer._on_add_copy()
+    seen = []
+    designer.events.subscribe(events.LOG, lambda **kw: seen.append(kw))
+    designer._on_copy_renamed(1, "arm")
+    assert any("already the name" in str(item.get("message")) for item in seen)

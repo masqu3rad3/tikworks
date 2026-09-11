@@ -79,20 +79,27 @@ def copy_name(row, module_name: str) -> str:
     return row.get("name") or module_name
 
 
-def duplicate_row(rows, slug: str, per_copy_defaults: dict, taken_names) -> dict:
+def duplicate_row(
+    rows, slug: str, per_copy_defaults: dict, taken_names, base: str = ""
+) -> dict:
     """The ``[+]`` verb: a new row carrying ``slug``'s values.
 
-    Its values, not the field defaults -- a fifth finger wants the fourth
+    Its *values*, not the field defaults -- a fifth finger wants the fourth
     finger's settings. Its guides are copied by the caller, which is what
     lands the new copy stacked on the one it came from: an unplaced thing
     should look unplaced.
+
+    Its *name*, though, comes from ``base`` -- the module's name -- and is
+    numbered up from there: ``arm``, ``arm1``, ``arm2``. The numbering
+    belongs to the module rather than to whichever copy was showing, which
+    is how Maya names a duplicate and what a rigger expects to see.
     """
     source = row_for(rows, slug)
     if source is None:
         raise CopyError(f"There is no copy '{slug}' to duplicate.")
     made = dict(source)
     made["slug"] = new_slug(row.get("slug", "") for row in rows)
-    made["name"] = free_name(source.get("name") or "copy", taken_names)
+    made["name"] = free_name(base or source.get("name") or "copy", taken_names)
     return made
 
 
