@@ -70,13 +70,21 @@ class DesignerProperties:
 
     @staticmethod
     def _topology(handle) -> tuple:
-        """What a settings change might alter: ports, controls and guide count."""
+        """What a settings change might alter: ports, controls and guide count.
+
+        The three candidate sets are here as well as ``control_names``,
+        because a module may narrow one of them without changing the controls
+        it builds -- and a section that empties has to leave the screen.
+        """
         module_cls = handle.module_class
         settings = handle.settings
         return (
             tuple(module_cls.input_names(settings)),
             tuple(module_cls.output_names(settings)),
             tuple(module_cls.control_names(settings)),
+            tuple(module_cls.space_control_names(settings)),
+            tuple(module_cls.pivot_control_names(settings)),
+            tuple(module_cls.shape_control_names(settings)),
             len(handle.instance.guides),
         )
 
