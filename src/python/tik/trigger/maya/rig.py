@@ -19,7 +19,7 @@ from tik.maya import naming
 from tik.maya.roles.controller import Controller
 from tik.trigger.core import shapes as shape_library
 from tik.trigger.core.exceptions import GuideError
-from tik.trigger.core.manifest import TIERS
+from tik.trigger.core.manifest import TIERS, instance_key
 from tik.trigger.core.module import Module
 from tik.trigger.core.schemas import ModuleInstance
 from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_joint
@@ -186,6 +186,8 @@ class ModuleRig:
         scaffold,
         guide_nodes: dict,
         bind_parent=None,
+        shared=None,
+        group_name: str = "",
     ) -> None:
         self.module = module
         self.instance = instance
@@ -199,11 +201,22 @@ class ModuleRig:
         self.attachments: dict[str, Any] = {}
         self.controllers: list[Controller] = []
         self.deform_joints: list[tm.Joint] = []
-        self.groups = self._create_groups()
+        #: The name the four groups are built under. A module's copies share
+        #: one set of groups, so this is the *module's* name while
+        #: ``instance.name`` is the copy's -- which is what keeps the groups
+        #: ``L_fkchain_grp`` while the controls stay ``L_index_fk0``.
+        self.group_name = group_name or instance.name
+        # The four groups belong to the *module*, so a later copy builds into
+        # the ones already standing rather than a second set beside them.
+        # Its sockets do not: a socket is a copy's attach frame, and
+        # ``rig.socket(match=...)`` aligns it to that copy's own guide -- one
+        # shared socket would be dragged to wherever the last copy's guide
+        # is, taking every rig already parented under it along.
+        self.groups = self._create_groups() if shared is None else shared
+        self._create_sockets()
         # Resolved by the builder from the connected input's producer, so bind
         # joints are created in their final hierarchy position.
         self.bind_parent = bind_parent if bind_parent is not None else self.groups.bind
-        self._create_sockets()
 
     def _create_sockets(self) -> None:
         """One transform per declared input, in ``socket_grp``.
@@ -226,21 +239,37 @@ class ModuleRig:
             )
 
     # ------------------------------------------------------------- groups
+    @property
+    def group_key(self) -> str:
+        """The *module's* display key, as the visibilities enum names it."""
+        return instance_key(self.group_name, self.side.value)
+
+    def group_label(self, *tokens, suffix=None) -> str:
+        """A name in the *module's* namespace rather than the copy's.
+
+        The four groups and the sockets belong to the module and are shared
+        by its copies, so they cannot be named after whichever copy happened
+        to build first.
+        """
+        return naming.format_name(
+            *tokens, side=self.side.value, prefix=self.group_name, suffix=suffix
+        )
+
     def _create_groups(self) -> RigGroups:
         limb = tm.Transform.create(
-            name=self.name(suffix="grp"), parent=self.rig_root.long_name
+            name=self.group_label(suffix="grp"), parent=self.rig_root.long_name
         )
         socket = tm.Transform.create(
-            name=self.name("socket", suffix="grp"), parent=limb.long_name
+            name=self.group_label("socket", suffix="grp"), parent=limb.long_name
         )
         control = tm.Transform.create(
-            name=self.name("control", suffix="grp"), parent=limb.long_name
+            name=self.group_label("control", suffix="grp"), parent=limb.long_name
         )
         rig = tm.Transform.create(
-            name=self.name("rig", suffix="grp"), parent=limb.long_name
+            name=self.group_label("rig", suffix="grp"), parent=limb.long_name
         )
         bind = tm.Transform.create(
-            name=self.name("bind", suffix="grp"), parent=limb.long_name
+            name=self.group_label("bind", suffix="grp"), parent=limb.long_name
         )
 
         self.separator(limb, "visibility_")
@@ -258,7 +287,7 @@ class ModuleRig:
                 tags.KIND: tags.RIG,
                 tags.MODULE: self.module.module_type,
                 tags.INSTANCE: self.instance.instance_id,
-                tags.NAME: self.instance.name,
+                tags.NAME: self.group_name,
                 tags.SIDE: self.side.value,
             },
         )

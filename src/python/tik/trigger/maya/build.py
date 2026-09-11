@@ -93,16 +93,42 @@ class ModuleBuild:
         return getattr(self.contexts[0][1], name)
 
 
+def copy_guide_nodes(instance_id: str, slug: str) -> dict:
+    """``{(bare role, index): joint}`` for one copy of one module.
+
+    The scene scan is by instance id and its roles are *qualified*, so a copy
+    has to be picked out of the result and de-qualified. Without this every
+    copy was handed the whole map and, asking for its bare ``root``, got the
+    first copy's joint -- so every copy built in the same place however far
+    apart the rigger moved the guides.
+    """
+    prefix = f"{slug}_" if slug else ""
+    found = {}
+    for (role, index), joint in guide_nodes.guide_nodes(instance_id).items():
+        if Module.slug_of(role) != slug or not role.startswith(prefix):
+            continue
+        found[(role[len(prefix) :], index)] = joint
+    return found
+
+
 def build_context(
-    module, instance, scaffold: RigScaffold, bind_parent=None
+    module,
+    instance,
+    scaffold: RigScaffold,
+    bind_parent=None,
+    slug: str = "",
+    shared=None,
+    group_name: str = "",
 ) -> ModuleRig:
-    """The object a module builds through, wired to its guides."""
+    """The object a module builds through, wired to *its copy's* guides."""
     return ModuleRig(
         module,
         instance,
         scaffold,
-        guide_nodes.guide_nodes(instance.instance_id),
+        copy_guide_nodes(instance.instance_id, slug),
         bind_parent,
+        shared=shared,
+        group_name=group_name,
     )
 
 
@@ -139,23 +165,27 @@ def tier_attr_name(key: str) -> str:
     return re.sub(r"\W", "_", key)
 
 
-def wire_tiers(rig) -> None:
+def wire_tiers(rig, rigs=None) -> None:
     """One exclusive-tier enum per module on visibilities_ctrl, driving shapes.
 
     Tiers are exclusive: ``secondary`` shows secondary controls only, ``all``
     shows the three tiers. Shapes are driven, not transforms, so an FK chain
     whose next control hangs under the previous one keeps its hierarchy.
     Tweaks carry no tier and are left to ``tweakVis`` on their main.
+
+    ``rigs`` is every copy of the module, because the enum belongs to the
+    module: one switch shows or hides the whole hand, not one finger of it.
     """
     by_tier: dict[str, list] = {}
-    for controller in rig.controllers:
-        tier = controller.transform.meta.get(tags.TIER)
-        if tier is not None:
-            by_tier.setdefault(tier, []).append(controller)
+    for one in rigs if rigs is not None else [rig]:
+        for controller in one.controllers:
+            tier = controller.transform.meta.get(tags.TIER)
+            if tier is not None:
+                by_tier.setdefault(tier, []).append(controller)
     if not by_tier:
         return
     vis = rig.scaffold.visibilities.transform
-    enum = vis[tier_attr_name(rig.instance.key)]
+    enum = vis[tier_attr_name(rig.group_key)]
     if not enum.exists():
         enum.create("enum", items=list(TIER_ITEMS), default=ALL_INDEX, keyable=False)
         enum.visible = True
@@ -169,11 +199,19 @@ def wire_tiers(rig) -> None:
                 shown >> shape["visibility"]
 
 
-def finalize(rig) -> None:
-    """Tag a built module's outputs and sockets, and wire it to the scaffold."""
+def finalize(rig, rigs=None, outputs=None) -> None:
+    """Tag a built module's outputs and sockets, and wire it to the scaffold.
+
+    Runs **once per module**, not once per copy: the groups, the sockets and
+    the preferences wiring are the module's, and wiring them a second time
+    would fail on attributes the first pass locked.
+
+    ``outputs`` is the module's merged, copy-qualified map, so a consumer
+    naming ``L_fkchain.c1_end`` finds the tag it needs.
+    """
     wire_preferences(rig)
-    wire_tiers(rig)
-    for name, node in rig.outputs.items():
+    wire_tiers(rig, rigs)
+    for name, node in (rig.outputs if outputs is None else outputs).items():
         # Every output is a bind joint, so trg_kind must stay "deform" -
         # overwriting it with "output" would erase the classification that
         # skinning and export read. The output role gets its own key.
@@ -185,15 +223,16 @@ def finalize(rig) -> None:
         if node.meta.get(tags.KIND) is None:
             marks[tags.KIND] = tags.OUTPUT
         tags.tag(node, **marks)
-    for name, node in rig.attachments.items():
-        tags.tag(
-            node,
-            **{
-                tags.KIND: tags.INPUT,
-                tags.INSTANCE: rig.instance.instance_id,
-                tags.ROLE: name,
-            },
-        )
+    for one in rigs if rigs is not None else [rig]:
+        for name, node in one.attachments.items():
+            tags.tag(
+                node,
+                **{
+                    tags.KIND: tags.INPUT,
+                    tags.INSTANCE: rig.instance.instance_id,
+                    tags.ROLE: name,
+                },
+            )
 
 
 def connect(rig, input_name: str, source_node) -> None:
@@ -645,6 +684,7 @@ class Builder:
         try:
             contexts = []
             merged: dict = {}
+            shared = None
             for slug in module.copy_slugs():
                 view = module.for_copy(slug)
                 ctx = build_context(
@@ -652,7 +692,13 @@ class Builder:
                     self._copy_instance(instance, view, slug),
                     scaffold,
                     bind_parent,
+                    slug=slug,
+                    shared=shared,
+                    group_name=module.name,
                 )
+                # The four groups belong to the module: the first copy
+                # makes them and the rest build into them.
+                shared = ctx.groups
                 view.build(ctx)
                 contexts.append((slug, ctx))
                 # The module's outputs are its copies' outputs, qualified.
@@ -671,8 +717,7 @@ class Builder:
                     instance_id=instance.instance_id,
                     module_type=instance.module_type,
                 )
-            for _slug, ctx in contexts:
-                finalize(ctx)
+            finalize(built.primary, [ctx for _slug, ctx in contexts], merged)
         except BuildError:
             raise
         except Exception as error:  # noqa: BLE001 - wrap with context
