@@ -72,12 +72,20 @@ control with a declared default shape is shape-editable; one without is not offe
 `shape_controls` list, because it would duplicate `controls` line for line in every module and
 then drift from it — the exact maintenance burden this document exists to remove.
 
-### 2.1 The consequence of that second job
+### 2.1 Why that second job is safe
 
-A module author who adds a control and forgets its shape default silently loses that control's
-override row. That is the price of not keeping a duplicated list, and §5's test guards the
-reverse direction — every key must name a control the module actually builds — because a typo
-there is the failure that would otherwise reach a rigger as a missing row.
+The obvious objection is that a module author who adds a control and forgets its shape default
+silently loses that control's override row. That failure is already impossible:
+`test_every_declared_control_has_a_resolvable_default_shape` asserts that every declared control
+has a default the pinned library can resolve, for every module and every settings variation. A
+forgotten default is a CI failure today and stays one.
+
+So for a well-formed module the shape candidate set *equals* its control set, and this change
+narrows nothing in practice. That is the point rather than a weakness: the module now says so
+rather than the table assuming it, and a module with no controls — `twist` — yields an empty set
+from the same rule that gives `arm` six, instead of from a special case.
+
+§5's test guards the reverse direction: every key must name a control the module actually builds.
 
 ## 3. The pivot anchor becomes addressable
 
@@ -155,6 +163,19 @@ logger.warning(
 
 `rig.pivot_control` already raises `GuideError` on an undeclared role, so pivots need nothing
 new beyond routing that check through the hook.
+
+**The advisory layer already exists** and needs only to read the right sets. `Module.warnings()`
+reports a stale row in all three tables, and two of its three checks are written against
+`control_names`:
+
+```python
+known = type(self).control_names(self.values())   # -> space_control_names for anim_spaces
+                                                  # -> shape_control_names for shape overrides
+```
+
+Its pivot check already reads `pivot_control_names`, which is correct. These are the warnings a
+rigger sees in the panel; §5's `space_rows` filter is the separate, silent guarantee that a stale
+row cannot grow a port or build a space.
 
 ## 6. The UI: a table nobody can fill renders nothing
 
