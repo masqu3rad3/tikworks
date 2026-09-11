@@ -742,6 +742,13 @@ class Builder:
                 # makes them and the rest build into them.
                 shared = ctx.groups
                 view.build(ctx)
+                # A pivot per declared role the rigger gave preset rows:
+                # declaring is what makes it available, a row is what builds
+                # it -- the same arrangement as a socket per declared input.
+                for role in view.pivot_controls_for_copy(view.values()):
+                    main = ctx.controller_by_role(role)
+                    if main is not None and view.pivot_labels(role):
+                        ctx.pivot_control(main)
                 contexts.append((slug, ctx))
                 # The module's outputs are its copies' outputs, qualified.
                 for name, node in ctx.outputs.items():

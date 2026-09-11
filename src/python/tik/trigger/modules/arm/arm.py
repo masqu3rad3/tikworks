@@ -232,9 +232,6 @@ class Arm(Module):
             pole_pin=self.pole_pin,
             labels=LIMB_LABELS,
         )
-        # A planted hand rolls about the fingertips, then the knuckles, then
-        # the wrist. The rigger places all three; the animator picks one.
-        rig.pivot_control(limb.ik_control)
         if self.auto_collar:
             reach = build_reach(
                 rig,
