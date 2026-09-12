@@ -760,3 +760,21 @@ def test_the_ik_control_follows_the_hand_guides_roll(scene, side):
     assert tuple(round(v, 3) for v in control.world_axis("x")) == rolled
     # and the bind joint agrees with both: it is what the fingers hang off
     assert tuple(round(v, 3) for v in ctx.outputs["hand"].world_axis("x")) == rolled
+
+
+def test_mirrored_pair_builds_both_arms(mirrored_pair):
+    """Smoke test for the fixture itself, on a module known to be correct."""
+    left, right = mirrored_pair(
+        "arm",
+        {
+            "collar": (2, 15, 0),
+            "shoulder": (5, 15, 0),
+            "elbow": (9, 15, -1),
+            "hand": (14, 15, 0),
+            "neutral": (2 + 12 * NEUTRAL_REACH, 15, 0),
+        },
+    )
+    left_hand = left.outputs["hand"].world_position
+    right_hand = right.outputs["hand"].world_position
+    assert left_hand[0] == pytest.approx(-right_hand[0], abs=1e-4)
+    assert left_hand[1] == pytest.approx(right_hand[1], abs=1e-4)

@@ -41,3 +41,48 @@ def build_context(scene):
         return build.build_context(built, instance, rig)
 
     return _make
+
+
+@pytest.fixture
+def mirrored_pair(scene):
+    """Build the same module on both sides and hand back both contexts.
+
+    Mirroring is the most common source of limb bugs and every test has been
+    asserting it ad hoc. ``poses`` are the LEFT side's world positions; the
+    right gets the same triples with X negated, which is what "mirrored" has
+    to mean for a comparison to say anything.
+
+    Both sides are built in one pass so the comparison cannot be poisoned by
+    two different scene states.
+    """
+    from tik.trigger.core import ParentRef, get_module
+    from tik.trigger.maya import Builder
+
+    def _make(module_type: str, poses: dict, **settings):
+        body = scene.create_guides(get_module("base")(name="body"))
+        cmds.xform(
+            scene.guide_node(body.instance_id, "root").long_name,
+            ws=True,
+            t=(0, 0, 0),
+        )
+        instances = {}
+        for side in ("L", "R"):
+            instance = scene.create_guides(
+                get_module(module_type)(name=module_type, side=side, settings=settings),
+                parent=ParentRef(body.instance_id, "root"),
+            )
+            mult = -1 if side == "R" else 1
+            for role, (x, y, z) in poses.items():
+                cmds.xform(
+                    scene.guide_node(instance.instance_id, role).long_name,
+                    ws=True,
+                    t=(x * mult, y, z),
+                )
+            instances[side] = instance
+        report = Builder().build(document=scene.document, afterlife="keep")
+        return (
+            report.rigs[instances["L"].instance_id],
+            report.rigs[instances["R"].instance_id],
+        )
+
+    return _make
