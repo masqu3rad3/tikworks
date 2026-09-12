@@ -122,6 +122,22 @@ class Module(Schema):
             Column("label", "string"),
         ),
     )
+    movable_pivots = ListField(
+        [],
+        item_type=str,
+        label="Movable Pivots",
+        group=PIVOTS,
+        last=True,
+        choices_from="pivot_control_names",
+        help="Controls that get a pivot the animator moves by hand.",
+    )
+    """Which offered controls actually get a pivot.
+
+    Declaring ``pivot_controls`` is the offer; this is the acceptance. Above
+    ``pivot_presets`` in the fold because "does this control have a movable
+    pivot" comes before "and what named positions does it have" -- ``last=True``
+    keeps the two in declaration order.
+    """
     pivot_presets = TableField(
         [],
         label="Pivot Presets",
@@ -577,6 +593,16 @@ class Module(Schema):
             for row in self.pivot_rows(self.values())
             if row.get("control") == role and row.get("label")
         ]
+
+    def pivot_wanted(self, role: str) -> bool:
+        """Whether ``role`` gets a movable pivot: ticked, or carrying presets.
+
+        A preset row implies the tick rather than requiring it. A row that
+        built no pivot would be a row that does nothing, and every session
+        written before the tick existed has rows and no ticks -- so the
+        implication is also what makes this change need no migration.
+        """
+        return role in (self.movable_pivots or ()) or bool(self.pivot_labels(role))
 
     @classmethod
     def pivot_guide_roles(cls, settings=None) -> tuple[str, ...]:
