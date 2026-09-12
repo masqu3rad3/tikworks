@@ -350,16 +350,29 @@ def test_a_driven_guide_shows_no_axis(scene):
     assert cmds.getAttr(f"{found['rail']}.displayLocalAxis") == 0
 
 
-def test_every_shipped_modules_chain_guides_show_axes(scene):
-    """The user-facing promise: wherever orientation reaches the build."""
+def test_every_shipped_module_offers_axes_exactly_where_it_reads_them(scene):
+    """The user-facing promise, asked of the layout rather than hard-coded.
+
+    A guide offers an axis when the build reads its orientation: not a
+    reference guide (position only), not a driven one (attributes only), and
+    within a module that narrows, only the roles it named.
+    """
+    from tik.trigger.core import registry
+
     for module_type in ("base", "control", "fkchain", "arm", "twist", "ribbon"):
+        layout = registry.get_module(module_type).guides
         handle = scene.add(module_type, side="L", name=f"probe_{module_type}")
-        for (_role, _index), node in scene.guide_nodes(handle.instance_id).items():
-            shown = cmds.getAttr(f"{node.long_name}.displayLocalAxis")
-            oriented = cmds.nodeType(node.long_name) == "joint" and not (
-                module_type == "twist" and _role == "twist"
+        for (role, _index), node in scene.guide_nodes(handle.instance_id).items():
+            if not cmds.attributeQuery(
+                "displayLocalAxis", node=node.long_name, exists=True
+            ):
+                continue  # a reference guide is a transform; nothing to offer
+            bare = layout.bare_role(role)
+            expected = bare not in layout.driven and (
+                not layout.oriented or bare in layout.oriented
             )
-            assert bool(shown) is oriented, f"{module_type} {_role}"
+            shown = bool(cmds.getAttr(f"{node.long_name}.displayLocalAxis"))
+            assert shown is expected, f"{module_type} {role}"
 
 
 def test_turning_axes_off_and_on_never_offers_one_that_is_not_read(scene):
@@ -374,3 +387,17 @@ def test_turning_axes_off_and_on_never_offers_one_that_is_not_read(scene):
     assert cmds.getAttr(f"{found[('root', 0)].long_name}.displayLocalAxis") == 1
     assert cmds.getAttr(f"{found[('aim', 0)].long_name}.displayLocalAxis") == 0
     assert cmds.getAttr(f"{found[('rail', 0)].long_name}.displayLocalAxis") == 0
+
+
+def test_only_the_arms_hand_guide_offers_an_axis(scene):
+    """The chain is oriented by convention at build time, so rolling the
+    collar, shoulder or elbow guide changes nothing -- and an axis on a guide
+    whose orientation the rig ignores is an invitation to a pointless edit."""
+    handle = scene.add("arm", side="L", name="arm")
+    shown = {
+        role: bool(cmds.getAttr(f"{node.long_name}.displayLocalAxis"))
+        for (role, _index), node in scene.guide_nodes(handle.instance_id).items()
+        if cmds.attributeQuery("displayLocalAxis", node=node.long_name, exists=True)
+    }
+    assert shown["hand"] is True
+    assert not any(on for role, on in shown.items() if role != "hand"), shown
