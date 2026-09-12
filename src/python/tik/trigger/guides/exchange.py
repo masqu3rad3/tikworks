@@ -152,12 +152,15 @@ class GuideExchangeMixin:
                     settings=guide_instance.settings,
                 )
                 joints: dict = {}
+                layout = module_cls.guides
                 for (role, index), record in guide_instance.joints.items():
                     # The record carries its kind: a pivot preset guide is in
                     # no GuideLayout, so there is nothing to ask on the way in.
                     # A file with no kind predates them and was all joints.
                     kind = GuideKind(record.get("kind", GuideKind.JOINT.value))
-                    joint = nodes.make_guide_shell(record["name"], kind)
+                    joint = nodes.make_guide_shell(
+                        record["name"], kind, chain=layout.chain
+                    )
                     joint.world_position = record["position"]
                     if kind is not GuideKind.REFERENCE:
                         # jointOrient exists only on a joint; a reference guide

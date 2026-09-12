@@ -293,3 +293,36 @@ def test_the_twist_rails_are_driven_guides(scene):
     for node in rails:
         assert cmds.nodeType(node.long_name) == "joint"
         assert cmds.getAttr(f"{node.long_name}.radius") == 0.5
+
+
+# ------------------------------------------------------- bones, or no bones
+def test_a_chain_modules_guides_draw_bones(scene):
+    """An arm's guides become a bone chain, so the bones tell the truth."""
+    handle = scene.add("arm", side="L", name="arm")
+    found = scene.guide_nodes(handle.instance_id)
+    for role in ("collar", "shoulder", "elbow"):
+        assert cmds.getAttr(f"{found[(role, 0)].long_name}.drawStyle") == 0  # Bone
+
+
+def test_a_non_chain_modules_guides_draw_no_bones(scene):
+    """`twist`'s rails are siblings on a segment, not a chain: the base had a
+    bone fanning to every one of them, stacked into an unreadable smear."""
+    handle = scene.add("twist", side="L", name="twist", count=3)
+    found = scene.guide_nodes(handle.instance_id)
+    assert found
+    for (_role, _index), node in found.items():
+        assert cmds.getAttr(f"{node.long_name}.drawStyle") == 3  # Joint
+
+
+def test_the_ribbon_draws_no_bones_either(scene):
+    """Its start and end span a surface; no bone runs between them."""
+    handle = scene.add("ribbon", side="L", name="ribbon")
+    for (_role, _index), node in scene.guide_nodes(handle.instance_id).items():
+        assert cmds.getAttr(f"{node.long_name}.drawStyle") == 3
+
+
+def test_a_reference_guide_has_no_draw_style_to_set(scene):
+    """It is a transform: drawStyle is a joint attribute, so the chain flag
+    must not try to write one."""
+    found = drawn(scene)
+    assert not cmds.attributeQuery("drawStyle", node=found["aim"], exists=True)

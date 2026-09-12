@@ -99,6 +99,32 @@ different species.
 relationship exactly — the difference the rigger already relies on — without the arm naming a
 number. `base` drops from 2.0 to 1.5 and becomes consistent with every other root.
 
+### 2.0b Chains, and modules that are not one
+
+`drawStyle` is a look, so no module names it. What a module names is whether **a bone runs
+between its guides**:
+
+```python
+# twist.py -- the rails are siblings on a segment, not links in it
+guides = GuideLayout("base", "end", multi="twist", driven=("twist",), chain=False)
+
+# ribbon.py -- the two ends span a surface
+guides = GuideLayout("start", "end", chain=False)
+```
+
+`chain` defaults True, so `arm`, `fkchain`, `base` and `control` say nothing and keep their
+bones. False renders every joint guide of that module with Maya's `drawStyle = 3` ("Joint"):
+the marker, and no bones to any child.
+
+The measurement that makes it worth having: Maya draws one bone from a joint to *every* child,
+so `twist`'s base -- which parents its `end` and all N rails -- drew N+1 bones to collinear
+points, stacked into a single unreadable smear. It is also a lie, because no bone joins those
+guides in the rig.
+
+Applied module-wide rather than per role. A leaf draws no bones anyway, so targeting only the
+parents behaves identically, and per-role would raise a question ("which of my guides draw
+bones?") that no module author has an opinion about.
+
 ### 2.1 The declaration
 
 Two new keyword arguments on `GuideLayout`, both tuples of roles:

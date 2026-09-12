@@ -99,6 +99,11 @@ class GuideLayout:
         multi: Optional role that repeats ``count`` times after the fixed ones.
         min: Minimum count for the multi role (default 1).
         max: Maximum count for the multi role (default unlimited).
+        reference: Roles that mark a position rather than a rig joint.
+        driven: Roles the module places, not the rigger.
+        chain: Whether a bone runs between these guides. False for a module
+            whose guides are not a chain, which stops Maya smearing a bone
+            from each guide to every one of its children.
     """
 
     def __init__(
@@ -109,6 +114,7 @@ class GuideLayout:
         max: Optional[int] = None,  # noqa: A002
         reference: Sequence[str] = (),
         driven: Sequence[str] = (),
+        chain: bool = True,
     ) -> None:
         if not roles:
             raise ValueError("GuideLayout needs at least one role.")
@@ -122,6 +128,12 @@ class GuideLayout:
         self.max_count = max if multi else 0
         self.reference: tuple[str, ...] = tuple(reference)
         self.driven: tuple[str, ...] = tuple(driven)
+        #: Whether a bone runs between these guides. True for a module whose
+        #: guides become a bone chain (``arm``, ``fkchain``); False for one
+        #: whose guides do not (``twist``'s rails are siblings on a segment,
+        #: ``ribbon``'s two ends span a surface). A statement about the rig,
+        #: not about the drawing -- what it renders as is the framework's.
+        self.chain = bool(chain)
         self._validate_kinds()
 
     def _validate_kinds(self) -> None:

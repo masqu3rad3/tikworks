@@ -56,7 +56,12 @@ class Twist(Module):
     """A strip of twist joints between two inputs."""
 
     label = "Twist"
-    guides = GuideLayout("base", "end", multi="twist", min=1, max=20, driven=("twist",))
+    # Not a chain: the rails are siblings riding the base-to-end segment, not
+    # links in it, so a bone from the base to each of them claims a structure
+    # the rig never builds -- and four collinear bones draw as one smear.
+    guides = GuideLayout(
+        "base", "end", multi="twist", min=1, max=20, driven=("twist",), chain=False
+    )
     inputs = (
         Input("base", primary=True, help="Segment start (upperarm, thigh, shaft)"),
         Input("end", help="Segment end (lowerarm, shin, hub)"),

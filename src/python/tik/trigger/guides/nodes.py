@@ -48,6 +48,12 @@ LABEL_SIDES = {"C": 0, "L": 1, "R": 2}
 #: rather than as a literal in the draft.
 MARKER_FAN_FRACTION = 0.25
 MARKER_FAN_FALLBACK = 0.5
+#: Maya's joint ``drawStyle``: 0 Bone, 1 Multi-child as Box, 2 None, 3 Joint.
+#: "Joint" draws the marker and *no* bones to any child -- what a module whose
+#: guides are not a chain wants, since Maya otherwise smears one bone per
+#: child and a base with four collinear children becomes an unreadable blur.
+BONE_DRAW_STYLE = 0
+JOINT_DRAW_STYLE = 3
 
 logger = logging.getLogger(__name__)
 
@@ -113,11 +119,17 @@ def holder() -> tm.Transform:
 
 
 # ------------------------------------------------------------------ create
-def make_guide_shell(name: str, kind: GuideKind, parent=None) -> tm.Transform:
+def make_guide_shell(
+    name: str, kind: GuideKind, parent=None, chain: bool = True
+) -> tm.Transform:
     """The bare node for one guide of ``kind`` -- no tags, no pose, no label.
 
     Shared by a fresh draw and by ``.trg`` import, so the two can never
     disagree about what a kind renders as.
+
+    ``chain`` is the layout's: False draws the joint marker without bones,
+    because a bone between these guides would claim a chain the rig does not
+    build. A reference guide is a transform and has no ``drawStyle`` to set.
 
     A ``REFERENCE`` guide is a plain transform because that is the only thing
     that suppresses the bone. Measured in Maya: the bone belongs to the
@@ -138,7 +150,9 @@ def make_guide_shell(name: str, kind: GuideKind, parent=None) -> tm.Transform:
         for axis in "XYZ":
             shape[f"localScale{axis}"].value = REFERENCE_SCALE
         return node
-    return tm.Joint.create(name=name, parent=parent_name, radius=KIND_RADIUS[kind])
+    node = tm.Joint.create(name=name, parent=parent_name, radius=KIND_RADIUS[kind])
+    node["drawStyle"].value = BONE_DRAW_STYLE if chain else JOINT_DRAW_STYLE
+    return node
 
 
 def guide_color(kind: GuideKind, side: str) -> int:
@@ -260,7 +274,7 @@ def create_guide_node(
         side=module.side.value,
         suffix="guide",
     )
-    node = make_guide_shell(name, kind, parent=parent)
+    node = make_guide_shell(name, kind, parent=parent, chain=module.guides.chain)
     node.world_position = position
     tags.tag(
         node,

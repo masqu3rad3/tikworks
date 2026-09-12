@@ -67,3 +67,12 @@ def test_defaults_are_empty_so_existing_layouts_are_unchanged():
     assert layout.reference == ()
     assert layout.driven == ()
     assert layout.kind_for("segment") is GuideKind.JOINT
+
+
+# ------------------------------------------------------------------- chains
+def test_a_layout_is_a_chain_by_default():
+    assert GuideLayout("root", multi="segment").chain is True
+
+
+def test_a_layout_can_declare_it_is_not_a_chain():
+    assert GuideLayout("start", "end", chain=False).chain is False
