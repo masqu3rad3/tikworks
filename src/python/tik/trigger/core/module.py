@@ -122,6 +122,22 @@ class Module(Schema):
             Column("label", "string"),
         ),
     )
+    movable_pivots = ListField(
+        [],
+        item_type=str,
+        label="Movable Pivots",
+        group=PIVOTS,
+        last=True,
+        choices_from="pivot_control_names",
+        help="Controls that get a pivot the animator moves by hand.",
+    )
+    """Which offered controls actually get a pivot.
+
+    Declaring ``pivot_controls`` is the offer; this is the acceptance. Above
+    ``pivot_presets`` in the fold because "does this control have a movable
+    pivot" comes before "and what named positions does it have" -- ``last=True``
+    keeps the two in declaration order.
+    """
     pivot_presets = TableField(
         [],
         label="Pivot Presets",
@@ -578,6 +594,27 @@ class Module(Schema):
             if row.get("control") == role and row.get("label")
         ]
 
+    def pivot_wanted(self, role: str) -> bool:
+        """Whether ``role`` gets a movable pivot: ticked, or carrying presets.
+
+        A preset row implies the tick rather than requiring it. A row that
+        built no pivot would be a row that does nothing, and every session
+        written before the tick existed has rows and no ticks -- so the
+        implication is also what makes this change need no migration.
+        """
+        return role in (self.movable_pivots or ()) or bool(self.pivot_labels(role))
+
+    def pivot_movable(self, role: str) -> bool:
+        """Whether the animator may move ``role``'s pivot by hand.
+
+        The other half of ``pivot_wanted``, and deliberately not implied by a
+        preset row: named positions and a draggable pivot are two features. A
+        rigger who offers three foot rolls has not thereby agreed to let the
+        animator put the pivot anywhere else, so rows alone build a null the
+        presets drive and nothing to grab.
+        """
+        return role in (self.movable_pivots or ())
+
     @classmethod
     def pivot_guide_roles(cls, settings=None) -> tuple[str, ...]:
         """``pivot_<control>_<label>`` per well-formed row, in row order.
@@ -719,6 +756,12 @@ class Module(Schema):
                 problems.append(
                     f"pivot preset '{control}.{label}': control '{control}' has "
                     f"no movable pivot with the current settings"
+                )
+        for control in self.movable_pivots:
+            if control and control not in movable:
+                problems.append(
+                    f"movable pivot '{control}': control has no movable pivot "
+                    f"with the current settings"
                 )
         shapeable = type(self).shape_control_names(self.values())
         for row in self.control_shape_overrides:

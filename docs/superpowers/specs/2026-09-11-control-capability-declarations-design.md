@@ -2,6 +2,10 @@
 
 **Date:** 2026-09-11
 **Status:** implemented
+**Amended by:** `2026-09-12-movable-pivots-without-presets-design.md` — §4's closing rule
+becomes "declaring is what makes it available; a **tick** is what builds it, and a preset row
+implies a tick". §4.1's claimed escape hatch ("adds a row and clears its label") is withdrawn:
+`_validate_pivots` has always refused a blank label. The seam and its idempotence guard stand.
 **Amends:** `2026-09-07-movable-pivots-and-pivot-presets-design.md` — `pivot_controls` becomes a
 settings-aware hook whose values address a guide by role *and index*, and the pivot controller
 is built by the framework rather than by a call in the module's `build()`. The declaration's

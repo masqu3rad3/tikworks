@@ -215,6 +215,10 @@ class ModuleRig:
         self.outputs: dict[str, Any] = {}
         self.attachments: dict[str, Any] = {}
         self.controllers: list[Controller] = []
+        #: ``{control role: pivot node}``, movable or not. The not-movable
+        #: ones are groups and never reach ``controllers``, so this is the
+        #: only record that answers "does this control already have a pivot".
+        self._pivots: dict = {}
         self.deform_joints: list[tm.Joint] = []
         #: The name the four groups are built under. A module's copies share
         #: one set of groups, so this is the *module's* name while
@@ -510,30 +514,45 @@ class ModuleRig:
         self,
         main: Controller,
         *,
+        movable: bool = True,
         size: Optional[float] = None,
         shape: str = "Sphere",
-    ) -> Controller:
-        """Give ``main`` a movable pivot, with this module's presets for its role.
+    ) -> Any:
+        """Give ``main`` a pivot at the point its presets name, for its role.
 
-        The pivot controller is a plain child of ``main``, which is exactly
-        where it belongs: a child at the local position of ``rotatePivot`` is
-        the rotation's fixed point, so the marker sits on the pivot and follows
-        the control with no space maths.
+        The pivot node is a plain child of ``main``, which is exactly where it
+        belongs: a child at the local position of ``rotatePivot`` is the
+        rotation's fixed point, so it sits on the pivot and follows the control
+        with no space maths.
 
-        A preset drives the pivot controller's *offset* group and the
-        controller translates on top, so a manual adjustment survives a preset
-        change. Index 0 of the enum is ``default`` -- the control's own origin,
-        the way ``world`` is always index 0 of a space switch. With no rows
-        there is no enum at all, only a pivot the animator moves by hand.
+        ``movable`` is what the *animator* gets, and it is a separate question
+        from which presets exist. With it the node is a controller: a marker to
+        grab, a ``showPivot`` bool on ``main`` to reveal it, and a manual
+        translate that adds on top of the preset, so an adjustment survives a
+        preset change. Without it the node is a plain group -- nothing to
+        select, nothing to key, and no ``showPivot``, because there is nothing
+        to show. Named positions to switch between and a pivot to drag are two
+        features, and a rigger who offers the first has not thereby agreed to
+        the second.
+
+        Index 0 of the enum is ``default`` -- the control's own origin, the way
+        ``world`` is always index 0 of a space switch. With no rows there is no
+        enum at all, only a pivot the animator moves by hand.
 
         Args:
-            main: The controller whose pivot becomes movable.
-            size: Shape scale (defaults to 1.0).
+            main: The controller whose pivot this is.
+            movable: Build an animator-facing pivot controller rather than a
+                plain group. Defaults to True, which is what a module calling
+                this itself is asking for; the builder seam passes the rigger's
+                answer instead.
+            size: Shape scale (defaults to 1.0). Unused when not movable.
             shape: Control shape name. A pivot is a point, and a sphere is the
-                one shape that reads the same from every angle.
+                one shape that reads the same from every angle. Unused when not
+                movable.
 
         Returns:
-            Controller: The pivot controller.
+            Controller | tm.Transform: The pivot controller, or the group that
+            stands in for it when ``movable`` is False.
 
         Raises:
             GuideError: If ``main``'s role is not in the module's
@@ -546,6 +565,21 @@ class ModuleRig:
                 f"'{self.module.module_type}' does not declare a movable pivot "
                 f"for control '{role}'."
             )
+        labels = self._pivot_labels(role)
+        if not movable:
+            # A fresh child of main starts at local zero, which *is* main's
+            # pivot -- nothing to match. No offset group either: with no
+            # manual translate riding on top, the preset drives this node
+            # itself and the two nodes collapse into one.
+            pivot = tm.Transform.create(
+                name=self.name(f"{role}_pivot", suffix="grp"),
+                parent=main.transform.long_name,
+            )
+            if labels:
+                self._wire_pivot_presets(main, role, labels, holder=pivot, target=pivot)
+            main.drive_pivot(pivot["translate"], scale=True)
+            self._pivots[role] = pivot
+            return pivot
         pivot = self.controller(
             f"{role}_pivot",
             size=size if size is not None else 1.0,
@@ -564,51 +598,70 @@ class ModuleRig:
         show.visible = True
         show >> pivot.offset["visibility"]
 
-        labels = self._pivot_labels(role)
         if labels:
-            self._wire_pivot_presets(main, pivot, role, labels)
+            self._wire_pivot_presets(
+                main, role, labels, holder=pivot.transform, target=pivot.offset
+            )
         main.drive_pivot(
             pivot.offset["translate"] + pivot.transform["translate"], scale=True
         )
+        self._pivots[role] = pivot
         return pivot
+
+    def pivot_node(self, role: str) -> Any:
+        """The pivot this build made for ``role``, movable or not, else None.
+
+        Not ``controller_by_role(f"{role}_pivot")``: a pivot that is not
+        movable is a group and never reaches ``self.controllers``, so asking
+        for a controller would report "no pivot" and build a second one.
+        """
+        return self._pivots.get(role)
 
     def _pivot_labels(self, role: str) -> list[str]:
         """Preset labels declared for ``role``, in row order."""
         return self.module.pivot_labels(role)
 
     def _wire_pivot_presets(
-        self, main: Controller, pivot: Controller, role: str, labels: list[str]
+        self,
+        main: Controller,
+        role: str,
+        labels: list[str],
+        *,
+        holder,
+        target,
     ) -> None:
-        """Store each preset on ``pivot`` and switch between them with a choice.
+        """Store each preset on ``holder`` and switch ``target`` with a choice.
 
         A ``choice`` node takes its input type from its *first connection*, not
         from a value written into it -- so the positions live as locked hidden
-        ``double3`` attributes on the pivot controller and are connected in.
-        That costs no extra node and leaves the preset data readable on the
-        control that uses it.
+        ``double3`` attributes and are connected in. That costs no extra node
+        and leaves the preset data readable on the control that uses it.
+
+        ``holder`` and ``target`` are the same node for a pivot that is not
+        movable. A movable one splits them: the preset drives the offset group
+        while the controller translates on top, which is what lets a manual
+        adjustment survive a preset change.
         """
         entries = ["default", *labels]
         positions = {"default": (0.0, 0.0, 0.0)}
         for label in labels:
             guide = self.guide(f"pivot_{role}_{label}")
-            # snap-and-read: the offset group is a child of main, so its own
+            # snap-and-read: the target is a child of main, so its own
             # translate *is* the guide's position in main's local space.
-            pivot.offset.snap_to(guide, rotation=False)
-            positions[label] = tuple(pivot.offset.translate)
-        pivot.offset.translate = (0.0, 0.0, 0.0)
+            target.snap_to(guide, rotation=False)
+            positions[label] = tuple(target.translate)
+        target.translate = (0.0, 0.0, 0.0)
 
         choice = tm.create_node("choice", name=self.name(role, "pivotPreset"))
         for index, label in enumerate(entries):
             name = f"preset_{label}"
-            plug = pivot.transform[name].create(attributeType="double3", hidden=True)
+            plug = holder[name].create(attributeType="double3", hidden=True)
             for axis in "XYZ":
-                pivot.transform[f"{name}{axis}"].create(
-                    attributeType="double", parent=name
-                )
+                holder[f"{name}{axis}"].create(attributeType="double", parent=name)
             plug.value = positions[label]
             plug.locked = True
             plug >> choice[f"input[{index}]"]
-        choice["output"] >> pivot.offset["translate"]
+        choice["output"] >> target["translate"]
 
         preset = main.transform["pivotPreset"].create(
             "enum", items=entries, keyable=False

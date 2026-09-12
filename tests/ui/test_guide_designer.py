@@ -856,8 +856,9 @@ def test_base_tables_render_after_the_module_settings():
     from tik.trigger.core import get_module
 
     names = list(get_module("toy_chain").fields())
-    assert names[-3:] == [
+    assert names[-4:] == [
         "anim_spaces",
+        "movable_pivots",
         "pivot_presets",
         "control_shape_overrides",
     ]

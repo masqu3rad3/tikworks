@@ -31,6 +31,7 @@ def test_create_guides_tags_and_parents(scene):
     assert scene.document.module(instance.instance_id).settings == {
         "controller_size": 10.0,
         "anim_spaces": [],
+        "movable_pivots": [],
         "pivot_presets": [],
         "control_shape_overrides": [],
         "copies": [],
@@ -88,6 +89,7 @@ def test_settings_roundtrip_and_delete_keeps_children(scene):
     assert scene.read_settings(root.instance_id) == {
         "controller_size": 3.0,
         "anim_spaces": [],
+        "movable_pivots": [],
         "pivot_presets": [],
         "control_shape_overrides": [],
         "copies": [],

@@ -64,6 +64,10 @@ class Arm(Module):
         "collar": "collar",
         **limb_pivot_controls(labels=LIMB_LABELS, guides=LIMB_GUIDES),
     }
+    #: The hand pivot has always been the animator's to drag, so the tick
+    #: ships on. Its three preset rows below are the named positions; the
+    #: tick is what keeps the pivot a controller rather than a null.
+    movable_pivots = Module.movable_pivots.with_default(["ik"])
     pivot_presets = Module.pivot_presets.with_default(
         [{"control": "ik", "label": label} for label in ("tip", "ball", "wrist")]
     )

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from tik.core.fields import Column, FieldGroup, Schema, TableField
+from tik.core.fields import Column, FieldGroup, ListField, Schema, TableField
 from tik.shared.ui.fields import FormBuilder
 
 GROUP = FieldGroup("Rows", collapsed=True)
@@ -225,3 +225,32 @@ def test_topology_notices_a_narrowed_space_set():
     assert DesignerProperties._topology(_Handle(Wide)) != DesignerProperties._topology(
         _Handle(Narrow)
     )
+
+
+# ------------------------------------------------- the same rule, for a list
+class ListToy(Schema):
+    """A tick list whose options are resolved from the target."""
+
+    options: tuple = ()
+    picked = ListField([], item_type=str, group=GROUP, choices_from="options")
+
+
+def test_a_list_nobody_can_tick_renders_no_widget(qapp):
+    """Same rule as a table nobody can fill, same reason."""
+    form = _form(ListToy(), qapp)
+    with pytest.raises(KeyError):
+        form.widget("picked")
+
+
+def test_an_unfillable_lists_fold_hides_with_it(qapp):
+    form = _form(ListToy(), qapp)
+    fold = form._groups.get("Rows")
+    assert fold is None or fold.isHidden()
+
+
+def test_a_list_holding_a_value_always_renders(qapp):
+    """A setting that narrowed the options must never strand a tick."""
+    target = ListToy()
+    target.picked = ["gone"]
+    form = _form(target, qapp)
+    assert form.widget("picked") is not None

@@ -619,7 +619,7 @@ class FormBuilder(QtWidgets.QWidget):
                 self._layout.addWidget(fold)
                 self._groups[group.label] = fold
             for name, field in rows[key]:
-                if field.type_name == "table" and self._table_is_dead(name, field):
+                if self._field_is_dead(name, field):
                     # No widget and no label, so the fold pass below finds
                     # nothing in this group and closes it.
                     continue
@@ -744,12 +744,9 @@ class FormBuilder(QtWidgets.QWidget):
             widget.valueChanged.connect(
                 lambda value, field_name=name: self._on_change(field_name, value)
             )
-        elif (
-            kind == "list" and getattr(field, "choices_from", "") and self.list_choices
-        ):
-            source = field.choices_from
+        elif kind == "list" and getattr(field, "choices_from", ""):
             widget = CheckListEditor(
-                lambda key=source: self.list_choices(key),
+                lambda item=field: self._list_options(item),
                 filterable=getattr(field, "filterable", False),
             )
             widget.valueChanged.connect(
@@ -836,17 +833,28 @@ class FormBuilder(QtWidgets.QWidget):
             )
         return widget
 
-    def _table_is_dead(self, name: str, field) -> bool:
-        """A table nobody could add a row to, that holds no rows to remove.
+    def _field_is_dead(self, name: str, field) -> bool:
+        """A widget nobody could add to, that holds nothing to remove.
 
-        The test is per *column*: a column whose options are fixed and empty
-        is what makes a row unfillable, and a table may carry a static column
-        beside a resolved one. A table holding rows always renders, whatever
-        its options say -- otherwise a setting that narrows the candidates
-        would strand a row where the rigger cannot reach it.
+        For a table the test is per *column*: a column whose options are fixed
+        and empty is what makes a row unfillable, and a table may carry a
+        static column beside a resolved one. For a list it is the one
+        ``choices_from``; a list without one is a plain editor and never dead.
+        Either holding a value always renders, whatever its options say --
+        otherwise a setting that narrows the candidates would strand a value
+        where the rigger cannot reach it.
         """
         if getattr(self._target, name, None):
             return False
+        if field.type_name == "list":
+            if not getattr(field, "choices_from", "") or self.list_choices:
+                # A list with no choices_from is a plain editor. One backed by
+                # an injected callback belongs to a panel that decides its own
+                # emptiness: an action's scope field stays on screen with
+                # nothing to tick, because empty is a validation error the
+                # rigger has to be able to see.
+                return False
+            return not self._list_options(field)
         source = getattr(field, "rows_from", "")
         if source and not self._resolve_choices(source):
             return True
@@ -854,6 +862,26 @@ class FormBuilder(QtWidgets.QWidget):
             column.choices_from and not self._resolve_choices(column.choices_from)
             for column in getattr(field, "columns", ())
         )
+
+    def _list_options(self, field) -> list:
+        """The ``(label, value)`` options a list field's picker offers.
+
+        An injected callback wins -- the pipeline's action panel offers modules
+        by display key and stores their ids, which no attribute on the target
+        can answer. Without one the target answers for itself, exactly as a
+        table column's ``choices_from`` already does, and a plain role is its
+        own label.
+
+        One definition, because ``_field_is_dead`` asks the same question: two
+        would let the widget and the emptiness test disagree about what a list
+        offers.
+        """
+        source = getattr(field, "choices_from", "")
+        if not source:
+            return []
+        if self.list_choices:
+            return list(self.list_choices(source) or [])
+        return [(one, one) for one in self._resolve_choices(source)]
 
     def _resolve_choices(self, attr: str) -> tuple:
         """The options a column's ``choices_from`` names on the current target.

@@ -502,3 +502,78 @@ def test_a_ribbon_mid_is_offered_no_movable_pivot():
     # The picker offers exactly the pivot-capable controls.
     assert ribbon.pivot_anchor("mid0", values) is None
     assert ribbon.pivot_anchor("start", values) == ("start", 0)
+
+
+# ------------------------------------------------- a tick, not a preset row
+class TickToy(PivotToy):
+    """Offers a pivot on ``main`` and ships no preset rows.
+
+    Unlike ``BarePivotToy`` it does not call ``rig.pivot_control`` itself, so
+    what it gets is whatever the framework decides -- which is the question
+    these tests ask.
+    """
+
+    pivot_presets = Module.pivot_presets.with_default([])
+
+    def build(self, rig):
+        rig.controller("main", match=rig.guide("hand"))
+        rig.output("root", rig.bind_joint("root", match=rig.guide("root")))
+
+
+def test_nothing_is_wanted_by_default():
+    assert TickToy(name="toy").pivot_wanted("main") is False
+
+
+def test_a_tick_wants_a_pivot():
+    toy = TickToy(name="toy", settings={"movable_pivots": ["main"]})
+    assert toy.pivot_wanted("main") is True
+
+
+def test_a_preset_row_wants_one_without_a_tick():
+    """Every session written before the tick existed has rows and no ticks."""
+    toy = TickToy(
+        name="toy", settings={"pivot_presets": [{"control": "main", "label": "tip"}]}
+    )
+    assert toy.movable_pivots == []
+    assert toy.pivot_wanted("main") is True
+
+
+def test_a_tick_on_one_control_leaves_another_alone():
+    toy = TickToy(name="toy", settings={"movable_pivots": ["main"]})
+    assert toy.pivot_wanted("other") is False
+
+
+def test_the_tick_belongs_to_the_copy():
+    """Per copy like every field but ``copies``: each view sees its own."""
+    toy = TickToy(
+        name="toy",
+        settings={
+            "copies": [
+                {"slug": "", "name": "a", "movable_pivots": ["main"]},
+                {"slug": "c1", "name": "b", "movable_pivots": []},
+            ]
+        },
+    )
+    assert toy.for_copy("").pivot_wanted("main") is True
+    assert toy.for_copy("c1").pivot_wanted("main") is False
+
+
+def test_a_tick_on_a_control_the_settings_removed_warns():
+    toy = TickToy(name="toy", settings={"movable_pivots": ["gone"]})
+
+    assert any("movable pivot 'gone'" in item for item in toy.warnings())
+
+
+def test_a_stale_tick_is_never_a_validation_error():
+    """A build must not fail over a control the rigger is not using."""
+    toy = TickToy(name="toy", settings={"movable_pivots": ["gone"]})
+
+    assert not any("gone" in item for item in toy.validate())
+
+
+def test_a_stale_tick_is_kept():
+    """Lowering a count and raising it again restores the setup."""
+    toy = TickToy(name="toy", settings={"movable_pivots": ["gone"]})
+    toy.warnings()
+
+    assert toy.movable_pivots == ["gone"]

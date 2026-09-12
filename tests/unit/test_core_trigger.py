@@ -93,12 +93,13 @@ def test_module_instance_roundtrip():
     )
     data = json.loads(json.dumps(instance.to_dict()))
     restored = ModuleInstance.from_dict(data)
-    # anim_spaces, pivot_presets and control_shape_overrides live on the base
-    # Module, so every module carries all three keys.
+    # anim_spaces, movable_pivots, pivot_presets and control_shape_overrides
+    # live on the base Module, so every module carries all four keys.
     assert restored.settings == {
         "segments": 3,
         "controller_size": 1.0,
         "anim_spaces": [],
+        "movable_pivots": [],
         "pivot_presets": [],
         "control_shape_overrides": [],
         "copies": [],
