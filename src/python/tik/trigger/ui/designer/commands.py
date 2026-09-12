@@ -406,6 +406,20 @@ class DesignerCommands:
         self._show_state(self.guides.diff())
         self.events.log(f"Snapshot restored {len(report.modules)} module(s).")
 
+    def set_labels_visible(self, on: bool) -> None:
+        """Flip the labels on the drawn guides, and remember the choice.
+
+        The preference decides where the button starts, never what Draw
+        renders -- `trigger/guides` may not read one at all. Living here, in
+        `trigger/ui`, is what keeps that boundary intact.
+        """
+        from tik.trigger.config import prefs
+
+        self.guides.set_labels_visible(bool(on))
+        self.action_bar.set_labels(on)
+        prefs.guides.show_guide_labels = bool(on)
+        prefs.save()
+
     def set_auto_sync(self, on: bool) -> None:
         """One setting, three front doors: the checkbox, the menu, and here.
 

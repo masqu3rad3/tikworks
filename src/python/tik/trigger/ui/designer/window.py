@@ -188,6 +188,13 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         migrate_designer_settings()
         self._apply_auto_sync(bool(prefs.guides.auto_sync))
         self.guides.draw_on_create = bool(prefs.guides.draw_on_create)
+        # Only the button and the flag: a restore must not run the scene
+        # operation, since nothing is drawn yet and set_labels() deliberately
+        # does not emit. The first Draw writes labels on regardless -- the
+        # preference decides where the button starts, never what Draw renders.
+        labels_on = bool(prefs.guides.show_guide_labels)
+        self.guides.labels_visible = labels_on
+        self.action_bar.set_labels(labels_on)
         self.refresh()
 
     # ------------------------------------------------------------------ ui
@@ -431,6 +438,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         )
         self.action_bar.sync_requested.connect(self.sync_now)
         self.action_bar.auto_sync_toggled.connect(self.set_auto_sync)
+        self.action_bar.labels_toggled.connect(self.set_labels_visible)
         self.name_edit.editingFinished.connect(self._rename_current)
         # Each form names the object it edits, so the handler never has to
         # guess which one a field came from.

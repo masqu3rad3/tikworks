@@ -45,6 +45,9 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         # Nothing in Maya fires when a guide is dragged, so a write that skipped
         # capture would redraw from stale records and discard the posing.
         self.auto_sync = True
+        #: Whether drawn guides show their labels. A view flag, not document
+        #: state: Draw always writes labels on, and this is what hides them.
+        self.labels_visible = True
         # Creation is the one automatic draw left: the rigger just asked for
         # the module and it has no joints yet, so nothing can be moved or
         # discarded. It governs creation and nothing else -- it can never
@@ -254,6 +257,30 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
     def select_guides(self, instance_id: str) -> None:
         """Select every guide joint of an instance."""
         nodes.select_guides(instance_id)
+
+    def set_labels_visible(self, on: bool, scope: Optional[Iterable[str]] = None):
+        """Show or hide every drawn guide's label.
+
+        A view operation over what is already drawn, never a change to the
+        document: Draw always writes labels on, because ``trigger/guides`` may
+        not read a preference and a preference can never change what Draw
+        renders. This is what turns them off afterwards.
+
+        Two node kinds, one switch. A joint guide's label is an attribute; a
+        reference guide is a transform with no ``drawLabel`` at all, and
+        carries an annotation whose visibility is the equivalent.
+        """
+        self.labels_visible = bool(on)
+        scope = scope if scope is not None else [
+            entry.instance_id for entry in self.document.modules
+        ]
+        for instance_id in scope:
+            for node in nodes.guide_nodes(instance_id).values():
+                plug = node["drawLabel"]
+                if plug.exists():
+                    plug.value = bool(on)
+                for label in nodes.guide_label_nodes(node):
+                    cmds.setAttr(f"{label}.visibility", bool(on))
 
     def scene_node(self, name: str):
         """The Maya node called ``name``, or None (used to validate sources)."""
