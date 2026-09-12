@@ -293,3 +293,27 @@ def test_the_ankle_takes_the_guide_rotation_the_chain_does_not(scene):
     assert (
         rolled_lowerleg_x * flat.outputs["lowerleg"].world_axis("x")
     ) == pytest.approx(1.0, abs=1e-4)
+
+
+def test_the_ball_and_toe_joints_land_on_their_own_guides(scene):
+    """A self-contained, absolute check on what the ball/toe correction does.
+
+    Not a rolled-vs-flat comparison: ``ball`` and ``toe`` are guide
+    *children* of ``ankle`` (siblings under it in ``draw_guides``), so
+    rotating the ankle guide drags their own guide positions along with
+    it too -- a rigger-authored roll moves the guide, not just the bind
+    joint. Comparing a rolled build's ball against a flat build's would
+    therefore compare two genuinely different guide poses (confirmed by
+    reading both guides directly: the ball guide itself sits several tenths
+    of a unit apart between the two scenes), not exercise the correction.
+
+    The correction's actual job is narrower and self-contained: whatever
+    the ball/toe *guides* end up at, the bind joints must land exactly
+    there, roll or no roll. That is what this checks, directly against
+    each joint's own guide within a single build.
+    """
+    ctx = _build_leg(scene, ankle_roll=30.0)
+    for role in ("ball", "toe"):
+        guide_pos = ctx.guide(role).world_position
+        joint_pos = ctx.outputs[role].world_position
+        assert (joint_pos - guide_pos).length() < 1e-3, role

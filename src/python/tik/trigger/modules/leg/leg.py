@@ -243,11 +243,19 @@ class Leg(Module):
         # read: it is what aligns the foot to the model.
         chain[3].align_to(limb_guides[-1], position=False)
         # ...and it has children, which the arm's hand does not. Step 3 just
-        # rotated the ball and the toe with it, so both go back onto their
-        # conventional frames. Omitting this is the single easiest mistake
-        # here and it is invisible until a rigger rolls the ankle guide.
+        # rotated the ball and the toe with it, so the ball goes back onto
+        # its conventional frame. Omitting this is the single easiest
+        # mistake here and it is invisible until a rigger rolls the ankle
+        # guide.
         chain[4].align_to(frames[4])
-        chain[5].align_to(frames[5])
+        # The toe needs no line of its own. `align_to` is an absolute
+        # world-space reset, not a relative nudge, so restoring the ball
+        # above puts every untouched descendant back with it for free: the
+        # toe's own local transform was never disturbed, only its ancestor's
+        # was, and the ancestor is now exactly where it started. This holds
+        # only because the ball's correction above is a *full* one -- were
+        # it ever narrowed to `position=False` like the ankle's, the toe
+        # would stop being restored and would need its own align_to back.
 
         tm.delete(frames[0].long_name)
 
