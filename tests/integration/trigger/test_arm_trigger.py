@@ -110,7 +110,7 @@ def test_control_names_carry_one_module_token(scene):
 
 def test_controller_size_scales_with_the_limb():
     """No size field: size is derived from the chain length."""
-    from tik.trigger.systems.limb import _derive_size
+    from tik.trigger.systems.limb import derive_size
 
     short = tm.Joint.chain(
         [(0, 0, 0), (4, 0, -1), (8, 0, 0)], name_pattern="short_{index}"
@@ -118,8 +118,8 @@ def test_controller_size_scales_with_the_limb():
     long_chain = tm.Joint.chain(
         [(0, 0, 0), (40, 0, -1), (80, 0, 0)], name_pattern="long_{index}"
     )
-    assert _derive_size(short) > 0
-    assert _derive_size(long_chain) > _derive_size(short)
+    assert derive_size(short) > 0
+    assert derive_size(long_chain) > derive_size(short)
 
 
 # -------------------------------------------------------------- deform rules

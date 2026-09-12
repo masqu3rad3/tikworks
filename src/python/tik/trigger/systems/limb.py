@@ -94,7 +94,7 @@ def build_ikfk_limb(
     labels = list(labels) if labels else [str(index) for index in range(len(guides))]
     parent = parent if parent is not None else rig.groups.socket
     if controller_size is None:
-        controller_size = _derive_size(guides)
+        controller_size = derive_size(guides)
     result = LimbResult()
     result.size = controller_size
     side_sign = rig.side_mult
@@ -547,14 +547,6 @@ def limb_pivot_controls(
     }
 
 
-def _derive_size(joints: Sequence) -> float:
-    """Base controller size from the chain's rest length."""
-    total = 0.0
-    for first, second in zip(joints, joints[1:]):
-        total += first.distance_to(second)
-    return total * 0.15
-
-
 def _pole_rest_position(joints: Sequence):
     """World position for the pole, in the chain's own bend plane.
 
@@ -585,3 +577,38 @@ def _pole_rest_position(joints: Sequence):
     for first, second in zip(joints, joints[1:]):
         total += first.distance_to(second)
     return mid + direction * (total * 0.25)
+
+
+def derive_size(joints: Sequence) -> float:
+    """Base controller size from the chain's rest length."""
+    total = 0.0
+    for first, second in zip(joints, joints[1:]):
+        total += first.distance_to(second)
+    return total * 0.15
+
+
+def conventional_frames(rig, positions):
+    """A throwaway chain on the convention, to read orientations off.
+
+    X to the next joint, Y up -- so in a T-pose Y is up for *every* joint on
+    *both* sides, which is what lets the arm bend on a single rotation.
+
+    No ``reverse_aim`` / ``reverse_up``. ``_build_chains`` passes those for the
+    puppet because a mirrored-behaviour limb needs a negative ``translateX``
+    for ``ChainLengths`` to read; the deform skeleton has no such requirement,
+    and flipping its Y would put the right arm's bend axis upside down.
+
+    Read off a throwaway rather than oriented in place: ``cmds.joint
+    -orientJoint`` silently *skips* a joint that has non-zero rotations (a
+    warning, no error), and ``match=`` leaves the guide's rotation exactly
+    there. Copying the world rotation also keeps the orientation in ``rotate``
+    with ``jointOrient`` at zero, which is where ``match=`` always put it.
+    """
+    source = tm.Joint.chain(
+        [tuple(position) for position in positions],
+        name_pattern=rig.name("convention", "src{index}", suffix="jnt"),
+        parent=rig.groups.rig,
+        orient=False,
+    )
+    tm.Joint.orient_chain(source, aim_axis="x", up_axis="y")
+    return source

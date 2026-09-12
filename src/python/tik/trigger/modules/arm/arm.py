@@ -24,8 +24,9 @@ from tik.trigger.core import (
     register_module,
 )
 from tik.trigger.systems.limb import (
-    _derive_size,
     build_ikfk_limb,
+    conventional_frames,
+    derive_size,
     limb_control_names,
     limb_control_orients,
     limb_control_shapes,
@@ -44,33 +45,6 @@ LIMB_LABELS = ("upper", "lower", "hand")
 #: The limb's own three guides, in chain order. The limb system never names a
 #: guide, so the anchors for its pivot presets come from here.
 LIMB_GUIDES = ("shoulder", "elbow", "hand")
-
-
-def _conventional_frames(rig, positions):
-    """A throwaway chain on the convention, to read orientations off.
-
-    X to the next joint, Y up -- so in a T-pose Y is up for *every* joint on
-    *both* sides, which is what lets the arm bend on a single rotation.
-
-    No ``reverse_aim`` / ``reverse_up``. ``_build_chains`` passes those for the
-    puppet because a mirrored-behaviour limb needs a negative ``translateX``
-    for ``ChainLengths`` to read; the deform skeleton has no such requirement,
-    and flipping its Y would put the right arm's bend axis upside down.
-
-    Read off a throwaway rather than oriented in place: ``cmds.joint
-    -orientJoint`` silently *skips* a joint that has non-zero rotations (a
-    warning, no error), and ``match=`` leaves the guide's rotation exactly
-    there. Copying the world rotation also keeps the orientation in ``rotate``
-    with ``jointOrient`` at zero, which is where ``match=`` always put it.
-    """
-    source = tm.Joint.chain(
-        [tuple(position) for position in positions],
-        name_pattern=rig.name("convention", "src{index}", suffix="jnt"),
-        parent=rig.groups.rig,
-        orient=False,
-    )
-    tm.Joint.orient_chain(source, aim_axis="x", up_axis="y")
-    return source
 
 
 #: How far past the hand the ``neutral`` guide sits, as a multiple of the
@@ -276,7 +250,7 @@ class Arm(Module):
         """IK/FK limb, limb lock, twist and the optional auto collar."""
         collar_guide = rig.guide("collar")
         limb_guides = rig.guides("shoulder", "elbow", "hand")
-        size = _derive_size(limb_guides)
+        size = derive_size(limb_guides)
 
         socket = rig.socket("root", match=collar_guide)
 
@@ -312,7 +286,7 @@ class Arm(Module):
         # comparison only resolves a side while the guide's rotation is
         # identity. Orienting the guides makes both terms flip together and
         # the correction is silently lost on the right arm.
-        frames = _conventional_frames(
+        frames = conventional_frames(
             rig,
             [collar_guide.world_position]
             + [guide.world_position for guide in limb_guides],
