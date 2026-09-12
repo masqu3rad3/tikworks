@@ -57,3 +57,33 @@ def test_a_preset_row_is_what_builds_the_pivot():
 def test_an_emptied_arm_builds_no_pivot():
     """The rule is uniform: no rows means no pivot, arm included."""
     assert _pivots(_build("arm", {"pivot_presets": []})) == []
+
+
+def test_a_tick_with_no_rows_builds_a_bare_pivot():
+    """The feature: showPivot and a pivot to move, with no enum at all."""
+    rig = _build("fkchain", {"segments": 3, "movable_pivots": ["fk1"]})
+
+    names = _pivots(rig)
+    assert len(names) == 1
+    assert "fk1_pivot_ctrl" in names[0]
+    assert not rig.controller_by_role("fk1").transform.has_attr("pivotPreset")
+
+
+def test_a_tick_and_rows_together_build_one_pivot_with_its_enum():
+    rig = _build(
+        "fkchain",
+        {
+            "segments": 3,
+            "movable_pivots": ["fk1"],
+            "pivot_presets": [{"control": "fk1", "label": "tip"}],
+        },
+    )
+
+    assert len(_pivots(rig)) == 1
+    assert rig.controller_by_role("fk1").transform.has_attr("pivotPreset")
+
+
+def test_a_tick_on_one_control_builds_nothing_on_the_others():
+    rig = _build("fkchain", {"segments": 3, "movable_pivots": ["fk1"]})
+
+    assert all("fk0_pivot" not in name for name in _pivots(rig))

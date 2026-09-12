@@ -71,6 +71,7 @@ def test_has_only_the_behaviour_fields():
         "squash",
         "pole_pin",
         "anim_spaces",
+        "movable_pivots",
         "pivot_presets",
         "control_shape_overrides",
         "copies",

@@ -748,9 +748,10 @@ class Builder:
                 # makes them and the rest build into them.
                 shared = ctx.groups
                 view.build(ctx)
-                # A pivot per declared role the rigger gave preset rows:
-                # declaring is what makes it available, a row is what builds
-                # it -- the same arrangement as a socket per declared input.
+                # A pivot per declared role the rigger asked for: declaring
+                # is what makes it available, a tick -- or preset rows, which
+                # imply one -- is what builds it, the same arrangement as a
+                # socket per declared input.
                 #
                 # Skips a role that already has one, so a module still calling
                 # rig.pivot_control itself -- every module did before this
@@ -758,7 +759,7 @@ class Builder:
                 # pivot rather than a second that fails on its showPivot attr.
                 for role in view.pivot_controls_for_copy(view.values()):
                     main = ctx.controller_by_role(role)
-                    if main is None or not view.pivot_labels(role):
+                    if main is None or not view.pivot_wanted(role):
                         continue
                     if ctx.controller_by_role(f"{role}_pivot") is None:
                         ctx.pivot_control(main)
