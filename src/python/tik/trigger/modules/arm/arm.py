@@ -46,12 +46,58 @@ LIMB_LABELS = ("upper", "lower", "hand")
 LIMB_GUIDES = ("shoulder", "elbow", "hand")
 
 
+def _conventional_frames(rig, positions):
+    """A throwaway chain on the convention, to read orientations off.
+
+    X to the next joint, Y up -- so in a T-pose Y is up for *every* joint on
+    *both* sides, which is what lets the arm bend on a single rotation.
+
+    No ``reverse_aim`` / ``reverse_up``. ``_build_chains`` passes those for the
+    puppet because a mirrored-behaviour limb needs a negative ``translateX``
+    for ``ChainLengths`` to read; the deform skeleton has no such requirement,
+    and flipping its Y would put the right arm's bend axis upside down.
+
+    Read off a throwaway rather than oriented in place: ``cmds.joint
+    -orientJoint`` silently *skips* a joint that has non-zero rotations (a
+    warning, no error), and ``match=`` leaves the guide's rotation exactly
+    there. Copying the world rotation also keeps the orientation in ``rotate``
+    with ``jointOrient`` at zero, which is where ``match=`` always put it.
+    """
+    source = tm.Joint.chain(
+        [tuple(position) for position in positions],
+        name_pattern=rig.name("convention", "src{index}", suffix="jnt"),
+        parent=rig.groups.rig,
+        orient=False,
+    )
+    tm.Joint.orient_chain(source, aim_axis="x", up_axis="y")
+    return source
+
+
+#: How far past the hand the ``neutral`` guide sits, as a multiple of the
+#: collar-to-hand distance. Only the direction matters to the auto-collar;
+#: sitting beyond the hand keeps the guide selectable rather than buried.
+NEUTRAL_REACH = 1.4
+
+
 @register_module("arm", category="limbs")
 class Arm(Module):
     """Biped arm: collar, shoulder, elbow, hand."""
 
     label = "Arm"
-    guides = GuideLayout("collar", "shoulder", "elbow", "hand", "neutral")
+    #: Only the hand's rotation reaches the rig: the chain is oriented by
+    #: convention at build time, so rolling the collar, shoulder or elbow
+    #: guide changes nothing -- and the Designer does not offer an axis on a
+    #: guide whose orientation it would then ignore. The hand's is what
+    #: aligns the wrist to the model.
+    guides = GuideLayout(
+        "collar",
+        "shoulder",
+        "elbow",
+        "hand",
+        "neutral",
+        reference=("neutral",),
+        oriented=("hand",),
+    )
     inputs = (Input("root", primary=True, help="Where the collar hangs (chest/body)"),)
     outputs = ("collar", "upperarm", "lowerarm", "hand")
     controls = ("collar", *limb_control_names(labels=LIMB_LABELS))
@@ -69,7 +115,9 @@ class Arm(Module):
     #: tick is what keeps the pivot a controller rather than a null.
     movable_pivots = Module.movable_pivots.with_default(["ik"])
     pivot_presets = Module.pivot_presets.with_default(
-        [{"control": "ik", "label": label} for label in ("tip", "ball", "wrist")]
+        # Proximal to distal: the order the preset fan walks, so the markers
+        # land anatomically rather than arbitrarily.
+        [{"control": "ik", "label": label} for label in ("wrist", "ball", "tip")]
     )
 
     stretch = BoolField(True, help="Build the stretch network")
@@ -169,17 +217,59 @@ class Arm(Module):
 
     # --------------------------------------------------------------- guides
     def draw_guides(self, guides) -> None:
-        """Collar, shoulder, elbow and hand along X, with a bent elbow."""
+        """Collar, then an A-pose arm: the chain hangs 45 degrees below level.
+
+        A-pose rather than T, because it gives the better shoulder
+        deformation. The collar stays level -- a clavicle is roughly
+        horizontal in any pose -- so the A starts at the shoulder.
+
+        The elbow's -1 in Z survives the rotation untouched, because turning
+        about Z does not change Z: the pole direction stays behind the arm
+        with no compensation anywhere.
+        """
         mult = guides.side_mult
-        collar = guides.joint("collar", (2 * mult, 0, 0), radius=1.5)
+        collar_at = (2.0 * mult, 0.0, 0.0)
+        hand_at = (11.4 * mult, -6.4, 0.0)
+        collar = guides.joint("collar", collar_at)
         shoulder = guides.joint("shoulder", (5 * mult, 0, 0), parent=collar)
-        elbow = guides.joint("elbow", (9 * mult, 0, -1), parent=shoulder)
-        guides.joint("hand", (14 * mult, 0, 0), parent=elbow)
+        elbow_at = (7.8 * mult, -2.8, -1)
+        elbow = guides.joint("elbow", elbow_at, parent=shoulder)
+        hand = guides.joint("hand", hand_at, parent=elbow)
         # Where the wrist sits when the collar is at rest -- the auto-collar's
-        # zero. Only the direction from `collar` matters, so sitting past the
-        # hand costs nothing and keeps the guide selectable. The default guide
-        # arm is already a T-pose, so the default neutral is the T-pose.
-        guides.joint("neutral", (18 * mult, 0, 0), parent=collar, radius=0.8)
+        # zero. Only the *direction* from `collar` matters, so sitting past the
+        # hand costs nothing and keeps the guide selectable.
+        #
+        # Derived from the hand rather than typed as a triple: the reach
+        # network measures the angle between this direction and the wrist's,
+        # and at the guide pose that angle must be exactly zero or no scalar
+        # value leaves the bind pose alone. A hand-written triple is only
+        # approximately collinear -- rounding the A-pose to one decimal put it
+        # 0.006 out, which is 60x the tolerance
+        # test_bind_pose_is_exact_with_the_automation_full_on allows.
+        neutral_at = tuple(
+            start + (end - start) * NEUTRAL_REACH
+            for start, end in zip(collar_at, hand_at)
+        )
+        guides.joint("neutral", neutral_at, parent=collar)
+
+        # The hand guide starts on the convention -- X down the arm, Y up -- so
+        # a rigger who never touches it still gets a conventional wrist. This
+        # is the same frame the lowerarm gets at build time (aimed at the hand,
+        # world up +Y), so the two agree.
+        #
+        # Only the hand. The rest deliberately stay world-aligned: their
+        # rotation is ignored at build time, and the collar's is load-bearing
+        # in a way that is easy to miss -- `build_reach` derives its mirror
+        # correction by comparing its own frame's Z against the socket's, and
+        # the socket is matched to the collar guide. Orienting that guide makes
+        # both terms flip together, so the correction silently cancels and the
+        # right arm's swing inverts.
+        beyond = tm.Transform.create(name="arm_handAim_tmp")
+        beyond.world_position = tuple(
+            far + (far - near) for far, near in zip(hand_at, elbow_at)
+        )
+        hand.aim_at(beyond, aim_vector=(1, 0, 0), up_vector=(0, 1, 0))
+        beyond.delete()
 
     # ---------------------------------------------------------------- build
     def build(self, rig) -> None:
@@ -209,6 +299,34 @@ class Arm(Module):
             joint = rig.bind_joint(label, parent=parent_joint, match=guide_node)
             bind_joints.append(joint)
             parent_joint = joint
+
+        # The deform skeleton takes the convention, not the guides' rotations:
+        # X to the next joint, Y up. `_build_chains` has always built the
+        # puppet from guide *positions* and oriented it this way, so the two
+        # used to disagree -- twist still documents an arm's lowerarm X being
+        # only 0.98 aligned with the direction to the hand.
+        #
+        # The *guides* are deliberately left world-aligned. `build_reach`
+        # derives its mirror correction by comparing its frame's Z against the
+        # socket's, and the socket is matched to the collar guide -- so that
+        # comparison only resolves a side while the guide's rotation is
+        # identity. Orienting the guides makes both terms flip together and
+        # the correction is silently lost on the right arm.
+        frames = _conventional_frames(
+            rig,
+            [collar_guide.world_position]
+            + [guide.world_position for guide in limb_guides],
+        )
+        # Position *and* rotation, root first: re-orienting a joint rotates
+        # everything under it, so each child has to be put back after its
+        # parent moves. The throwaway chain sits on the guide positions, so
+        # aligning to it restores the pose exactly as it corrects the frame.
+        for joint, frame in zip([collar_jnt, *bind_joints], frames):
+            joint.align_to(frame)
+        # The hand is the exception, and the only guide whose rotation is read:
+        # it is what aligns the wrist to the model.
+        bind_joints[-1].align_to(limb_guides[-1], position=False)
+        tm.delete(frames[0].long_name)
 
         # collar ---------------------------------------------------------------
         # The controller lives in control_grp and is driven by the socket rather

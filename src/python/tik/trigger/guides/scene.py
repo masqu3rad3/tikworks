@@ -10,6 +10,7 @@ from typing import Any, Iterable, Optional
 
 from maya import cmds
 
+import tik.maya as tm
 from tik.core.side import Side
 from tik.trigger.core import copies as copy_list
 from tik.trigger.core import registry
@@ -45,6 +46,11 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         # Nothing in Maya fires when a guide is dragged, so a write that skipped
         # capture would redraw from stale records and discard the posing.
         self.auto_sync = True
+        #: Whether drawn guides show their labels and their local axes. View
+        #: flags, not document state: Draw always writes both on, and these
+        #: are what hide them.
+        self.labels_visible = True
+        self.axes_visible = True
         # Creation is the one automatic draw left: the rigger just asked for
         # the module and it has no joints yet, so nothing can be moved or
         # discarded. It governs creation and nothing else -- it can never
@@ -254,6 +260,61 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
     def select_guides(self, instance_id: str) -> None:
         """Select every guide joint of an instance."""
         nodes.select_guides(instance_id)
+
+    def set_labels_visible(self, on: bool, scope: Optional[Iterable[str]] = None):
+        """Show or hide every drawn guide's label.
+
+        A view operation over what is already drawn, never a change to the
+        document: Draw always writes labels on, because ``trigger/guides`` may
+        not read a preference and a preference can never change what Draw
+        renders. This is what turns them off afterwards.
+
+        Which label a guide carries depends on its kind, and that split
+        belongs next to the one that draws it -- ``nodes.set_label_visible``.
+        """
+        self.labels_visible = bool(on)
+        for node, _layout in self._drawn_guides(scope):
+            nodes.set_label_visible(node, on)
+
+    def set_axes_visible(self, on: bool, scope: Optional[Iterable[str]] = None):
+        """Show or hide the local rotation axis on every drawn guide.
+
+        The other view operation, same shape as the labels one. Which guides
+        *can* show an axis is not a view choice -- it is whether the build
+        reads their orientation at all -- so ``nodes.set_axes_visible`` only
+        ever offers, and a reference or driven guide stays off.
+        """
+        self.axes_visible = bool(on)
+        for node, layout in self._drawn_guides(scope):
+            nodes.set_axes_visible(node, on, layout)
+
+    def _drawn_guides(self, scope: Optional[Iterable[str]] = None):
+        """Yield ``(node, layout)`` for every drawn guide, in one scene scan.
+
+        One scan, not one per module: `trg_instance` is stamped on built rig
+        nodes too -- controllers, offset groups, deform joints -- so a
+        per-module `guide_nodes()` walked the whole tagged scene once per
+        module to find a handful of guides. Scanning on the kind gives the
+        identical set in a single pass, and it is the pattern `snapshot()` and
+        `find_instances()` already use.
+
+        The layout rides along because both callers need it or would have to
+        re-resolve the module per node.
+        """
+        wanted = None if scope is None else set(scope)
+        layouts: dict = {}
+        for node in tm.find_by_meta(tags.KIND, tags.GUIDE, node_type="transform"):
+            instance_id = node.meta.get(tags.INSTANCE)
+            if wanted is not None and instance_id not in wanted:
+                continue
+            if instance_id not in layouts:
+                entry = self.document.module(instance_id)
+                if entry is None or not registry.is_module_registered(
+                    entry.module_type
+                ):
+                    continue  # an orphan: reconcile reports it, views skip it
+                layouts[instance_id] = registry.get_module(entry.module_type).guides
+            yield node, layouts[instance_id]
 
     def scene_node(self, name: str):
         """The Maya node called ``name``, or None (used to validate sources)."""

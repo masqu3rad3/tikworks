@@ -42,10 +42,14 @@ def snapshot() -> list:
     """Every tagged guide joint in the scene, as pure records."""
     found = []
     # cmds rather than tik.maya: one attribute-qualified ls finds every tagged
-    # joint without walking the DAG. This runs on every refresh.
+    # guide node without walking the DAG. This runs on every refresh.
+    # type="transform" catches joints too, and reference guides are transforms.
     for name in (
         cmds.ls(
-            f"*.{tm.META_PREFIX}{tags.KIND}", long=True, objectsOnly=True, type="joint"
+            f"*.{tm.META_PREFIX}{tags.KIND}",
+            long=True,
+            objectsOnly=True,
+            type="transform",
         )
         or []
     ):

@@ -3,11 +3,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional, Sequence
 
 #: Control tiers, in the order the visibilities enum lists them. ``all`` is
 #: the enum's fourth item, not a tier a control can be given.
 TIERS = ("primary", "secondary", "tertiary")
+
+
+class GuideKind(str, Enum):
+    """What a guide *is*, to the rig. Never what it looks like.
+
+    The look is a pure function of the kind and lives in one table, in
+    ``tik/trigger/guides/nodes.py``. A module states the kind; nothing
+    anywhere states a radius, a colour or a shape -- a radius was only ever
+    the sentence "this is the module root" written in the wrong language.
+    """
+
+    #: The module's anchor. Derived: the first guide a copy draws.
+    ROOT = "root"
+    #: A joint in the rig. Move it, a bone moves. Derived: the default.
+    JOINT = "joint"
+    #: Only its *position* is read; nothing in the rig is shaped like it.
+    REFERENCE = "reference"
+    #: A real rig joint the module places, not the rigger. Declared.
+    DRIVEN = "driven"
 
 
 @dataclass(frozen=True)
@@ -79,6 +99,14 @@ class GuideLayout:
         multi: Optional role that repeats ``count`` times after the fixed ones.
         min: Minimum count for the multi role (default 1).
         max: Maximum count for the multi role (default unlimited).
+        reference: Roles that mark a position rather than a rig joint.
+        driven: Roles the module places, not the rigger.
+        oriented: Roles whose orientation the build reads. Empty means all
+            of them, which is the ordinary case; a module that orients its
+            own chain narrows to the guides it still takes rotation from.
+        chain: Whether a bone runs between these guides. False for a module
+            whose guides are not a chain, which stops Maya smearing a bone
+            from each guide to every one of its children.
     """
 
     def __init__(
@@ -87,6 +115,10 @@ class GuideLayout:
         multi: Optional[str] = None,
         min: Optional[int] = None,  # noqa: A002
         max: Optional[int] = None,  # noqa: A002
+        reference: Sequence[str] = (),
+        driven: Sequence[str] = (),
+        oriented: Sequence[str] = (),
+        chain: bool = True,
     ) -> None:
         if not roles:
             raise ValueError("GuideLayout needs at least one role.")
@@ -98,6 +130,90 @@ class GuideLayout:
         self.multi = multi
         self.min_count = (min if min is not None else 1) if multi else 0
         self.max_count = max if multi else 0
+        self.reference: tuple[str, ...] = tuple(reference)
+        self.driven: tuple[str, ...] = tuple(driven)
+        #: Whether a bone runs between these guides. True for a module whose
+        #: guides become a bone chain (``arm``, ``fkchain``); False for one
+        #: whose guides do not (``twist``'s rails are siblings on a segment,
+        #: ``ribbon``'s two ends span a surface). A statement about the rig,
+        #: not about the drawing -- what it renders as is the framework's.
+        #: Roles whose *orientation* the build reads. **Empty means all of
+        #: them** -- the one default that is "all", because taking a guide's
+        #: rotation is the ordinary case and a module narrows rather than
+        #: opts in. ``arm`` narrows to ``hand``: it orients its chain by
+        #: convention (X down the bone, Y the bend axis), so a rigger rolling
+        #: the collar or elbow guide would change nothing.
+        self.oriented: tuple[str, ...] = tuple(oriented)
+        self.chain = bool(chain)
+        self._validate_kinds()
+
+    def _validate_kinds(self) -> None:
+        """Declared kinds must name real, distinct, non-root roles."""
+        known = set(self.all_roles)
+        for label, group in (("reference", self.reference), ("driven", self.driven)):
+            for role in group:
+                if role not in known:
+                    raise ValueError(
+                        f"GuideLayout {label}={role!r} is not one of its roles."
+                    )
+                if role == self.root:
+                    # root_guide() and parent_ref() find a module by walking
+                    # guide joints; a root that is neither would strand it.
+                    raise ValueError(
+                        f"GuideLayout {label}={role!r} is the root role, which "
+                        "must stay an ordinary joint."
+                    )
+        both = set(self.reference) & set(self.driven)
+        if both:
+            raise ValueError(
+                f"Guide role(s) {sorted(both)} declared both reference and driven."
+            )
+        for role in self.oriented:
+            if role not in known:
+                raise ValueError(
+                    f"GuideLayout oriented={role!r} is not one of its roles."
+                )
+            if role in self.reference or role in self.driven:
+                raise ValueError(
+                    f"GuideLayout oriented={role!r} is also declared reference "
+                    "or driven, whose orientation the rig never reads."
+                )
+
+    def kind_for(self, role: str, *, is_root: bool = False) -> GuideKind:
+        """What ``role`` is. Declared kinds win; the rest is derived.
+
+        ``is_root`` comes from the draft, which knows which guide a copy
+        created first -- not from ``self.root``, because a copy's first guide
+        is its own root.
+
+        A role this layout has never heard of is a plain ``JOINT``: pivot
+        preset guides are created by the framework, not declared here, and
+        name their kind explicitly.
+        """
+        role = self.bare_role(role)
+        if role in self.reference:
+            return GuideKind.REFERENCE
+        if role in self.driven:
+            return GuideKind.DRIVEN
+        return GuideKind.ROOT if is_root else GuideKind.JOINT
+
+    def bare_role(self, role: str) -> str:
+        """The declared role behind a possibly copy-qualified one.
+
+        A copy keys its guides ``c1_twist`` while this layout declares
+        ``twist``: the slug is bookkeeping and no layout has heard of it. So
+        anything asking about a guide that has already been *drawn* -- which
+        carries the qualified tag role -- has to strip it first, or a copy's
+        declared kinds are invisible.
+
+        A role that matches nothing declared comes back unchanged, which is
+        what keeps a framework-made role like ``pivot_ik_wrist`` a plain
+        ``JOINT`` instead of being mangled into something else.
+        """
+        for known in self.all_roles:
+            if role == known or role.endswith(f"_{known}"):
+                return known
+        return role
 
     @property
     def root(self) -> str:

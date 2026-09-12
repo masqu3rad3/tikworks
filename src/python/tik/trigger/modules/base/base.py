@@ -27,7 +27,7 @@ class Base(Module):
 
     def draw_guides(self, guides) -> None:
         """A single root joint."""
-        guides.joint("root", (0, 0, 0), radius=2.0)
+        guides.joint("root", (0, 0, 0))
 
     def build(self, rig) -> None:
         """One root controller with a bind joint under it."""

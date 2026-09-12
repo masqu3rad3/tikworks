@@ -39,7 +39,9 @@ class RibbonModule(Module):
     """A ribbon strip pinned between two inputs."""
 
     label = "Ribbon"
-    guides = GuideLayout("start", "end")
+    # Not a chain: the two ends span a surface, and no bone runs between them
+    # in the rig, so drawing one would claim a link that is not there.
+    guides = GuideLayout("start", "end", chain=False)
     inputs = (
         Input("start", primary=True, help="What the ribbon start pins to"),
         Input("end", help="What the ribbon end pins to"),

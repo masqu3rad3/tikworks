@@ -52,11 +52,21 @@ class StubScene:
         # matches GuideScene's default (spec 3.1): governs whether a scene
         # event may start a sync, nothing else
         self.auto_sync = True
+        self.labels_visible = True
+        self.axes_visible = True
         # mirrors GuideScene: creating a module draws it, opening does not
         self.draw_on_create = True
         # mirrors GuideScene.session: None for a free-standing double, or set
         # by a test to the Session that owns it -- snapshot_guides reads this
         self.session = None
+
+    def set_labels_visible(self, on: bool, scope=None) -> None:
+        """A view flag. The real scene also flips the drawn nodes."""
+        self.labels_visible = bool(on)
+
+    def set_axes_visible(self, on: bool, scope=None) -> None:
+        """A view flag. The real scene also flips the drawn nodes."""
+        self.axes_visible = bool(on)
 
     def borrow(self, instance_id, ref_id="r1", file="base.tr", source=None) -> None:
         """Mark an instance as referenced from ``file``.

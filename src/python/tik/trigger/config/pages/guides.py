@@ -28,6 +28,26 @@ class GuidesPrefs(PrefPage):
             "from the scene as you move them."
         ),
     )
+    show_guide_labels = BoolField(
+        True,
+        group=AUTHORING,
+        label="Show guide labels",
+        help=(
+            "Start the Guide Designer with guide names shown in the viewport. "
+            "Guides are always drawn with labels; this is only where the "
+            "Designer's Labels button starts."
+        ),
+    )
+    show_guide_axes = BoolField(
+        True,
+        group=AUTHORING,
+        label="Show guide axes",
+        help=(
+            "Start the Guide Designer with the local rotation axis shown on "
+            "guides whose orientation the build reads. Guides that only mark "
+            "a position never show one."
+        ),
+    )
     draw_on_create = BoolField(
         True,
         group=AUTHORING,

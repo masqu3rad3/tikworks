@@ -7,6 +7,7 @@ import tik.maya as tm
 from tik.trigger.core import ParentRef, get_module
 from tik.trigger.guides import GuideScene
 from tik.trigger.maya import Builder, tags
+from tik.trigger.modules.arm.arm import NEUTRAL_REACH
 
 
 @pytest.fixture
@@ -25,16 +26,28 @@ def _build_arm(scene, side="L", **settings):
         parent=ParentRef(body.instance_id, "root"),
     )
     mult = -1 if side == "R" else 1
+    # A rigger-authored pose, deliberately not the module's default: these
+    # tests are about an arm someone moved. `neutral` has to be authored with
+    # it -- it is a *direction* from the collar through the wrist, so leaving
+    # it at the module default while the chain moves makes the arm start off
+    # its own neutral, and every auto-collar test then measures a pose error
+    # instead of the automation.
+    collar_at = (2 * mult, 15, 0)
+    hand_at = (14 * mult, 15, 0)
+    neutral_at = tuple(
+        start + (end - start) * NEUTRAL_REACH for start, end in zip(collar_at, hand_at)
+    )
     for role, position in (
-        ("collar", (2, 15, 0)),
-        ("shoulder", (5, 15, 0)),
-        ("elbow", (9, 15, -1)),
-        ("hand", (14, 15, 0)),
+        ("collar", collar_at),
+        ("shoulder", (5 * mult, 15, 0)),
+        ("elbow", (9 * mult, 15, -1)),
+        ("hand", hand_at),
+        ("neutral", neutral_at),
     ):
         cmds.xform(
             scene.guide_node(arm.instance_id, role).long_name,
             ws=True,
-            t=(position[0] * mult, position[1], position[2]),
+            t=position,
         )
     report = Builder().build(document=scene.document, afterlife="delete")
     return report, body, arm
@@ -705,12 +718,45 @@ def test_the_scalars_have_a_soft_slider_and_a_wider_hard_range(scene):
 
 # ------------------------------------------------------------- movable pivot
 def test_the_ik_hand_control_has_a_movable_pivot_with_three_presets(scene):
-    """A planted hand rolls about the fingertips, the knuckles, then the wrist."""
+    """A planted hand rolls about the wrist, the knuckles, then the fingertips.
+
+    Proximal to distal, which is also the order the preset guide fan walks --
+    the rows are the single source of both.
+    """
     ctx = _arm_ctx(scene)
     ik = ctx.controller_by_role("ik")
     assert ik.transform["showPivot"].exists()
     listed = cmds.attributeQuery(
         "pivotPreset", node=ik.transform.long_name, listEnum=True
     )[0]
-    assert listed == "default:tip:ball:wrist"
+    assert listed == "default:wrist:ball:tip"
     assert ctx.controller_by_role("ik_pivot") is not None
+
+
+@pytest.mark.parametrize("side", ["L", "R"])
+def test_the_ik_control_follows_the_hand_guides_roll(scene, side):
+    """The hand guide is how a rigger lines the wrist up with the model, and
+    the IK control is the animator's handle on that joint -- so it has to
+    agree. Matched to `ik_joints[-1]` it would not: the puppet chain is
+    oriented by convention and carries the forearm's frame.
+    """
+    body = scene.create_guides(get_module("base")(name="body"))
+    cmds.xform(
+        scene.guide_node(body.instance_id, "root").long_name, ws=True, t=(0, 15, 0)
+    )
+    arm = scene.create_guides(
+        get_module("arm")(name="arm", side=side),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    guide = scene.guide_node(arm.instance_id, "hand")
+    cmds.xform(guide.long_name, ws=True, relative=True, ro=(40, 0, 0))
+    scene.sync()
+    # read before the build: afterlife="delete" takes the guides with it
+    rolled = tuple(round(value, 3) for value in guide.world_axis("x"))
+    report = Builder().build(document=scene.document, afterlife="delete")
+    ctx = report.rigs[arm.instance_id]
+
+    control = _ik_control(ctx)
+    assert tuple(round(v, 3) for v in control.world_axis("x")) == rolled
+    # and the bind joint agrees with both: it is what the fingers hang off
+    assert tuple(round(v, 3) for v in ctx.outputs["hand"].world_axis("x")) == rolled

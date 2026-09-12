@@ -406,6 +406,31 @@ class DesignerCommands:
         self._show_state(self.guides.diff())
         self.events.log(f"Snapshot restored {len(report.modules)} module(s).")
 
+    def set_labels_visible(self, on: bool) -> None:
+        """Flip the labels on the drawn guides, and remember the choice.
+
+        The preference decides where the button starts, never what Draw
+        renders -- `trigger/guides` may not read one at all. Living here, in
+        `trigger/ui`, is what keeps that boundary intact.
+        """
+        from tik.trigger.config import prefs
+
+        # No set_labels() echo back to the bar: unlike Auto Sync -- which has
+        # three front doors (checkbox, menu action, signal) and needs them kept
+        # in step -- the checkbox is the only thing that can produce this, so
+        # writing the value back to it would advertise a door that isn't there.
+        self.guides.set_labels_visible(bool(on))
+        prefs.guides.show_guide_labels = bool(on)
+        prefs.save()
+
+    def set_axes_visible(self, on: bool) -> None:
+        """Flip the local axes on the drawn guides, and remember the choice."""
+        from tik.trigger.config import prefs
+
+        self.guides.set_axes_visible(bool(on))
+        prefs.guides.show_guide_axes = bool(on)
+        prefs.save()
+
     def set_auto_sync(self, on: bool) -> None:
         """One setting, three front doors: the checkbox, the menu, and here.
 

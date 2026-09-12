@@ -28,6 +28,8 @@ class DesignerActionBar(QtWidgets.QFrame):
     draw_all_requested = QtCore.Signal()
     select_requested = QtCore.Signal()
     mirror_requested = QtCore.Signal()
+    labels_toggled = QtCore.Signal(bool)
+    axes_toggled = QtCore.Signal(bool)
     sync_requested = QtCore.Signal()
     auto_sync_toggled = QtCore.Signal(bool)
     build_all_requested = QtCore.Signal()
@@ -60,6 +62,25 @@ class DesignerActionBar(QtWidgets.QFrame):
         layout.addWidget(self.select_button)
         layout.addWidget(self.mirror_button)
 
+        # A view operation over what is already drawn, which is why it lives
+        # on the SCENE side: Draw always writes labels on -- `trigger/guides`
+        # may not read preferences, and a preference can never change what
+        # Draw renders -- so this is what turns them off afterwards.
+        self.labels_check = QtWidgets.QCheckBox("Labels")
+        self.labels_check.setChecked(True)
+        self.labels_check.setToolTip(
+            "Show each guide's name in the viewport. "
+            "Turn it off on dense modules, where labels overlap."
+        )
+        layout.addWidget(self.labels_check)
+        self.axes_check = QtWidgets.QCheckBox("Axes")
+        self.axes_check.setChecked(True)
+        self.axes_check.setToolTip(
+            "Show the local rotation axis on the guides whose orientation the "
+            "build reads. Guides that only mark a position never show one."
+        )
+        layout.addWidget(self.axes_check)
+
         layout.addStretch(1)
 
         layout.addWidget(self._caption("→ SESSION"))
@@ -88,6 +109,8 @@ class DesignerActionBar(QtWidgets.QFrame):
         self.draw_all_button.clicked.connect(self.draw_all_requested)
         self.select_button.clicked.connect(self.select_requested)
         self.mirror_button.clicked.connect(self.mirror_requested)
+        self.labels_check.toggled.connect(self.labels_toggled)
+        self.axes_check.toggled.connect(self.axes_toggled)
         self.sync_button.clicked.connect(self.sync_requested)
         self.auto_check.toggled.connect(self.auto_sync_toggled)
         self.build_all_button.clicked.connect(self.build_all_requested)
@@ -135,6 +158,27 @@ class DesignerActionBar(QtWidgets.QFrame):
         self._set_alert(self.draw_selected_button, stale_selected)
         self._set_alert(self.draw_all_button, stale_any)
         self._set_alert(self.sync_button, moved)
+
+    def set_labels(self, on: bool) -> None:
+        """Reflect the stored state without reporting it back as a user action.
+
+        Construction restores the preference through here, and a restore is
+        not a toggle: emitting would write the value straight back and, worse,
+        push a scene operation before anything is drawn.
+        """
+        self.labels_check.blockSignals(True)
+        try:
+            self.labels_check.setChecked(bool(on))
+        finally:
+            self.labels_check.blockSignals(False)
+
+    def set_axes(self, on: bool) -> None:
+        """Reflect the stored state without reporting it back as a user action."""
+        self.axes_check.blockSignals(True)
+        try:
+            self.axes_check.setChecked(bool(on))
+        finally:
+            self.axes_check.blockSignals(False)
 
     def set_auto_sync(self, on: bool) -> None:
         """Reflect the setting without reporting it back as a user action.

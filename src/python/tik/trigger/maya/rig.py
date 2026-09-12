@@ -19,10 +19,15 @@ from tik.maya import naming
 from tik.maya.roles.controller import Controller
 from tik.trigger.core import shapes as shape_library
 from tik.trigger.core.exceptions import GuideError
-from tik.trigger.core.manifest import TIERS, instance_key
+from tik.trigger.core.manifest import TIERS, GuideKind, instance_key
 from tik.trigger.core.module import Module
 from tik.trigger.core.schemas import ModuleInstance
-from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_joint
+from tik.trigger.guides.nodes import (
+    MARKER_FAN_FALLBACK,
+    MARKER_FAN_FRACTION,
+    SIDE_COLORS,
+    create_guide_node,
+)
 
 from . import tags
 
@@ -155,14 +160,36 @@ class GuideDraft:
         *,
         index: int = 0,
         parent: Any = None,
-        radius: float = 1.0,
-        marker: bool = False,
-    ) -> tm.Joint:
-        """Create one tagged guide joint; the first one becomes the module root.
+    ) -> tm.Transform:
+        """Create one tagged guide; the first one becomes the copy's root.
 
-        ``marker`` draws it as a locator cross rather than a bone -- what a
-        pivot-preset guide wants.
+        There is no ``radius`` and no ``marker``. What a guide looks like is a
+        consequence of what it *is*, and what it is comes from the module's
+        ``GuideLayout`` -- so no call site anywhere picks a number.
         """
+        layout = type(self._drawing).guides
+        kind = layout.kind_for(role, is_root=self.root is None)
+        return self._create(role, position, kind, index=index, parent=parent)
+
+    def reference(
+        self,
+        role: str,
+        position: Sequence[float],
+        *,
+        index: int = 0,
+        parent: Any = None,
+    ) -> tm.Transform:
+        """Create a reference guide for a role no layout declares.
+
+        Pivot preset guides are made by the framework from a settings table
+        rather than declared in a ``GuideLayout``, so they name their kind here
+        instead of being looked up. Module authors never call this.
+        """
+        return self._create(
+            role, position, GuideKind.REFERENCE, index=index, parent=parent
+        )
+
+    def _create(self, role, position, kind, *, index=0, parent=None) -> tm.Transform:
         key = (Module.qualify(self._slug, role), index)
         if key in self.created:
             raise GuideError(f"Guide '{key[0]}' [{index}] created twice.")
@@ -171,24 +198,42 @@ class GuideDraft:
             parent = self.parent_node if is_root else self.root
             if parent is None:
                 parent = self.holder
-        joint = create_guide_joint(
+        node = create_guide_node(
             self._drawing,
             role,
             position,
+            kind=kind,
             index=index,
             parent=parent,
-            radius=radius,
-            marker=marker,
             tag_role=key[0],
         )
         for declared in self._drawing.attrs_for_role(role):
-            joint[declared.name].create(
+            node[declared.name].create(
                 "float", default=declared.default, keyable=declared.keyable
             )
-        self.created[key] = joint
+        self.created[key] = node
         if is_root:
-            self.root = joint
-        return joint
+            self.root = node
+        return node
+
+    def chain_step(self, anchor) -> tuple[tuple[float, float, float], float]:
+        """Unit direction and step length for fanning markers off ``anchor``.
+
+        The direction is the anchor's own incoming bone (parent -> anchor), so
+        a fan off a hand runs along the hand's forward axis -- the direction a
+        roll actually travels. A root has no incoming bone, so it falls back to
+        the module's aim axis.
+        """
+        parent = anchor.parent
+        if parent is not None:
+            # world_position is an MVector, so this is the same idiom the
+            # twist and limb systems use rather than a third spelling of it.
+            vector = anchor.world_position - parent.world_position
+            length = vector.length()
+            if length > 1e-6:
+                vector.normalize()
+                return tuple(vector), MARKER_FAN_FRACTION * length
+        return (float(self.side_mult), 0.0, 0.0), MARKER_FAN_FALLBACK
 
 
 class ModuleRig:

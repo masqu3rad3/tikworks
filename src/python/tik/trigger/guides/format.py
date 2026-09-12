@@ -4,7 +4,13 @@ A file is a JSON object with a ``joints`` list, a ``connections`` list and
 optional ``meta`` / ``designer`` dicts. Each joint record is::
 
     {"name", "position", "rotation", "joint_orient", "scale", "parent",
-     "side", "color", "radius", "module", "role", "index", "instance"}
+     "side", "color", "radius", "kind", "module", "role", "index", "instance"}
+
+``kind`` is the ``GuideKind`` the guide was drawn as. It is stored rather than
+re-derived because a pivot preset guide belongs to no ``GuideLayout`` -- its
+role comes from a settings table -- so there is nothing to ask on the way back
+in. ``color`` and ``radius`` are advisory once ``kind`` is present: the kind
+decides both.
 
 Root records carry ``settings`` and ``module_name``. A record without a
 ``module``/``role`` pair belongs to no registered module and is reported in
@@ -229,6 +235,7 @@ def make_record(
     role: str,
     index: int,
     instance: str,
+    kind: str = "joint",
     radius: float = 1.0,
     color: int = 17,
     attrs: Optional[dict] = None,
@@ -246,6 +253,7 @@ def make_record(
         "side": side,
         "color": int(color),
         "radius": float(radius),
+        "kind": str(kind),
         "module": module,
         "role": role,
         "index": int(index),

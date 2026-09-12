@@ -309,7 +309,7 @@ class Transform(DagNode):
     def freeze(self, translate=True, rotate=True, scale=True):
         """Freeze the transformations on this transform node."""
         cmds.makeIdentity(
-            self.name,
+            self.long_name,
             apply=True,
             translate=translate,
             rotate=rotate,

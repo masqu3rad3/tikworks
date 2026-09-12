@@ -8,6 +8,7 @@ from maya import cmds
 
 import tik.maya as tm
 from tik.trigger.core import registry
+from tik.trigger.core.manifest import GuideKind
 from tik.trigger.core.schemas import ModuleInstance
 from tik.trigger.maya import tags
 from tik.trigger.maya.rig import GuideDraft
@@ -47,6 +48,14 @@ class GuideExchangeMixin:
                     else None
                 )
                 is_root = role == root_role and index == 0
+                kind = nodes.guide_kind(node, module_cls.guides, role, is_root=is_root)
+                # Radius and colour come off the NODE, not the kind table: a
+                # rigger may set them by hand in the scene and the `.trg` is
+                # their only carrier (see
+                # test_guide_radius_and_colour_round_trip_through_a_trg). A
+                # reference guide is a transform, so it has neither a radius
+                # nor a jointOrient to read.
+                is_reference = kind is GuideKind.REFERENCE
                 declared = module_cls.attrs_for_role(role)
                 attrs = {item.name: node[item.name].value for item in declared}
                 records.append(
@@ -59,14 +68,15 @@ class GuideExchangeMixin:
                             translation=True,
                         ),
                         rotation=tuple(node.rotate),
-                        joint_orient=node.joint_orient,
+                        joint_orient=(0, 0, 0) if is_reference else node.joint_orient,
                         parent=parent_name,
                         side=instance.side,
                         module=instance.module_type,
                         role=role,
                         index=index,
                         instance=instance.instance_id,
-                        radius=node.radius,
+                        kind=kind.value,
+                        radius=1.0 if is_reference else node.radius,
                         color=node.color or 17,
                         attrs=attrs,
                         settings=dict(instance.settings) if is_root else None,
@@ -142,14 +152,23 @@ class GuideExchangeMixin:
                     settings=guide_instance.settings,
                 )
                 joints: dict = {}
+                layout = module_cls.guides
                 for (role, index), record in guide_instance.joints.items():
-                    joint = tm.Joint.create(
-                        name=record["name"], radius=record.get("radius", 1.0)
+                    # The record carries its kind: a pivot preset guide is in
+                    # no GuideLayout, so there is nothing to ask on the way in.
+                    # A file with no kind predates them and was all joints.
+                    kind = GuideKind(record.get("kind", GuideKind.JOINT.value))
+                    joint = nodes.make_guide_shell(
+                        record["name"], kind, chain=layout.chain
                     )
                     joint.world_position = record["position"]
-                    joint.joint_orient = record.get("joint_orient", (0, 0, 0))
+                    if kind is not GuideKind.REFERENCE:
+                        # jointOrient exists only on a joint; a reference guide
+                        # carries its orientation in `rotate` alone.
+                        joint.joint_orient = record.get("joint_orient", (0, 0, 0))
                     joint.rotate = tuple(record.get("rotation", (0, 0, 0)))
-                    joint.color = record.get("color") or 17
+                    # The kind decides the colour; the record's is advisory.
+                    joint.color = nodes.guide_color(kind, module.side.value)
                     for item in module_cls.attrs_for_role(role):
                         plug = joint[item.name].create(
                             "float", default=item.default, keyable=item.keyable
@@ -167,6 +186,8 @@ class GuideExchangeMixin:
                             tags.SIDE: module.side.value,
                         }
                     )
+                    nodes.label_guide(joint, kind, role, module.side.value)
+                    nodes.set_axes_visible(joint, True, layout)
                     joints[(role, index)] = joint
                     created_nodes[record["name"]] = joint
                 # Roles this file predates, drawn where the module puts them.
@@ -239,13 +260,18 @@ class GuideExchangeMixin:
             # radius/colour/orient aren't captured from the scene (spec 4.2 gap),
             # so the .trg file is their only source -- fill them in directly from
             # what the file recorded, for regenerate to re-apply from here on.
+            #
+            # Radius is skipped for a reference guide: it is a transform, which
+            # has no radius property, so seeding one only had regenerate assign
+            # a Python attribute that wrote nothing to the scene.
             for pair, record in guide_instance.joints.items():
                 target = entry.guide(*pair)
                 if target is None:
                     continue
-                target.radius = float(record.get("radius", 1.0))
                 target.color = int(record.get("color") or 17)
                 target.joint_orient = tuple(record.get("joint_orient", (0.0, 0.0, 0.0)))
+                if record.get("kind") != GuideKind.REFERENCE.value:
+                    target.radius = float(record.get("radius", 1.0))
             # appended as we go, so a two-module import uniquifies against itself
             document.modules.append(entry)
             entries[module.instance_id] = (entry, guide_instance)

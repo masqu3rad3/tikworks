@@ -835,12 +835,18 @@ class Module(Schema):
                 view._draw_pivot_guides(draft)
 
     def _draw_pivot_guides(self, draft) -> None:
-        """One marker guide per pivot-preset row, at its control's anchor guide.
+        """One reference guide per pivot-preset row, fanned off its anchor.
 
-        Stacked on the anchor is deliberate: an unplaced preset should look
-        unplaced, and moving the anchor carries its presets along.
+        The markers step along the anchor's own incoming chain direction, in
+        table order, so an arm's wrist/ball/tip run along the hand's forward
+        axis -- the direction a roll actually travels. They used to stack on
+        the anchor, so that an unplaced preset looked unplaced; three markers
+        in one pixel are not selectable, and unselectable is worse.
+
+        Parenting is unchanged: moving the anchor still carries its presets.
         """
         settings = self.values()
+        placed: dict[str, int] = {}  # control -> markers already fanned
         for row in self.pivot_rows(settings):
             control, label = row.get("control", ""), row.get("label", "")
             if not control or not label:
@@ -852,12 +858,14 @@ class Module(Schema):
             anchor = draft.made(*anchor_ref) if anchor_ref else None
             if anchor is None:
                 continue  # a stale row; Module.warnings() reports it
-            draft.joint(
-                f"pivot_{control}_{label}",
-                tuple(anchor.world_position),
-                parent=anchor,
-                marker=True,
+            rank = placed.get(control, 0)
+            placed[control] = rank + 1
+            direction, step = draft.chain_step(anchor)
+            position = tuple(
+                value + axis * (rank + 1) * step
+                for value, axis in zip(tuple(anchor.world_position), direction)
             )
+            draft.reference(f"pivot_{control}_{label}", position, parent=anchor)
 
     def wire_guides(self, guides) -> None:
         """Connect a guide rig over already-created guides.
