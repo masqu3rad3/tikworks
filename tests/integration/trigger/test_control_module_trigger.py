@@ -93,9 +93,17 @@ def test_the_joint_follows_the_tweak_when_there_is_one():
 
 
 # ------------------------------------------------------------------- pivot
-def test_no_preset_rows_means_no_pivot():
-    """Declaring offers a pivot; a row is what builds it."""
+def test_neither_a_tick_nor_a_row_means_no_pivot():
+    """Declaring offers a pivot; a tick or a row is what builds it."""
     assert "L_head_root_pivot_ctrl" not in _controls(_build())
+
+
+def test_a_tick_alone_builds_a_pivot_with_no_presets():
+    """The whole point of the control module's 'optional movable pivot'."""
+    rig = _build(movable_pivots=["root"])
+
+    assert "L_head_root_pivot_ctrl" in _controls(rig)
+    assert not rig.controller_by_role("root").transform.has_attr("pivotPreset")
 
 
 def test_a_preset_row_builds_the_pivot():

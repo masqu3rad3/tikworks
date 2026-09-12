@@ -1,7 +1,7 @@
 # Movable Pivots Without Presets: a tick is what builds a pivot
 
 **Date:** 2026-09-12
-**Status:** proposed
+**Status:** implemented
 **Amends:** `2026-09-11-control-capability-declarations-design.md` — §4's closing rule becomes
 "declaring is what makes it available; a **tick** is what builds it, and a preset row implies a
 tick", and §4.1's claimed escape hatch is withdrawn as untrue of the code. The seam, its
@@ -170,6 +170,12 @@ with the target's values. The `ListField` branch falls back to the same helper w
 is supplied, so `choices_from` means one thing on both field kinds and the Designer's module
 form gets a real picker instead of the comma-separated `QLineEdit` fallback.
 
+The two sources must be one. `_field_is_dead` below asks the same question the picker does, and
+during implementation they disagreed: the dead test read the target while the widget read the
+callback, and `kinematics`' `choices_from="modules"` happens to collide with its own field name,
+so the test resolved the field's own empty value and hid the picker. One `_list_options(field)`
+answers for both.
+
 **`_table_is_dead` becomes `_field_is_dead`.** The empty-section rule the 2026-09-11 pass
 installed counts widgets: a fold whose every field was skipped hides itself
 (`shared/ui/fields.py:640`). A `ListField` nobody can tick — `choices_from` resolving to nothing,
@@ -178,6 +184,11 @@ Pivots fold returns to `twist`, which builds no controllers at all. The rule is 
 its domain: *a widget nobody could add to, holding nothing to remove.* A list holding a value
 always renders, whatever its options say, for the reason a table holding rows does — a setting
 that narrows the candidates must never strand a value where the rigger cannot reach it.
+
+**A callback-backed list is exempt from the dead test.** A panel that injects `list_choices`
+decides its own emptiness, and the one that does is the pipeline's action panel: `kinematics`
+with no modules in the session must keep its scope picker on screen, because an empty scope is a
+validation error the rigger has to be able to see. Hiding the field would hide the error.
 
 ## 6. Validation and warnings
 
