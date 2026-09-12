@@ -459,7 +459,11 @@ class ModuleRig:
         shape, size_multiplier = self.module.resolve_control_shape(name)
         effective_size = size * size_multiplier
         orient = self.module.control_orient_defaults(self.module.values()).get(name)
-        if orient and self.side is Side.RIGHT:
+        # Only a behaviour-mirrored control needs the conjugation. It undoes
+        # the 180 degree roll about X that the right side's *joints* carry --
+        # a world-aligned control is identical on both sides and has no roll
+        # to undo, so conjugating it flips a shape that was already right.
+        if orient and self.side is Side.RIGHT and mirror == tags.BEHAVIOUR:
             orient = mirror_orient(orient)
         controller = Controller.create(
             name=self.name(name, suffix="ctrl"),

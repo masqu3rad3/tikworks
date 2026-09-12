@@ -612,3 +612,36 @@ def test_a_tweak_inherits_its_master_orientation():
         if role and role.endswith("_tweak"):
             master = by_role[role[: -len("_tweak")]]
             assert controller.shape_orient == master.shape_orient, role
+
+
+def test_a_world_mirrored_control_keeps_its_shape_orientation(build_context):
+    """mirror_orient undoes a 180 roll about X that a world control has not got.
+
+    A behaviour-mirrored control's joints carry that roll, so a shape
+    authored for the left arrives rolled and the conjugation puts it back. A
+    world-aligned control is identical on both sides, so conjugating it flips
+    a shape that was already correct.
+    """
+    from tik.trigger.maya.rig import mirror_orient
+
+    turn = (0.0, 0.0, -90.0)
+    # The conjugation itself is unchanged and still correct where it applies.
+    assert mirror_orient(turn) == (0.0, 0.0, 90.0)
+
+    # "base" is deliberately unsided (a rig has one, regardless of side), so
+    # side="R" would be silently coerced back to CENTER and never reach the
+    # branch under test. "control" is an ordinary sided module.
+    ctx = build_context("control", name="probe", side="R")
+    # control_orient_defaults is a classmethod reading cls.control_orients,
+    # so an instance attribute here would be invisible to rig.controller.
+    module_cls = type(ctx.module)
+    previous = module_cls.control_orients
+    module_cls.control_orients = {"worldish": turn, "boney": turn}
+    try:
+        world = ctx.controller("worldish", mirror="world")
+        boney = ctx.controller("boney", mirror="behaviour")
+    finally:
+        module_cls.control_orients = previous
+
+    assert world.shape_orient == turn, "a world control must not be conjugated"
+    assert boney.shape_orient == mirror_orient(turn), "a bone control must be"
