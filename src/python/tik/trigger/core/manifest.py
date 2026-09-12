@@ -3,11 +3,31 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Optional, Sequence
 
 #: Control tiers, in the order the visibilities enum lists them. ``all`` is
 #: the enum's fourth item, not a tier a control can be given.
 TIERS = ("primary", "secondary", "tertiary")
+
+
+class GuideKind(str, Enum):
+    """What a guide *is*, to the rig. Never what it looks like.
+
+    The look is a pure function of the kind and lives in one table, in
+    ``tik/trigger/guides/nodes.py``. A module states the kind; nothing
+    anywhere states a radius, a colour or a shape -- a radius was only ever
+    the sentence "this is the module root" written in the wrong language.
+    """
+
+    #: The module's anchor. Derived: the first guide a copy draws.
+    ROOT = "root"
+    #: A joint in the rig. Move it, a bone moves. Derived: the default.
+    JOINT = "joint"
+    #: Only its *position* is read; nothing in the rig is shaped like it.
+    REFERENCE = "reference"
+    #: A real rig joint the module places, not the rigger. Declared.
+    DRIVEN = "driven"
 
 
 @dataclass(frozen=True)
@@ -87,6 +107,8 @@ class GuideLayout:
         multi: Optional[str] = None,
         min: Optional[int] = None,  # noqa: A002
         max: Optional[int] = None,  # noqa: A002
+        reference: Sequence[str] = (),
+        driven: Sequence[str] = (),
     ) -> None:
         if not roles:
             raise ValueError("GuideLayout needs at least one role.")
@@ -98,6 +120,48 @@ class GuideLayout:
         self.multi = multi
         self.min_count = (min if min is not None else 1) if multi else 0
         self.max_count = max if multi else 0
+        self.reference: tuple[str, ...] = tuple(reference)
+        self.driven: tuple[str, ...] = tuple(driven)
+        self._validate_kinds()
+
+    def _validate_kinds(self) -> None:
+        """Declared kinds must name real, distinct, non-root roles."""
+        known = set(self.all_roles)
+        for label, group in (("reference", self.reference), ("driven", self.driven)):
+            for role in group:
+                if role not in known:
+                    raise ValueError(
+                        f"GuideLayout {label}={role!r} is not one of its roles."
+                    )
+                if role == self.root:
+                    # root_guide() and parent_ref() find a module by walking
+                    # guide joints; a root that is neither would strand it.
+                    raise ValueError(
+                        f"GuideLayout {label}={role!r} is the root role, which "
+                        "must stay an ordinary joint."
+                    )
+        both = set(self.reference) & set(self.driven)
+        if both:
+            raise ValueError(
+                f"Guide role(s) {sorted(both)} declared both reference and driven."
+            )
+
+    def kind_for(self, role: str, *, is_root: bool = False) -> GuideKind:
+        """What ``role`` is. Declared kinds win; the rest is derived.
+
+        ``is_root`` comes from the draft, which knows which guide a copy
+        created first -- not from ``self.root``, because a copy's first guide
+        is its own root.
+
+        A role this layout has never heard of is a plain ``JOINT``: pivot
+        preset guides are created by the framework, not declared here, and
+        name their kind explicitly.
+        """
+        if role in self.reference:
+            return GuideKind.REFERENCE
+        if role in self.driven:
+            return GuideKind.DRIVEN
+        return GuideKind.ROOT if is_root else GuideKind.JOINT
 
     @property
     def root(self) -> str:
