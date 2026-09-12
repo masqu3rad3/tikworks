@@ -731,3 +731,32 @@ def test_the_ik_hand_control_has_a_movable_pivot_with_three_presets(scene):
     )[0]
     assert listed == "default:wrist:ball:tip"
     assert ctx.controller_by_role("ik_pivot") is not None
+
+
+@pytest.mark.parametrize("side", ["L", "R"])
+def test_the_ik_control_follows_the_hand_guides_roll(scene, side):
+    """The hand guide is how a rigger lines the wrist up with the model, and
+    the IK control is the animator's handle on that joint -- so it has to
+    agree. Matched to `ik_joints[-1]` it would not: the puppet chain is
+    oriented by convention and carries the forearm's frame.
+    """
+    body = scene.create_guides(get_module("base")(name="body"))
+    cmds.xform(
+        scene.guide_node(body.instance_id, "root").long_name, ws=True, t=(0, 15, 0)
+    )
+    arm = scene.create_guides(
+        get_module("arm")(name="arm", side=side),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    guide = scene.guide_node(arm.instance_id, "hand")
+    cmds.xform(guide.long_name, ws=True, relative=True, ro=(40, 0, 0))
+    scene.sync()
+    # read before the build: afterlife="delete" takes the guides with it
+    rolled = tuple(round(value, 3) for value in guide.world_axis("x"))
+    report = Builder().build(document=scene.document, afterlife="delete")
+    ctx = report.rigs[arm.instance_id]
+
+    control = _ik_control(ctx)
+    assert tuple(round(v, 3) for v in control.world_axis("x")) == rolled
+    # and the bind joint agrees with both: it is what the fingers hang off
+    assert tuple(round(v, 3) for v in ctx.outputs["hand"].world_axis("x")) == rolled

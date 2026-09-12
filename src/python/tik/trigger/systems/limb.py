@@ -104,7 +104,7 @@ def build_ikfk_limb(
     # move the chain, and every offset baked afterwards depends on this pose.
     pole_rest = _pole_rest_position(result.ik_joints)
     _build_pole_base(rig, name, parent, result)
-    _build_controls(rig, name, parent, controller_size, labels, result)
+    _build_controls(rig, name, parent, controller_size, labels, guides, result)
     control = result.ik_control  # animator-facing attributes
     driver = result.ik_tweak  # what the rig actually follows
 
@@ -191,13 +191,21 @@ def _build_pole_base(rig, name, parent, result) -> None:
 
 
 # ------------------------------------------------------------------- controls
-def _build_controls(rig, name, parent, size, labels, result) -> None:
-    """Create the IK, switch and FK controllers."""
+def _build_controls(rig, name, parent, size, labels, guides, result) -> None:
+    """Create the IK, switch and FK controllers.
+
+    The IK control is matched to the last *guide*, not to the last IK joint.
+    Those differ exactly when the rigger has rolled that guide to line the
+    wrist up with the model: the puppet chain is oriented by convention, so
+    ``ik_joints[-1]`` carries the forearm's frame and would ignore the roll.
+    The control is the animator's handle on that joint, so it has to agree
+    with what the guide -- and the bind joint built from it -- actually say.
+    """
     result.ik_control = rig.controller(
         _role(name, "ik"),
         size=size,
         parent=rig.groups.control,
-        match=result.ik_joints[-1],
+        match=guides[-1],
         mirror="world",
     )
     for channel in ("sx", "sy", "sz", "v"):
