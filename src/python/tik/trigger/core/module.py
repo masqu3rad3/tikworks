@@ -746,6 +746,12 @@ class Module(Schema):
                     f"pivot preset '{control}.{label}': control '{control}' has "
                     f"no movable pivot with the current settings"
                 )
+        for control in self.movable_pivots:
+            if control and control not in movable:
+                problems.append(
+                    f"movable pivot '{control}': control has no movable pivot "
+                    f"with the current settings"
+                )
         shapeable = type(self).shape_control_names(self.values())
         for row in self.control_shape_overrides:
             control, shape = row.get("control", ""), row.get("shape", "")

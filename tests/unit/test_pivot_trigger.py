@@ -556,3 +556,24 @@ def test_the_tick_belongs_to_the_copy():
     )
     assert toy.for_copy("").pivot_wanted("main") is True
     assert toy.for_copy("c1").pivot_wanted("main") is False
+
+
+def test_a_tick_on_a_control_the_settings_removed_warns():
+    toy = TickToy(name="toy", settings={"movable_pivots": ["gone"]})
+
+    assert any("movable pivot 'gone'" in item for item in toy.warnings())
+
+
+def test_a_stale_tick_is_never_a_validation_error():
+    """A build must not fail over a control the rigger is not using."""
+    toy = TickToy(name="toy", settings={"movable_pivots": ["gone"]})
+
+    assert not any("gone" in item for item in toy.validate())
+
+
+def test_a_stale_tick_is_kept():
+    """Lowering a count and raising it again restores the setup."""
+    toy = TickToy(name="toy", settings={"movable_pivots": ["gone"]})
+    toy.warnings()
+
+    assert toy.movable_pivots == ["gone"]
