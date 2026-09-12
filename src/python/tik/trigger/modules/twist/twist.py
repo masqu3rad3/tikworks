@@ -56,7 +56,9 @@ class Twist(Module):
     """A strip of twist joints between two inputs."""
 
     label = "Twist"
-    guides = GuideLayout("base", "end", multi="twist", min=1, max=20)
+    guides = GuideLayout(
+        "base", "end", multi="twist", min=1, max=20, driven=("twist",)
+    )
     inputs = (
         Input("base", primary=True, help="Segment start (upperarm, thigh, shaft)"),
         Input("end", help="Segment end (lowerarm, shin, hub)"),

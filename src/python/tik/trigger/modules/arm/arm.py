@@ -45,13 +45,20 @@ LIMB_LABELS = ("upper", "lower", "hand")
 #: guide, so the anchors for its pivot presets come from here.
 LIMB_GUIDES = ("shoulder", "elbow", "hand")
 
+#: How far past the hand the ``neutral`` guide sits, as a multiple of the
+#: collar-to-hand distance. Only the direction matters to the auto-collar;
+#: sitting beyond the hand keeps the guide selectable rather than buried.
+NEUTRAL_REACH = 1.4
+
 
 @register_module("arm", category="limbs")
 class Arm(Module):
     """Biped arm: collar, shoulder, elbow, hand."""
 
     label = "Arm"
-    guides = GuideLayout("collar", "shoulder", "elbow", "hand", "neutral")
+    guides = GuideLayout(
+        "collar", "shoulder", "elbow", "hand", "neutral", reference=("neutral",)
+    )
     inputs = (Input("root", primary=True, help="Where the collar hangs (chest/body)"),)
     outputs = ("collar", "upperarm", "lowerarm", "hand")
     controls = ("collar", *limb_control_names(labels=LIMB_LABELS))
@@ -69,7 +76,9 @@ class Arm(Module):
     #: tick is what keeps the pivot a controller rather than a null.
     movable_pivots = Module.movable_pivots.with_default(["ik"])
     pivot_presets = Module.pivot_presets.with_default(
-        [{"control": "ik", "label": label} for label in ("tip", "ball", "wrist")]
+        # Proximal to distal: the order the preset fan walks, so the markers
+        # land anatomically rather than arbitrarily.
+        [{"control": "ik", "label": label} for label in ("wrist", "ball", "tip")]
     )
 
     stretch = BoolField(True, help="Build the stretch network")
@@ -169,17 +178,39 @@ class Arm(Module):
 
     # --------------------------------------------------------------- guides
     def draw_guides(self, guides) -> None:
-        """Collar, shoulder, elbow and hand along X, with a bent elbow."""
+        """Collar, then an A-pose arm: the chain hangs 45 degrees below level.
+
+        A-pose rather than T, because it gives the better shoulder
+        deformation. The collar stays level -- a clavicle is roughly
+        horizontal in any pose -- so the A starts at the shoulder.
+
+        The elbow's -1 in Z survives the rotation untouched, because turning
+        about Z does not change Z: the pole direction stays behind the arm
+        with no compensation anywhere.
+        """
         mult = guides.side_mult
-        collar = guides.joint("collar", (2 * mult, 0, 0))
+        collar_at = (2.0 * mult, 0.0, 0.0)
+        hand_at = (11.4 * mult, -6.4, 0.0)
+        collar = guides.joint("collar", collar_at)
         shoulder = guides.joint("shoulder", (5 * mult, 0, 0), parent=collar)
-        elbow = guides.joint("elbow", (9 * mult, 0, -1), parent=shoulder)
-        guides.joint("hand", (14 * mult, 0, 0), parent=elbow)
+        elbow = guides.joint("elbow", (7.8 * mult, -2.8, -1), parent=shoulder)
+        guides.joint("hand", hand_at, parent=elbow)
         # Where the wrist sits when the collar is at rest -- the auto-collar's
-        # zero. Only the direction from `collar` matters, so sitting past the
-        # hand costs nothing and keeps the guide selectable. The default guide
-        # arm is already a T-pose, so the default neutral is the T-pose.
-        guides.joint("neutral", (18 * mult, 0, 0), parent=collar)
+        # zero. Only the *direction* from `collar` matters, so sitting past the
+        # hand costs nothing and keeps the guide selectable.
+        #
+        # Derived from the hand rather than typed as a triple: the reach
+        # network measures the angle between this direction and the wrist's,
+        # and at the guide pose that angle must be exactly zero or no scalar
+        # value leaves the bind pose alone. A hand-written triple is only
+        # approximately collinear -- rounding the A-pose to one decimal put it
+        # 0.006 out, which is 60x the tolerance
+        # test_bind_pose_is_exact_with_the_automation_full_on allows.
+        neutral_at = tuple(
+            start + (end - start) * NEUTRAL_REACH
+            for start, end in zip(collar_at, hand_at)
+        )
+        guides.joint("neutral", neutral_at, parent=collar)
 
     # ---------------------------------------------------------------- build
     def build(self, rig) -> None:

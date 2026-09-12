@@ -191,3 +191,105 @@ def test_the_annotation_is_invisible_to_the_guide_scans(scene):
     handle = scene.add("toy_kinds", side="L", name="toy")
     roles = {role for (role, _index) in scene.guide_nodes(handle.instance_id)}
     assert roles == {"root", "tip", "aim", "rail"}
+
+
+# ------------------------------------------------------------ the preset fan
+def test_preset_markers_never_share_a_position(scene):
+    """Three markers in one pixel are not selectable, and unselectable is
+    worse than the 'unplaced' look the stack was defending."""
+    handle = scene.add("arm", side="L", name="arm")
+    positions = [
+        tuple(round(value, 4) for value in node.world_position)
+        for (role, _index), node in scene.guide_nodes(handle.instance_id).items()
+        if role.startswith("pivot_")
+    ]
+    assert len(positions) == 3
+    assert len(set(positions)) == 3
+
+
+def test_preset_markers_fan_along_the_anchor_chain(scene):
+    """Each marker is further from the elbow than the last, in row order --
+    which for a hand means along the direction a roll actually travels."""
+    handle = scene.add("arm", side="L", name="arm")
+    found = scene.guide_nodes(handle.instance_id)
+    elbow = found[("elbow", 0)].world_position
+    ordered = [
+        found[(f"pivot_ik_{label}", 0)].world_position
+        for label in ("wrist", "ball", "tip")
+    ]
+    distances = [sum((a - b) ** 2 for a, b in zip(point, elbow)) for point in ordered]
+    # strictly increasing, not merely sorted: three stacked markers are all
+    # equidistant, and `sorted` would pass on exactly the bug this catches
+    assert all(a < b for a, b in zip(distances, distances[1:]))
+
+
+def test_preset_markers_still_hang_under_their_anchor(scene):
+    """The fan moved them; it did not reparent them."""
+    handle = scene.add("arm", side="L", name="arm")
+    found = scene.guide_nodes(handle.instance_id)
+    hand = found[("hand", 0)].long_name
+    for label in ("wrist", "ball", "tip"):
+        marker = found[(f"pivot_ik_{label}", 0)].long_name
+        assert cmds.listRelatives(marker, parent=True, fullPath=True)[0] == hand
+
+
+# ---------------------------------------------- the arm's pose and its kinds
+def test_the_arm_draws_an_a_pose(scene):
+    """A-pose, not T: it gives the better shoulder deformation."""
+    handle = scene.add("arm", side="L", name="arm")
+    found = scene.guide_nodes(handle.instance_id)
+    shoulder = found[("shoulder", 0)].world_position
+    hand = found[("hand", 0)].world_position
+    assert hand[1] < shoulder[1] - 1.0
+
+
+def test_the_arms_collar_stays_level(scene):
+    """A clavicle is roughly horizontal in any pose, so the A starts at the
+    shoulder, not at the collar."""
+    handle = scene.add("arm", side="L", name="arm")
+    found = scene.guide_nodes(handle.instance_id)
+    assert round(found[("collar", 0)].world_position[1], 3) == 0.0
+    assert round(found[("shoulder", 0)].world_position[1], 3) == 0.0
+
+
+def test_the_arm_keeps_its_elbow_behind_the_chain(scene):
+    """A rotation about Z does not change Z, so the pole offset survives
+    the A-pose with no compensation."""
+    handle = scene.add("arm", side="L", name="arm")
+    elbow = scene.guide_nodes(handle.instance_id)[("elbow", 0)]
+    assert round(elbow.world_position[2], 3) == -1.0
+
+
+def test_the_arms_neutral_rides_the_same_ray_as_the_arm(scene):
+    """Its docstring says 'where the wrist sits at rest'; a T-pose neutral on
+    an A-pose arm would leave that quietly false."""
+    handle = scene.add("arm", side="L", name="arm")
+    found = scene.guide_nodes(handle.instance_id)
+    collar = found[("collar", 0)].world_position
+    hand = found[("hand", 0)].world_position
+    neutral = found[("neutral", 0)].world_position
+    to_hand = [h - c for h, c in zip(hand, collar)]
+    to_neutral = [n - c for n, c in zip(neutral, collar)]
+    # same direction: the cross product of the two is ~zero
+    cross = [
+        to_hand[1] * to_neutral[2] - to_hand[2] * to_neutral[1],
+        to_hand[2] * to_neutral[0] - to_hand[0] * to_neutral[2],
+        to_hand[0] * to_neutral[1] - to_hand[1] * to_neutral[0],
+    ]
+    assert max(abs(value) for value in cross) < 0.5
+
+
+def test_the_arms_neutral_is_a_reference_guide(scene):
+    handle = scene.add("arm", side="L", name="arm")
+    node = scene.guide_nodes(handle.instance_id)[("neutral", 0)]
+    assert cmds.nodeType(node.long_name) == "transform"
+
+
+def test_the_twist_rails_are_driven_guides(scene):
+    handle = scene.add("twist", side="L", name="twist")
+    found = scene.guide_nodes(handle.instance_id)
+    rails = [node for (role, _index), node in found.items() if role == "twist"]
+    assert rails
+    for node in rails:
+        assert cmds.nodeType(node.long_name) == "joint"
+        assert cmds.getAttr(f"{node.long_name}.radius") == 0.5
