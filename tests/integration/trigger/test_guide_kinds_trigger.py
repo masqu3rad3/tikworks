@@ -141,3 +141,53 @@ def test_draw_rebuilds_a_deleted_reference_guide(scene):
     scene.draw()
     rebuilt = scene.guide_nodes(handle.instance_id)[("aim", 0)]
     assert cmds.nodeType(rebuilt.long_name) == "transform"
+
+
+# --------------------------------------------------------------- the labels
+def test_joint_guides_carry_a_native_label(scene):
+    found = drawn(scene, side="L")
+    assert cmds.getAttr(f"{found['root']}.drawLabel") == 1
+    assert cmds.getAttr(f"{found['root']}.type") == 18  # Other
+    assert cmds.getAttr(f"{found['root']}.otherType") == "root"
+    assert cmds.getAttr(f"{found['root']}.side") == 1  # Left
+
+
+def test_a_centre_module_labels_without_a_side(scene):
+    found = drawn(scene, side="C")
+    assert cmds.getAttr(f"{found['root']}.side") == 0
+
+
+def test_reference_guides_carry_an_annotation(scene):
+    """A transform has no drawLabel, so a reference guide gets an annotation.
+
+    Maya appends "(L)" itself for a native joint label but not for an
+    annotation, so the side is built into the text here.
+    """
+    found = drawn(scene, side="L")
+    label = nodes.guide_label_nodes(tm.resolve(found["aim"]))[0]
+    shape = cmds.listRelatives(label, shapes=True, fullPath=True)[0]
+    assert cmds.nodeType(shape) == "annotationShape"
+    assert cmds.getAttr(f"{shape}.text") == "aim (L)"
+
+
+def test_the_annotation_sits_on_its_guide(scene):
+    """Zero offset, so the leader collapses to a stub rather than a line
+    across the scene -- which is the streak this design exists to remove."""
+    found = drawn(scene, side="L")
+    label = nodes.guide_label_nodes(tm.resolve(found["aim"]))[0]
+    assert list(cmds.getAttr(f"{label}.translate")[0]) == [0.0, 0.0, 0.0]
+
+
+def test_the_annotation_is_visible_but_unpickable(scene):
+    found = drawn(scene, side="L")
+    label = nodes.guide_label_nodes(tm.resolve(found["aim"]))[0]
+    shape = cmds.listRelatives(label, shapes=True, fullPath=True)[0]
+    assert cmds.getAttr(f"{shape}.overrideEnabled") == 1
+    assert cmds.getAttr(f"{shape}.overrideDisplayType") == 2  # reference
+
+
+def test_the_annotation_is_invisible_to_the_guide_scans(scene):
+    """It carries no trg_kind, and every scan gates on KIND == GUIDE."""
+    handle = scene.add("toy_kinds", side="L", name="toy")
+    roles = {role for (role, _index) in scene.guide_nodes(handle.instance_id)}
+    assert roles == {"root", "tip", "aim", "rail"}

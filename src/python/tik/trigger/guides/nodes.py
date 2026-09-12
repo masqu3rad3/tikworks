@@ -143,6 +143,59 @@ def guide_color(kind: GuideKind, side: str) -> int:
     return table.get(side, 17)
 
 
+def label_guide(node, kind: GuideKind, text: str, side: str) -> None:
+    """Draw ``text`` beside ``node``, by whatever means its kind allows.
+
+    A joint gets Maya's native label. A reference guide is a transform and has
+    no ``drawLabel``, so it gets an annotation parented *at* it -- at zero
+    offset, which collapses the leader to a stub arrow rather than a line
+    across the scene, which is the streak this whole design removes.
+
+    ``text`` is the *qualified* role, so a five-copy ``fingers`` reads
+    ``index_root`` and ``thumb_root`` rather than five guides all reading
+    ``root``; a one-copy module has an empty slug and reads as it always has.
+    The side is appended only for an annotation, because Maya appends it
+    itself for a native joint label and doubling it would read ``(L) (L)``.
+    """
+    if kind is not GuideKind.REFERENCE:
+        node["drawLabel"].value = 1
+        node["side"].value = LABEL_SIDES.get(side, 3)
+        node["type"].value = 18  # Other: otherType carries the string
+        # cmds rather than a tik.maya plug write: `otherType` is a string
+        # attribute, and setAttr needs its type named explicitly.
+        cmds.setAttr(f"{node.long_name}.otherType", text, type="string")
+        return
+
+    suffix = f" ({side})" if side in ("L", "R") else ""
+    shape = cmds.annotate(node.long_name, text=f"{text}{suffix}")
+    # annotate() returns the shape, whose transform is a fresh world-space node.
+    transform = cmds.listRelatives(shape, parent=True, fullPath=True)[0]
+    transform = cmds.parent(transform, node.long_name, relative=True)[0]
+    transform = cmds.rename(transform, f"{node.name}_label")
+    cmds.setAttr(f"{transform}.translate", 0, 0, 0, type="double3")
+    # Re-query: the rename invalidated the path annotate() handed back.
+    shape = cmds.listRelatives(transform, shapes=True, fullPath=True)[0]
+    cmds.setAttr(f"{shape}.overrideEnabled", 1)
+    # 2 = reference: visible, and unpickable. Without it riggers grab the
+    # label instead of the guide.
+    cmds.setAttr(f"{shape}.overrideDisplayType", 2)
+    cmds.setAttr(f"{shape}.overrideColor", MARKER_COLOR)
+
+
+def guide_label_nodes(node) -> list[str]:
+    """The annotation transforms under a guide, as long names.
+
+    The Designer's Labels toggle hides these; a joint guide's label is an
+    attribute and is toggled directly.
+    """
+    found = []
+    for child in cmds.listRelatives(node.long_name, children=True, fullPath=True) or []:
+        shapes = cmds.listRelatives(child, shapes=True, fullPath=True) or []
+        if any(cmds.nodeType(shape) == "annotationShape" for shape in shapes):
+            found.append(child)
+    return found
+
+
 def create_guide_node(
     module,
     role: str,
@@ -185,6 +238,7 @@ def create_guide_node(
         },
     )
     node.color = guide_color(kind, module.side.value)
+    label_guide(node, kind, tag_role or role, module.side.value)
     return node
 
 

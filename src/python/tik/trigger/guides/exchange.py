@@ -184,6 +184,7 @@ class GuideExchangeMixin:
                             tags.SIDE: module.side.value,
                         }
                     )
+                    nodes.label_guide(joint, kind, role, module.side.value)
                     joints[(role, index)] = joint
                     created_nodes[record["name"]] = joint
                 # Roles this file predates, drawn where the module puts them.
