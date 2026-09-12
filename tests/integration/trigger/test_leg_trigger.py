@@ -3,8 +3,7 @@
 import pytest
 from maya import cmds
 
-from tik.trigger.core import get_module
-from tik.trigger.core.exceptions import BuildError
+from tik.trigger.core import ParentRef, get_module
 from tik.trigger.core.manifest import GuideKind
 from tik.trigger.guides import GuideScene
 from tik.trigger.maya import Builder
@@ -156,15 +155,141 @@ def test_the_foot_markers_sit_near_the_ground_plane(scene):
         assert 0.0 <= y < 0.5, f"{role} sits at y={y}, not near the ground plane"
 
 
-def test_the_leg_builds_standalone_and_stubs(scene):
-    """No parent, no inputs: the module still draws and registers.
+def test_the_leg_builds_standalone_with_no_parent(scene):
+    """No parent, no inputs: the module still builds the deform skeleton.
 
-    ``build()`` is still a stub (Task 7): the builder wraps whatever it
-    raises into a ``BuildError``, so this only proves the module reaches the
-    builder and fails for the *expected* reason rather than a manifest or
-    guide-wiring mistake.
+    ``build()`` now creates the bind chain and the socket (Task 7); the
+    limb, foot and controls still don't exist (Tasks 8-15), but nothing in
+    the bind chain requires the ``root`` input to be wired -- the socket
+    simply stands free at the hip guide.
     """
     leg = scene.create_guides(get_module("leg")(name="leg", side="L"))
-    with pytest.raises(BuildError, match="lands in Task 7"):
-        Builder().build(document=scene.document, afterlife="delete")
-    assert any(entry.instance_id == leg.instance_id for entry in scene.document.modules)
+    report = Builder().build(document=scene.document, afterlife="delete")
+    ctx = report.rigs[leg.instance_id]
+    for name in ("hip", "upperleg", "lowerleg", "foot", "ball", "toe"):
+        assert ctx.outputs[name] is not None, name
+
+
+def test_the_bank_markers_straddle_the_ankle_in_x(scene):
+    """``bank_in`` and ``bank_out`` sit on opposite sides of the ankle.
+
+    ``bank_in`` is the marker nearer the body midline (x=0) and ``bank_out``
+    the one farther from it -- a different X *sign* on each side, but on
+    both sides the ankle's X must land strictly between them. If the two
+    were ever swapped or misplaced in ``draw_guides``, Task 8's reverse-foot
+    bank pivots would roll the wrong way.
+    """
+    for side in ("L", "R"):
+        leg = scene.create_guides(get_module("leg")(name="leg", side=side))
+        ankle_x = scene.guide_node(leg.instance_id, "ankle").world_position.x
+        bank_in_x = scene.guide_node(leg.instance_id, "bank_in").world_position.x
+        bank_out_x = scene.guide_node(leg.instance_id, "bank_out").world_position.x
+
+        assert abs(bank_in_x) < abs(ankle_x) < abs(bank_out_x), side
+        assert (bank_in_x - ankle_x) * (bank_out_x - ankle_x) < 0.0, side
+
+
+def test_heel_and_tip_bracket_the_ankle_in_z(scene):
+    """``heel`` sits behind the ankle in Z, ``tip`` in front of it.
+
+    Task 8 builds the foot's frame by aiming heel-to-tip; if the two were
+    swapped the frame would point backwards and every later test would
+    agree with it, since Task 8's own tests build their own hardcoded
+    guides rather than reading the module's.
+    """
+    for side in ("L", "R"):
+        leg = scene.create_guides(get_module("leg")(name="leg", side=side))
+        ankle_z = scene.guide_node(leg.instance_id, "ankle").world_position.z
+        heel_z = scene.guide_node(leg.instance_id, "heel").world_position.z
+        tip_z = scene.guide_node(leg.instance_id, "tip").world_position.z
+
+        assert heel_z < ankle_z < tip_z, side
+
+
+def _build_leg(scene, side="L", ankle_roll=0.0, **settings):
+    """A rigger-authored pose, deliberately not the module's default."""
+    body = scene.create_guides(get_module("base")(name="body"))
+    leg = scene.create_guides(
+        get_module("leg")(name="leg", side=side, settings=settings),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    mult = -1 if side == "R" else 1
+    for role, (x, y, z) in {
+        "hip": (1, 10.4, 0),
+        "thigh": (2, 9.6, 0),
+        "knee": (2, 5.3, 0.45),
+        "ankle": (2, 1.0, 0),
+        "ball": (2, 0.25, 1.3),
+        "toe": (2, 0.05, 2.4),
+        "heel": (2, 0.05, -0.6),
+        "tip": (2, 0.05, 2.8),
+        "bank_in": (1.2, 0.05, 1.3),
+        "bank_out": (2.8, 0.05, 1.3),
+        "neutral": (1 + 1 * 1.4, 10.4 - 9.4 * 1.4, 0),
+    }.items():
+        cmds.xform(
+            scene.guide_node(leg.instance_id, role).long_name,
+            ws=True,
+            t=(x * mult, y, z),
+        )
+    if ankle_roll:
+        cmds.xform(
+            scene.guide_node(leg.instance_id, "ankle").long_name,
+            ws=True,
+            ro=(0, 0, ankle_roll),
+        )
+    report = Builder().build(document=scene.document, afterlife="keep")
+    return report.rigs[leg.instance_id]
+
+
+def test_the_bind_chain_runs_hip_to_toe(scene):
+    ctx = _build_leg(scene)
+    for name in ("hip", "upperleg", "lowerleg", "foot", "ball", "toe"):
+        assert ctx.outputs[name] is not None, name
+
+
+def test_rolling_the_ankle_guide_leaves_the_ball_aimed_at_the_toe(scene):
+    """The step the arm never needed.
+
+    The arm's oriented guide is its LAST joint, so re-aligning it disturbs
+    nothing. The ankle has the ball and the toe under it: re-orienting a
+    joint rotates everything beneath it, so both have to be put back.
+    """
+    ctx = _build_leg(scene, ankle_roll=30.0)
+    ball = ctx.outputs["ball"]
+    toe = ctx.outputs["toe"]
+
+    to_toe = toe.world_position - ball.world_position
+    to_toe.normalize()
+    ball_x = ball.world_axis("x")
+    assert (ball_x * to_toe) == pytest.approx(1.0, abs=1e-4)
+
+
+def test_the_ankle_takes_the_guide_rotation_the_chain_does_not(scene):
+    """The one guide whose rotation is read, and only it.
+
+    ``ankle_roll`` is written as an absolute ``ro=(0, 0, ankle_roll)`` onto
+    an identity-oriented guide, i.e. a pure rotation *about* world Z -- so
+    the Z axis itself is exactly what stays fixed under it (confirmed
+    against a bare joint: worldMatrix's Z row is (0, 0, 1) whatever the
+    roll). Comparing ``world_axis("z")`` therefore could not have failed
+    here no matter what the ankle did with the guide's rotation; ``"x"`` is
+    the axis the roll actually moves.
+    """
+    rolled = _build_leg(scene, ankle_roll=30.0)
+    foot_x = rolled.outputs["foot"].world_axis("x")
+    # Read before the scene is wiped below: `rolled`'s nodes do not survive
+    # `cmds.file(new=True)`, so anything compared against the flat build has
+    # to be captured here, not re-read from `rolled.outputs` afterwards.
+    rolled_lowerleg_x = rolled.outputs["lowerleg"].world_axis("x")
+
+    cmds.file(new=True, force=True)
+    flat_scene = GuideScene()
+    flat = _build_leg(flat_scene, ankle_roll=0.0)
+    flat_x = flat.outputs["foot"].world_axis("x")
+
+    assert (foot_x * flat_x) < 0.99, "the ankle must follow its guide's roll"
+    # ...while the knee above it must not have moved.
+    assert (
+        rolled_lowerleg_x * flat.outputs["lowerleg"].world_axis("x")
+    ) == pytest.approx(1.0, abs=1e-4)

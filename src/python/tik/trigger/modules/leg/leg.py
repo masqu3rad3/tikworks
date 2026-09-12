@@ -13,6 +13,7 @@ them.
 
 from __future__ import annotations
 
+import tik.maya as tm
 from tik.trigger.core import (
     BoolField,
     ChoiceField,
@@ -24,6 +25,8 @@ from tik.trigger.core import (
     register_module,
 )
 from tik.trigger.systems.limb import (
+    conventional_frames,
+    derive_size,
     limb_control_names,
     limb_control_orients,
     limb_control_shapes,
@@ -204,5 +207,54 @@ class Leg(Module):
         guides.joint("neutral", neutral_at, parent=hip)
 
     def build(self, rig) -> None:
-        """Not yet built -- see Tasks 7 and 15."""
-        raise NotImplementedError("leg.build lands in Task 7")
+        """The deform skeleton. Limb, foot and automation land in Task 15."""
+        hip_guide = rig.guide("hip")
+        limb_guides = rig.guides(*LIMB_GUIDES)
+        foot_guides = rig.guides("ball", "toe")
+
+        rig.socket("root", match=hip_guide)
+
+        # deform skeleton -- created in final position, never reparented -----
+        hip_jnt = rig.bind_joint("hip", match=hip_guide)
+        chain = [hip_jnt]
+        parent_joint = hip_jnt
+        for label, guide_node in zip(
+            ("upperleg", "lowerleg", "foot", "ball", "toe"),
+            [*limb_guides, *foot_guides],
+        ):
+            joint = rig.bind_joint(label, parent=parent_joint, match=guide_node)
+            chain.append(joint)
+            parent_joint = joint
+
+        # The deform skeleton takes the convention, not the guides' rotations:
+        # X to the next joint, Y up. The guides stay world-aligned, which is
+        # load-bearing: `build_reach` derives its mirror correction by
+        # comparing its own frame's Z against the socket's, and the socket is
+        # matched to the hip guide, so orienting that guide would make both
+        # terms flip together and silently cancel the correction.
+        frames = conventional_frames(rig, [joint.world_position for joint in chain])
+        # Position *and* rotation, root first: re-orienting a joint rotates
+        # everything under it, so each child has to be put back after its
+        # parent moves.
+        for joint, frame in zip(chain, frames):
+            joint.align_to(frame)
+
+        # The ankle is the exception, and the only guide whose rotation is
+        # read: it is what aligns the foot to the model.
+        chain[3].align_to(limb_guides[-1], position=False)
+        # ...and it has children, which the arm's hand does not. Step 3 just
+        # rotated the ball and the toe with it, so both go back onto their
+        # conventional frames. Omitting this is the single easiest mistake
+        # here and it is invisible until a rigger rolls the ankle guide.
+        chain[4].align_to(frames[4])
+        chain[5].align_to(frames[5])
+
+        tm.delete(frames[0].long_name)
+
+        for name, joint in zip(
+            ("hip", "upperleg", "lowerleg", "foot", "ball", "toe"), chain
+        ):
+            rig.output(name, joint)
+
+        self._bind_chain = chain
+        self._size = derive_size(limb_guides)
