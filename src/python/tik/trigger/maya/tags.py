@@ -13,7 +13,7 @@ SIDE = "trg_side"
 NAME = "trg_name"  # user facing instance name (root guide only)
 DRAWN_KEY = "trg_drawn_key"  # display key this guide was DRAWN under, e.g. "L_arm".
 # A record of the rendering, never of the module: identity is the uuid in INSTANCE
-# and the name is the document's. Written by create_guide_joint, read only by
+# and the name is the document's. Written by create_guide_node, read only by
 # snapshot() so reconcile can notice a rename (guides match on uuid, not on names).
 SETTINGS = "trg_settings"  # settings dict (root guide only)
 DESIGNER = "trg_designer"  # Guide Designer layout dict (guide holder only)

@@ -20,10 +20,9 @@ from tik.maya import naming
 from tik.maya.roles.controller import Controller
 from tik.trigger.core import shapes as shape_library
 from tik.trigger.core.exceptions import GuideError
-from tik.trigger.core.manifest import TIERS, instance_key
+from tik.trigger.core.manifest import TIERS, GuideKind, instance_key
 from tik.trigger.core.module import Module
 from tik.trigger.core.schemas import ModuleInstance
-from tik.trigger.core.manifest import GuideKind
 from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_node
 
 from . import tags

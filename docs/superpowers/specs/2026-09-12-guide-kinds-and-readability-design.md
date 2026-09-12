@@ -1,7 +1,13 @@
 # Guide Kinds: a guide says what it is, and the framework decides how it looks
 
 **Date:** 2026-09-12
-**Status:** designed
+**Status:** implemented
+**Corrected during implementation:** §4.4's claim that the `.trg` needs no change, and
+§11's "the kind is not stored in the file", are both **withdrawn**. A pivot preset guide
+belongs to no `GuideLayout` -- its role comes from a settings table -- so there is nothing to
+ask on the way back in, and it would have re-imported as a joint. The record carries a `kind`
+field; `color` and `radius` become advisory. Export needed the same branch: a transform has no
+`jointOrient` and no `radius`. The *document* schema is unchanged, as §4.4 also says.
 **Amends:** `2026-09-07-movable-pivots-and-pivot-presets-design.md` — preset guides stop being
 joints styled as markers and become reference guides; they fan along the anchor's chain
 direction instead of stacking on it. The declaration, the anchor addressing and the switch
@@ -284,7 +290,14 @@ Two consequences worth recording. The elbow's `-1` in Z survives untouched, beca
 about Z does not change Z — the pole direction stays behind the arm for free, and no
 compensation is needed. And `neutral` stays on the collar-to-hand ray, extended past the hand,
 which keeps its docstring true (*"where the wrist sits when the collar is at rest"*) instead of
-leaving it quietly describing a pose the module no longer draws. The comment claiming "the
+leaving it quietly describing a pose the module no longer draws.
+
+**The neutral is derived from the hand, not typed as a triple.** `build_reach` aims a frame
+from the collar at the neutral and measures the wrist against it, so at the guide pose that
+angle must be *exactly* zero or no scalar value leaves the bind pose alone. Rounding the
+A-pose to one decimal left the neutral 0.006 off the collar-to-hand ray -- 60x the tolerance
+`test_bind_pose_is_exact_with_the_automation_full_on` allows. `NEUTRAL_REACH` is the multiple
+of the collar-to-hand distance it sits at. The comment claiming "the
 default guide arm is already a T-pose, so the default neutral is the T-pose" is replaced.
 
 No setting, no angle field, no rig-wide rest-pose concept. The guides are draggable; a field

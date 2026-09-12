@@ -13,7 +13,7 @@ An unposed :class:`GuideRecord` (``position is None``) means "no authored pose
 yet" -- regenerate places it wherever the module's ``draw_guides`` puts it,
 never at the origin. The same rule now covers ``joint_orient``, ``radius`` and
 ``color``: ``None`` means "never authored", so regenerate leaves whatever the
-module's own ``draw_guides`` (or ``create_guide_joint``) chose -- side colour
+module's own ``draw_guides`` (or ``create_guide_node``) chose -- side colour
 included -- rather than stamping a default over it.
 """
 

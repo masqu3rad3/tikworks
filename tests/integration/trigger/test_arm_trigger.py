@@ -35,8 +35,7 @@ def _build_arm(scene, side="L", **settings):
     collar_at = (2 * mult, 15, 0)
     hand_at = (14 * mult, 15, 0)
     neutral_at = tuple(
-        start + (end - start) * NEUTRAL_REACH
-        for start, end in zip(collar_at, hand_at)
+        start + (end - start) * NEUTRAL_REACH for start, end in zip(collar_at, hand_at)
     )
     for role, position in (
         ("collar", collar_at),

@@ -271,9 +271,11 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         carries an annotation whose visibility is the equivalent.
         """
         self.labels_visible = bool(on)
-        scope = scope if scope is not None else [
-            entry.instance_id for entry in self.document.modules
-        ]
+        scope = (
+            scope
+            if scope is not None
+            else [entry.instance_id for entry in self.document.modules]
+        )
         for instance_id in scope:
             for node in nodes.guide_nodes(instance_id).values():
                 plug = node["drawLabel"]

@@ -146,7 +146,7 @@ def test_only_the_root_guide_carries_the_breadcrumb():
 
 def test_unauthored_colour_keeps_the_modules_side_colour_on_regenerate():
     """Regression fence (fix round 2): a record with no authored colour must not
-    overwrite what draw_guides/create_guide_joint chose for the module's side --
+    overwrite what draw_guides/create_guide_node chose for the module's side --
     an L module regenerated from bare records must not turn centre-yellow."""
     from tik.trigger.guides import nodes
 

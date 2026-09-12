@@ -8,8 +8,8 @@ from maya import cmds
 
 import tik.maya as tm
 from tik.trigger.core import registry
-from tik.trigger.core.schemas import ModuleInstance
 from tik.trigger.core.manifest import GuideKind
+from tik.trigger.core.schemas import ModuleInstance
 from tik.trigger.maya import tags
 from tik.trigger.maya.rig import GuideDraft
 

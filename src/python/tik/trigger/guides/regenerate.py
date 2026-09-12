@@ -181,7 +181,7 @@ def regenerate(entry: ModuleEntry, document: Optional[GuideDocument] = None) -> 
             # an authored one applies even to an unposed guide -- before the
             # posed guard below. But each is Optional exactly like position:
             # None means "never authored", so draw_guides' own choice (e.g.
-            # the module's per-side colour from create_guide_joint) must be
+            # the module's per-side colour from create_guide_node) must be
             # left alone rather than stamped over with a stale default.
             if record.radius is not None:
                 joint.radius = record.radius
