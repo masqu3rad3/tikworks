@@ -262,3 +262,27 @@ def build_foot_controls(
             summed = control.offset[channel] + control.transform[channel]
             summed >> result.pivots[pivot_role][channel]
     return result
+
+
+def build_foot_bank(rig, result: FootResult, *, name: str = "foot") -> FootResult:
+    """Split the bank control's roll across the two edge pivots.
+
+    Two clamps, not the legacy's pair of set-driven keys: the relationship is
+    a straight line, and expressing a straight line as an animation curve
+    puts editable, serialising keyframes into a rig nobody keyed.
+
+    **Bank is the one place the two hierarchies are not twins.** One channel
+    feeds two mutually exclusive pivots, so there is no single pivot for the
+    control to correspond to: it is a handle for a value, and rotating it
+    does not tilt it onto the edge the foot banks over. A single pivot whose
+    ``rotatePivot`` switched on the sign would restore the correspondence --
+    and the switch would be free, because the rotation is zero at the instant
+    the sign changes. Rejected for now as cleverness bought against a
+    structure the legacy proved in production; this is the note saying where
+    to look if the detachment turns out to bother animators.
+    """
+    channel = result.controls["bank"].transform["rotateX"]
+    total = result.controls["bank"].offset["rotateX"] + channel
+    total.maximum(0.0) >> result.pivots["bank_out"]["rotateX"]
+    total.minimum(0.0) >> result.pivots["bank_in"]["rotateX"]
+    return result

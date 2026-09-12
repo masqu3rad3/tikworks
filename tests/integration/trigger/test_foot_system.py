@@ -7,6 +7,22 @@ import pytest
 import tik.maya as tm
 from tik.trigger.systems import foot as foot_system
 
+#: The leg guide pose the mirrored tests build from (left side; the fixture
+#: negates X for the right).
+LEG_POSES = {
+    "hip": (1, 10.4, 0),
+    "thigh": (2, 9.6, 0),
+    "knee": (2, 5.3, 0.45),
+    "ankle": (2, 1.0, 0),
+    "ball": (2, 0.25, 1.3),
+    "toe": (2, 0.05, 2.4),
+    "heel": (2, 0.05, -0.6),
+    "tip": (2, 0.05, 2.8),
+    "bank_in": (1.2, 0.05, 1.3),
+    "bank_out": (2.8, 0.05, 1.3),
+    "neutral": (1 + 1 * 1.4, 10.4 - 9.4 * 1.4, 0),
+}
+
 #: Left-foot marker positions, matching the leg module's defaults.
 _STRAIGHT_POSITIONS = {
     "ankle": (2.0, 1.0, 0.0),
@@ -466,3 +482,48 @@ def test_the_right_foots_declared_orients_are_conjugated(build_context):
         assert left_result.controls[role].shape_orient == orient, role
         assert right_result.controls[role].shape_orient == mirror_orient(orient), role
     assert checked > 0  # sanity: the leg module does declare foot orients
+
+
+def test_positive_bank_rolls_one_edge_and_leaves_the_other(build_context):
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    foot_system.build_foot_bank(ctx, result)
+
+    result.controls["bank"].transform["rotateX"].value = 45.0
+    assert result.pivots["bank_out"]["rotateX"].value == pytest.approx(45.0, abs=1e-4)
+    assert result.pivots["bank_in"]["rotateX"].value == pytest.approx(0.0, abs=1e-4)
+
+    result.controls["bank"].transform["rotateX"].value = -45.0
+    assert result.pivots["bank_out"]["rotateX"].value == pytest.approx(0.0, abs=1e-4)
+    assert result.pivots["bank_in"]["rotateX"].value == pytest.approx(-45.0, abs=1e-4)
+
+
+def test_bank_lays_down_no_animation_curves(build_context):
+    """The legacy used setDrivenKeyframe for what is a straight line.
+
+    A build should not author animation curves: they are editable, they
+    serialise into the scene, and a rigger who scrubs onto them cannot tell
+    they were made by code.
+    """
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    foot_system.build_foot_bank(ctx, result)
+
+    for role in ("bank_in", "bank_out"):
+        curves = tm.listConnections(
+            result.pivots[role]["rotateX"].path, type="animCurve"
+        )
+        assert not curves, role
+
+
+@pytest.mark.xfail(reason="needs leg.build -- Task 15", strict=True)
+def test_bank_is_mirrored_by_the_frame_not_by_a_multiplier(mirrored_pair):
+    """Same value, same magnitude, opposite world direction -- no side term."""
+    left, right = mirrored_pair("leg", LEG_POSES)
+    for ctx in (left, right):
+        ctx.controller_by_role("bank").transform["rotateX"].value = 30.0
+
+    left_up = left.outputs["foot"].world_axis("y")
+    right_up = right.outputs["foot"].world_axis("y")
+    assert left_up[0] == pytest.approx(-right_up[0], abs=1e-3)
+    assert left_up[1] == pytest.approx(right_up[1], abs=1e-3)
