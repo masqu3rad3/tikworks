@@ -106,11 +106,27 @@ def test_a_tick_alone_builds_a_pivot_with_no_presets():
     assert not rig.controller_by_role("root").transform.has_attr("pivotPreset")
 
 
-def test_a_preset_row_builds_the_pivot():
+def test_a_preset_row_alone_builds_a_null_the_animator_switches():
+    """Presets without the tick: an enum to switch, nothing to drag."""
     rig = _build(pivot_presets=[{"control": "root", "label": "tip"}])
+    main = rig.controller_by_role("root")
+
+    assert "L_head_root_pivot_ctrl" not in _controls(rig)
+    assert "L_head_root_pivot_grp" in rig.pivot_node("root").name
+    assert main.transform.has_attr("pivotPreset")
+    assert not main.transform.has_attr("showPivot")
+
+
+def test_a_tick_and_a_row_give_both():
+    rig = _build(
+        movable_pivots=["root"],
+        pivot_presets=[{"control": "root", "label": "tip"}],
+    )
+    main = rig.controller_by_role("root")
 
     assert "L_head_root_pivot_ctrl" in _controls(rig)
-    assert rig.controller_by_role("root").transform.has_attr("pivotPreset")
+    assert main.transform.has_attr("pivotPreset")
+    assert main.transform.has_attr("showPivot")
 
 
 # ------------------------------------------------------------------ spaces

@@ -604,6 +604,17 @@ class Module(Schema):
         """
         return role in (self.movable_pivots or ()) or bool(self.pivot_labels(role))
 
+    def pivot_movable(self, role: str) -> bool:
+        """Whether the animator may move ``role``'s pivot by hand.
+
+        The other half of ``pivot_wanted``, and deliberately not implied by a
+        preset row: named positions and a draggable pivot are two features. A
+        rigger who offers three foot rolls has not thereby agreed to let the
+        animator put the pivot anywhere else, so rows alone build a null the
+        presets drive and nothing to grab.
+        """
+        return role in (self.movable_pivots or ())
+
     @classmethod
     def pivot_guide_roles(cls, settings=None) -> tuple[str, ...]:
         """``pivot_<control>_<label>`` per well-formed row, in row order.

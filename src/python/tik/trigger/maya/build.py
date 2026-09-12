@@ -761,8 +761,8 @@ class Builder:
                     main = ctx.controller_by_role(role)
                     if main is None or not view.pivot_wanted(role):
                         continue
-                    if ctx.controller_by_role(f"{role}_pivot") is None:
-                        ctx.pivot_control(main)
+                    if ctx.pivot_node(role) is None:
+                        ctx.pivot_control(main, movable=view.pivot_movable(role))
                 contexts.append((slug, ctx))
                 # The module's outputs are its copies' outputs, qualified.
                 for name, node in ctx.outputs.items():

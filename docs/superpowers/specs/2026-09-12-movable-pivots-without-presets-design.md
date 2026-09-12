@@ -46,8 +46,8 @@ framework-wide: it is not about any module, and no module can work around it, be
 
 ## 2. Decision
 
-**A rigger-facing tick list decides which offered controls get a pivot; a preset row implies a
-tick.**
+**A rigger-facing tick list decides which pivots the animator may move; a preset row builds the
+pivot but not the control.**
 
 The Pivots fold grows a second widget above the existing table:
 
@@ -68,9 +68,29 @@ Three properties make this the right shape:
 movable pivot" is answered above "and what named positions does it have", which is the order a
 rigger thinks in and the order the build reads them.
 
-**A preset row implies a tick, so nothing migrates.** Every `.tr` in existence, and `arm`'s
-three shipped default rows, build exactly what they build today. The implication runs one way
-only — a tick does not invent rows — which is what makes the bare pivot reachable.
+**A preset row implies a pivot, not a pivot *control*.** This is the whole point, and the first
+draft of this spec got it wrong: gating only *existence* left a presets-only control with a
+tagged, shaped, keyable pivot controller and a `showPivot` attr on its main — so `movable_pivots`
+did not describe movability at all, and a rigger offering three foot rolls was still forced to
+hand the animator a pivot to drag. Measured on a rows-only `fkchain`:
+
+```
+pivot has shape   : True          <- a real control shape
+pivot trg_kind    : controller    <- tagged as an animator control
+pivot keyable tx  : True          <- draggable in the channel box
+main showPivot    : True
+```
+
+The two questions are therefore separate, and neither implies the other:
+
+| Question | Asked by | Builds |
+|---|---|---|
+| Is there a pivot at all? | a tick **or** preset rows | a node under `main` driving `rotatePivot` |
+| May the animator move it? | the tick alone | that node is a *controller*, plus `showPivot` |
+
+**Nothing migrates.** Every `.tr` keeps its preset rows and keeps switching them; `arm` ships a
+default tick for `ik` alongside its three default rows, so a fresh arm's hand pivot is the
+controller it has always been.
 
 **Nothing is ticked by default.** A module that offers pivots on fifty FK controls still builds
 none until asked, which is the property that let `pivot_controls` become a declaration every
@@ -134,11 +154,15 @@ for role in view.pivot_controls_for_copy(view.values()):
     main = ctx.controller_by_role(role)
     if main is None or not view.pivot_wanted(role):
         continue
-    if ctx.controller_by_role(f"{role}_pivot") is None:
-        ctx.pivot_control(main)
+    if ctx.pivot_node(role) is None:
+        ctx.pivot_control(main, movable=view.pivot_movable(role))
 ```
 
-with the rule itself on `Module`, beside `pivot_labels`:
+`ctx.pivot_node(role)`, not `ctx.controller_by_role(f"{role}_pivot")`: a pivot that is not
+movable is a group and never reaches `rig.controllers`, so the old guard would report "no pivot"
+and build a second one. `ModuleRig` keeps a `{role: node}` record instead.
+
+with **both** rules on `Module`, beside `pivot_labels`:
 
 ```python
 def pivot_wanted(self, role: str) -> bool:
@@ -154,9 +178,42 @@ def pivot_wanted(self, role: str) -> bool:
 On `Module` rather than in the builder for the reason `pivot_labels` is there: it is a question
 about settings, not about a scene, and `core` is where the rows live.
 
-`rig.pivot_control` is unchanged. It already builds `showPivot`, the pivot controller and
-`drive_pivot` first and wires presets only `if labels:`, so a ticked control with no rows gets
-the pivot and no `pivotPreset` enum — which is precisely the feature.
+### 4.1 What `rig.pivot_control` builds
+
+It takes a `movable` flag, defaulting to True — which is what a module calling it itself is
+asking for, so the legacy path the 2026-09-11 seam promised to keep working keeps working. The
+builder passes the rigger's answer instead.
+
+**Movable** is today's construction, unchanged: a controller child of `main` with a sphere
+shape, a `showPivot` bool revealing it, and a manual `translate` that *adds* to the preset —
+`drive_pivot` receives the plug sum `offset.translate + transform.translate`, so an adjustment
+survives a preset change (`test_a_manual_offset_adds_on_top_of_the_preset`: preset 4.0 + manual
+0.5 → `(4.0, 0.5, 0.0)`).
+
+**Not movable** collapses those two nodes into one plain `tm.Transform` child of `main`, suffixed
+`grp`. A fresh child starts at local zero, which *is* `main`'s pivot, so nothing needs matching;
+and with no manual translate riding on top there is nothing for an offset group to separate, so
+the preset drives that node directly. No shape, no controller tag, not in `rig.controllers`, and
+**no `showPivot`** — there is nothing to show.
+
+`pivotPreset` stays on `main` either way, which is what keeps the animator's side whole: the
+Switches dock reads only that enum and its labels (`maya/pivot.py:40`), never the pivot node, so
+it works against a demoted pivot untouched. Measured on a rows-only `fkchain` with its preset
+guides placed:
+
+```
+node            : C_tail_fk0_pivot_grp / transform
+is a controller : False
+has shape       : False
+showPivot       : False
+enum labels     : ['default', 'tip', 'heel']
+preset tip      -> rotatePivot (3.0, 0.0, 0.0)
+preset heel     -> rotatePivot (0.0, 5.0, 0.0)
+```
+
+`_wire_pivot_presets` gains explicit `holder` and `target` arguments — the node carrying the
+locked `preset_<label>` attributes, and the transform the `choice` drives. They are the same
+node when the pivot is a group, and the controller and its offset group when it is not.
 
 ## 5. Two FormBuilder fixes
 
@@ -215,8 +272,8 @@ would still be a module whose presets could not be placed.
 
 | Test | What it pins |
 |---|---|
-| `tests/integration/trigger/test_pivot_build_trigger.py` | a tick with no rows builds a pivot and **no** `pivotPreset` attr; a row with no tick still builds one; neither builds nothing; a tick and rows together build one pivot with its enum |
-| `tests/unit/test_pivot_trigger.py` | `pivot_wanted` for the four combinations; the tick is per copy and qualifies like the rows |
+| `tests/integration/trigger/test_pivot_build_trigger.py` | a tick with no rows builds a pivot and **no** `pivotPreset` attr; a row with no tick builds a *null* (no `showPivot`, not in `controllers`) that still drives `rotatePivot`; neither builds nothing; a tick and rows together build one controller with its enum; an arm whose rows are cleared keeps the pivot its tick asked for |
+| `tests/unit/test_pivot_trigger.py` | `pivot_wanted` and `pivot_movable` for the four combinations; the tick is per copy and qualifies like the rows; a module calling `rig.pivot_control` itself still gets a controller |
 | `tests/ui/test_empty_sections.py` | `twist` still renders no Pivots fold, now with a live field in it |
 | `tests/ui/test_pivot_picker.py` (new, beside `test_kinematics_picker.py`) | the module form renders the picker rather than a line edit, and its choices are the copy's bare roles |
-| `tests/integration/trigger/test_control_module_trigger.py` | `test_no_preset_rows_means_no_pivot` becomes "no tick and no rows means no pivot"; a ticked control gets one |
+| `tests/integration/trigger/test_control_module_trigger.py` | neither a tick nor a row means no pivot; a tick alone gives one with no presets; a row alone gives a null the animator switches; both give both |
