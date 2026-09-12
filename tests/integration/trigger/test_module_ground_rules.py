@@ -201,7 +201,14 @@ def test_every_output_is_a_tagged_bind_joint(module_type):
 def test_every_controller_declares_a_mirror_rule(module_type):
     """Rule 1.6: a pose-mirror tool needs the rule per control."""
     ctx = _solo(module_type)
-    assert ctx.controllers, f"'{module_type}' produced no controllers"
+    # Not `assert ctx.controllers`: a module may legitimately build none
+    # (twist's joints ride an aimed frame), and the rule below is about the
+    # controllers that exist, not about there being any.
+    declared = get_module(module_type).control_names(ctx.instance.settings)
+    assert bool(ctx.controllers) == bool(declared), (
+        f"'{module_type}' declares {len(declared)} controls and built "
+        f"{len(ctx.controllers)}"
+    )
     for controller in ctx.controllers:
         rule = controller.transform.meta[tags.MIRROR]
         assert rule in (
@@ -316,7 +323,14 @@ def test_every_top_level_controller_has_an_offset_group(module_type):
     refines, so it rides along and needs no offset of its own.
     """
     rig = _solo(module_type)
-    assert rig.controllers
+    # Not `assert rig.controllers`: a module may legitimately build none
+    # (twist's joints ride an aimed frame), and the rule below is about the
+    # controllers that exist, not about there being any.
+    declared = get_module(module_type).control_names(rig.instance.settings)
+    assert bool(rig.controllers) == bool(declared), (
+        f"'{module_type}' declares {len(declared)} controls and built "
+        f"{len(rig.controllers)}"
+    )
     tweaks = {
         control.transform.long_name
         for control in rig.controllers
