@@ -42,6 +42,12 @@ REFERENCE_SCALE = 0.6
 DRIVEN_COLORS = {"L": 15, "R": 12, "C": 3}
 #: Maya's joint-label side enum: 0 centre, 1 left, 2 right, 3 none.
 LABEL_SIDES = {"C": 0, "L": 1, "R": 2}
+#: How far apart preset markers fan off their anchor, as a fraction of the
+#: anchor's own incoming bone -- and the step to use when it has no incoming
+#: bone. Same class of decision as REFERENCE_SCALE, so it lives beside it
+#: rather than as a literal in the draft.
+MARKER_FAN_FRACTION = 0.25
+MARKER_FAN_FALLBACK = 0.5
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +149,22 @@ def guide_color(kind: GuideKind, side: str) -> int:
     return table.get(side, 17)
 
 
+def guide_kind(node, layout, role: str, *, is_root: bool = False) -> GuideKind:
+    """What kind a *drawn* guide is.
+
+    ``REFERENCE`` is the one kind readable from the node itself -- it is not a
+    joint -- and also the one a layout may not know about, because a pivot
+    preset guide's role comes from a settings table rather than a
+    ``GuideLayout``. Every other kind comes from the layout.
+
+    Centralised here so the scene-facing derivation lives next to the table it
+    feeds, instead of being re-spelled at each call site.
+    """
+    if node.type != "joint":
+        return GuideKind.REFERENCE
+    return layout.kind_for(role, is_root=is_root)
+
+
 def label_guide(node, kind: GuideKind, text: str, side: str) -> None:
     """Draw ``text`` beside ``node``, by whatever means its kind allows.
 
@@ -161,9 +183,7 @@ def label_guide(node, kind: GuideKind, text: str, side: str) -> None:
         node["drawLabel"].value = 1
         node["side"].value = LABEL_SIDES.get(side, 3)
         node["type"].value = 18  # Other: otherType carries the string
-        # cmds rather than a tik.maya plug write: `otherType` is a string
-        # attribute, and setAttr needs its type named explicitly.
-        cmds.setAttr(f"{node.long_name}.otherType", text, type="string")
+        node["otherType"].value = text
         return
 
     suffix = f" ({side})" if side in ("L", "R") else ""
@@ -182,18 +202,37 @@ def label_guide(node, kind: GuideKind, text: str, side: str) -> None:
     cmds.setAttr(f"{shape}.overrideColor", MARKER_COLOR)
 
 
+def set_label_visible(node, on: bool) -> None:
+    """Show or hide one guide's label, whichever kind of label it has.
+
+    The inverse of ``label_guide``, and it lives beside it so the two halves
+    of the same split cannot drift. The branch is the same one: a joint
+    guide's label is an attribute, a reference guide's is an annotation --
+    and because ``REFERENCE`` is the only kind without a ``drawLabel`` plug,
+    the two cases are mutually exclusive rather than both worth trying.
+    """
+    plug = node["drawLabel"]
+    if plug.exists():
+        plug.value = bool(on)
+        return
+    for label in guide_label_nodes(node):
+        cmds.setAttr(f"{label}.visibility", bool(on))
+
+
 def guide_label_nodes(node) -> list[str]:
     """The annotation transforms under a guide, as long names.
 
-    The Designer's Labels toggle hides these; a joint guide's label is an
-    attribute and is toggled directly.
+    One ``listRelatives`` for the children and one for their shapes, rather
+    than a call per child: this runs per guide on every Labels toggle.
     """
-    found = []
-    for child in cmds.listRelatives(node.long_name, children=True, fullPath=True) or []:
-        shapes = cmds.listRelatives(child, shapes=True, fullPath=True) or []
-        if any(cmds.nodeType(shape) == "annotationShape" for shape in shapes):
-            found.append(child)
-    return found
+    children = cmds.listRelatives(node.long_name, children=True, fullPath=True) or []
+    if not children:
+        return []
+    shapes = (
+        cmds.listRelatives(children, shapes=True, fullPath=True, type="annotationShape")
+        or []
+    )
+    return sorted({shape.rsplit("|", 1)[0] for shape in shapes})
 
 
 def create_guide_node(

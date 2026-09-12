@@ -10,6 +10,7 @@ from typing import Any, Iterable, Optional
 
 from maya import cmds
 
+import tik.maya as tm
 from tik.core.side import Side
 from tik.trigger.core import copies as copy_list
 from tik.trigger.core import registry
@@ -266,23 +267,21 @@ class GuideScene(GuideExchangeMixin, SceneGroupsMixin):
         not read a preference and a preference can never change what Draw
         renders. This is what turns them off afterwards.
 
-        Two node kinds, one switch. A joint guide's label is an attribute; a
-        reference guide is a transform with no ``drawLabel`` at all, and
-        carries an annotation whose visibility is the equivalent.
+        Which label a guide carries depends on its kind, and that split
+        belongs next to the one that draws it -- ``nodes.set_label_visible``.
         """
         self.labels_visible = bool(on)
-        scope = (
-            scope
-            if scope is not None
-            else [entry.instance_id for entry in self.document.modules]
-        )
-        for instance_id in scope:
-            for node in nodes.guide_nodes(instance_id).values():
-                plug = node["drawLabel"]
-                if plug.exists():
-                    plug.value = bool(on)
-                for label in nodes.guide_label_nodes(node):
-                    cmds.setAttr(f"{label}.visibility", bool(on))
+        # One scan for every drawn guide, not one per module: `trg_instance` is
+        # stamped on built rig nodes too -- controllers, offset groups, deform
+        # joints -- so a per-module `guide_nodes()` walked the whole tagged
+        # scene once per module to find a handful of guides. Scanning on the
+        # kind gives the identical set in a single pass, and it is the pattern
+        # `snapshot()` and `find_instances()` already use.
+        wanted = None if scope is None else set(scope)
+        for node in tm.find_by_meta(tags.KIND, tags.GUIDE, node_type="transform"):
+            if wanted is not None and node.meta.get(tags.INSTANCE) not in wanted:
+                continue
+            nodes.set_label_visible(node, on)
 
     def scene_node(self, name: str):
         """The Maya node called ``name``, or None (used to validate sources)."""

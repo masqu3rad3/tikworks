@@ -415,8 +415,11 @@ class DesignerCommands:
         """
         from tik.trigger.config import prefs
 
+        # No set_labels() echo back to the bar: unlike Auto Sync -- which has
+        # three front doors (checkbox, menu action, signal) and needs them kept
+        # in step -- the checkbox is the only thing that can produce this, so
+        # writing the value back to it would advertise a door that isn't there.
         self.guides.set_labels_visible(bool(on))
-        self.action_bar.set_labels(on)
         prefs.guides.show_guide_labels = bool(on)
         prefs.save()
 

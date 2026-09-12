@@ -8,7 +8,6 @@ removes naming, tagging, placement or registration boilerplate, so
 
 from __future__ import annotations
 
-import math
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
@@ -23,7 +22,12 @@ from tik.trigger.core.exceptions import GuideError
 from tik.trigger.core.manifest import TIERS, GuideKind, instance_key
 from tik.trigger.core.module import Module
 from tik.trigger.core.schemas import ModuleInstance
-from tik.trigger.guides.nodes import SIDE_COLORS, create_guide_node
+from tik.trigger.guides.nodes import (
+    MARKER_FAN_FALLBACK,
+    MARKER_FAN_FRACTION,
+    SIDE_COLORS,
+    create_guide_node,
+)
 
 from . import tags
 
@@ -222,14 +226,14 @@ class GuideDraft:
         """
         parent = anchor.parent
         if parent is not None:
-            here = tuple(anchor.world_position)
-            there = tuple(parent.world_position)
-            vector = [a - b for a, b in zip(here, there)]
-            length = math.sqrt(sum(value * value for value in vector))
+            # world_position is an MVector, so this is the same idiom the
+            # twist and limb systems use rather than a third spelling of it.
+            vector = anchor.world_position - parent.world_position
+            length = vector.length()
             if length > 1e-6:
-                unit = tuple(value / length for value in vector)
-                return unit, 0.25 * length
-        return (float(self.side_mult), 0.0, 0.0), 0.5
+                vector.normalize()
+                return tuple(vector), MARKER_FAN_FRACTION * length
+        return (float(self.side_mult), 0.0, 0.0), MARKER_FAN_FALLBACK
 
 
 class ModuleRig:

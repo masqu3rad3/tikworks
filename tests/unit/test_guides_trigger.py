@@ -7,6 +7,7 @@ import pytest
 from maya import cmds
 from maya.api import OpenMaya
 
+from tik.trigger.core import GuideKind
 from tik.trigger.core.exceptions import GuideError
 from tik.trigger.guides import nodes
 from tik.trigger.maya import tags
@@ -478,3 +479,38 @@ def test_a_pre_copies_module_loads_as_one_copy(guides):
     assert module.for_copy("").segments == 4
     assert module.expected_guides()[0] == ("root", 0)
     assert len(module.expected_guides()) == 5  # root + 4 segments, unprefixed
+
+
+def test_trg_round_trip_rebuilds_each_guide_from_its_kind(guides, tmp_path):
+    """The kind decides the look on the way back in, not the record.
+
+    The record stores a kind because a pivot preset guide is in no
+    ``GuideLayout`` and so cannot be asked what it is. Radius and colour ride
+    along advisory: a reference guide has neither to read.
+    """
+    guides.add("arm", side="L", name="arm")
+    guides.add("twist", name="twist", count=2)
+    path = guides.export(tmp_path / "kinds")
+
+    records = {
+        record["name"]: record for record in json.loads(path.read_text())["joints"]
+    }
+    neutral = next(name for name in records if name.endswith("neutral_guide"))
+    assert records[neutral]["kind"] == "reference"
+    rail = next(name for name in records if "twist_guide" in name)
+    assert records[rail]["kind"] == "driven"
+
+    guides.clear()
+    guides.import_(path)
+
+    rebuilt_arm = next(h for h in guides.instances() if h.module_type == "arm")
+    rebuilt_twist = next(h for h in guides.instances() if h.module_type == "twist")
+    arm_nodes = guides.guide_nodes(rebuilt_arm.instance_id)
+    twist_nodes = guides.guide_nodes(rebuilt_twist.instance_id)
+
+    # a reference guide comes back a locator transform, not a joint
+    assert cmds.nodeType(arm_nodes[("neutral", 0)].long_name) == "transform"
+    assert arm_nodes[("neutral", 0)].color == nodes.MARKER_COLOR
+    # and a driven guide comes back a joint at the kind's radius
+    assert cmds.nodeType(twist_nodes[("twist", 0)].long_name) == "joint"
+    assert twist_nodes[("twist", 0)].radius == nodes.KIND_RADIUS[GuideKind.DRIVEN]

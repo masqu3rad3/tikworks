@@ -8,18 +8,16 @@ renders -- it only decides where the button starts.
 
 import pytest
 from stub import StubScene
-from toy_modules import ToyChain, ToyRoot
 
-from tik.trigger.core import clear_registries, register_module
+from tik.trigger.core import clear_registries
 from tik.trigger.ui.designer import GuideDesigner
 from tik.trigger.ui.designer.action_bar import DesignerActionBar
 
 
 @pytest.fixture(autouse=True)
 def _registered():
+    """No toy modules: every test here builds a bar or an empty Designer."""
     clear_registries()
-    register_module("toy_root")(ToyRoot)
-    register_module("toy_chain")(ToyChain)
     yield
     clear_registries()
 

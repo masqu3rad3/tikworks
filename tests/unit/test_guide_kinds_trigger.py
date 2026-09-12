@@ -4,8 +4,6 @@ Pure -- no Maya. The appearance these kinds resolve to lives in
 ``tik/trigger/guides/nodes.py`` and is covered by the integration tests.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from tik.trigger.core import GuideKind, GuideLayout
