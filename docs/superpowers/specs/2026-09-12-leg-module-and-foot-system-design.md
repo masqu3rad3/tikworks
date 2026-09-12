@@ -1,7 +1,7 @@
 # The Leg: a foot is a second solver, not a longer arm
 
 **Date:** 2026-09-12
-**Status:** designed
+**Status:** in implementation
 **Amends:** `2026-08-30-trigger-simplification-design.md` — `build_ikfk_limb` is no longer the
 only way into the limb system. It splits into a controls phase and a solve phase, and the solve
 phase takes a `driver`. The single-call entry point survives unchanged and the arm keeps using
@@ -269,26 +269,100 @@ leave the animator's control behind, visually detached from the foot it is drivi
 The IK handles are *constrained* to `toe_wiggle`, not parented under it — the same pattern
 `_build_soft_ik` already uses to drive the leg's own handle from `soft_ik.goal_matrix`.
 
-### 6.3 The side-multiplier table disappears
+### 6.3 The frame is behaviour-mirrored, and no sign rule is needed
 
-The old module multiplied eight of nine attributes by `sideMult` and then had to exempt `hRoll`
-and `tRoll` from it. Two exemptions in a table of eight is the signature of a frame problem being
-paid for one attribute at a time.
+**Twice corrected. The original claim -- that a frame built from each foot's own geometry
+retires the legacy's side handling -- was withdrawn on measurement, replaced with a sign rule,
+and the sign rule is now withdrawn too. What follows is the third and final answer, and unlike
+the first two it rests on a uniqueness proof rather than on a reading of the legacy.**
 
-The cause is visible in the old code: `footPlaneLocator_TEMP` is point-constrained between the
-heel and toe markers and aim-constrained at the toe with the ankle as up — a frame built from the
-*foot's own geometry*, which points the same way on both sides. The pivots were then given that
-frame's rotation. So `rx`, `ry` and `rz` already mean the same thing on the left and the right,
-and the multipliers were re-introducing a mirror the frame had removed.
+#### What was measured
 
-**This design builds every foot pivot on one shared frame, aimed heel → tip with the ankle as up,
-and mirrors none of it.** `rx` is roll, `ry` is spin, `rz` is lean, on both feet.
+Build the frame by aiming local Z heel->tip with local Y up, on each foot, from that foot's own
+geometry. On both a straight and a 25-degree toed-out foot, the right frame comes back as the
+naive mirror **with its X column negated**: `z_R = M z_L`, `y_R = M y_L`, `x_R = -M x_L`, where
+`M = diag(-1, 1, 1)`.
 
-This is a claim, not an assertion: it is the one part of the foot design that is not derived from
-something already measured. It gets a test that builds a left and a right leg, sets the same
-`footRoll` and the same `bank` on both, and asserts the two feet rotate in mirrored world space
-by the same magnitude. If the test fails, the frame is wrong and the fix belongs in the frame —
-not in a per-attribute multiplier.
+That is forced, not incidental. For any reflection `M`, `(Ma) x (Mb) = det(M) M(a x b) =
+-M(a x b)`. The frame takes Z from a point difference and Y from a point difference
+(Gram-Schmidt'd, and dot products are reflection-invariant), so both mirror cleanly -- while X
+is their cross product and must come back negated. **No guide layout can make it otherwise.**
+
+Consequently, with naive mirrored frames, a local rotation about X produces mirrored world
+motion while rotations about Y and Z produce the mirror of the *negated* angle.
+
+#### Why the obvious remedy is wrong
+
+The tempting fix is to negate `rotateY` and `rotateZ` on the mirrored side -- which is, exactly,
+what the legacy did, and the legacy's two "unexplained" exemptions turn out to be its `rotateX`
+channels. (All three of them: `hRoll`, `tRoll` and `bank` all escaped `sideMult`, and all six
+`rotateY`/`rotateZ` drivers took it.) So the legacy was right, and this spec's first version was
+wrong to read those exemptions as a smell.
+
+But adopting that rule here breaks something this design promises elsewhere. `rig.controller`
+does **not** set orientation from its `mirror=` argument -- that argument is a tag plus a
+shape-orient conjugation. A controller's frame comes from `match=` and its ancestor chain, so
+under 6.2 the foot controls inherit their *pivots'* frames. Put the sign on the control-to-pivot
+connection and, on the right leg, the animator turns a handle one way while the foot turns the
+other, on six of the ten driven channels. 6.4 spends a paragraph apologising for **one**
+detached handle. Six more, on one side only, is not a footnote -- it is the lockstep claim of
+6.2 quietly failing.
+
+#### The frame-level fix, and why it is the only one
+
+Require that the mirrored frame reproduce mirrored motion for *every* rotation:
+
+```
+F_R R F_R^T  =  M (F_L R F_L^T) M      for all R in SO(3)
+```
+
+Set `C = (M F_L)^T F_R`. The requirement becomes `C R C^T = R` for all `R`, so `C` commutes with
+all of SO(3), so `C = +/-I`. And `det C = det(M) det(F_R) det(F_L) = -1`. Therefore **`C = -I`**:
+
+```
+F_R  =  -M F_L  =  diag(1, -1, -1) . F_L  =  Rx(180) . F_L
+```
+
+The solution is unique, and it is the **behaviour mirror** -- the left frame rolled 180 degrees
+about the world mirror normal. Three candidates were considered and two were rejected for the
+wrong reason: `Ry(180)` gives `C = diag(-1, 1, -1)` and `Rz(180)` gives `C = diag(-1, -1, 1)`,
+neither of which is `-I`. `Rx(180)` is the one that works, and it was initially skipped because
+it is the ugliest to look at: on the right foot it points Z backwards *and* Y downwards.
+
+Crucially it is a **proper rotation**: `det(-M F_L) = (-1)^3 . (-1) . (+1) = +1`. There is no
+negative scale, no flipped normal, and nothing for `jointOrient` to choke on -- which was the
+stated reason for rejecting a "true mirrored frame" and does not apply here.
+
+It is also already this repo's convention. `mirror_orient` in `tik/trigger/maya/rig.py` says it
+outright: *"The right side is mirrored by behaviour: its joints carry a 180 degree roll about
+X."* Conjugation by `Rx(180) = diag(1,-1,-1)` and by `diag(-1,1,1)` are the same operation, so
+this is not a new rule at all -- it is the repo's existing mirror algebra, reappearing.
+
+#### What it costs and what it buys
+
+One line, in `foot_frame`, on the mirrored side only:
+
+```python
+aim, up = ((0, 0, -1), (0, -1, 0)) if rig.side_mult < 0 else ((0, 0, 1), (0, 1, 0))
+```
+
+Aiming local `-Z` at the tip puts `+Z` behind the heel; upping on `-Y` puts `+Y` down; and
+`X = Y x Z` then lands on `-M x_L`, giving exactly `-M F_L`.
+
+In exchange: **no sign anywhere else in the foot.** `CONTROL_CHANNELS` connects straight
+through, 6.4's bank clamps take no side term, 8's auto-roll takes none, 6.2's lockstep holds
+unconditionally on both legs, and `mirror="behaviour"` on the foot controls becomes literally
+true rather than a tag that lies to the pose-mirror tool. The frame still does the job it was
+introduced for: a toed-out foot defines its own roll axes instead of inheriting a world
+convention.
+
+#### How it was found
+
+Task 8's first pass measured the frame as exact world identity, because the default guide layout
+puts heel and tip at the same X and Y. Every frame assertion was satisfied by an identity
+matrix, and both feet were trivially equal -- the original claim appeared to hold in the one
+case where the mechanism does nothing. Re-testing on a toed-out foot, the ordinary production
+pose, is what exposed it. **A claim proven only where its mechanism is inert is not proven.**
 
 ### 6.4 Bank is two linear connections
 
@@ -606,7 +680,7 @@ follow-up and is explicitly deferred.
 | 1 | Split `build_ikfk_limb` into controls + solve | A `driver_from` callback — hides a sub-rig in a keyword; re-pointing after the fact — leaves soft-IK and the pole measuring the wrong node, silently |
 | 2 | The foot is a system, the leg is a module | Extending `limb.py` with foot knowledge — a limb has no feet |
 | 3 | Two parallel hierarchies, channel-connected | Controllers *as* the pivots — puts IK handles in `control_grp` |
-| 4 | One shared foot frame, no side multipliers | The old per-attribute table, with its two exemptions |
+| 4 | The foot frame is **behaviour-mirrored** (`Rx(180)`) on the mirrored side, so no sign appears anywhere | A per-axis sign rule -- correct, and what the legacy did, but it desynchronises six handles from their pivots on the right leg (6.2); and a naive mirrored frame, **withdrawn twice, see 6.3** |
 | 5 | Every foot channel gets a control **and** a proxy | A smaller control set — a rule with exceptions is unpredictable |
 | 6 | Auto-roll drives controller offset groups | Driving pivots directly — the controls would drift off the foot |
 | 7 | Quadratic smooth-min for the break | Blend toward the break — overshoots, drives the toe backwards |
