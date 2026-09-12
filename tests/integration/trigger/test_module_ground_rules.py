@@ -18,8 +18,6 @@ from tik.trigger.core import ParentRef, get_module
 from tik.trigger.guides import GuideScene
 from tik.trigger.maya import Builder, tags
 
-MODULE_TYPES = ("base", "fkchain", "arm")
-
 
 def _solo(module_type):
     """Build one unconnected instance and return its context."""
@@ -178,7 +176,7 @@ def test_connected_module_leaves_its_bind_group_empty(connected_rig):
     assert children == [], f"bind_grp should be empty when connected, holds {children}"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_no_controller_outside_the_control_group(module_type):
     """Rule 1.3: control_grp holds controllers and their offset groups only."""
     ctx = _solo(module_type)
@@ -189,7 +187,7 @@ def test_no_controller_outside_the_control_group(module_type):
         ), f"{controller.transform.name} is outside {control_group}"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_every_output_is_a_tagged_bind_joint(module_type):
     """Rule 1.5: ctx.bind_parent reads outputs, so they must be bind joints."""
     ctx = _solo(module_type)
@@ -199,7 +197,7 @@ def test_every_output_is_a_tagged_bind_joint(module_type):
         assert node in ctx.deform_joints, f"output '{name}' is not a bind joint"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_every_controller_declares_a_mirror_rule(module_type):
     """Rule 1.6: a pose-mirror tool needs the rule per control."""
     ctx = _solo(module_type)
@@ -212,7 +210,7 @@ def test_every_controller_declares_a_mirror_rule(module_type):
         ), f"{controller.transform.name} declares mirror rule {rule!r}"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_module_has_exactly_the_four_groups(module_type):
     """Rule 1.3: socket / control / rig / bind, and nothing else."""
     ctx = _solo(module_type)
@@ -231,7 +229,7 @@ def test_module_has_exactly_the_four_groups(module_type):
     }
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_bind_joints_carry_live_trs(module_type):
     """Rule 1.4: bind joints bake and export, so TRS must be driven.
 
@@ -244,7 +242,7 @@ def test_bind_joints_carry_live_trs(module_type):
         ), f"{joint.name} is driven through offsetParentMatrix"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_module_builds_without_a_cycle(module_type):
     _solo(module_type)
     cmds.dgdirty(allPlugs=True)
@@ -252,7 +250,7 @@ def test_module_builds_without_a_cycle(module_type):
     assert not cycles, f"'{module_type}' evaluates with a cycle: {cycles}"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_module_parents_everything_it_creates(module_type):
     """Rule 1.7: nothing a module builds is left at the world root."""
     cmds.file(new=True, force=True)
@@ -273,7 +271,7 @@ def test_module_parents_everything_it_creates(module_type):
 
 
 # ------------------------------------------------- sockets from declarations
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_every_declared_input_gets_a_socket(module_type):
     """Declaring an input is what creates its socket; a module cannot forget."""
     rig = _solo(module_type)
@@ -310,7 +308,7 @@ def test_space_inputs_get_no_socket():
     assert "ik_world" not in rig.attachments
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_every_top_level_controller_has_an_offset_group(module_type):
     """A control that hangs from control_grp gets its offset group for free.
 
@@ -337,7 +335,7 @@ def test_every_top_level_controller_has_an_offset_group(module_type):
 
 
 # ------------------------------------------------------------------- tiers
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_every_controller_carries_a_valid_tier(module_type):
     """Rule: a tweak has no tier; everything else declares one of TIERS."""
     from tik.trigger.core import TIERS
