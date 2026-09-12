@@ -7,31 +7,28 @@ import pytest
 import tik.maya as tm
 from tik.trigger.systems import foot as foot_system
 
+#: Left-foot marker positions, matching the leg module's defaults.
+_STRAIGHT_POSITIONS = {
+    "ankle": (2.0, 1.0, 0.0),
+    "ball": (2.0, 0.25, 1.3),
+    "heel": (2.0, 0.05, -0.6),
+    "tip": (2.0, 0.05, 2.8),
+    "bank_in": (1.2, 0.05, 1.3),
+    "bank_out": (2.8, 0.05, 1.3),
+}
 
-def _foot_guides():
-    """Left-foot marker positions, matching the leg module's defaults."""
+
+def _foot_guides(positions=None):
+    """Guide joints at ``positions`` (default: the straight-foot markers)."""
+    positions = positions if positions is not None else _STRAIGHT_POSITIONS
     return {
         role: tm.Joint.create(name="guide_" + role, position=position)
-        for role, position in {
-            "ankle": (2.0, 1.0, 0.0),
-            "ball": (2.0, 0.25, 1.3),
-            "heel": (2.0, 0.05, -0.6),
-            "tip": (2.0, 0.05, 2.8),
-            "bank_in": (1.2, 0.05, 1.3),
-            "bank_out": (2.8, 0.05, 1.3),
-        }.items()
+        for role, position in positions.items()
     }
 
 
 def _rotate_about_y(position, pivot, degrees):
-    """``position`` rotated about the world Y axis through ``pivot`` (XZ only).
-
-    Used to derive a toed-out foot from the straight one: the straight
-    layout puts heel, tip and the ankle all on the same module X, which is
-    exactly why ``foot_frame`` came out as a plain identity matrix for it --
-    a degenerate case that cannot tell a real aim/up construction from a
-    no-op. A toed-out foot is not collinear that way.
-    """
+    """``position`` rotated about the world Y axis through ``pivot`` (XZ only)."""
     theta = math.radians(degrees)
     cos_t, sin_t = math.cos(theta), math.sin(theta)
     dx = position[0] - pivot[0]
@@ -41,6 +38,38 @@ def _rotate_about_y(position, pivot, degrees):
         position[1],
         pivot[2] - dx * sin_t + dz * cos_t,
     )
+
+
+def _toed_out_positions(degrees: float = 25.0, mirror: bool = False) -> dict:
+    """The straight-foot markers, toed out about world Y through the ankle.
+
+    The ordinary production pose, not an edge case: the straight layout
+    puts heel, tip and the ankle all on the same module X, which is exactly
+    why ``foot_frame`` came out as a plain identity matrix for it -- a
+    degenerate case that cannot tell a real aim/up construction from a
+    no-op, nor a naively-mirrored frame from a behaviour-mirrored one (both
+    read back as identity on both feet). Every marker but the ankle itself
+    rotates, ``ball`` included: three pivots (``ball_spin``, ``ball_roll``,
+    ``toe_wiggle``) sit on it, and leaving it on the old heel-tip line while
+    the rest of the foot turned would put those three off the foot this
+    layout is meant to describe.
+
+    ``mirror=True`` negates X afterwards, giving the guide placement a
+    naively-mirrored right foot would actually have (this repo's own
+    definition of "mirrored" for a guide layout, matching the
+    ``mirrored_pair`` fixture's convention) -- the input §6.3's proof and
+    F-1 are about, not an already-corrected one.
+    """
+    ankle = _STRAIGHT_POSITIONS["ankle"]
+    positions = {
+        role: (
+            position if role == "ankle" else _rotate_about_y(position, ankle, degrees)
+        )
+        for role, position in _STRAIGHT_POSITIONS.items()
+    }
+    if mirror:
+        positions = {role: (-x, y, z) for role, (x, y, z) in positions.items()}
+    return positions
 
 
 def test_the_pivots_nest_in_the_documented_order(build_context):
@@ -84,18 +113,18 @@ def test_each_pivot_sits_on_its_marker(build_context):
         ("ball_roll", "ball"),
         ("toe_wiggle", "ball"),
     ):
-        expected = guides[guide_role].world_position
-        actual = result.pivots[pivot_role].world_position
-        assert (actual - expected).length() == pytest.approx(0.0, abs=1e-5), pivot_role
+        distance = result.pivots[pivot_role].distance_to(guides[guide_role])
+        assert distance == pytest.approx(0.0, abs=1e-5), pivot_role
 
 
 def test_every_pivot_shares_one_frame_aimed_heel_to_tip(build_context):
-    """The claim the whole side-multiplier simplification rests on.
+    """Every pivot on one foot reads its rotation from the same frame.
 
-    The old module multiplied eight of nine attributes by the side sign and
-    then had to exempt two. The cause was the frame: build them all on one
-    frame aimed heel-to-tip with the ankle as up, and rx/ry/rz mean the same
-    thing on both feet with no multiplier anywhere.
+    Within a single foot this needs no side story at all: every pivot is
+    simply aligned to the frame `build_foot_pivots` built for it. The two
+    feet agreeing with each other -- and why that takes a behaviour-mirrored
+    frame rather than a naive one -- is
+    `test_the_mirrored_frame_is_the_behaviour_mirror`, not this test.
     """
     ctx = build_context("base", name="probe")
     guides = _foot_guides()
@@ -159,20 +188,7 @@ def test_the_frame_follows_a_toed_out_foot(build_context):
     a degenerate input.
     """
     ctx = build_context("base", name="probe")
-    straight = _foot_guides()
-    ankle_pos = tuple(straight["ankle"].world_position)
-    positions = {
-        "ankle": ankle_pos,
-        "ball": tuple(straight["ball"].world_position),
-    }
-    for role in ("heel", "tip", "bank_in", "bank_out"):
-        positions[role] = _rotate_about_y(
-            tuple(straight[role].world_position), ankle_pos, 25.0
-        )
-    guides = {
-        role: tm.Joint.create(name="guide_toed_" + role, position=position)
-        for role, position in positions.items()
-    }
+    guides = _foot_guides(_toed_out_positions())
 
     anchor = tm.Transform.create(name="anchor", parent=ctx.groups.rig.long_name)
     result = foot_system.build_foot_pivots(ctx, parent=anchor, guides=guides)
@@ -198,3 +214,132 @@ def test_the_frame_follows_a_toed_out_foot(build_context):
     reference = x_axis
     for role, pivot in result.pivots.items():
         assert (pivot.world_axis("x") * reference) == pytest.approx(1.0, abs=1e-4), role
+
+
+def test_the_mirrored_frame_is_the_behaviour_mirror(build_context):
+    """Section 6.3's uniqueness proof, pinned so it cannot regress silently.
+
+    A naive mirror of the frame (``M = diag(-1,1,1)`` applied straight to
+    the guide positions) comes back with Z and Y mirrored but X negated
+    relative to that -- because X is a cross product of the other two, and
+    a reflection negates a cross product one extra time. Requiring the
+    mirrored frame to reproduce mirrored motion for *every* rotation forces
+    a unique answer instead: ``F_R = -M F_L``, i.e. every column keeps its
+    own X component and negates Y and Z. That is the *behaviour* mirror
+    (``Rx(180)``) this repo already uses for mirrored joints, and it is what
+    lets every channel connection downstream of this frame go in with no
+    side term anywhere.
+    """
+    # "base" is deliberately unsided (``sided = False`` -- it is a rig root,
+    # not a left/right limb) and forces ``side_mult`` to ``1`` regardless of
+    # what is asked for, which would silently take the mirrored branch this
+    # test exists to exercise out of the picture. "control" is an ordinary
+    # sided module and gives a real ``side_mult`` of ``-1`` for "R".
+    left_positions = _toed_out_positions()
+    right_positions = _toed_out_positions(mirror=True)
+
+    left_ctx = build_context("control", name="probeL", side="L")
+    left_anchor = tm.Transform.create(
+        name="anchorL", parent=left_ctx.groups.rig.long_name
+    )
+    left_result = foot_system.build_foot_pivots(
+        left_ctx, parent=left_anchor, guides=_foot_guides(left_positions)
+    )
+
+    right_ctx = build_context("control", name="probeR", side="R")
+    right_anchor = tm.Transform.create(
+        name="anchorR", parent=right_ctx.groups.rig.long_name
+    )
+    right_result = foot_system.build_foot_pivots(
+        right_ctx, parent=right_anchor, guides=_foot_guides(right_positions)
+    )
+    assert left_ctx.side_mult == 1 and right_ctx.side_mult == -1  # sanity
+
+    # F_R == -M F_L: every column keeps X, negates Y and Z. The naive
+    # mirror this design withdrew would instead keep Y/Z and negate X.
+    for axis in ("x", "y", "z"):
+        left_axis = left_result.frame.world_axis(axis)
+        right_axis = right_result.frame.world_axis(axis)
+        assert right_axis.x == pytest.approx(left_axis.x, abs=1e-4), axis
+        assert right_axis.y == pytest.approx(-left_axis.y, abs=1e-4), axis
+        assert right_axis.z == pytest.approx(-left_axis.z, abs=1e-4), axis
+
+    # The payoff: the SAME positive rotation about each local axis, applied
+    # on both sides, must move the foot as an exact mirror image of the
+    # other side -- no negation anywhere, unlike the naive frame this
+    # design withdrew.
+    #
+    # The marker's own local offset must be the FULL negation of the left's,
+    # ``-v``, not ``S v = diag(-1,1,1) v``. Proof: for any single-axis
+    # rotation R(t) applied identically on both sides, R(t)(-v) - (-v) =
+    # -(R(t)v - v) always (linearity), so with F_R = -M F_L: delta_R =
+    # F_R * (-(R(t)v - v)) = -F_R(R(t)v - v) = -(-M F_L)(R(t)v - v) =
+    # M * (F_L(R(t)v - v)) = M * delta_L -- the exact spatial mirror, on
+    # every axis, unconditionally. ``S v`` does not have this property for
+    # a general offset: verified numerically that with ``S v`` the Y and Z
+    # rotations do not come back as a clean mirror of any kind, only X does
+    # (and there as the *behaviour* mirror of ``delta_L``, not the spatial
+    # one) -- because unlike ``-v``, ``S v`` does not satisfy
+    # ``R(t) S v - S v = S(R(t)v - v)`` for the y/z rotations (S and R_y/R_z
+    # do not commute; S and R_x do, which is why the x-axis case alone
+    # looked clean with ``S v`` too, just not spatially).
+    left_pivot = left_result.pivots["ball_roll"]
+    right_pivot = right_result.pivots["ball_roll"]
+    left_offset = (0.3, 0.5, 1.0)
+    right_offset = (-left_offset[0], -left_offset[1], -left_offset[2])
+    left_marker = tm.Transform.create(name="markerL", parent=left_pivot.long_name)
+    left_marker.translate = left_offset
+    right_marker = tm.Transform.create(name="markerR", parent=right_pivot.long_name)
+    right_marker.translate = right_offset
+
+    left_rest_rotate = tuple(left_pivot.rotate)
+    right_rest_rotate = tuple(right_pivot.rotate)
+
+    for index, axis in enumerate("xyz"):
+        left_rest_pos = left_marker.world_position
+        left_rot = list(left_rest_rotate)
+        left_rot[index] += 15.0
+        left_pivot.rotate = tuple(left_rot)
+        left_delta = left_marker.world_position - left_rest_pos
+        left_pivot.rotate = left_rest_rotate
+
+        right_rest_pos = right_marker.world_position
+        right_rot = list(right_rest_rotate)
+        right_rot[index] += 15.0
+        right_pivot.rotate = tuple(right_rot)
+        right_delta = right_marker.world_position - right_rest_pos
+        right_pivot.rotate = right_rest_rotate
+
+        assert right_delta.x == pytest.approx(-left_delta.x, abs=1e-4), axis
+        assert right_delta.y == pytest.approx(left_delta.y, abs=1e-4), axis
+        assert right_delta.z == pytest.approx(left_delta.z, abs=1e-4), axis
+
+
+def test_every_pivot_rests_at_identity_local_rotation(build_context):
+    """§6.2 connects a channel straight into ``bank_in.rotateX`` (F-4).
+
+    Every pivot but ``bank_in`` sits under a sibling that already carries
+    the shared frame's world rotation, so its own local rotate is zero by
+    construction. ``bank_in``'s parent is ``root`` instead, so ``root`` must
+    also carry the frame's rotation -- not the driver's -- or ``bank_in``'s
+    rest-pose local rotate would hold the frame-vs-driver delta, and §6.2's
+    connection would overwrite (not add to) that rest value the moment the
+    build wires it, popping the foot.
+
+    An identity anchor -- what every other test in this file uses -- cannot
+    expose this: with the driver at identity, the delta IS the frame's own
+    rotation restated, and the straight foot's frame is also identity, so
+    the bug hides in both the default anchor and the default guide layout.
+    The anchor here is given an arbitrary rotation of its own so the delta
+    is a real one.
+    """
+    ctx = build_context("base", name="probe")
+    anchor = tm.Transform.create(name="anchor", parent=ctx.groups.rig.long_name)
+    anchor.rotate = (10.0, 20.0, 30.0)
+    guides = _foot_guides(_toed_out_positions())
+    result = foot_system.build_foot_pivots(ctx, parent=anchor, guides=guides)
+
+    for role in foot_system.PIVOTS:
+        rotate = result.pivots[role].rotate
+        for component in rotate:
+            assert component == pytest.approx(0.0, abs=1e-4), role

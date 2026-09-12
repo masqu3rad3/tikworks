@@ -23,12 +23,29 @@ it inherits its ancestors' rotation exactly as its pivot does. No constraint
 runs between the two and no cycle is possible. ``bank`` is the one exception
 and §6.4 of the spec says why.
 
-**No side multipliers anywhere.** Every pivot is built on one frame aimed
-heel-to-tip with the ankle as up, which points the same way on both feet, so
-``rx`` is roll, ``ry`` is spin and ``rz`` is lean on the left and the right
-alike. The legacy module's per-attribute multiplier table -- with its two
-exemptions for heel roll and toe roll -- was paying for a frame problem one
-attribute at a time.
+**The frame is behaviour-mirrored, and that is what needs no sign rule
+anywhere else.** A frame aimed heel-to-tip with the ankle as up, built
+naively from each foot's own geometry, does *not* come back as a plain
+mirror on the right side: the aim and up axes mirror cleanly (they come
+from point differences and a Gram-Schmidt, both reflection-equivariant),
+but the third axis is their cross product, and a reflection negates a cross
+product one extra time (``(Ma) x (Mb) = -M(a x b)``). So a naive frame's
+``rx`` ends up same-signed between feet, while ``ry``/``rz`` end up
+sign-flipped relative to what mirrored motion needs -- reproducing the
+legacy's exemption pattern (``hRoll``/``tRoll``/``bank`` escaped
+``sideMult``; every ``rotateY``/``rotateZ`` driver took it) exactly, not by
+coincidence.
+
+The unique fix -- proven in §6.3 of the spec, not merely chosen -- is to
+require the mirrored frame to reproduce mirrored motion for *every*
+rotation, which forces ``F_R = -M F_L = Rx(180) . F_L``: the *behaviour*
+mirror, the same "180 degree roll about X" this repo already uses for
+mirrored joints (``mirror_orient`` in ``tik/trigger/maya/rig.py``). Built by
+aiming local ``-Z``/``-Y`` instead of ``+Z``/``+Y`` on the mirrored side
+(below), it is a proper rotation (``det = +1``) with nothing for
+``jointOrient`` to choke on, and it is what makes every channel connection
+in this file signless: no side term on the bank clamps, none on the
+auto-roll, none anywhere.
 """
 
 from __future__ import annotations
@@ -77,19 +94,25 @@ class FootResult:
 def foot_frame(rig, guides: dict, *, parent=None, name: str = "foot"):
     """A static frame aimed heel to tip, with the ankle as up.
 
-    Built from the foot's own geometry rather than from a side convention,
-    which is what makes both feet agree. ``aim_at`` bakes plain rotation
-    values, so the frame is static once created.
+    Built from the foot's own geometry rather than from a side convention.
+    On the mirrored side, the aim and up vectors are negated rather than
+    left alone: aiming local ``-Z`` at the tip and upping on ``-Y`` lands the
+    frame on the *behaviour* mirror of the unmirrored side (``F_R = -M F_L``,
+    §6.3 of the spec) rather than the naive mirror a plain ``aim_at`` would
+    give, which is what lets every channel connection built on this frame go
+    in with no side term. ``aim_at`` bakes plain rotation values, so the
+    frame is static once created.
     """
     frame = tm.Transform.create(
-        name=rig.name(name, "frame"),
+        name=rig.name(name, "frame", suffix="grp"),
         parent=parent.long_name if parent is not None else rig.groups.rig.long_name,
     )
     frame.snap_to(guides["heel"], rotation=False)
+    aim, up = ((0, 0, -1), (0, -1, 0)) if rig.side_mult < 0 else ((0, 0, 1), (0, 1, 0))
     frame.aim_at(
         guides["tip"],
-        aim_vector=(0, 0, 1),
-        up_vector=(0, 1, 0),
+        aim_vector=aim,
+        up_vector=up,
         world_up_object=guides["ankle"],
     )
     return frame
@@ -114,10 +137,17 @@ def build_foot_pivots(rig, *, parent, guides: dict, name: str = "foot") -> FootR
     result = FootResult()
     result.frame = foot_frame(rig, guides, name=name)
 
-    result.root = tm.Transform.create(
-        name=rig.name(name, "root", suffix="grp"), parent=rig.groups.rig.long_name
-    )
+    result.root = rig.group(name, "root", under="rig")
     result.root.snap_to(parent)
+    # The frame's rotation, not the driver's: every other pivot ends up with
+    # the frame's world rotation under a sibling that already has it, so its
+    # local rotate is zero. ``bank_in`` is the exception -- its parent is
+    # ``root`` -- so ``root`` must carry the frame's rotation too, or
+    # ``bank_in``'s rest-pose local rotate holds the frame-vs-driver delta
+    # and popping the foot the moment §6.2 connects a channel into it.
+    # ``maintain_offset=True`` on the constraint below absorbs the
+    # difference between this and the driver's own rotation.
+    result.root.align_to(result.frame, position=False)
     tm.MatrixConstraint.create(parent, result.root, maintain_offset=True)
 
     branch = result.root
@@ -126,9 +156,7 @@ def build_foot_pivots(rig, *, parent, guides: dict, name: str = "foot") -> FootR
         # it carries the ball and toe handles, so it must bend the toes
         # without moving the leg.
         under = result.pivots["toe"] if role == "toe_wiggle" else branch
-        pivot = tm.Transform.create(
-            name=rig.name(name, role, suffix="grp"), parent=under.long_name
-        )
+        pivot = rig.group(name, role, under=under)
         pivot.snap_to(guides[PIVOT_GUIDES[role]], rotation=False)
         # Position from the marker, rotation from the shared frame. This is
         # the whole of §6.3.
@@ -138,9 +166,8 @@ def build_foot_pivots(rig, *, parent, guides: dict, name: str = "foot") -> FootR
             branch = pivot
 
     # What the limb solve follows.
-    result.ankle_driver = tm.Transform.create(
-        name=rig.name(name, "ankleDriver", suffix="grp"),
-        parent=result.pivots["ball_roll"].long_name,
+    result.ankle_driver = rig.group(
+        name, "ankleDriver", under=result.pivots["ball_roll"]
     )
     result.ankle_driver.snap_to(guides["ankle"], rotation=False)
     result.ankle_driver.align_to(parent, position=False)
