@@ -171,7 +171,7 @@ class Arm(Module):
     def draw_guides(self, guides) -> None:
         """Collar, shoulder, elbow and hand along X, with a bent elbow."""
         mult = guides.side_mult
-        collar = guides.joint("collar", (2 * mult, 0, 0), radius=1.5)
+        collar = guides.joint("collar", (2 * mult, 0, 0))
         shoulder = guides.joint("shoulder", (5 * mult, 0, 0), parent=collar)
         elbow = guides.joint("elbow", (9 * mult, 0, -1), parent=shoulder)
         guides.joint("hand", (14 * mult, 0, 0), parent=elbow)
@@ -179,7 +179,7 @@ class Arm(Module):
         # zero. Only the direction from `collar` matters, so sitting past the
         # hand costs nothing and keeps the guide selectable. The default guide
         # arm is already a T-pose, so the default neutral is the T-pose.
-        guides.joint("neutral", (18 * mult, 0, 0), parent=collar, radius=0.8)
+        guides.joint("neutral", (18 * mult, 0, 0), parent=collar)
 
     # ---------------------------------------------------------------- build
     def build(self, rig) -> None:

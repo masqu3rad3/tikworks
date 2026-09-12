@@ -17,14 +17,31 @@ from tik.maya import naming
 from tik.maya.core.decorators import undo_chunk  # noqa: F401 - the guides' undo step
 from tik.trigger.core import registry
 from tik.trigger.core.exceptions import GuideError
-from tik.trigger.core.manifest import instance_key
+from tik.trigger.core.manifest import GuideKind, instance_key
 from tik.trigger.core.schemas import GuidePose, ModuleInstance, ParentRef
 from tik.trigger.maya import tags
 
 INPUTS = "trg_inputs"
 
 SIDE_COLORS = {"L": 6, "R": 13, "C": 17}
-MARKER_COLOR = 14  # green: a pivot-preset marker, never a chain guide
+MARKER_COLOR = 14  # green: a reference guide, never a chain link
+
+#: The kind -> appearance table. The *only* place a guide's look is decided.
+#: A module states a kind; nothing anywhere states a radius or a colour --
+#: ``radius=1.5`` on a collar was only ever "this is the module root" written
+#: in a language nothing could read.
+KIND_RADIUS = {
+    GuideKind.ROOT: 1.5,
+    GuideKind.JOINT: 1.0,
+    GuideKind.DRIVEN: 0.5,
+}
+#: localScale of a reference guide's locator shape.
+REFERENCE_SCALE = 0.6
+#: A railed guide reads as subordinate to the chain it sits in, so it takes a
+#: darker shade of its side colour rather than a colour of its own.
+DRIVEN_COLORS = {"L": 15, "R": 12, "C": 3}
+#: Maya's joint-label side enum: 0 centre, 1 left, 2 right, 3 none.
+LABEL_SIDES = {"C": 0, "L": 1, "R": 2}
 
 logger = logging.getLogger(__name__)
 
@@ -90,22 +107,53 @@ def holder() -> tm.Transform:
 
 
 # ------------------------------------------------------------------ create
-def create_guide_joint(
+def make_guide_shell(name: str, kind: GuideKind, parent=None) -> tm.Transform:
+    """The bare node for one guide of ``kind`` -- no tags, no pose, no label.
+
+    Shared by a fresh draw and by ``.trg`` import, so the two can never
+    disagree about what a kind renders as.
+
+    A ``REFERENCE`` guide is a plain transform because that is the only thing
+    that suppresses the bone. Measured in Maya: the bone belongs to the
+    *parent* joint, so ``drawStyle`` on the child does nothing and
+    ``drawStyle`` on the parent removes every one of its bones; and an
+    intervening transform does not break it either, because joint drawing
+    walks through transforms to find descendant joints. A non-joint child
+    draws nothing at all, which is the whole mechanism.
+    """
+    parent_name = parent.long_name if hasattr(parent, "long_name") else parent
+    if kind is GuideKind.REFERENCE:
+        node = tm.Transform.create(name=name, parent=parent_name)
+        # The shape is created straight under the transform rather than via
+        # ``spaceLocator`` and a reparent: importing a ``.trg`` draws a scratch
+        # copy of a module beside the real one, so two guides legitimately
+        # share a short name, and anything that looks one up by it raises.
+        shape = tm.create_node("locator", name=f"{name}Shape", parent=node.long_name)
+        for axis in "XYZ":
+            shape[f"localScale{axis}"].value = REFERENCE_SCALE
+        return node
+    return tm.Joint.create(name=name, parent=parent_name, radius=KIND_RADIUS[kind])
+
+
+def guide_color(kind: GuideKind, side: str) -> int:
+    """The colour index for a guide of ``kind`` on ``side``."""
+    if kind is GuideKind.REFERENCE:
+        return MARKER_COLOR
+    table = DRIVEN_COLORS if kind is GuideKind.DRIVEN else SIDE_COLORS
+    return table.get(side, 17)
+
+
+def create_guide_node(
     module,
     role: str,
     position: Sequence[float],
     *,
+    kind: GuideKind,
     index: int = 0,
     parent=None,
-    radius: float = 1.0,
-    marker: bool = False,
     tag_role: str = "",
-) -> tm.Joint:
-    """Create one tagged guide joint for ``module``.
-
-    ``marker`` draws it as a locator cross instead of a bone -- what a
-    pivot-preset guide wants, since it marks a point rather than linking a
-    chain.
+) -> tm.Transform:
+    """Create one tagged guide node for ``module``, rendered by its ``kind``.
 
     ``tag_role`` is the role the *document* keys this guide by, when that
     differs from the one the node is named after. A module's second copy
@@ -113,20 +161,17 @@ def create_guide_joint(
     the slug is bookkeeping and has no business in a name a rigger reads.
     Defaults to ``role``, which is every non-copy case.
     """
-    joint = tm.Joint.create(
-        name=naming.format_name(
-            module.name,
-            role,
-            index if index else None,
-            side=module.side.value,
-            suffix="guide",
-        ),
-        parent=parent.long_name if hasattr(parent, "long_name") else parent,
-        radius=radius,
+    name = naming.format_name(
+        module.name,
+        role,
+        index if index else None,
+        side=module.side.value,
+        suffix="guide",
     )
-    joint.world_position = position
+    node = make_guide_shell(name, kind, parent=parent)
+    node.world_position = position
     tags.tag(
-        joint,
+        node,
         **{
             tags.KIND: tags.GUIDE,
             tags.MODULE: module.module_type,
@@ -139,45 +184,29 @@ def create_guide_joint(
             tags.DRAWN_KEY: instance_key(module.name, module.side.value),
         },
     )
-    joint.color = SIDE_COLORS.get(module.side.value, 17)
-    if marker:
-        _style_as_marker(joint)
-    return joint
-
-
-def _style_as_marker(joint) -> None:
-    """Draw ``joint`` as a locator cross instead of a bone.
-
-    A pivot-preset guide is a marker, not a link in a chain, and must not be
-    mistaken for one. It stays a joint so ``guide_nodes``, ``scan``,
-    ``snapshot`` and the selection sync -- all of which filter ``type="joint"``
-    -- keep working on it unchanged; only what it draws changes. The drawing
-    override lives on the transform, so the locator shape inherits the colour.
-    """
-    joint["drawStyle"].value = 2  # None: the bone is not drawn
-    # The shape is created straight under the joint rather than via
-    # ``spaceLocator`` and a reparent: importing a ``.trg`` draws a scratch
-    # copy of a module beside the real one, so two joints legitimately share a
-    # short name, and anything that looks one up by it raises.
-    shape = tm.create_node("locator", name=f"{joint.name}Shape", parent=joint.long_name)
-    for axis in "XYZ":
-        shape[f"localScale{axis}"].value = 0.6
-    joint.color = MARKER_COLOR
+    node.color = guide_color(kind, module.side.value)
+    return node
 
 
 # -------------------------------------------------------------------- read
-def guide_nodes(instance_id: str) -> dict[tuple[str, int], tm.Joint]:
-    """``{(role, index): joint}`` for one instance."""
-    found: dict[tuple[str, int], tm.Joint] = {}
-    for node in tm.find_by_meta(tags.INSTANCE, instance_id, node_type="joint"):
+def guide_nodes(instance_id: str) -> dict[tuple[str, int], tm.Transform]:
+    """``{(role, index): node}`` for one instance.
+
+    ``node_type="transform"`` rather than ``"joint"``: ``joint`` inherits from
+    ``transform``, so this is a widening that cannot lose a node, and a
+    reference guide *is* a transform. The KIND check below is what makes it
+    exact -- it always was; the joint filter was only ever narrowing for speed.
+    """
+    found: dict[tuple[str, int], tm.Transform] = {}
+    for node in tm.find_by_meta(tags.INSTANCE, instance_id, node_type="transform"):
         if node.meta.get(tags.KIND) != tags.GUIDE:
             continue
         found[(node.meta[tags.ROLE], int(node.meta.get(tags.INDEX, 0)))] = node
     return found
 
 
-def guide_node(instance_id: str, role: str, index: int = 0) -> tm.Joint:
-    """The joint drawn for ``role``/``index`` of an instance; raises when missing."""
+def guide_node(instance_id: str, role: str, index: int = 0) -> tm.Transform:
+    """The node drawn for ``role``/``index`` of an instance; raises when missing."""
     try:
         return guide_nodes(instance_id)[(role, index)]
     except KeyError:
@@ -275,10 +304,15 @@ def find_instances(scope: Any = "scene", document=None) -> list[ModuleInstance]:
     meta: dict[str, dict] = {}
     joints = []
     # cmds rather than tik.maya: one attribute-qualified ls finds every tagged
-    # joint in the scene without walking the DAG.
+    # guide node in the scene without walking the DAG. type="transform" catches
+    # joints too -- joint inherits from transform -- and reference guides are
+    # transforms; the KIND check below is what makes the result exact.
     for name in (
         cmds.ls(
-            f"*.{tm.META_PREFIX}{tags.KIND}", long=True, objectsOnly=True, type="joint"
+            f"*.{tm.META_PREFIX}{tags.KIND}",
+            long=True,
+            objectsOnly=True,
+            type="transform",
         )
         or []
     ):
@@ -359,8 +393,8 @@ def apply_poses(nodes: dict, poses: Sequence[GuidePose]) -> None:
 # --------------------------------------------------------------- selection
 def selected_guide() -> Optional[ParentRef]:
     """The first selected guide as a ``ParentRef`` (for UI parenting)."""
-    for name in cmds.ls(selection=True, long=True, type="joint") or []:
-        node = tm.Joint(name)
+    for name in cmds.ls(selection=True, long=True, type="transform") or []:
+        node = tm.resolve(name)
         if node.meta.get(tags.KIND) == tags.GUIDE and tags.INSTANCE in node.meta:
             return ParentRef(
                 node.meta[tags.INSTANCE],

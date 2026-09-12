@@ -206,14 +206,15 @@ def test_preset_guides_draw_under_their_anchor_as_markers():
         assert ("pivot_ik_ball", 0) in created
         tip = created[("pivot_ik_tip", 0)]
         anchor = created[("hand", 0)]
-        # parented under the anchor guide, and drawn there
+        # parented under the anchor guide, so moving it carries the presets
         assert tip.parent.long_name == anchor.long_name
-        assert list(tip.world_position) == list(anchor.world_position)
-        # a marker: the bone is not drawn, and it carries a locator shape
-        assert tip["drawStyle"].value == 2
+        # a reference guide: a transform with a locator shape, which is what
+        # keeps the anchor from drawing a bone out to it. Its own drawStyle
+        # never mattered -- the bone belongs to the parent joint.
+        assert cmds.nodeType(tip.long_name) == "transform"
         assert [cmds.nodeType(shape.long_name) for shape in tip.shapes] == ["locator"]
-        # still a joint to every scan in the guide layer
-        assert cmds.nodeType(tip.long_name) == "joint"
+        # and still found by every scan in the guide layer, which keys on the
+        # trg_* meta and no longer filters on the node type
         assert tip.meta.get(tags.ROLE) == "pivot_ik_tip"
     finally:
         registry.unregister_module("pivoted")

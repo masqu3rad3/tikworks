@@ -9,6 +9,7 @@ from maya import cmds
 import tik.maya as tm
 from tik.trigger.core import registry
 from tik.trigger.core.schemas import ModuleInstance
+from tik.trigger.core.manifest import GuideKind
 from tik.trigger.maya import tags
 from tik.trigger.maya.rig import GuideDraft
 
@@ -47,6 +48,15 @@ class GuideExchangeMixin:
                     else None
                 )
                 is_root = role == root_role and index == 0
+                # A reference guide is a transform: it has no jointOrient and
+                # no radius. Ask the node rather than the layout, because a
+                # pivot preset guide is in no layout at all.
+                is_joint = cmds.nodeType(node.long_name) == "joint"
+                kind = (
+                    module_cls.guides.kind_for(role, is_root=is_root)
+                    if is_joint
+                    else GuideKind.REFERENCE
+                )
                 declared = module_cls.attrs_for_role(role)
                 attrs = {item.name: node[item.name].value for item in declared}
                 records.append(
@@ -59,14 +69,15 @@ class GuideExchangeMixin:
                             translation=True,
                         ),
                         rotation=tuple(node.rotate),
-                        joint_orient=node.joint_orient,
+                        joint_orient=node.joint_orient if is_joint else (0, 0, 0),
                         parent=parent_name,
                         side=instance.side,
                         module=instance.module_type,
                         role=role,
                         index=index,
                         instance=instance.instance_id,
-                        radius=node.radius,
+                        kind=kind.value,
+                        radius=node.radius if is_joint else 1.0,
                         color=node.color or 17,
                         attrs=attrs,
                         settings=dict(instance.settings) if is_root else None,
@@ -143,13 +154,19 @@ class GuideExchangeMixin:
                 )
                 joints: dict = {}
                 for (role, index), record in guide_instance.joints.items():
-                    joint = tm.Joint.create(
-                        name=record["name"], radius=record.get("radius", 1.0)
-                    )
+                    # The record carries its kind: a pivot preset guide is in
+                    # no GuideLayout, so there is nothing to ask on the way in.
+                    # A file with no kind predates them and was all joints.
+                    kind = GuideKind(record.get("kind", GuideKind.JOINT.value))
+                    joint = nodes.make_guide_shell(record["name"], kind)
                     joint.world_position = record["position"]
-                    joint.joint_orient = record.get("joint_orient", (0, 0, 0))
+                    if kind is not GuideKind.REFERENCE:
+                        # jointOrient exists only on a joint; a reference guide
+                        # carries its orientation in `rotate` alone.
+                        joint.joint_orient = record.get("joint_orient", (0, 0, 0))
                     joint.rotate = tuple(record.get("rotation", (0, 0, 0)))
-                    joint.color = record.get("color") or 17
+                    # The kind decides the colour; the record's is advisory.
+                    joint.color = nodes.guide_color(kind, module.side.value)
                     for item in module_cls.attrs_for_role(role):
                         plug = joint[item.name].create(
                             "float", default=item.default, keyable=item.keyable

@@ -117,12 +117,12 @@ class Twist(Module):
     def draw_guides(self, guides) -> None:
         """A base, an end, and ``count`` twist joints spread between them."""
         span = self.spacing * guides.side_mult
-        base = guides.joint("base", (0, 0, 0), radius=1.5)
-        guides.joint("end", (span, 0, 0), parent=base, radius=1.5)
+        base = guides.joint("base", (0, 0, 0))
+        guides.joint("end", (span, 0, 0), parent=base)
         for index in range(self.count):
             fraction = (index + 1) / (self.count + 1)
             joint = guides.joint(
-                "twist", (span * fraction, 0, 0), index=index, parent=base, radius=0.5
+                "twist", (span * fraction, 0, 0), index=index, parent=base
             )
             joint[POSITION_ATTR].value = fraction
             # The sensible default, freely overridable afterwards.

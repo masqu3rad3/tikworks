@@ -852,11 +852,10 @@ class Module(Schema):
             anchor = draft.made(*anchor_ref) if anchor_ref else None
             if anchor is None:
                 continue  # a stale row; Module.warnings() reports it
-            draft.joint(
+            draft.reference(
                 f"pivot_{control}_{label}",
                 tuple(anchor.world_position),
                 parent=anchor,
-                marker=True,
             )
 
     def wire_guides(self, guides) -> None:
