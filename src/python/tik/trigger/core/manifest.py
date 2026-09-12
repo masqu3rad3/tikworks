@@ -169,11 +169,30 @@ class GuideLayout:
         preset guides are created by the framework, not declared here, and
         name their kind explicitly.
         """
+        role = self.bare_role(role)
         if role in self.reference:
             return GuideKind.REFERENCE
         if role in self.driven:
             return GuideKind.DRIVEN
         return GuideKind.ROOT if is_root else GuideKind.JOINT
+
+    def bare_role(self, role: str) -> str:
+        """The declared role behind a possibly copy-qualified one.
+
+        A copy keys its guides ``c1_twist`` while this layout declares
+        ``twist``: the slug is bookkeeping and no layout has heard of it. So
+        anything asking about a guide that has already been *drawn* -- which
+        carries the qualified tag role -- has to strip it first, or a copy's
+        declared kinds are invisible.
+
+        A role that matches nothing declared comes back unchanged, which is
+        what keeps a framework-made role like ``pivot_ik_wrist`` a plain
+        ``JOINT`` instead of being mangled into something else.
+        """
+        for known in self.all_roles:
+            if role == known or role.endswith(f"_{known}"):
+                return known
+        return role
 
     @property
     def root(self) -> str:

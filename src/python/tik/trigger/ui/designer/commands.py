@@ -423,6 +423,14 @@ class DesignerCommands:
         prefs.guides.show_guide_labels = bool(on)
         prefs.save()
 
+    def set_axes_visible(self, on: bool) -> None:
+        """Flip the local axes on the drawn guides, and remember the choice."""
+        from tik.trigger.config import prefs
+
+        self.guides.set_axes_visible(bool(on))
+        prefs.guides.show_guide_axes = bool(on)
+        prefs.save()
+
     def set_auto_sync(self, on: bool) -> None:
         """One setting, three front doors: the checkbox, the menu, and here.
 

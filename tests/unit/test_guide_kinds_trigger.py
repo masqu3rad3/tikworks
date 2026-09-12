@@ -76,3 +76,22 @@ def test_a_layout_is_a_chain_by_default():
 
 def test_a_layout_can_declare_it_is_not_a_chain():
     assert GuideLayout("start", "end", chain=False).chain is False
+
+
+def test_a_copys_qualified_role_still_resolves_its_declared_kind():
+    """A copy keys its guides `c1_twist` while the layout declares `twist`.
+
+    Anything asking the layout about a *drawn* guide passes the tag role, so
+    the slug has to be stripped or a copy's declared kinds are invisible --
+    which exported a copy's driven rail to a .trg as an ordinary joint.
+    """
+    layout = GuideLayout("base", "end", multi="twist", driven=("twist",))
+    assert layout.kind_for("twist") is GuideKind.DRIVEN
+    assert layout.kind_for("c1_twist") is GuideKind.DRIVEN
+    assert layout.kind_for("index_twist") is GuideKind.DRIVEN
+
+
+def test_stripping_a_slug_never_invents_a_role():
+    layout = GuideLayout("base", "end", multi="twist", driven=("twist",))
+    assert layout.bare_role("pivot_ik_wrist") == "pivot_ik_wrist"
+    assert layout.kind_for("pivot_ik_wrist") is GuideKind.JOINT

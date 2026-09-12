@@ -125,6 +125,38 @@ Applied module-wide rather than per role. A leaf draws no bones anyway, so targe
 parents behaves identically, and per-role would raise a question ("which of my guides draw
 bones?") that no module author has an opinion about.
 
+### 2.0c The local rotation axis, where orientation reaches the rig
+
+A guide's orientation matters exactly when `build()` reads it, and that turns out to be
+something the kinds already say -- so nothing is declared:
+
+```python
+# guides/nodes.py
+node["displayLocalAxis"].value = kind in ORIENTED_KINDS   # (ROOT, JOINT)
+```
+
+The trace behind it. `socket(match=)`, `bind_joint(match=)` and `controller(match=)` all call
+`align_to`, which is `snap_to(rotation=True)` -- so orientation is consumed wherever `match=`
+appears, and every `ROOT`/`JOINT` guide in the repo is passed that way (arm x4, base, control,
+fkchain root and segments, ribbon x2, twist base and end). A `REFERENCE` guide is read for its
+position alone (`rig.guide("neutral").world_position`; a preset marker likewise), and a
+`DRIVEN` one only for its authored attributes -- `twist` reads `position` and `twistWeight`,
+its joints ride an aimed frame, and its `bind_joint` call passes no `match` at all, commented
+"so joint orient stays zero".
+
+`twist`'s `end` is the one case worth naming: `wire_guides` locks its rotation, so the rigger
+cannot author it, but the build *does* align the end socket to it. The axis stays on, because
+it is the orientation actually in use.
+
+Hiding them is the Designer's **Axes** toggle, the same shape as **Labels** (SS9). It only ever
+*offers*: `nodes.set_axes_visible` re-asks the kind, so turning axes on can never start
+claiming a reference marker or a railed guide has an orientation worth adjusting.
+
+**A bug this surfaced.** `kind_for` was being asked about *tag* roles, which are copy-qualified
+(`c1_twist`), and compared them against the bare declared roles -- so a copy's declared kinds
+were invisible, and a copy's driven rail exported to a `.trg` as an ordinary joint and came back
+at the wrong radius. `GuideLayout.bare_role` strips the slug, and `kind_for` goes through it.
+
 ### 2.1 The declaration
 
 Two new keyword arguments on `GuideLayout`, both tuples of roles:

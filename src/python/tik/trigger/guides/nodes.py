@@ -54,6 +54,13 @@ MARKER_FAN_FALLBACK = 0.5
 #: child and a base with four collinear children becomes an unreadable blur.
 BONE_DRAW_STYLE = 0
 JOINT_DRAW_STYLE = 3
+#: The kinds whose *orientation* reaches the rig, so the rigger needs to see
+#: it. ROOT and JOINT guides are all passed as ``match=`` to ``socket`` /
+#: ``bind_joint`` / ``controller``, and ``align_to`` copies rotation as well
+#: as position. A REFERENCE guide is read for its position alone, and a
+#: DRIVEN one only for its authored attributes -- twist's rails ride an aimed
+#: frame and their bind joints are built with no ``match`` at all.
+ORIENTED_KINDS = (GuideKind.ROOT, GuideKind.JOINT)
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +159,7 @@ def make_guide_shell(
         return node
     node = tm.Joint.create(name=name, parent=parent_name, radius=KIND_RADIUS[kind])
     node["drawStyle"].value = BONE_DRAW_STYLE if chain else JOINT_DRAW_STYLE
+    node["displayLocalAxis"].value = kind in ORIENTED_KINDS
     return node
 
 
@@ -231,6 +239,32 @@ def set_label_visible(node, on: bool) -> None:
         return
     for label in guide_label_nodes(node):
         cmds.setAttr(f"{label}.visibility", bool(on))
+
+
+def shows_axes(node, layout) -> bool:
+    """Whether this guide's *orientation* reaches the rig.
+
+    The question the axis display answers, asked of a guide that is already
+    drawn -- so the role comes off the node and may be copy-qualified.
+    A reference guide is readable straight from the node type; a driven one
+    needs the layout, because it is an ordinary joint in every other respect.
+    """
+    if node.type != "joint":
+        return False
+    role = layout.bare_role(node.meta.get(tags.ROLE, ""))
+    return role not in layout.driven
+
+
+def set_axes_visible(node, on: bool, layout) -> None:
+    """Show or hide one guide's local rotation axis.
+
+    ``on`` only ever *offers*: a guide whose orientation the rig never reads
+    stays off, so turning axes on does not start claiming that a reference
+    marker or a railed twist guide has an orientation worth adjusting.
+    """
+    plug = node["displayLocalAxis"]
+    if plug.exists():
+        plug.value = bool(on) and shows_axes(node, layout)
 
 
 def guide_label_nodes(node) -> list[str]:

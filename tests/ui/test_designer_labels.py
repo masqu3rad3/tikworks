@@ -65,3 +65,36 @@ def test_the_designer_pushes_the_toggle_to_the_scene(qapp):
         assert window.guides.labels_visible is True
     finally:
         window.close()
+
+
+def test_the_bar_has_an_axes_toggle(qapp):
+    bar = DesignerActionBar()
+    assert bar.axes_check.text() == "Axes"
+    assert bar.axes_check.isChecked()
+
+
+def test_toggling_axes_emits_its_state(qapp):
+    bar = DesignerActionBar()
+    seen = []
+    bar.axes_toggled.connect(seen.append)
+    bar.axes_check.setChecked(False)
+    assert seen == [False]
+
+
+def test_set_axes_does_not_re_emit(qapp):
+    bar = DesignerActionBar()
+    seen = []
+    bar.axes_toggled.connect(seen.append)
+    bar.set_axes(False)
+    assert seen == []
+
+
+def test_the_designer_pushes_the_axes_toggle_to_the_scene(qapp):
+    window = GuideDesigner(scene=StubScene())
+    try:
+        window.action_bar.axes_check.setChecked(False)
+        assert window.guides.axes_visible is False
+        window.action_bar.axes_check.setChecked(True)
+        assert window.guides.axes_visible is True
+    finally:
+        window.close()

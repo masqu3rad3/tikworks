@@ -195,6 +195,9 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         labels_on = bool(prefs.guides.show_guide_labels)
         self.guides.labels_visible = labels_on
         self.action_bar.set_labels(labels_on)
+        axes_on = bool(prefs.guides.show_guide_axes)
+        self.guides.axes_visible = axes_on
+        self.action_bar.set_axes(axes_on)
         self.refresh()
 
     # ------------------------------------------------------------------ ui
@@ -439,6 +442,7 @@ class GuideDesigner(DesignerCommands, DesignerProperties, QtWidgets.QWidget):
         self.action_bar.sync_requested.connect(self.sync_now)
         self.action_bar.auto_sync_toggled.connect(self.set_auto_sync)
         self.action_bar.labels_toggled.connect(self.set_labels_visible)
+        self.action_bar.axes_toggled.connect(self.set_axes_visible)
         self.name_edit.editingFinished.connect(self._rename_current)
         # Each form names the object it edits, so the handler never has to
         # guess which one a field came from.

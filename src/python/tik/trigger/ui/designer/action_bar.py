@@ -29,6 +29,7 @@ class DesignerActionBar(QtWidgets.QFrame):
     select_requested = QtCore.Signal()
     mirror_requested = QtCore.Signal()
     labels_toggled = QtCore.Signal(bool)
+    axes_toggled = QtCore.Signal(bool)
     sync_requested = QtCore.Signal()
     auto_sync_toggled = QtCore.Signal(bool)
     build_all_requested = QtCore.Signal()
@@ -72,6 +73,13 @@ class DesignerActionBar(QtWidgets.QFrame):
             "Turn it off on dense modules, where labels overlap."
         )
         layout.addWidget(self.labels_check)
+        self.axes_check = QtWidgets.QCheckBox("Axes")
+        self.axes_check.setChecked(True)
+        self.axes_check.setToolTip(
+            "Show the local rotation axis on the guides whose orientation the "
+            "build reads. Guides that only mark a position never show one."
+        )
+        layout.addWidget(self.axes_check)
 
         layout.addStretch(1)
 
@@ -102,6 +110,7 @@ class DesignerActionBar(QtWidgets.QFrame):
         self.select_button.clicked.connect(self.select_requested)
         self.mirror_button.clicked.connect(self.mirror_requested)
         self.labels_check.toggled.connect(self.labels_toggled)
+        self.axes_check.toggled.connect(self.axes_toggled)
         self.sync_button.clicked.connect(self.sync_requested)
         self.auto_check.toggled.connect(self.auto_sync_toggled)
         self.build_all_button.clicked.connect(self.build_all_requested)
@@ -162,6 +171,14 @@ class DesignerActionBar(QtWidgets.QFrame):
             self.labels_check.setChecked(bool(on))
         finally:
             self.labels_check.blockSignals(False)
+
+    def set_axes(self, on: bool) -> None:
+        """Reflect the stored state without reporting it back as a user action."""
+        self.axes_check.blockSignals(True)
+        try:
+            self.axes_check.setChecked(bool(on))
+        finally:
+            self.axes_check.blockSignals(False)
 
     def set_auto_sync(self, on: bool) -> None:
         """Reflect the setting without reporting it back as a user action.

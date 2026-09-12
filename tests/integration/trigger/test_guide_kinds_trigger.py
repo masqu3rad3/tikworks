@@ -326,3 +326,51 @@ def test_a_reference_guide_has_no_draw_style_to_set(scene):
     must not try to write one."""
     found = drawn(scene)
     assert not cmds.attributeQuery("drawStyle", node=found["aim"], exists=True)
+
+
+# ---------------------------------------------- axes, where they are read
+def test_oriented_guides_show_their_local_axis(scene):
+    """ROOT and JOINT guides are all passed as `match=`, and `align_to`
+    copies rotation -- so their orientation reaches the rig."""
+    found = drawn(scene)
+    for role in ("root", "tip"):
+        assert cmds.getAttr(f"{found[role]}.displayLocalAxis") == 1
+
+
+def test_a_reference_guide_shows_no_axis(scene):
+    """Only its position is read; an axis would invite a pointless edit."""
+    found = drawn(scene)
+    assert cmds.getAttr(f"{found['aim']}.displayLocalAxis") == 0
+
+
+def test_a_driven_guide_shows_no_axis(scene):
+    """twist reads a rail's attributes, never its transform: the joints ride
+    an aimed frame and their bind joints are built with no `match` at all."""
+    found = drawn(scene)
+    assert cmds.getAttr(f"{found['rail']}.displayLocalAxis") == 0
+
+
+def test_every_shipped_modules_chain_guides_show_axes(scene):
+    """The user-facing promise: wherever orientation reaches the build."""
+    for module_type in ("base", "control", "fkchain", "arm", "twist", "ribbon"):
+        handle = scene.add(module_type, side="L", name=f"probe_{module_type}")
+        for (_role, _index), node in scene.guide_nodes(handle.instance_id).items():
+            shown = cmds.getAttr(f"{node.long_name}.displayLocalAxis")
+            oriented = cmds.nodeType(node.long_name) == "joint" and not (
+                module_type == "twist" and _role == "twist"
+            )
+            assert bool(shown) is oriented, f"{module_type} {_role}"
+
+
+def test_turning_axes_off_and_on_never_offers_one_that_is_not_read(scene):
+    """`on` only ever offers: a reference or driven guide stays off, so the
+    toggle cannot start claiming they have an orientation worth adjusting."""
+    handle = scene.add("toy_kinds", side="L", name="toy")
+    scene.set_axes_visible(False)
+    found = scene.guide_nodes(handle.instance_id)
+    assert cmds.getAttr(f"{found[('root', 0)].long_name}.displayLocalAxis") == 0
+    scene.set_axes_visible(True)
+    found = scene.guide_nodes(handle.instance_id)
+    assert cmds.getAttr(f"{found[('root', 0)].long_name}.displayLocalAxis") == 1
+    assert cmds.getAttr(f"{found[('aim', 0)].long_name}.displayLocalAxis") == 0
+    assert cmds.getAttr(f"{found[('rail', 0)].long_name}.displayLocalAxis") == 0
