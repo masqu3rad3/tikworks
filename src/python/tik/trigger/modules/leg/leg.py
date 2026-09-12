@@ -107,8 +107,11 @@ class Leg(Module):
         # Rz(-90) maps +Y to +X. A spin turns about Z: Rx(90) maps +Y to +Z.
         # A wiggle turns about Y and needs no turn at all.
         #
-        # These survive on the right side unconjugated, because every foot
-        # control is `mirror="world"` and both feet share one frame.
+        # Every foot control is `mirror="behaviour"` (the foot's own frame
+        # is behaviour-mirrored, spec §6.3), so these DO get conjugated on
+        # the right side, same as every other behaviour-mirrored control: a
+        # shape authored for the left arrives rolled 180 degrees about X on
+        # the mirrored frame, and the conjugation undoes it.
         "heel": (0.0, 0.0, -90.0),
         "toe": (0.0, 0.0, -90.0),
         "ball": (0.0, 0.0, -90.0),

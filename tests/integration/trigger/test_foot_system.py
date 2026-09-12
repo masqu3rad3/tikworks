@@ -343,3 +343,126 @@ def test_every_pivot_rests_at_identity_local_rotation(build_context):
         rotate = result.pivots[role].rotate
         for component in rotate:
             assert component == pytest.approx(0.0, abs=1e-4), role
+
+
+def _built_foot(ctx, size=1.0):
+    anchor = tm.Transform.create(name="anchor", parent=ctx.groups.rig.long_name)
+    guides = _foot_guides()
+    result = foot_system.build_foot_pivots(ctx, parent=anchor, guides=guides)
+    foot_system.build_foot_controls(ctx, result, size=size)
+    return result
+
+
+def test_the_controls_nest_like_the_pivots(build_context):
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    chain = ("bank", "heel", "ball_spin", "toe", "ball", "toe_wiggle")
+    for child, parent in zip(chain[1:], chain[:-1]):
+        control = result.controls[child]
+        assert control.offset.parent.long_name == (
+            result.controls[parent].transform.long_name
+        ), child
+
+
+def test_every_foot_control_is_secondary(build_context):
+    from tik.trigger.maya import tags
+
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    for role, control in result.controls.items():
+        assert control.transform.meta.get(tags.TIER) == "secondary", role
+
+
+def test_a_control_channel_and_its_offset_sum_onto_the_pivot(build_context):
+    """The sum is what lets automation and the animator both drive a pivot."""
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+
+    result.controls["heel"].transform["rotateX"].value = 20.0
+    result.controls["heel"].offset["rotateX"].value = 5.0
+    assert result.pivots["heel"]["rotateX"].value == pytest.approx(25.0, abs=1e-4)
+
+
+def test_every_declared_channel_reaches_its_pivot(build_context):
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    for control_role, channels in foot_system.CONTROL_CHANNELS.items():
+        for channel, pivot_role in channels.items():
+            if control_role == "bank":
+                continue  # two clamps, not a direct sum -- see Task 10
+            result.controls[control_role].transform[channel].value = 7.0
+            assert result.pivots[pivot_role][channel].value == pytest.approx(
+                7.0, abs=1e-4
+            ), (control_role, channel)
+            result.controls[control_role].transform[channel].value = 0.0
+
+
+def test_a_control_sits_exactly_on_its_twin_pivot(build_context):
+    """``match=`` is claimed to give position AND orientation in one step.
+
+    A test that only checked position (e.g. ``distance_to``) would pass even
+    if the control's world rotation drifted from its pivot -- and a drifted
+    rotation is exactly what the brief's snap-then-align-then-zero bug would
+    have produced, since ``offset.snap_to(control.transform)`` moves the
+    parent the control is about to be re-parented under. Checking both axes
+    and position together is what makes this a real lockstep check rather
+    than a coincidence.
+    """
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    for role in foot_system.CONTROL_CHAIN:
+        pivot = result.pivots[foot_system.CONTROL_GUIDES[role]]
+        control = result.controls[role]
+        assert control.transform.distance_to(pivot) == pytest.approx(
+            0.0, abs=1e-5
+        ), role
+        for axis in ("x", "y", "z"):
+            assert (
+                control.transform.world_axis(axis) * pivot.world_axis(axis)
+            ) == pytest.approx(1.0, abs=1e-4), (role, axis)
+
+
+def test_every_foot_control_is_behaviour_mirrored(build_context):
+    """Correction 1: ``mirror="behaviour"``, not ``"world"``.
+
+    The foot's own frame is itself behaviour-mirrored (spec 6.3), so a
+    control matched onto a pivot -- and therefore onto that frame -- is
+    behaviour-mirrored for real. This is the tag a pose-mirror tool reads,
+    and it also gates ``rig.controller``'s orient conjugation, which the
+    next test exercises.
+    """
+    from tik.trigger.maya import tags
+
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    for role, control in result.controls.items():
+        assert control.transform.meta.get(tags.MIRROR) == tags.BEHAVIOUR, role
+
+
+def test_the_right_foots_declared_orients_are_conjugated(build_context):
+    """A ``mirror="world"`` regression would silently skip this conjugation.
+
+    ``rig.controller`` only conjugates a declared ``control_orients`` entry
+    when the control is behaviour-mirrored (``rig.py`` line ~466). None of
+    the other tests in this file build on the right side, so this is the one
+    place a regression back to ``mirror="world"`` -- correction 1's exact
+    bug -- would go unnoticed: every other assertion here is insensitive to
+    which mirror string was used.
+    """
+    from tik.trigger.maya.rig import mirror_orient
+
+    left_ctx = build_context("leg", name="probeL", side="L")
+    left_result = _built_foot(left_ctx)
+    right_ctx = build_context("leg", name="probeR", side="R")
+    right_result = _built_foot(right_ctx)
+
+    declared = left_ctx.module.control_orient_defaults(left_ctx.module.values())
+    checked = 0
+    for role in foot_system.CONTROL_CHAIN:
+        orient = declared.get(role)
+        if not orient:
+            continue
+        checked += 1
+        assert left_result.controls[role].shape_orient == orient, role
+        assert right_result.controls[role].shape_orient == mirror_orient(orient), role
+    assert checked > 0  # sanity: the leg module does declare foot orients

@@ -51,6 +51,7 @@ auto-roll, none anywhere.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 import tik.maya as tm
 
@@ -171,4 +172,93 @@ def build_foot_pivots(rig, *, parent, guides: dict, name: str = "foot") -> FootR
     )
     result.ankle_driver.snap_to(guides["ankle"], rotation=False)
     result.ankle_driver.align_to(parent, position=False)
+    return result
+
+
+#: Which controller channel drives which pivot channel. The single place the
+#: mapping lives -- the proxy names in ``PROXIES`` key off it, so a channel
+#: cannot be wired one way and proxied another.
+CONTROL_CHANNELS = {
+    "bank": {"rotateX": "bank_in"},  # special-cased: two clamped pivots
+    "heel": {"rotateX": "heel", "rotateY": "heel"},
+    "ball_spin": {"rotateZ": "ball_spin"},
+    "toe": {"rotateX": "toe", "rotateY": "toe"},
+    "ball": {"rotateY": "ball_roll", "rotateZ": "ball_roll"},
+    "toe_wiggle": {"rotateY": "toe_wiggle"},
+}
+
+#: Controller nesting, outermost first. Matches the pivot stack so the two
+#: hierarchies inherit the same rotation without a constraint between them.
+CONTROL_CHAIN = ("bank", "heel", "ball_spin", "toe", "ball", "toe_wiggle")
+
+#: Which PIVOT each controller co-locates with. Pivot roles, not guide
+#: roles: the controller has to land exactly where its twin is, and the
+#: pivots have already resolved every marker.
+CONTROL_GUIDES = {
+    "bank": "ball_roll",
+    "heel": "heel",
+    "ball_spin": "ball_spin",
+    "toe": "toe",
+    "ball": "ball_roll",
+    "toe_wiggle": "toe_wiggle",
+}
+
+
+def build_foot_controls(
+    rig,
+    result: FootResult,
+    *,
+    size: float,
+    guides: Optional[dict] = None,
+    parent=None,
+    name: str = "foot",
+) -> FootResult:
+    """Build the controller chain that mirrors the pivot stack.
+
+    Every control is ``mirror="behaviour"``: the foot's frame is itself
+    behaviour-mirrored (``F_R = Rx(180) . F_L``, spec §6.3), and a control
+    born from ``match=`` on a pivot inherits that pivot's frame exactly --
+    so the controls are behaviour-mirrored for real, not by declaration.
+    That is what lets the channel sums below carry no side term: the sign
+    the legacy multiplier table used to supply is already in the frame.
+
+    ``match=result.pivots[CONTROL_GUIDES[role]]`` gets position *and*
+    orientation from the pivot in one step -- ``rig.controller`` applies
+    ``match`` before creating the offset group, so the offset group is
+    what ends up carrying the pivot's placement, not the control fighting
+    its own parent for it.
+
+    ``tier="secondary"`` puts all six behind the rig's ``visibilities_ctrl``,
+    so an animator who prefers the proxy attributes never sees them.
+    """
+    guides = guides if guides is not None else {}
+    under = parent if parent is not None else rig.groups.control
+    for role in CONTROL_CHAIN:
+        control = rig.controller(
+            role,
+            size=size,
+            parent=under,
+            match=result.pivots[CONTROL_GUIDES[role]],
+            mirror="behaviour",
+            tier="secondary",
+        )
+        for channel in ("tx", "ty", "tz", "sx", "sy", "sz", "v"):
+            plug = control[channel]
+            plug.locked = True
+            plug.visible = False
+        result.controls[role] = control
+        under = control
+
+    # The outermost control rides what the pivot stack rides.
+    tm.MatrixConstraint.create(
+        result.root, result.controls[CONTROL_CHAIN[0]].offset, maintain_offset=True
+    )
+
+    for role, channels in CONTROL_CHANNELS.items():
+        if role == "bank":
+            continue  # two clamped pivots, wired in build_foot_bank
+        control = result.controls[role]
+        for channel, pivot_role in channels.items():
+            summed = control.offset[channel] + control.transform[channel]
+            summed >> result.pivots[pivot_role][channel]
     return result
