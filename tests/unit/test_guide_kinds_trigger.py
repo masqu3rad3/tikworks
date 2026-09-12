@@ -95,3 +95,29 @@ def test_stripping_a_slug_never_invents_a_role():
     layout = GuideLayout("base", "end", multi="twist", driven=("twist",))
     assert layout.bare_role("pivot_ik_wrist") == "pivot_ik_wrist"
     assert layout.kind_for("pivot_ik_wrist") is GuideKind.JOINT
+
+
+# --------------------------------------------- which orientations are read
+def test_every_joint_guide_is_oriented_by_default():
+    """Empty means all of them: taking a guide's rotation is the ordinary
+    case, so a module narrows rather than opts in."""
+    assert GuideLayout("root", multi="segment").oriented == ()
+
+
+def test_a_module_can_narrow_which_orientations_it_reads():
+    layout = GuideLayout("collar", "shoulder", "hand", oriented=("hand",))
+    assert layout.oriented == ("hand",)
+
+
+def test_oriented_naming_an_absent_role_raises():
+    with pytest.raises(ValueError, match="not one of its roles"):
+        GuideLayout("collar", "hand", oriented=("nope",))
+
+
+def test_oriented_contradicting_a_kind_raises():
+    """A reference or driven guide has no orientation the rig reads, so
+    declaring one oriented is a contradiction, not a narrowing."""
+    with pytest.raises(ValueError, match="reference"):
+        GuideLayout("root", "aim", reference=("aim",), oriented=("aim",))
+    with pytest.raises(ValueError, match="driven"):
+        GuideLayout("root", multi="rail", driven=("rail",), oriented=("rail",))

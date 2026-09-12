@@ -101,6 +101,9 @@ class GuideLayout:
         max: Maximum count for the multi role (default unlimited).
         reference: Roles that mark a position rather than a rig joint.
         driven: Roles the module places, not the rigger.
+        oriented: Roles whose orientation the build reads. Empty means all
+            of them, which is the ordinary case; a module that orients its
+            own chain narrows to the guides it still takes rotation from.
         chain: Whether a bone runs between these guides. False for a module
             whose guides are not a chain, which stops Maya smearing a bone
             from each guide to every one of its children.
@@ -114,6 +117,7 @@ class GuideLayout:
         max: Optional[int] = None,  # noqa: A002
         reference: Sequence[str] = (),
         driven: Sequence[str] = (),
+        oriented: Sequence[str] = (),
         chain: bool = True,
     ) -> None:
         if not roles:
@@ -133,6 +137,13 @@ class GuideLayout:
         #: whose guides do not (``twist``'s rails are siblings on a segment,
         #: ``ribbon``'s two ends span a surface). A statement about the rig,
         #: not about the drawing -- what it renders as is the framework's.
+        #: Roles whose *orientation* the build reads. **Empty means all of
+        #: them** -- the one default that is "all", because taking a guide's
+        #: rotation is the ordinary case and a module narrows rather than
+        #: opts in. ``arm`` narrows to ``hand``: it orients its chain by
+        #: convention (X down the bone, Y the bend axis), so a rigger rolling
+        #: the collar or elbow guide would change nothing.
+        self.oriented: tuple[str, ...] = tuple(oriented)
         self.chain = bool(chain)
         self._validate_kinds()
 
@@ -157,6 +168,16 @@ class GuideLayout:
             raise ValueError(
                 f"Guide role(s) {sorted(both)} declared both reference and driven."
             )
+        for role in self.oriented:
+            if role not in known:
+                raise ValueError(
+                    f"GuideLayout oriented={role!r} is not one of its roles."
+                )
+            if role in self.reference or role in self.driven:
+                raise ValueError(
+                    f"GuideLayout oriented={role!r} is also declared reference "
+                    "or driven, whose orientation the rig never reads."
+                )
 
     def kind_for(self, role: str, *, is_root: bool = False) -> GuideKind:
         """What ``role`` is. Declared kinds win; the rest is derived.

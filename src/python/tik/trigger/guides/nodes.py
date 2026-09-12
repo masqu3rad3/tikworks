@@ -54,13 +54,12 @@ MARKER_FAN_FALLBACK = 0.5
 #: child and a base with four collinear children becomes an unreadable blur.
 BONE_DRAW_STYLE = 0
 JOINT_DRAW_STYLE = 3
-#: The kinds whose *orientation* reaches the rig, so the rigger needs to see
-#: it. ROOT and JOINT guides are all passed as ``match=`` to ``socket`` /
-#: ``bind_joint`` / ``controller``, and ``align_to`` copies rotation as well
-#: as position. A REFERENCE guide is read for its position alone, and a
-#: DRIVEN one only for its authored attributes -- twist's rails ride an aimed
-#: frame and their bind joints are built with no ``match`` at all.
-ORIENTED_KINDS = (GuideKind.ROOT, GuideKind.JOINT)
+#: A REFERENCE guide is read for its position alone, and a DRIVEN one only
+#: for its authored attributes -- twist's rails ride an aimed frame and their
+#: bind joints are built with no ``match`` at all. Neither has an orientation
+#: the rig ever reads. Beyond that it is per *role*: a module that orients its
+#: own chain narrows ``GuideLayout.oriented`` to the guides it still takes a
+#: rotation from, which is why this is not a kind table.
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +158,6 @@ def make_guide_shell(
         return node
     node = tm.Joint.create(name=name, parent=parent_name, radius=KIND_RADIUS[kind])
     node["drawStyle"].value = BONE_DRAW_STYLE if chain else JOINT_DRAW_STYLE
-    node["displayLocalAxis"].value = kind in ORIENTED_KINDS
     return node
 
 
@@ -250,9 +248,13 @@ def shows_axes(node, layout) -> bool:
     needs the layout, because it is an ordinary joint in every other respect.
     """
     if node.type != "joint":
-        return False
+        return False  # a reference guide: its position is all the rig reads
     role = layout.bare_role(node.meta.get(tags.ROLE, ""))
-    return role not in layout.driven
+    if role in layout.driven:
+        return False  # only its authored attributes are read
+    # Empty means all of them: taking a guide's rotation is the ordinary
+    # case, so a module narrows rather than opts in.
+    return not layout.oriented or role in layout.oriented
 
 
 def set_axes_visible(node, on: bool, layout) -> None:
@@ -326,6 +328,9 @@ def create_guide_node(
     )
     node.color = guide_color(kind, module.side.value)
     label_guide(node, kind, tag_role or role, module.side.value)
+    # Through the same setter the toggle uses, so displayLocalAxis has exactly
+    # one writer and a fresh draw cannot disagree with a toggle.
+    set_axes_visible(node, True, module.guides)
     return node
 
 
