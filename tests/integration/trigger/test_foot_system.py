@@ -1,5 +1,7 @@
 """The reverse foot, driven directly rather than through the leg module."""
 
+import math
+
 import pytest
 
 import tik.maya as tm
@@ -19,6 +21,26 @@ def _foot_guides():
             "bank_out": (2.8, 0.05, 1.3),
         }.items()
     }
+
+
+def _rotate_about_y(position, pivot, degrees):
+    """``position`` rotated about the world Y axis through ``pivot`` (XZ only).
+
+    Used to derive a toed-out foot from the straight one: the straight
+    layout puts heel, tip and the ankle all on the same module X, which is
+    exactly why ``foot_frame`` came out as a plain identity matrix for it --
+    a degenerate case that cannot tell a real aim/up construction from a
+    no-op. A toed-out foot is not collinear that way.
+    """
+    theta = math.radians(degrees)
+    cos_t, sin_t = math.cos(theta), math.sin(theta)
+    dx = position[0] - pivot[0]
+    dz = position[2] - pivot[2]
+    return (
+        pivot[0] + dx * cos_t + dz * sin_t,
+        position[1],
+        pivot[2] - dx * sin_t + dz * cos_t,
+    )
 
 
 def test_the_pivots_nest_in_the_documented_order(build_context):
@@ -121,3 +143,58 @@ def test_the_frame_is_well_formed(build_context):
 
     # Y's component along world up, without constructing a second vector.
     assert y_axis.y > 0.5
+
+
+def test_the_frame_follows_a_toed_out_foot(build_context):
+    """The straight-foot case cannot rule out a frame that does nothing.
+
+    Heel, tip and the ankle guide all share the module's X in the straight
+    layout, so ``foot_frame`` comes out as the plain identity matrix -- every
+    assertion above (Z at the tip, orthonormal axes, Y toward world up) is
+    satisfied by a frame that was never actually built, or built wrong and
+    landed on identity by coincidence. A toed-out foot -- the ordinary
+    production pose, not an edge case -- breaks that collinearity, so if the
+    pivots come out aligned to a real, non-identity frame here, the aim/up
+    construction is doing the work the design claims rather than coasting on
+    a degenerate input.
+    """
+    ctx = build_context("base", name="probe")
+    straight = _foot_guides()
+    ankle_pos = tuple(straight["ankle"].world_position)
+    positions = {
+        "ankle": ankle_pos,
+        "ball": tuple(straight["ball"].world_position),
+    }
+    for role in ("heel", "tip", "bank_in", "bank_out"):
+        positions[role] = _rotate_about_y(
+            tuple(straight[role].world_position), ankle_pos, 25.0
+        )
+    guides = {
+        role: tm.Joint.create(name="guide_toed_" + role, position=position)
+        for role, position in positions.items()
+    }
+
+    anchor = tm.Transform.create(name="anchor", parent=ctx.groups.rig.long_name)
+    result = foot_system.build_foot_pivots(ctx, parent=anchor, guides=guides)
+
+    x_axis = result.frame.world_axis("x")
+    y_axis = result.frame.world_axis("y")
+    z_axis = result.frame.world_axis("z")
+
+    to_tip = guides["tip"].world_position - guides["heel"].world_position
+    to_tip.normalize()
+    assert (z_axis * to_tip) == pytest.approx(1.0, abs=1e-4)
+    # The point of this test: not the straight foot's identity matrix. Heel
+    # and tip no longer share X, so a real aim has to give Z a real X part.
+    assert abs(z_axis.x) > 0.3
+
+    for axis in (x_axis, y_axis, z_axis):
+        assert axis.length() == pytest.approx(1.0, abs=1e-5)
+    assert (x_axis * y_axis) == pytest.approx(0.0, abs=1e-5)
+    assert (y_axis * z_axis) == pytest.approx(0.0, abs=1e-5)
+    assert (x_axis * z_axis) == pytest.approx(0.0, abs=1e-5)
+    assert y_axis.y > 0.5
+
+    reference = x_axis
+    for role, pivot in result.pivots.items():
+        assert (pivot.world_axis("x") * reference) == pytest.approx(1.0, abs=1e-4), role
