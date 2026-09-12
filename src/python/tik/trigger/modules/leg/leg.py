@@ -1,0 +1,208 @@
+"""Leg module: hip plus a single-IK-chain IK/FK leg with a reverse foot.
+
+The arm's recipe down to the ankle, and then a second solver hierarchy
+wrapped *around* it: the reverse foot's pivots sit upstream of the leg's own
+IK handle, so rolling onto the toe drags the ankle, the knee and the hip with
+it. The foot is not downstream of the limb.
+
+Ribbons and twist live in their own modules. A twist attached to the
+``upperleg`` output creates its joints as siblings of the shin, which is
+exactly how engine twist bones are structured, so nothing here anticipates
+them.
+"""
+
+from __future__ import annotations
+
+from tik.trigger.core import (
+    BoolField,
+    ChoiceField,
+    FieldGroup,
+    FloatField,
+    GuideLayout,
+    Input,
+    Module,
+    register_module,
+)
+from tik.trigger.systems.limb import (
+    limb_control_names,
+    limb_control_orients,
+    limb_control_shapes,
+    limb_pivot_controls,
+)
+
+LIMB_LOCK = FieldGroup("Limb Lock")
+AUTO_HIP = FieldGroup("Auto Hip", collapsed=True)
+FOOT = FieldGroup("Foot", collapsed=True)
+
+#: The FK labels ``build()`` passes to the limb. Named once so the manifest
+#: and the build cannot disagree.
+LIMB_LABELS = ("upper", "lower", "foot")
+
+#: The limb's own three guides, in chain order. The limb system never names a
+#: guide, so the anchors for its pivot presets come from here.
+LIMB_GUIDES = ("thigh", "knee", "ankle")
+
+#: The reverse foot's controllers, ground up. ``systems/foot.py`` builds them
+#: and the module declares them; the two must not drift.
+FOOT_CONTROLS = ("heel", "ball_spin", "toe", "ball", "toe_wiggle", "bank")
+
+#: How far past the ankle the ``neutral`` guide sits, as a multiple of the
+#: hip-to-ankle distance. Only the direction matters to the reach network;
+#: sitting beyond the ankle keeps the guide selectable rather than buried.
+NEUTRAL_REACH = 1.4
+
+
+@register_module("leg", category="limbs")
+class Leg(Module):
+    """Biped leg: hip, thigh, knee, ankle, ball, toe, and a reverse foot."""
+
+    label = "Leg"
+    #: Only the ankle's rotation reaches the rig: the chain is oriented by
+    #: convention at build time, so rolling the hip, thigh or knee guide
+    #: changes nothing. The ankle's is what aligns the foot to the model.
+    guides = GuideLayout(
+        "hip",
+        "thigh",
+        "knee",
+        "ankle",
+        "ball",
+        "toe",
+        "heel",
+        "tip",
+        "bank_in",
+        "bank_out",
+        "neutral",
+        reference=("heel", "tip", "bank_in", "bank_out", "neutral"),
+        oriented=("ankle",),
+    )
+    inputs = (Input("root", primary=True, help="Where the hip hangs (pelvis/body)"),)
+    outputs = ("hip", "upperleg", "lowerleg", "foot", "ball", "toe")
+    controls = (
+        "thigh",
+        *limb_control_names(labels=LIMB_LABELS),
+        "fk_ball",
+        *FOOT_CONTROLS,
+    )
+    control_shapes = {
+        "thigh": "CurvedCircle",
+        **limb_control_shapes(labels=LIMB_LABELS),
+        # The IK control is a foot, not a cube. Overrides the limb default.
+        "ik": "FootPrint",
+        "fk_ball": "Circle",
+        "heel": "CurvedArrow",
+        "ball_spin": "Rotator",
+        "toe": "CurvedArrow",
+        "ball": "CurvedArrow",
+        "toe_wiggle": "Arrow",
+        "bank": "DualCurvedArrow",
+    }
+    control_orients = {
+        **limb_control_orients(labels=LIMB_LABELS),
+        "fk_ball": (0.0, 0.0, -90.0),
+        # Shapes are authored flat in XZ with the normal on +Y. A roll pivot
+        # turns about the foot frame's X, so its arrow wants the normal on X:
+        # Rz(-90) maps +Y to +X. A spin turns about Z: Rx(90) maps +Y to +Z.
+        # A wiggle turns about Y and needs no turn at all.
+        #
+        # These survive on the right side unconjugated, because every foot
+        # control is `mirror="world"` and both feet share one frame.
+        "heel": (0.0, 0.0, -90.0),
+        "toe": (0.0, 0.0, -90.0),
+        "ball": (0.0, 0.0, -90.0),
+        "bank": (0.0, 0.0, -90.0),
+        "ball_spin": (90.0, 0.0, 0.0),
+    }
+    #: No entry for ``ik``: the reverse foot already owns that control's
+    #: pivot, and offering both would give the animator two pivots on one
+    #: node whose corrections do not compose. The foot controls are pivots
+    #: themselves, so a movable pivot on one is meaningless.
+    pivot_controls = {
+        "thigh": "hip",
+        **{
+            role: guide
+            for role, guide in limb_pivot_controls(
+                labels=LIMB_LABELS, guides=LIMB_GUIDES
+            ).items()
+            if role != "ik"
+        },
+        "fk_ball": "ball",
+    }
+
+    @classmethod
+    def pivot_exempt_for_copy(cls, settings=None):
+        """``ik`` and every reverse-foot control, on the record.
+
+        ``ik`` is exempt because the reverse foot already owns that control's
+        pivot -- offering a second would give the animator two pivots on one
+        node whose corrections do not compose. Every ``FOOT_CONTROLS`` role is
+        exempt because it *is* a pivot: a heel or toe roll control already
+        pivots the foot from a fixed point, so a movable pivot on top of it is
+        meaningless rather than merely unbuilt.
+        """
+        return ("ik", *FOOT_CONTROLS)
+
+    stretch = BoolField(True, help="Build the stretch network")
+    squash = BoolField(True, help="Build the compress-side network")
+    pole_pin = BoolField(False, help="Lock the knee to the pole control")
+    lock_from = ChoiceField(
+        "thigh",
+        choices=("thigh", "hip"),
+        label="Lock From",
+        group=LIMB_LOCK,
+        help="'thigh' displaces the leg chain and leaves the hip on the "
+        "pelvis; 'hip' carries the hip joint along too",
+    )
+    limb_lock = BoolField(
+        True,
+        label="Limb Lock",
+        group=LIMB_LOCK,
+        help="Hold the thigh-to-foot distance while the foot anchors. "
+        "Inert until the animator raises limbLock.",
+    )
+    roll_overlap = FloatField(
+        10.0,
+        min=0.0,
+        label="Roll Overlap",
+        group=FOOT,
+        help="Degrees either side of rollBreak over which the ball hands off "
+        "to the toe. 0 is a hard switch.",
+    )
+
+    def draw_guides(self, guides) -> None:
+        """A rest stance: the chain hangs down, knee pushed forward in +Z.
+
+        The knee's +Z is what makes the bend plane unambiguous -- the same job
+        the arm's elbow does with -1 in Z. The four foot markers are siblings
+        of the ankle rather than links in a chain, and are reference guides,
+        so none of them draws a bone.
+        """
+        mult = guides.side_mult
+        hip_at = (1.0 * mult, 10.4, 0.0)
+        ankle_at = (2.0 * mult, 1.0, 0.0)
+        hip = guides.joint("hip", hip_at)
+        thigh = guides.joint("thigh", (2.0 * mult, 9.6, 0.0), parent=hip)
+        knee = guides.joint("knee", (2.0 * mult, 5.3, 0.45), parent=thigh)
+        ankle = guides.joint("ankle", ankle_at, parent=knee)
+        ball = guides.joint("ball", (2.0 * mult, 0.25, 1.3), parent=ankle)
+        guides.joint("toe", (2.0 * mult, 0.05, 2.4), parent=ball)
+
+        # Position-only markers around the shoe. Siblings of the ankle: they
+        # describe the foot's footprint, not a chain through it.
+        guides.joint("heel", (2.0 * mult, 0.05, -0.6), parent=ankle)
+        guides.joint("tip", (2.0 * mult, 0.05, 2.8), parent=ankle)
+        guides.joint("bank_in", (1.2 * mult, 0.05, 1.3), parent=ankle)
+        guides.joint("bank_out", (2.8 * mult, 0.05, 1.3), parent=ankle)
+
+        # Where the ankle sits when the hip is at rest -- the auto-hip's zero.
+        # Derived from the ankle rather than typed as a triple: the reach
+        # network measures the angle between this direction and the ankle's,
+        # and at the guide pose that angle must be exactly zero.
+        neutral_at = tuple(
+            start + (end - start) * NEUTRAL_REACH
+            for start, end in zip(hip_at, ankle_at)
+        )
+        guides.joint("neutral", neutral_at, parent=hip)
+
+    def build(self, rig) -> None:
+        """Not yet built -- see Tasks 7 and 15."""
+        raise NotImplementedError("leg.build lands in Task 7")
