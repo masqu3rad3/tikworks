@@ -308,7 +308,21 @@ def build_foot_chains(
     """
     ball_at = guides["ball"].world_position
     toe_at = guides["toe"].world_position
-
+    # No `reverse_aim`/`reverse_up` here, unlike `systems/limb.py:281`'s own
+    # puppet chain -- checked, not assumed, by building a mirrored pair and
+    # comparing both sides
+    # (`test_a_mirrored_foot_rests_and_rolls_exactly_like_the_source` in
+    # test_foot_system.py, and a direct FK-mode check driving `fk_ball`
+    # identically on both legs): the FK side's world pose comes from
+    # `MatrixConstraint`'s joint-rotation strand (an absolute world match,
+    # orientation-convention independent) and the IK side's from two
+    # `ikSCsolver` handles, which have no bend-plane ambiguity to get wrong
+    # -- a 2-joint SC chain always just rotates onto its target position
+    # regardless of starting orientation. Neither reads this chain's own
+    # local convention, so reversing it here would be a no-op dressed as a
+    # fix. The real defect this task's mirrored-pair testing found was in
+    # `build_foot_bank`, not here -- see its docstring.
+    #
     # --- IK side: two SC handles inside the reverse foot -------------------
     # Parented under the foot's own ankle driver (upstream of the limb's
     # solve), not under the limb's last IK joint (whose rotation is already
@@ -447,11 +461,23 @@ def build_foot_bank(rig, result: FootResult, *, name: str = "foot") -> FootResul
     the sign changes. Rejected for now as cleverness bought against a
     structure the legacy proved in production; this is the note saying where
     to look if the detachment turns out to bother animators.
+
+    Reads ``transform["rotateX"]`` alone, not ``offset["rotateX"] +
+    transform["rotateX"]`` the way every other foot channel does. That sum is
+    what lets automation (via the offset) and the animator (via the control)
+    both drive a pivot -- but nothing ever writes automation into ``bank``'s
+    offset, and "bank" is also the one control in ``CONTROL_CHAIN`` parented
+    directly under the world-aligned IK control rather than a
+    behaviour-mirrored sibling. On the mirrored side that offset therefore
+    bakes a real, non-zero rest rotation of its own (its local decomposition
+    of the frame's Rx(180) against a non-mirrored parent, measured at exactly
+    ``rotateX = -180``) -- summing it in would pollute the live bank value
+    with that baseline and roll the foot on the mirrored side the instant
+    this function wires the connection, on top of the animator's own input.
     """
     channel = result.controls["bank"].transform["rotateX"]
-    total = result.controls["bank"].offset["rotateX"] + channel
-    total.maximum(0.0) >> result.pivots["bank_out"]["rotateX"]
-    total.minimum(0.0) >> result.pivots["bank_in"]["rotateX"]
+    channel.maximum(0.0) >> result.pivots["bank_out"]["rotateX"]
+    channel.minimum(0.0) >> result.pivots["bank_in"]["rotateX"]
     return result
 
 

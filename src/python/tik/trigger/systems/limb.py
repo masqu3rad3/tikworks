@@ -61,8 +61,6 @@ class LimbResult:
     #: before the solve is wired: the pole and soft-IK constraints move the
     #: chain, and every offset baked afterwards depends on this pose.
     pole_rest: object = None
-    #: What the limb hangs from, carried so the solve phase need not be told.
-    parent: object = None
     #: Segment labels, resolved. The solve phase names attributes from them.
     labels: list = field(default_factory=list)
     #: The extra name token, carried for the same reason.
@@ -107,7 +105,6 @@ def build_limb_controls(
         controller_size = derive_size(guides)
     result = LimbResult()
     result.size = controller_size
-    result.parent = parent
     result.labels = list(labels)
     result.name = name
     side_sign = rig.side_mult
@@ -462,6 +459,35 @@ def _build_stretch(
         result.ik_lengths.add_factor((compress - 1.0) * squash_plug + 1.0)
 
 
+def _safe_twist_axis(base, target) -> str:
+    """Which of ``target``'s own axes is safest as the pole frame's twist ref.
+
+    ``AimFrame``'s twist-aware secondary mode rotates the frame so one of its
+    own axes tracks a world direction read off ``target`` -- its local Y axis
+    for ``twist_axis="X"``, its local X axis for ``"Y"``/``"Z"`` (the two
+    distinct choices this API offers; ``TWIST_TARGETS`` maps "Y" and "Z" to
+    the same reference). That tracking is a Gram-Schmidt orthogonalization
+    against the frame's aim axis (``base`` toward ``target``), which is
+    undefined -- and numerically unstable near the undefined point -- exactly
+    when the chosen reference is (nearly) parallel to that aim direction.
+
+    "X" is safe for a limb whose end guide is oriented along the bone (an
+    elbow reads the wrist's Y, perpendicular to the forearm the wrist's X
+    tracks) but wrong for a limb hanging straight onto an unrotated end guide
+    (a knee under a straight ankle: the ankle's own Y then points straight
+    back up the aim line -- exactly the degenerate case). Measured at build
+    time from the actual guide pose rather than hardcoded, so this adapts
+    to whatever the rigger's guides turn out to describe.
+    """
+    aim = target.world_position - base.world_position
+    if aim.length() < 1e-6:
+        return "X"
+    aim.normalize()
+    y_dot = abs(aim * target.world_axis("y"))
+    x_dot = abs(aim * target.world_axis("x"))
+    return "X" if y_dot <= x_dot else "Y"
+
+
 # ----------------------------------------------------------------------- pole
 def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -> None:
     """Pole controller in a twist-aware auto space blended against a rest space."""
@@ -471,7 +497,7 @@ def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -
         result.pole_base,
         driver,
         driver,
-        twist_axis="X",
+        twist_axis=_safe_twist_axis(result.pole_base, driver),
         parent=rig.groups.rig,
         name=rig.name(name, "pole"),
     )

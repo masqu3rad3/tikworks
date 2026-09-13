@@ -25,7 +25,17 @@ from tik.trigger.core import (
     Vector2Field,
     register_module,
 )
+from tik.trigger.systems.foot import (
+    build_foot_bank,
+    build_foot_chains,
+    build_foot_controls,
+    build_foot_pivots,
+    build_foot_proxies,
+    build_foot_roll,
+)
 from tik.trigger.systems.limb import (
+    build_limb_controls,
+    build_limb_solve,
     conventional_frames,
     derive_size,
     limb_control_names,
@@ -33,7 +43,8 @@ from tik.trigger.systems.limb import (
     limb_control_shapes,
     limb_pivot_controls,
 )
-from tik.trigger.systems.reach import ReachAxis
+from tik.trigger.systems.limb_lock import build_limb_lock
+from tik.trigger.systems.reach import ReachAxis, build_reach
 
 LIMB_LOCK = FieldGroup("Limb Lock")
 AUTO_HIP = FieldGroup("Auto Hip", collapsed=True)
@@ -281,12 +292,18 @@ class Leg(Module):
         guides.joint("neutral", neutral_at, parent=hip)
 
     def build(self, rig) -> None:
-        """The deform skeleton. Limb, foot and automation land in Task 15."""
+        """Bind skeleton, limb, reverse foot, auto hip and limb lock.
+
+        The limb is built in two phases with the reverse foot between them
+        (``build_limb_controls`` / ``build_limb_solve``): the foot's pivot
+        stack is wired upstream of the limb's own IK handle, so rolling onto
+        the toe drags the ankle, the knee and the hip with it.
+        """
         hip_guide = rig.guide("hip")
         limb_guides = rig.guides(*LIMB_GUIDES)
-        foot_guides = rig.guides("ball", "toe")
+        chain_foot_guides = rig.guides("ball", "toe")
 
-        rig.socket("root", match=hip_guide)
+        socket = rig.socket("root", match=hip_guide)
 
         # deform skeleton -- created in final position, never reparented -----
         hip_jnt = rig.bind_joint("hip", match=hip_guide)
@@ -294,7 +311,7 @@ class Leg(Module):
         parent_joint = hip_jnt
         for label, guide_node in zip(
             ("upperleg", "lowerleg", "foot", "ball", "toe"),
-            [*limb_guides, *foot_guides],
+            [*limb_guides, *chain_foot_guides],
         ):
             joint = rig.bind_joint(label, parent=parent_joint, match=guide_node)
             chain.append(joint)
@@ -338,5 +355,112 @@ class Leg(Module):
         ):
             rig.output(name, joint)
 
-        self._bind_chain = chain
-        self._size = derive_size(limb_guides)
+        size = derive_size(limb_guides)
+
+        # Two places the lock can push, both inert pass-throughs otherwise.
+        # `hang_from` carries the hip with it; `limb_from` moves only the leg
+        # chain, leaving the pelvis alone. build_limb_lock owns the
+        # translation of whichever one it targets, so only the other gets a
+        # full constraint here.
+        locks_hip = self.limb_lock and self.lock_from == "hip"
+        hang_from = rig.group("lock", "hip", under="socket")
+        hang_from.snap_to(socket)
+        if not locks_hip:
+            tm.MatrixConstraint.create(socket, hang_from, maintain_offset=True)
+
+        # hip control ------------------------------------------------------
+        thigh_ctrl = rig.controller(
+            "thigh", size=size, match=chain[0], mirror="behaviour"
+        )
+        tm.MatrixConstraint.create(hang_from, thigh_ctrl.offset, maintain_offset=True)
+        tm.MatrixConstraint.create(thigh_ctrl, chain[0], maintain_offset=True)
+        for channel in ("sx", "sy", "sz", "v"):
+            plug = thigh_ctrl[channel]
+            plug.locked = True
+            plug.visible = False
+
+        limb_from = rig.group("lock", "limb", under="rig")
+        limb_from.snap_to(thigh_ctrl.transform)
+        if locks_hip or not self.limb_lock:
+            tm.MatrixConstraint.create(thigh_ctrl, limb_from, maintain_offset=True)
+
+        # the limb, opened in the middle for the foot ----------------------
+        limb = build_limb_controls(
+            rig,
+            limb_guides,
+            parent=limb_from,
+            controller_size=size,
+            labels=LIMB_LABELS,
+        )
+
+        foot_guides = {
+            role: rig.guide(role)
+            for role in ("ankle", "ball", "toe", "heel", "tip", "bank_in", "bank_out")
+        }
+        foot = build_foot_pivots(
+            rig, parent=limb.ik_tweak.transform, guides=foot_guides
+        )
+        build_foot_controls(rig, foot, size=size * 0.35, parent=limb.ik_control)
+        build_foot_bank(rig, foot)
+
+        # The solve follows the bottom of the pivot stack, not the tweak:
+        # that is what makes rolling onto the toe drag the ankle, the knee
+        # and the hip with it.
+        build_limb_solve(
+            rig,
+            limb,
+            driver=foot.ankle_driver,
+            bind_joints=chain[1:4],
+            soft_ik=True,  # never optional for an IK solution
+            stretch=self.stretch,
+            squash=self.squash,
+            pole_pin=self.pole_pin,
+        )
+
+        build_foot_chains(
+            rig,
+            foot,
+            limb,
+            guides=foot_guides,
+            bind_joints=chain[4:6],
+            size=size * 0.5,
+        )
+        build_foot_proxies(rig, foot, limb.ik_control)
+        build_foot_roll(rig, foot, limb.ik_control, overlap=float(self.roll_overlap))
+
+        if self.auto_hip:
+            reach = build_reach(
+                rig,
+                thigh_ctrl.offset,
+                thigh_ctrl.transform,
+                hang_from,
+                tuple(rig.guide("neutral").world_position),
+                limb.ik_tweak.transform,
+                limb.ik_control.transform,
+                lift=self._lift_axis(),
+                swing=self._swing_axis(),
+                fk_controls=limb.fk_controls,
+                switch_plug=limb.switch_plug,
+                prefix="autoHip",
+                interpolation=self.auto_hip_interpolation,
+                name="hip",
+            )
+            # Relative, so set_parent writes no compensation into the
+            # channels: `align` already carries the hip's own orientation.
+            thigh_ctrl.transform.set_parent(reach.align, relative=True)
+
+        if self.limb_lock:
+            # Built last because it needs the limb's IK tweak; lock_root
+            # still reads the raw socket, which keeps the graph acyclic.
+            target, follows = (
+                (hang_from, socket) if locks_hip else (limb_from, thigh_ctrl)
+            )
+            build_limb_lock(
+                rig,
+                socket=socket,
+                chain_root=limb.ik_joints[0],
+                driver=limb.ik_tweak.transform,
+                control=limb.ik_control,
+                target=target,
+                follows=follows,
+            )

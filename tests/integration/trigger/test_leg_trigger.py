@@ -320,25 +320,98 @@ def test_the_ball_and_toe_joints_land_on_their_own_guides(scene):
         assert (joint_pos - guide_pos).length() < 1e-3, role
 
 
-@pytest.mark.xfail(reason="needs leg.build -- Task 15", strict=True)
 def test_auto_hip_is_inert_at_the_guide_pose(scene):
-    """The neutral is where the leg is drawn, so zero must mean zero.
+    """The neutral is where the leg is drawn, so raising the scalars must
+    not move the hip -- matching the arm's own
+    ``test_bind_pose_is_exact_with_the_automation_full_on``.
 
-    If this fails the neutral guide is not collinear with hip-to-ankle and
-    every auto-hip value starts by moving the rig off its own bind pose.
+    The original version of this check compared ``thigh.offset`` against
+    identity. That group is a static bake of the hip bind joint's own
+    conventional bone orientation (X toward the thigh guide) -- it is
+    non-zero purely because the hip and thigh guides are not stacked
+    vertically (there is a real X offset between them), and it has nothing
+    to do with auto-hip: it is exactly as non-identity with ``auto_hip``
+    off, or with the reach network deleted outright. Checking it could never
+    have caught a mis-placed neutral guide.
+
+    The real invariant is that raising ``autoHipLift``/``autoHipSwing`` from
+    their build-time zero must not move the thigh control at all, which
+    holds only because the driven angle is exactly zero at the guide pose --
+    i.e. only when the neutral guide really is collinear with hip-to-ankle.
     """
     ctx = _build_leg(scene, auto_hip=True)
     thigh = ctx.controller_by_role("thigh")
-    for channel in ("rotateX", "rotateY", "rotateZ"):
-        assert thigh.offset[channel].value == pytest.approx(0.0, abs=1e-3), channel
+    ik = ctx.controller_by_role("ik")
+    before = list(thigh.transform["worldMatrix[0]"].value)
+    ik.transform["autoHipLift"].value = 1.0
+    ik.transform["autoHipSwing"].value = 1.0
+    after = list(thigh.transform["worldMatrix[0]"].value)
+    for first, second in zip(before, after):
+        assert first == pytest.approx(second, abs=1e-4)
 
 
 def test_auto_hip_off_builds_no_reach_network(scene):
+    """No reach network at all when auto_hip is off.
+
+    ``"hip" in node`` (a bare ``Node``, not ``node.name``) is refused by
+    ``Node.__contains__`` -- membership testing on a node falls back to
+    integer indexing and used to segfault Maya, so it now raises
+    ``TypeError`` instead. Comparing against ``node.name`` is what actually
+    checks the node's name. The internal reach nodes are named from
+    ``build_reach``'s own ``name="hip"`` argument (``L_leg_hip_lift_remapValue``
+    / ``L_leg_hip_swing_remapValue``) -- the ``autoHip`` token is only the
+    *animator-facing attribute* prefix (``autoHipLift``), never part of an
+    internal node's name, so matching for it here would never find anything
+    regardless of whether ``build_reach`` ran.
+
+    This also has to prove it discriminates: before this task nothing ever
+    called ``build_reach``, so "no reach nodes" held trivially regardless of
+    the flag. The second half re-runs the identical query with
+    ``auto_hip=True`` and requires it to find something, or the query would
+    still be asserting nothing.
+    """
     _build_leg(scene, auto_hip=False)
-    assert not [node for node in tm.ls(type="remapValue") if "autoHip" in node]
+    assert not [node for node in tm.ls(type="remapValue") if "hip" in node.name]
+
+    cmds.file(new=True, force=True)
+    on_scene = GuideScene()
+    _build_leg(on_scene, auto_hip=True)
+    found = [node for node in tm.ls(type="remapValue") if "hip" in node.name]
+    assert found, "auto_hip=True must build a reach network with remapValue nodes"
 
 
 def test_a_bad_auto_hip_range_is_a_validation_problem():
     leg = get_module("leg")(name="leg", settings={"auto_hip_lift_angles": (10.0, 75.0)})
     problems = leg.validate()
     assert any("auto hip lift" in problem for problem in problems)
+
+
+def test_the_bind_pose_is_exact_with_every_automation_full_on(scene):
+    """Every automation built, every default in place: nothing has moved.
+
+    The arm's own tolerance. A leg that does not reproduce the pose its
+    guides describe has an automation whose zero is not zero, and every
+    later measurement then reads a pose error rather than the feature.
+    """
+    ctx = _build_leg(
+        scene,
+        stretch=True,
+        squash=True,
+        limb_lock=True,
+        auto_hip=True,
+        pole_pin=True,
+    )
+    for name, guide_role in (
+        ("upperleg", "thigh"),
+        ("lowerleg", "knee"),
+        ("foot", "ankle"),
+        ("ball", "ball"),
+        ("toe", "toe"),
+    ):
+        expected = scene.guide_node(ctx.instance.instance_id, guide_role).world_position
+        actual = ctx.outputs[name].world_position
+        # `world_position` is a raw OpenMaya.MVector, which has no
+        # `distance_to` (that lives on `Transform`/`Node`, e.g.
+        # `pole_base.distance_to(driver)` elsewhere in this codebase) --
+        # subtract-and-measure-length is the same computation.
+        assert (actual - expected).length() == pytest.approx(0.0, abs=1e-4), name

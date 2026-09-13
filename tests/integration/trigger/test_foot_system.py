@@ -635,7 +635,6 @@ def test_build_foot_chains_never_touches_the_limbs_last_ik_joint(build_context):
         assert wrapped.start_joint.long_name != last_ik.long_name, handle
 
 
-@pytest.mark.xfail(reason="needs leg.build -- Task 15", strict=True)
 def test_bank_is_mirrored_by_the_frame_not_by_a_multiplier(mirrored_pair):
     """Same value, same magnitude, opposite world direction -- no side term."""
     left, right = mirrored_pair("leg", LEG_POSES)
@@ -648,7 +647,41 @@ def test_bank_is_mirrored_by_the_frame_not_by_a_multiplier(mirrored_pair):
     assert left_up[1] == pytest.approx(right_up[1], abs=1e-3)
 
 
-@pytest.mark.xfail(reason="needs leg.build -- Task 15", strict=True)
+def test_a_mirrored_foot_rests_and_rolls_exactly_like_the_source(mirrored_pair):
+    """Both sides of a real, two-legged build -- not just the isolated frame.
+
+    Regression test for a defect found while completing this task: every
+    pivot's world rotation is proven behaviour-mirrored in isolation (the
+    tests above), but ``build_foot_bank`` summed the bank control's own
+    OFFSET group into the live bank value -- and on the mirrored side that
+    offset carries a real, non-zero baseline of its own (``bank`` is the one
+    control in ``CONTROL_CHAIN`` parented directly under the world-aligned
+    IK control rather than a behaviour-mirrored sibling, so its offset's
+    local decomposition of the frame's ``Rx(180)`` lands on exactly
+    ``rotateX = -180``, not zero). Wiring that baseline into a live
+    connection popped every pivot from ``bank_in`` down on the mirrored
+    side's REST pose, and made an identical ``footRoll`` value lift the two
+    feet by different amounts. No isolated system test caught it because
+    none of them build a mirrored pair through the whole leg.
+    """
+    left, right = mirrored_pair("leg", LEG_POSES)
+
+    # Rest pose: ball and toe land on their own guides on both sides.
+    for ctx in (left, right):
+        for role in ("ball", "toe"):
+            guide_pos = ctx.guide(role).world_position
+            joint_pos = ctx.outputs[role].world_position
+            assert (joint_pos - guide_pos).length() < 1e-3, role
+
+    # An identical footRoll must lift both feet by the same amount -- a
+    # world-Y-invariant motion, not a mirrored one.
+    for ctx in (left, right):
+        ctx.controller_by_role("ik").transform["footRoll"].value = 40.0
+    left_height = left.outputs["ball"].world_position.y
+    right_height = right.outputs["ball"].world_position.y
+    assert left_height == pytest.approx(right_height, abs=1e-3)
+
+
 def test_the_ball_and_toe_blend_on_the_limb_switch(scene):
     """One ikFk value covers the whole leg, ankle and foot alike."""
     from tik.trigger.core import ParentRef, get_module
@@ -683,21 +716,45 @@ def test_the_ball_and_toe_blend_on_the_limb_switch(scene):
 
 
 def test_ikfk_is_one_switch_for_the_whole_leg(scene):
-    """There is no second switch on the foot.
+    """Exactly one real ``ikFk`` attribute exists on the built rig.
 
-    Not marked xfail: unlike the blend test above, this needs no build at
-    all. ``controls`` is a plain class tuple the module author writes by
-    hand (``Leg.controls`` already exists), so the invariant it guards --
-    the foot never declares a second ``ikFk``-shaped control role -- holds
-    or fails today, regardless of whether ``Leg.build`` wires the foot in
-    yet. Marking it xfail(strict=True) before Task 15 would XPASS and fail
-    the suite for a reason that has nothing to do with Task 15.
+    The earlier version of this test asserted
+    ``"ikFk" not in [c for c in Leg.controls if c.endswith("Fk")]`` --
+    vacuous, because every role in this codebase is snake_case (``_role()``
+    joins with underscores), so no role can ever end in capital ``"Fk"``. A
+    real second switch named e.g. ``foot_ik_fk`` would have sailed straight
+    through it.
+
+    The real invariant is about the *built rig*, not the manifest: every FK
+    control (including the foot's ``fk_ball``) carries an ``ikFk`` PROXY of
+    the limb's own switch, so the channel box always shows one no matter
+    which controller is selected -- but there must be exactly one REAL,
+    non-proxy attribute underneath all of them. A proxy attribute is a real
+    Maya connection (``addAttr -proxy``): the proxy plug has an incoming
+    connection from the attribute it mirrors, the real one does not.
     """
-    from tik.trigger.core import get_module
+    from tik.trigger.core import ParentRef, get_module
+    from tik.trigger.maya import Builder
 
-    assert "ikFk" not in [
-        control for control in get_module("leg").controls if control.endswith("Fk")
+    body = scene.create_guides(get_module("base")(name="body"))
+    leg = scene.create_guides(
+        get_module("leg")(name="leg", side="L"),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    for role, (x, y, z) in LEG_POSES.items():
+        cmds.xform(
+            scene.guide_node(leg.instance_id, role).long_name, ws=True, t=(x, y, z)
+        )
+    Builder().build(document=scene.document, afterlife="keep")
+
+    plugs = cmds.ls("*.ikFk") or []
+    assert plugs, "no ikFk attribute was built at all"
+    real = [
+        plug
+        for plug in plugs
+        if not cmds.listConnections(plug, source=True, destination=False, plugs=True)
     ]
+    assert len(real) == 1, f"expected exactly one real ikFk attribute, found {real}"
 
 
 def test_every_proxy_writes_through_to_its_control(build_context):
