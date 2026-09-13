@@ -698,3 +698,60 @@ def test_ikfk_is_one_switch_for_the_whole_leg(scene):
     assert "ikFk" not in [
         control for control in get_module("leg").controls if control.endswith("Fk")
     ]
+
+
+def test_every_proxy_writes_through_to_its_control(build_context):
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    host = ctx.controller("ik", size=1.0, mirror="world")
+    foot_system.build_foot_proxies(ctx, result, host)
+
+    for attribute, role, channel in foot_system.PROXIES:
+        host.transform[attribute].value = 11.0
+        assert result.controls[role].transform[channel].value == pytest.approx(
+            11.0, abs=1e-4
+        ), attribute
+        host.transform[attribute].value = 0.0
+
+
+def test_a_proxy_reads_back_what_its_control_was_set_to(build_context):
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    host = ctx.controller("ik", size=1.0, mirror="world")
+    foot_system.build_foot_proxies(ctx, result, host)
+
+    result.controls["heel"].transform["rotateX"].value = -17.5
+    assert host.transform["heelRoll"].value == pytest.approx(-17.5, abs=1e-4)
+
+
+def test_keying_a_proxy_lands_the_curve_on_the_control(build_context):
+    """Measured in Maya on 2026-09-12, and the reason this design works.
+
+    An animator in the channel box and an animator on the controller write
+    the same curve. There is nothing to reconcile because there are not two
+    of anything.
+    """
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    host = ctx.controller("ik", size=1.0, mirror="world")
+    foot_system.build_foot_proxies(ctx, result, host)
+
+    cmds.setKeyframe(host.transform.long_name, attribute="heelRoll", time=1)
+
+    on_control = cmds.listConnections(
+        result.controls["heel"].transform["rotateX"].path, type="animCurve"
+    )
+    on_proxy = cmds.listConnections(host.transform["heelRoll"].path, type="animCurve")
+    assert on_control, "the curve must land on the control"
+    assert not on_proxy, "and not on the proxy"
+
+
+def test_the_proxy_names_match_the_channel_table():
+    """A channel cannot be wired one way and proxied another."""
+    wired = {
+        (role, channel)
+        for role, channels in foot_system.CONTROL_CHANNELS.items()
+        for channel in channels
+    }
+    proxied = {(role, channel) for _name, role, channel in foot_system.PROXIES}
+    assert wired == proxied

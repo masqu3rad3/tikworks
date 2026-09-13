@@ -394,6 +394,43 @@ def build_foot_chains(
     return result
 
 
+#: ``(attribute, control role, channel)``, ground up. The names are the
+#: legacy module's, shortened to the house style: riggers and animators have
+#: the muscle memory and there is no reason to spend it.
+PROXIES = (
+    ("heelRoll", "heel", "rotateX"),
+    ("heelSpin", "heel", "rotateY"),
+    ("ballSpin", "ball_spin", "rotateZ"),
+    ("toeRoll", "toe", "rotateX"),
+    ("toeSpin", "toe", "rotateY"),
+    ("ballRoll", "ball", "rotateY"),
+    ("ballLean", "ball", "rotateZ"),
+    ("toeWiggle", "toe_wiggle", "rotateY"),
+    ("bank", "bank", "rotateX"),
+)
+
+
+def build_foot_proxies(rig, result: FootResult, control) -> None:
+    """Proxy every foot channel onto ``control``.
+
+    Measured: Maya will proxy a single compound child (``rotateX``) under a
+    different long name, the proxy is two-way, and **keying the proxy creates
+    the animation curve on the source**. So the channel box and the
+    controller are two front ends on one interface, not two interfaces that
+    can disagree -- which is why there is no additive offset attribute here.
+
+    Args:
+        rig: The module's ``ModuleRig``.
+        result: The foot, after ``build_foot_controls``.
+        control: The controller the attributes appear on (the leg's IK foot).
+    """
+    rig.separator(control, "foot_")
+    for attribute, role, channel in PROXIES:
+        control.transform[attribute].create(
+            proxy=result.controls[role].transform[channel]
+        )
+
+
 def build_foot_bank(rig, result: FootResult, *, name: str = "foot") -> FootResult:
     """Split the bank control's roll across the two edge pivots.
 
