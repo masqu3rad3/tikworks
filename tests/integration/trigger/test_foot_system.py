@@ -682,6 +682,56 @@ def test_a_mirrored_foot_rests_and_rolls_exactly_like_the_source(mirrored_pair):
     assert left_height == pytest.approx(right_height, abs=1e-3)
 
 
+def test_fk_ball_mirrors_on_every_axis_not_just_the_one_that_reads_zero(mirrored_pair):
+    """``fk_ball``'s three unlocked rotate channels must all mirror.
+
+    Regression test for a second, sharper defect than the one above:
+    ``build_foot_chains`` never passed ``reverse_aim``/``reverse_up`` to the
+    FK side's ``orient_chain``. Ball-to-toe is ``(0, -0.2, 1.1)`` on this
+    module's own numbers -- the X term is ``2*mult - 2*mult``, zero on
+    EITHER side -- so the unreversed call gave ``fk_ball`` the identical
+    world frame on both feet, while ``fk_control`` was still built
+    ``match=fk_ball, mirror="behaviour"``: an un-mirrored frame wearing a
+    behaviour-mirror tag.
+
+    By spec 6.3's own algebra a local rotation only mirrors correctly when
+    its world axis is the mirror normal. ``fk_ball``'s local Z happens to
+    map to world -X, so driving ``rotateZ`` alone (as the task's first pass
+    did) reads as correct BY COINCIDENCE -- rotateX and rotateY do not, and
+    both are unlocked on the control, so an animator can reach them. This is
+    exactly the trap spec 6.3 names: "a claim proven only where its
+    mechanism is inert is not proven." Driving all three channels here is
+    what actually proves the mirror, rather than the one axis that would
+    have passed regardless.
+    """
+    left, right = mirrored_pair("leg", LEG_POSES)
+    for ctx in (left, right):
+        ctx.controller_by_role("ik").transform["ikFk"].value = 0.0
+
+    for channel in ("rotateX", "rotateY", "rotateZ"):
+        rest = {
+            side: ctx.outputs["toe"].world_position
+            for side, ctx in (("L", left), ("R", right))
+        }
+        for ctx in (left, right):
+            ctx.controller_by_role("fk_ball").transform[channel].value = 25.0
+        rolled = {
+            side: ctx.outputs["toe"].world_position
+            for side, ctx in (("L", left), ("R", right))
+        }
+        for ctx in (left, right):
+            ctx.controller_by_role("fk_ball").transform[channel].value = 0.0
+
+        left_delta = rolled["L"] - rest["L"]
+        right_delta = rolled["R"] - rest["R"]
+        assert right_delta.x == pytest.approx(-left_delta.x, abs=1e-3), channel
+        assert right_delta.y == pytest.approx(left_delta.y, abs=1e-3), channel
+        assert right_delta.z == pytest.approx(left_delta.z, abs=1e-3), channel
+
+    for ctx in (left, right):
+        ctx.controller_by_role("ik").transform["ikFk"].value = 1.0
+
+
 def test_the_ball_and_toe_blend_on_the_limb_switch(scene):
     """One ikFk value covers the whole leg, ankle and foot alike."""
     from tik.trigger.core import ParentRef, get_module

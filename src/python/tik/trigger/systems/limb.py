@@ -478,6 +478,24 @@ def _safe_twist_axis(base, target) -> str:
     back up the aim line -- exactly the degenerate case). Measured at build
     time from the actual guide pose rather than hardcoded, so this adapts
     to whatever the rigger's guides turn out to describe.
+
+    The two candidates are ``target``'s own orthonormal X and Y axes, so
+    ``x_dot**2 + y_dot**2 <= 1`` always: ``aim`` is a unit vector and X, Y
+    and ``target``'s own Z form a complete orthonormal basis, so by
+    Parseval's identity ``x_dot**2 + y_dot**2 + z_dot**2 == 1`` exactly, and
+    dropping the (non-negative) ``z_dot**2`` term only weakens that to
+    ``<=``. That forces ``min(x_dot, y_dot) <= 1/sqrt(2)``: whichever this
+    function picks is guaranteed at least 45 degrees off the aim, for *any*
+    input -- it can never land in the degenerate neighbourhood it exists to
+    avoid.
+
+    This is a **build-time** measurement, not a runtime guarantee: it reads
+    ``target``'s pose once, when the pole is built. Nothing stops an animator
+    from later posing the limb so the chosen reference axis swings parallel
+    to the aim direction anyway -- the twist-aware pole space was already
+    living with that risk (any fixed reference can be driven into it by a
+    large enough pose), and this function only fixes the one guaranteed,
+    static degeneracy: the rest pose itself landing on the singularity.
     """
     aim = target.world_position - base.world_position
     if aim.length() < 1e-6:

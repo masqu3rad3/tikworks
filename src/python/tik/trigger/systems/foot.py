@@ -308,21 +308,30 @@ def build_foot_chains(
     """
     ball_at = guides["ball"].world_position
     toe_at = guides["toe"].world_position
-    # No `reverse_aim`/`reverse_up` here, unlike `systems/limb.py:281`'s own
-    # puppet chain -- checked, not assumed, by building a mirrored pair and
-    # comparing both sides
-    # (`test_a_mirrored_foot_rests_and_rolls_exactly_like_the_source` in
-    # test_foot_system.py, and a direct FK-mode check driving `fk_ball`
-    # identically on both legs): the FK side's world pose comes from
-    # `MatrixConstraint`'s joint-rotation strand (an absolute world match,
-    # orientation-convention independent) and the IK side's from two
-    # `ikSCsolver` handles, which have no bend-plane ambiguity to get wrong
-    # -- a 2-joint SC chain always just rotates onto its target position
-    # regardless of starting orientation. Neither reads this chain's own
-    # local convention, so reversing it here would be a no-op dressed as a
-    # fix. The real defect this task's mirrored-pair testing found was in
-    # `build_foot_bank`, not here -- see its docstring.
+    # Ball-to-toe is `(0, -0.2, 1.1)` on the module's own numbers -- the X
+    # term is `2*mult - 2*mult`, zero on EITHER side -- so an unreversed
+    # `orient_chain` gives `fk_ball` the identical world frame on both feet.
+    # `fk_control` is then built `match=fk_ball, mirror="behaviour"`: an
+    # un-mirrored frame wearing a behaviour-mirror tag. By spec 6.3's own
+    # algebra a local rotation mirrors correctly only when its world axis is
+    # the mirror normal (world X here); `fk_ball`'s local Z happens to map to
+    # world -X, so `rotateZ` came out correct by that coincidence alone, but
+    # `rotateX` (local X -> world +Z) and `rotateY` (local Y ~= world +Y) do
+    # not, and both are unlocked on `fk_control` -- confirmed by driving
+    # `fk_ball.rotateY` identically on both sides of a mirrored pair and
+    # finding the same-signed (not mirrored) world delta on the toe. Reverse
+    # flags fix it: `side_sign < 0` flips the aim 180 degrees about the up
+    # axis and the up 180 degrees about the aim, landing on `Rx(180).F_L`,
+    # the unique behaviour mirror 6.3 proves -- confirmed by hand for the
+    # right side against `ball_at=(-2,0.25,1.3)`, `toe_at=(-2,0.05,2.4)`:
+    # `X_R=(0,0,-1)`, `Y_R=(0,-1,0)`, `Z_R=(-1,0,0)`, exactly `-M.F_L`.
     #
+    # The IK side genuinely needs none of this: no control ever reaches
+    # `ik_ball`/`ik_toe`'s own rotation (the SC handles solve it), and a
+    # 2-joint SC chain has no bend-plane ambiguity a starting orientation
+    # could get wrong -- it just rotates onto its target position regardless.
+    reverse = rig.side_mult < 0
+
     # --- IK side: two SC handles inside the reverse foot -------------------
     # Parented under the foot's own ankle driver (upstream of the limb's
     # solve), not under the limb's last IK joint (whose rotation is already
@@ -372,7 +381,13 @@ def build_foot_chains(
     fk_ball.world_position = ball_at
     fk_toe = tm.Joint.create(name=rig.name(name, "fkToe", suffix="jnt"), parent=fk_ball)
     fk_toe.world_position = toe_at
-    tm.Joint.orient_chain([fk_ball, fk_toe], aim_axis="x", up_axis="y")
+    tm.Joint.orient_chain(
+        [fk_ball, fk_toe],
+        aim_axis="x",
+        up_axis="y",
+        reverse_aim=reverse,
+        reverse_up=reverse,
+    )
 
     fk_control = rig.controller(
         "fk_ball",

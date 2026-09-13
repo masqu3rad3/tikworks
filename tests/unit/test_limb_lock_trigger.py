@@ -4,6 +4,7 @@ from maya import cmds
 
 import tik.maya as tm
 from tik.trigger.maya.rig import ModuleRig
+from tik.trigger.systems.limb import _safe_twist_axis
 from tik.trigger.systems.limb_lock import build_limb_lock
 
 
@@ -276,3 +277,49 @@ def test_both_modes_are_cycle_free():
         for node in ctx.outputs.values():
             node.world_position
         assert (cmds.cycleCheck(all=True, list=True) or []) == [], mode
+
+
+# ---------------------------------------------------- pole twist-axis choice
+#
+# ``_safe_twist_axis`` lives in ``systems/limb.py`` (the sibling this file's
+# own module tests) rather than ``systems/limb_lock.py``, but that module has
+# no dedicated unit test file of its own -- this is the nearest one that
+# already imports from the same package.
+def test_an_arm_shaped_end_guide_picks_x():
+    """Reproduces the arm's own draw_guides numbers, not invented ones.
+
+    Shoulder (5,0,0), elbow (7.8,-2.8,-1), hand (11.4,-6.4,0) -- straight out
+    of ``modules/arm/arm.py``. The hand guide is oriented exactly as
+    ``Arm.draw_guides`` orients it: aimed at the point beyond it on the
+    elbow-hand line, up +Y. That puts the hand's local X almost parallel to
+    the aim (pole_base -> hand) direction and its local Y almost
+    perpendicular -- "X" (which reads the target's Y) is the safe pick, and
+    it must stay "X" or a future tie-break tweak silently re-rigs the arm's
+    already-working pole space.
+    """
+    pole_base = tm.Transform.create(name="poleBaseArm")
+    pole_base.world_position = (5.0, 0.0, 0.0)
+
+    hand = tm.Transform.create(name="handArm")
+    hand.world_position = (11.4, -6.4, 0.0)
+    beyond = tm.Transform.create(name="beyondArm")
+    beyond.world_position = (15.0, -10.0, 1.0)  # hand + (hand - elbow)
+    hand.aim_at(beyond, aim_vector=(1, 0, 0), up_vector=(0, 1, 0))
+
+    assert _safe_twist_axis(pole_base, hand) == "X"
+
+
+def test_a_leg_shaped_end_guide_picks_y():
+    """Reproduces the leg's own draw_guides numbers: thigh (2,9.6,0) above
+    an UNROTATED ankle (2,1.0,0) -- the degenerate case this function exists
+    for. The ankle's own Y then points straight back up the aim line, so
+    "X" (which reads that Y) is exactly the unsafe pick; "Y" (which reads
+    the ankle's X, perpendicular to a vertical aim) is the safe one.
+    """
+    pole_base = tm.Transform.create(name="poleBaseLeg")
+    pole_base.world_position = (2.0, 9.6, 0.0)
+
+    ankle = tm.Transform.create(name="ankleLeg")
+    ankle.world_position = (2.0, 1.0, 0.0)  # identity rotation, as drawn
+
+    assert _safe_twist_axis(pole_base, ankle) == "Y"
