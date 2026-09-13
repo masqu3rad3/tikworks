@@ -174,11 +174,18 @@ def test_the_leg_builds_standalone_with_no_parent(scene):
 def test_the_bank_markers_straddle_the_ankle_in_x(scene):
     """``bank_in`` and ``bank_out`` sit on opposite sides of the ankle.
 
-    ``bank_in`` is the marker nearer the body midline (x=0) and ``bank_out``
+    ``bank_out`` is the marker nearer the body midline (x=0) and ``bank_in``
     the one farther from it -- a different X *sign* on each side, but on
     both sides the ankle's X must land strictly between them. If the two
     were ever swapped or misplaced in ``draw_guides``, the reverse foot's
     bank pivots would roll the wrong way.
+
+    This assertion ran inverted until a rigger caught it in the viewport:
+    it was written from the guess that "in" meant the inboard marker, and
+    it then pinned that guess rather than the behaviour. The legacy module
+    is the authority -- `bankout` at 4*side, `bankin` at 6*side, leg at
+    5*side -- and rolling onto an edge pivots about the edge that stays
+    down, not the one that lifts.
     """
     for side in ("L", "R"):
         leg = scene.create_guides(get_module("leg")(name="leg", side=side))
@@ -186,7 +193,7 @@ def test_the_bank_markers_straddle_the_ankle_in_x(scene):
         bank_in_x = scene.guide_node(leg.instance_id, "bank_in").world_position.x
         bank_out_x = scene.guide_node(leg.instance_id, "bank_out").world_position.x
 
-        assert abs(bank_in_x) < abs(ankle_x) < abs(bank_out_x), side
+        assert abs(bank_out_x) < abs(ankle_x) < abs(bank_in_x), side
         assert (bank_in_x - ankle_x) * (bank_out_x - ankle_x) < 0.0, side
 
 
@@ -224,8 +231,8 @@ def _build_leg(scene, side="L", ankle_roll=0.0, **settings):
         "toe": (2, 0.05, 2.4),
         "heel": (2, 0.05, -0.6),
         "tip": (2, 0.05, 2.8),
-        "bank_in": (1.2, 0.05, 1.3),
-        "bank_out": (2.8, 0.05, 1.3),
+        "bank_in": (2.8, 0.05, 1.3),
+        "bank_out": (1.2, 0.05, 1.3),
         "neutral": (1 + 1 * 1.4, 10.4 - 9.4 * 1.4, 0),
     }.items():
         cmds.xform(

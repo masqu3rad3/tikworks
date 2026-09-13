@@ -287,8 +287,14 @@ class Leg(Module):
         # describe the foot's footprint, not a chain through it.
         guides.joint("heel", (2.0 * mult, 0.05, -0.6), parent=ankle)
         guides.joint("tip", (2.0 * mult, 0.05, 2.8), parent=ankle)
-        guides.joint("bank_in", (1.2 * mult, 0.05, 1.3), parent=ankle)
-        guides.joint("bank_out", (2.8 * mult, 0.05, 1.3), parent=ankle)
+        # `bank_out` is the marker NEARER the body midline and `bank_in` the
+        # one farther out. That reads backwards until you follow the pivots:
+        # the stack is `bank_in > bank_out`, and rolling the foot onto an edge
+        # means pivoting about the edge that stays on the ground while the
+        # opposite one lifts. The legacy module placed them this way too
+        # (`bankout` at 4*side, `bankin` at 6*side, with the leg at 5*side).
+        guides.joint("bank_in", (2.8 * mult, 0.05, 1.3), parent=ankle)
+        guides.joint("bank_out", (1.2 * mult, 0.05, 1.3), parent=ankle)
 
         # Where the ankle sits when the hip is at rest -- the auto-hip's zero.
         # Derived from the ankle rather than typed as a triple: the reach

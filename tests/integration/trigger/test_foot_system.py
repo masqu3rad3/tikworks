@@ -19,8 +19,8 @@ LEG_POSES = {
     "toe": (2, 0.05, 2.4),
     "heel": (2, 0.05, -0.6),
     "tip": (2, 0.05, 2.8),
-    "bank_in": (1.2, 0.05, 1.3),
-    "bank_out": (2.8, 0.05, 1.3),
+    "bank_in": (2.8, 0.05, 1.3),
+    "bank_out": (1.2, 0.05, 1.3),
     "neutral": (1 + 1 * 1.4, 10.4 - 9.4 * 1.4, 0),
 }
 
@@ -30,8 +30,8 @@ _STRAIGHT_POSITIONS = {
     "ball": (2.0, 0.25, 1.3),
     "heel": (2.0, 0.05, -0.6),
     "tip": (2.0, 0.05, 2.8),
-    "bank_in": (1.2, 0.05, 1.3),
-    "bank_out": (2.8, 0.05, 1.3),
+    "bank_in": (2.8, 0.05, 1.3),
+    "bank_out": (1.2, 0.05, 1.3),
 }
 
 
@@ -1100,7 +1100,27 @@ def test_each_foot_channel_moves_the_foot_the_way_its_name_says(mirrored_pair):
         )
 
     _assert_dominant("ballLean", _delta("ballLean", "foot"), "x", "y")
-    _assert_dominant("bank (ankle)", _delta("bank", "foot"), "x", "y")
+    # Bank gets an X-dominant check rather than the near-zero-Y one the other
+    # tip channels use, and the difference is geometry, not leniency. The bank
+    # pivots sit on the floor at the foot's edges while the ankle rides ~0.95
+    # above them, so arcing about one MUST lift the ankle: at 30 degrees the
+    # measured delta is x -0.58, y +0.27, which is exactly
+    # `rotate((+0.8, +0.95), 30deg)`. Demanding a near-zero Y here would be
+    # demanding that the foot bank without rolling onto the edge.
+    #
+    # It still discriminates the defect this test was written for. The old
+    # wiring put bank on `rotateX` (a pitch), which moves the ankle
+    # (0, +0.52, +0.65) -- no X at all -- so `|dx| > |dy|` fails on it just as
+    # the near-zero-Y form did.
+    bank_delta = _delta("bank", "foot")
+    assert abs(bank_delta.x) > abs(bank_delta.y), (
+        "bank (ankle): x delta %.4f must dominate y delta %.4f -- bank tips the "
+        "foot onto an edge about the forward axis; a y-dominant move is a pitch"
+        % (bank_delta.x, bank_delta.y)
+    )
+    assert abs(bank_delta.x) > dominant_min, (
+        "bank (ankle): x delta %.4f is not a real move" % bank_delta.x
+    )
     _assert_dominant("bank (toe)", _delta("bank", "toe"), "y", "x")
     _assert_dominant("toeWiggle", _delta("toeWiggle", "toe"), "y", "x")
 
