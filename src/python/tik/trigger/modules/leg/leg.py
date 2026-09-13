@@ -22,6 +22,7 @@ from tik.trigger.core import (
     GuideLayout,
     Input,
     Module,
+    Vector2Field,
     register_module,
 )
 from tik.trigger.systems.limb import (
@@ -32,6 +33,7 @@ from tik.trigger.systems.limb import (
     limb_control_shapes,
     limb_pivot_controls,
 )
+from tik.trigger.systems.reach import ReachAxis
 
 LIMB_LOCK = FieldGroup("Limb Lock")
 AUTO_HIP = FieldGroup("Auto Hip", collapsed=True)
@@ -165,6 +167,53 @@ class Leg(Module):
         help="Hold the thigh-to-foot distance while the foot anchors. "
         "Inert until the animator raises limbLock.",
     )
+    auto_hip = BoolField(True, help="Build the auto-hip network", group=AUTO_HIP)
+    auto_hip_lift_angles = Vector2Field(
+        (-55.0, 70.0),
+        min=-89.0,
+        max=89.0,
+        labels=("Lower", "Upper"),
+        label="Lift Angles",
+        group=AUTO_HIP,
+        help="Leg elevation either side of the neutral guide at full falloff. "
+        "Both stay inside +/-89: the driver's off-plane angles saturate "
+        "at 90, so a wider limit is never reached.",
+    )
+    auto_hip_lift_degrees = Vector2Field(
+        (-4.0, 12.0),
+        min=-90.0,
+        max=90.0,
+        labels=("Lower", "Upper"),
+        label="Lift Degrees",
+        group=AUTO_HIP,
+        help="Hip rotation at each of those angles.",
+    )
+    auto_hip_swing_angles = Vector2Field(
+        (-40.0, 55.0),
+        min=-89.0,
+        max=89.0,
+        labels=("Back", "Front"),
+        label="Swing Angles",
+        group=AUTO_HIP,
+        help="Leg azimuth either side of the neutral guide at full falloff.",
+    )
+    auto_hip_swing_degrees = Vector2Field(
+        (-4.0, 8.0),
+        min=-90.0,
+        max=90.0,
+        labels=("Back", "Front"),
+        label="Swing Degrees",
+        group=AUTO_HIP,
+        help="Hip rotation at each of those angles.",
+    )
+    auto_hip_interpolation = ChoiceField(
+        "smooth",
+        choices=("linear", "smooth", "spline"),
+        label="Auto Hip Interpolation",
+        group=AUTO_HIP,
+        help="Only 'smooth' is free of a slope discontinuity: 'linear' kinks "
+        "at the neutral and both limits, 'spline' kinks at both limits.",
+    )
     roll_overlap = FloatField(
         10.0,
         min=0.0,
@@ -173,6 +222,28 @@ class Leg(Module):
         help="Degrees either side of rollBreak over which the ball hands off "
         "to the toe. 0 is a hard switch.",
     )
+
+    def _lift_axis(self) -> ReachAxis:
+        # Component order is (min, max), matching ReachAxis's first two and
+        # last two arguments.
+        return ReachAxis(*self.auto_hip_lift_angles, *self.auto_hip_lift_degrees)
+
+    def _swing_axis(self) -> ReachAxis:
+        return ReachAxis(*self.auto_hip_swing_angles, *self.auto_hip_swing_degrees)
+
+    def validate(self) -> list[str]:
+        """The base checks plus the auto-hip axis ranges."""
+        problems = super().validate()
+        if self.auto_hip:
+            for label, axis in (
+                ("lift", self._lift_axis()),
+                ("swing", self._swing_axis()),
+            ):
+                try:
+                    axis.validate("auto hip %s" % label)
+                except ValueError as error:
+                    problems.append(str(error))
+        return problems
 
     def draw_guides(self, guides) -> None:
         """A rest stance: the chain hangs down, knee pushed forward in +Z.

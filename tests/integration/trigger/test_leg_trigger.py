@@ -3,6 +3,7 @@
 import pytest
 from maya import cmds
 
+import tik.maya as tm
 from tik.trigger.core import ParentRef, get_module
 from tik.trigger.core.manifest import GuideKind
 from tik.trigger.guides import GuideScene
@@ -317,3 +318,27 @@ def test_the_ball_and_toe_joints_land_on_their_own_guides(scene):
         guide_pos = ctx.guide(role).world_position
         joint_pos = ctx.outputs[role].world_position
         assert (joint_pos - guide_pos).length() < 1e-3, role
+
+
+@pytest.mark.xfail(reason="needs leg.build -- Task 15", strict=True)
+def test_auto_hip_is_inert_at_the_guide_pose(scene):
+    """The neutral is where the leg is drawn, so zero must mean zero.
+
+    If this fails the neutral guide is not collinear with hip-to-ankle and
+    every auto-hip value starts by moving the rig off its own bind pose.
+    """
+    ctx = _build_leg(scene, auto_hip=True)
+    thigh = ctx.controller_by_role("thigh")
+    for channel in ("rotateX", "rotateY", "rotateZ"):
+        assert thigh.offset[channel].value == pytest.approx(0.0, abs=1e-3), channel
+
+
+def test_auto_hip_off_builds_no_reach_network(scene):
+    _build_leg(scene, auto_hip=False)
+    assert not [node for node in tm.ls(type="remapValue") if "autoHip" in node]
+
+
+def test_a_bad_auto_hip_range_is_a_validation_problem():
+    leg = get_module("leg")(name="leg", settings={"auto_hip_lift_angles": (10.0, 75.0)})
+    problems = leg.validate()
+    assert any("auto hip lift" in problem for problem in problems)
