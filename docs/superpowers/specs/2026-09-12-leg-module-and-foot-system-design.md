@@ -72,6 +72,19 @@ second input is the side multiplier:
 
 The two exceptions are a finding, not a quirk. §6.3 shows why the whole table disappears.
 
+**Warning, added after a shipped defect: these axis letters do not transfer.** The legacy's
+`create_ik_setup` builds its foot plane with `cmds.aimConstraint`'s *default* `aimVector=(1,0,0)`
+— **X** toward the toe. This design's `foot_frame` (§6.1) aims **Z** at the tip instead. X and Z
+are swapped between the two conventions, so `rotateY`/`rotateZ` in the table above are not this
+design's `rotateY`/`rotateZ` — they are rotations about axes that land somewhere else entirely once
+the frame is rebuilt Z-forward. An earlier pass of this work transcribed the legacy's letters
+verbatim into this design's `CONTROL_CHANNELS` (`bRoll -> rotateY`, `bSpin -> rotateZ`,
+`bank -> rotateX`) without re-deriving them against the new frame, and it shipped: ball roll swung
+the foot sideways instead of lifting the heel, ball spin landed on the same axis as the lean, and
+bank pitched instead of tipping onto an edge. §6.2 now states the rule this table cannot be copied
+into: roll/spin/lean map to axes by what they mean (side/up/forward), never by the letter a prior
+implementation happened to use on a different frame.
+
 **`autoHip`** is a two-locator angle extractor blended between IK and FK, multiplied by a 0–1
 `autoHip` attribute (default 1.0), driving `cont_thigh_auto.rotateZ`. That is the auto-collar,
 on one axis, built before `systems/reach.py` existed.
@@ -238,14 +251,14 @@ So the foot builds **two parallel hierarchies**:
 ```
 rig_grp                                        control_grp
   foot_root      <- MatrixConstraint(ik_tweak)   bank_ctrl.offset <- MatrixConstraint(ik_tweak)
-    bank_in      rx <- min(bank_ctrl.rx, 0)         bank_ctrl        rx bank
-      bank_out   rx <- max(bank_ctrl.rx, 0)           heel_ctrl      rx heelRoll  ry heelSpin
-        heel     rx ry                                  ball_spin_ctrl  rz ballSpin
-          ball_spin  rz                                   toe_ctrl      rx toeRoll  ry toeSpin
-            toe      rx ry                                  ball_ctrl   ry ballRoll rz ballLean
-              ball_roll  ry rz                                toe_wiggle_ctrl  ry toeWiggle
+    bank_in      rz <- min(bank_ctrl.rz, 0)         bank_ctrl        rz bank
+      bank_out   rz <- max(bank_ctrl.rz, 0)           heel_ctrl      rx heelRoll  ry heelSpin
+        heel     rx ry                                  ball_spin_ctrl  ry ballSpin
+          ball_spin  ry                                   toe_ctrl      rx toeRoll  ry toeSpin
+            toe      rx ry                                  ball_ctrl   rx ballRoll rz ballLean
+              ball_roll  rx rz                                toe_wiggle_ctrl  rx toeWiggle
                 ankle_driver  ---> build_limb_solve(driver=)
-              toe_wiggle   ry  ---> constrains ikBall + ikToe handles
+              toe_wiggle   rx  ---> constrains ikBall + ikToe handles
 ```
 
 The nesting on the left is the old module's, unchanged. `ball_roll` merges the old `pv_ballRoll`
@@ -253,7 +266,22 @@ and `pv_ballLean`: they pivot at the same point and are adjacent in the chain, s
 tidiness, not mechanism. `ballSpin` stays where it is — above the toe pivot — because that is
 what makes spinning the foot on the ball independent of rolling over the tip.
 
+The channel letters above are this design's, not the legacy's (see the warning at the end of §2):
+`foot_frame` aims Z at the tip, so X is side, Y is up and Z is forward, and every roll/spin/lean
+channel follows from that alone.
+
 ### 6.2 Lockstep is by construction, not by constraint
+
+**The axis a channel drives follows from what it means, not from a prior implementation's
+letters.** In this frame (X side, Y up, Z forward): a **roll** (heel lifts, toe dips) is a rotation
+about the side axis, `rotateX`; a **spin** (yaw, turning on the spot) is a rotation about the up
+axis, `rotateY`; a **lean or bank** (tipping onto an edge) is a rotation about the forward axis,
+`rotateZ`. This is the rule a pre-fix pass got wrong by copying the legacy's `bRoll -> rotateY`,
+`bSpin -> rotateZ` and `bank -> rotateX` onto this design's Z-forward frame instead of re-deriving
+them (§2's warning has the full account) — `ballRoll` swung the foot sideways instead of lifting
+the heel, `ballSpin` landed on the same axis as `ballLean`, and `bank` pitched instead of tipping.
+Every entry in §6.1's diagram already reflects the corrected rule; there is no per-channel table
+left to get out of sync with it.
 
 Each controller sits at its pivot's position with the same ancestor chain, so it inherits its
 ancestors' rotation exactly as its pivot does. No constraints run between the two hierarchies and
@@ -378,8 +406,8 @@ pose, is what exposed it. **A claim proven only where its mechanism is inert is 
 ### 6.4 Bank is two linear connections
 
 ```
-bank_out.rx = max(bank, 0)
-bank_in.rx  = min(bank, 0)
+bank_out.rz = max(bank, 0)
+bank_in.rz  = min(bank, 0)
 ```
 
 The old module used `setDrivenKeyframe` at ±90 with linear tangents, which is a straight line
@@ -544,8 +572,11 @@ pivots directly. §6.2's sum is what makes that work: the pivot reads `offset + 
 auto roll and the animator's manual value add, and the controller visually rides on top of the
 automation instead of drifting away from the foot it drives.
 
-Axis mapping: `heel -> heel_ctrl.offset.rx`, `ball -> ball_ctrl.offset.ry`,
-`toe -> toe_ctrl.offset.rx`.
+Axis mapping: `heel -> heel_ctrl.offset.rx`, `ball -> ball_ctrl.offset.rx`,
+`toe -> toe_ctrl.offset.rx`. All three are `rx` -- roll is a rotation about the side axis (§6.2) --
+which is also why `footRoll` shares an axis with `ballRoll` and a bug in one can hide the other
+(the reason `test_foot_roll_lifts_the_ankle_not_sideways` exists alongside the per-channel
+anatomical test in §10.3).
 
 ### 8.4 The handover at zero stays hard
 
@@ -648,6 +679,18 @@ the modules, as that file's own docstring says, not tests to relax.
   `max(r - b, 0)`; at `roll_overlap = 10` the toe is non-zero before the break and never negative
   anywhere in a −90…+90 sweep
 - negative `footRoll` drives the heel and leaves ball and toe at zero
+- **anatomical, added after a shipped axis-mapping defect** (§2's warning, §6.2's rule):
+  `test_each_foot_channel_moves_the_foot_the_way_its_name_says` drives each of the nine proxies to
+  30 degrees in turn on a real built leg and asserts the *dominant* component of the resulting
+  bind-joint motion — roll channels dominate in world Y with near-zero X, spin channels dominate in
+  X with near-zero Y *and* a real Z move (needed to tell a Y-axis spin from a same-signature
+  Z-axis lean at this guide geometry), `bank` dominates in X at the ankle and Y at the toe,
+  `ballLean` dominates in X at the ankle, `toeWiggle` dominates in Y at the toe. Every other test
+  above only checks consistency (a channel reaches its pivot, both feet agree, the roll slices
+  sum) — none of them can tell a roll that lifts the heel from one that swings it sideways, which
+  is exactly how the defect shipped. `test_foot_roll_lifts_the_ankle_not_sideways` adds the same
+  anatomical check for `footRoll`, which shares `ball`'s axis with `ballRoll` and could carry the
+  same bug independently.
 
 `tests/integration/trigger/test_leg_trigger.py`, mirroring `test_arm_trigger.py`
 

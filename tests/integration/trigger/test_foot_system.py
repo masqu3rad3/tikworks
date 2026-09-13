@@ -333,7 +333,7 @@ def test_the_mirrored_frame_is_the_behaviour_mirror(build_context):
 
 
 def test_every_pivot_rests_at_identity_local_rotation(build_context):
-    """§6.2 connects a channel straight into ``bank_in.rotateX`` (F-4).
+    """§6.2 connects a channel straight into ``bank_in.rotateZ`` (F-4).
 
     Every pivot but ``bank_in`` sits under a sibling that already carries
     the shared frame's world rotation, so its own local rotate is zero by
@@ -490,13 +490,13 @@ def test_positive_bank_rolls_one_edge_and_leaves_the_other(build_context):
     result = _built_foot(ctx)
     foot_system.build_foot_bank(ctx, result)
 
-    result.controls["bank"].transform["rotateX"].value = 45.0
-    assert result.pivots["bank_out"]["rotateX"].value == pytest.approx(45.0, abs=1e-4)
-    assert result.pivots["bank_in"]["rotateX"].value == pytest.approx(0.0, abs=1e-4)
+    result.controls["bank"].transform["rotateZ"].value = 45.0
+    assert result.pivots["bank_out"]["rotateZ"].value == pytest.approx(45.0, abs=1e-4)
+    assert result.pivots["bank_in"]["rotateZ"].value == pytest.approx(0.0, abs=1e-4)
 
-    result.controls["bank"].transform["rotateX"].value = -45.0
-    assert result.pivots["bank_out"]["rotateX"].value == pytest.approx(0.0, abs=1e-4)
-    assert result.pivots["bank_in"]["rotateX"].value == pytest.approx(-45.0, abs=1e-4)
+    result.controls["bank"].transform["rotateZ"].value = -45.0
+    assert result.pivots["bank_out"]["rotateZ"].value == pytest.approx(0.0, abs=1e-4)
+    assert result.pivots["bank_in"]["rotateZ"].value == pytest.approx(-45.0, abs=1e-4)
 
 
 def test_bank_lays_down_no_animation_curves(build_context):
@@ -512,7 +512,7 @@ def test_bank_lays_down_no_animation_curves(build_context):
 
     for role in ("bank_in", "bank_out"):
         curves = tm.listConnections(
-            result.pivots[role]["rotateX"].path, type="animCurve"
+            result.pivots[role]["rotateZ"].path, type="animCurve"
         )
         assert not curves, role
 
@@ -651,7 +651,7 @@ def test_bank_behaviour_is_mirrored_between_the_two_feet(mirrored_pair):
     """
     left, right = mirrored_pair("leg", LEG_POSES)
     for ctx in (left, right):
-        ctx.controller_by_role("bank").transform["rotateX"].value = 30.0
+        ctx.controller_by_role("bank").transform["rotateZ"].value = 30.0
 
     left_up = left.outputs["foot"].world_axis("y")
     right_up = right.outputs["foot"].world_axis("y")
@@ -902,7 +902,7 @@ def _sample(result, host, value):
     host.transform["footRoll"].value = value
     return (
         result.controls["heel"].offset["rotateX"].value,
-        result.controls["ball"].offset["rotateY"].value,
+        result.controls["ball"].offset["rotateX"].value,
         result.controls["toe"].offset["rotateX"].value,
     )
 
@@ -985,6 +985,145 @@ def test_the_roll_adds_to_the_animator_s_own_value(build_context):
     result, host = _roll_rig(ctx, overlap=0.0)
     host.transform["rollBreak"].value = 30.0
     host.transform["footRoll"].value = 20.0
-    result.controls["ball"].transform["rotateY"].value = 7.0
+    result.controls["ball"].transform["rotateX"].value = 7.0
 
-    assert result.pivots["ball_roll"]["rotateY"].value == pytest.approx(27.0, abs=1e-3)
+    assert result.pivots["ball_roll"]["rotateX"].value == pytest.approx(27.0, abs=1e-3)
+
+
+def test_each_foot_channel_moves_the_foot_the_way_its_name_says(mirrored_pair):
+    """The channel table has axis letters; nothing until now checked they
+    are the RIGHT letters.
+
+    Every other test in this file checks *consistency* -- a channel reaches
+    its pivot, both feet agree, the roll slices sum back to ``footRoll``. A
+    channel wired to the wrong rotation axis passes every one of them: the
+    control still drives *a* pivot channel, the sum still holds, both feet
+    still agree with each other -- they are just all agreeing on the wrong
+    motion. That is exactly the defect a rigger reported: ball roll swinging
+    the foot sideways instead of lifting the heel, ball spin landing on the
+    same axis as the lean, banking pitching instead of tipping onto an edge.
+    None of the 524 integration tests standing at the time were anatomical,
+    so none of them caught it.
+
+    Each proxy is driven to a generous 30 degrees in turn and the DOMINANT
+    component of the resulting bind-joint motion is checked against what the
+    channel's name promises, not merely that *some* motion happened. In this
+    frame X is side, Y is up, Z is forward:
+
+    - a **roll** (heel lifts / toe dips) must move its joint dominantly in Y,
+      with near-zero sideways (X) motion
+    - a **spin** (yaw) must move its joint dominantly in X, with near-zero Y
+      **and** a non-trivial Z -- see below for why Z is checked too
+    - **bank** must tip the foot: the ankle moves dominantly in X while the
+      toe moves dominantly in Y -- a real secondary signal that only
+      ``bank`` produces (its pivots sit above the whole stack, unlike
+      ``ball_roll``'s, so rotating it alone reaches all the way to the toe)
+    - **ballLean** tips the same way, checked at the ankle alone -- rotating
+      ``ball_roll`` does not reach the toe (``toe_wiggle`` is its sibling,
+      not its child), so there is no secondary signal to check there
+    - **toeWiggle** must bend the toe dominantly in Y, not yaw it in X
+
+    **Why spin also checks Z.** ``ball_spin``'s guide sits exactly on
+    ``ball_roll``'s (both are the ``ball`` marker), and the joint measured
+    for spin has an offset from that shared point that is mostly along Y.
+    Rotating *either* a genuine Y-axis spin or a wrongly-Z-axis lean about
+    that point swings X dominantly with only a second-order (near-zero) Y
+    change -- so "X dominant, Y near-zero" alone cannot tell ``ballSpin``'s
+    pre-fix ``rotateZ`` bug from a correct ``rotateY``, and was measured to
+    pass under the broken mapping while writing this test. The tell is Z: a
+    Y-axis rotation swings X *and* Z together (Z changes by a comparable,
+    non-trivial amount here), while a Z-axis rotation leaves Z **exactly**
+    invariant by construction. Requiring a real Z move is what actually
+    catches the bug the "identical to ballLean" verdict describes.
+
+    Measured (this build, left leg, ``LEG_POSES``, 30 degrees each): the
+    margins below are generous on purpose -- this is a "which axis" test,
+    not a precision one. Restoring the pre-fix mapping (``ballRoll ->
+    rotateY``, ``ballSpin -> rotateZ``, ``toeWiggle -> rotateY``,
+    ``bank -> rotateX``) fails this test on exactly those four channels and
+    passes on the other five -- verified by hand while writing this test
+    (see the fix's report), which is the evidence this class of bug cannot
+    ship silently again.
+    """
+    left, _right = mirrored_pair("leg", LEG_POSES)
+    ik = left.controller_by_role("ik")
+    angle = 30.0
+    dominant_min = 0.15
+    ratio_max = 0.35
+    spin_z_min = 0.05
+
+    def _delta(attribute, role):
+        rest = left.outputs[role].world_position
+        ik.transform[attribute].value = angle
+        moved = left.outputs[role].world_position
+        ik.transform[attribute].value = 0.0
+        return moved - rest
+
+    def _assert_dominant(label, delta, dominant_axis, other_axis):
+        dominant = abs(getattr(delta, dominant_axis))
+        other = abs(getattr(delta, other_axis))
+        assert dominant > dominant_min, "%s: %s delta %.4f is not a real move" % (
+            label,
+            dominant_axis,
+            dominant,
+        )
+        assert (
+            other < ratio_max * dominant
+        ), "%s: %s delta %.4f is not near-zero next to %s delta %.4f" % (
+            label,
+            other_axis,
+            other,
+            dominant_axis,
+            dominant,
+        )
+
+    # (attribute, joint output) -- roll channels must dominate in Y
+    for attribute, role in (
+        ("heelRoll", "toe"),
+        ("toeRoll", "foot"),
+        ("ballRoll", "foot"),
+    ):
+        _assert_dominant(attribute, _delta(attribute, role), "y", "x")
+
+    # (attribute, joint output) -- spin/yaw channels must dominate in X, with
+    # near-zero Y *and* a real Z move (the Z-invariance discriminator above).
+    for attribute, role in (
+        ("heelSpin", "toe"),
+        ("toeSpin", "foot"),
+        ("ballSpin", "foot"),
+    ):
+        delta = _delta(attribute, role)
+        _assert_dominant(attribute, delta, "x", "y")
+        assert abs(delta.z) > spin_z_min, (
+            "%s: z delta %.4f is exactly zero -- this is a lean (Z-axis), "
+            "not a spin (Y-axis)" % (attribute, delta.z)
+        )
+
+    _assert_dominant("ballLean", _delta("ballLean", "foot"), "x", "y")
+    _assert_dominant("bank (ankle)", _delta("bank", "foot"), "x", "y")
+    _assert_dominant("bank (toe)", _delta("bank", "toe"), "y", "x")
+    _assert_dominant("toeWiggle", _delta("toeWiggle", "toe"), "y", "x")
+
+
+def test_foot_roll_lifts_the_ankle_not_sideways(mirrored_pair):
+    """``footRoll`` is the animator's one auto-roll channel; sweeping it
+    positive must lift the ankle, not swing it sideways.
+
+    A separate test from the nine discrete channels above: ``footRoll``
+    drives the same controls' OFFSET groups (``build_foot_roll``, §8.3)
+    through the smooth-minimum in §8.2, not their proxied ``transform``
+    channels, and it shares ``ball``'s channel with ``ballRoll`` (both land
+    on ``offset["rotateX"]`` / ``transform["rotateX"]``) -- the same class
+    of axis bug could reappear in one without the other test noticing.
+    """
+    left, _right = mirrored_pair("leg", LEG_POSES)
+    ik = left.controller_by_role("ik")
+
+    rest = left.outputs["foot"].world_position
+    ik.transform["footRoll"].value = 30.0
+    moved = left.outputs["foot"].world_position
+    ik.transform["footRoll"].value = 0.0
+    delta = moved - rest
+
+    assert delta.y > 0.15, "footRoll did not lift the ankle in Y"
+    assert abs(delta.x) < 0.35 * delta.y, "footRoll swung the ankle sideways"

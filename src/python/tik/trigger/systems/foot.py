@@ -177,17 +177,22 @@ def build_foot_pivots(rig, *, parent, guides: dict, name: str = "foot") -> FootR
     return result
 
 
-#: Which controller channel drives which pivot channel. ``PROXIES`` below is
-#: an independent literal, not derived from this table -- the two staying in
-#: step is a real invariant, but one guarded by
-#: ``test_the_proxy_names_match_the_channel_table``, not by construction.
+#: Which controller channel drives which pivot channel. In this module's
+#: frame X is side, Y is up and Z is forward (``foot_frame`` aims local Z at
+#: the tip), so a roll (heel lifts / toe dips) is ``rotateX``, a spin (yaw)
+#: is ``rotateY``, and a lean/bank (tips onto an edge) is ``rotateZ`` --
+#: never the legacy's letters, which were measured on an X-forward frame
+#: (spec §2, §6.2). ``PROXIES`` below is an independent literal, not derived
+#: from this table -- the two staying in step is a real invariant, but one
+#: guarded by ``test_the_proxy_names_match_the_channel_table``, not by
+#: construction.
 CONTROL_CHANNELS = {
-    "bank": {"rotateX": "bank_in"},  # special-cased: two clamped pivots
+    "bank": {"rotateZ": "bank_in"},  # special-cased: two clamped pivots
     "heel": {"rotateX": "heel", "rotateY": "heel"},
-    "ball_spin": {"rotateZ": "ball_spin"},
+    "ball_spin": {"rotateY": "ball_spin"},
     "toe": {"rotateX": "toe", "rotateY": "toe"},
-    "ball": {"rotateY": "ball_roll", "rotateZ": "ball_roll"},
-    "toe_wiggle": {"rotateY": "toe_wiggle"},
+    "ball": {"rotateX": "ball_roll", "rotateZ": "ball_roll"},
+    "toe_wiggle": {"rotateX": "toe_wiggle"},
 }
 
 #: Controller nesting, outermost first. Matches the pivot stack so the two
@@ -473,13 +478,13 @@ def build_foot_chains(
 PROXIES = (
     ("heelRoll", "heel", "rotateX"),
     ("heelSpin", "heel", "rotateY"),
-    ("ballSpin", "ball_spin", "rotateZ"),
+    ("ballSpin", "ball_spin", "rotateY"),
     ("toeRoll", "toe", "rotateX"),
     ("toeSpin", "toe", "rotateY"),
-    ("ballRoll", "ball", "rotateY"),
+    ("ballRoll", "ball", "rotateX"),
     ("ballLean", "ball", "rotateZ"),
-    ("toeWiggle", "toe_wiggle", "rotateY"),
-    ("bank", "bank", "rotateX"),
+    ("toeWiggle", "toe_wiggle", "rotateX"),
+    ("bank", "bank", "rotateZ"),
 )
 
 
@@ -525,22 +530,24 @@ def build_foot_bank(rig, result: FootResult) -> FootResult:
     structure the legacy proved in production; this is the note saying where
     to look if the detachment turns out to bother animators.
 
-    Reads ``transform["rotateX"]`` alone, not ``offset["rotateX"] +
-    transform["rotateX"]`` the way every other foot channel does. That sum is
+    Reads ``transform["rotateZ"]`` alone, not ``offset["rotateZ"] +
+    transform["rotateZ"]`` the way every other foot channel does. That sum is
     what lets automation (via the offset) and the animator (via the control)
     both drive a pivot -- but nothing ever writes automation into ``bank``'s
     offset, and "bank" is also the one control in ``CONTROL_CHAIN`` parented
     directly under the world-aligned IK control rather than a
     behaviour-mirrored sibling. On the mirrored side that offset therefore
     bakes a real, non-zero rest rotation of its own (its local decomposition
-    of the frame's Rx(180) against a non-mirrored parent, measured at exactly
-    ``rotateX = -180``) -- summing it in would pollute the live bank value
-    with that baseline and roll the foot on the mirrored side the instant
-    this function wires the connection, on top of the animator's own input.
+    of the frame's Rx(180) against a non-mirrored parent, measured on its own
+    ``rotateX`` at exactly ``-180`` -- that component is a property of the
+    frame's own decomposition, not of which channel ``bank`` drives) --
+    summing it in would pollute the live bank value with that baseline and
+    roll the foot on the mirrored side the instant this function wires the
+    connection, on top of the animator's own input.
     """
-    channel = result.controls["bank"].transform["rotateX"]
-    channel.maximum(0.0) >> result.pivots["bank_out"]["rotateX"]
-    channel.minimum(0.0) >> result.pivots["bank_in"]["rotateX"]
+    channel = result.controls["bank"].transform["rotateZ"]
+    channel.maximum(0.0) >> result.pivots["bank_out"]["rotateZ"]
+    channel.minimum(0.0) >> result.pivots["bank_in"]["rotateZ"]
     return result
 
 
@@ -606,5 +613,5 @@ def build_foot_roll(rig, result: FootResult, control, *, overlap: float) -> None
     toe = roll - ball - heel
 
     heel >> result.controls["heel"].offset["rotateX"]
-    ball >> result.controls["ball"].offset["rotateY"]
+    ball >> result.controls["ball"].offset["rotateX"]
     toe >> result.controls["toe"].offset["rotateX"]

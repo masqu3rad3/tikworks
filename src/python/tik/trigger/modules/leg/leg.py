@@ -107,8 +107,8 @@ class Leg(Module):
     control_shapes = {
         "thigh": "CurvedCircle",
         **limb_control_shapes(labels=LIMB_LABELS),
-        # The IK control is a foot, not a cube. Overrides the limb default.
-        "ik": "FootPrint",
+        # No "ik" entry: the rigger wants a plain cube, which is already
+        # ``limb_control_shapes``'s default -- no override needed.
         "fk_ball": "Circle",
         "heel": "CurvedArrow",
         "ball_spin": "Rotator",
@@ -120,10 +120,14 @@ class Leg(Module):
     control_orients = {
         **limb_control_orients(labels=LIMB_LABELS),
         "fk_ball": (0.0, 0.0, -90.0),
-        # Shapes are authored flat in XZ with the normal on +Y. A roll pivot
-        # turns about the foot frame's X, so its arrow wants the normal on X:
-        # Rz(-90) maps +Y to +X. A spin turns about Z: Rx(90) maps +Y to +Z.
-        # A wiggle turns about Y and needs no turn at all.
+        # Shapes are authored flat in XZ with the normal on +Y. In the foot
+        # frame X is side, Y is up, Z is forward: a roll pivot (heel lifts /
+        # toe dips) turns about X, so its arrow wants the normal on X:
+        # Rz(-90) maps +Y to +X. A spin (yaw) turns about Y and needs no turn
+        # at all -- the normal is already on Y. A lean/bank pivot (tips onto
+        # an edge) turns about Z: Rx(90) maps +Y to +Z. Toe wiggle bends
+        # about the same side axis as roll (X), so it takes the same
+        # Rz(-90).
         #
         # Every foot control is `mirror="behaviour"` (the foot's own frame
         # is behaviour-mirrored, spec §6.3), so these DO get conjugated on
@@ -133,8 +137,8 @@ class Leg(Module):
         "heel": (0.0, 0.0, -90.0),
         "toe": (0.0, 0.0, -90.0),
         "ball": (0.0, 0.0, -90.0),
-        "bank": (0.0, 0.0, -90.0),
-        "ball_spin": (90.0, 0.0, 0.0),
+        "bank": (90.0, 0.0, 0.0),
+        "toe_wiggle": (0.0, 0.0, -90.0),
     }
     #: No entry for ``ik``: the reverse foot already owns that control's
     #: pivot, and offering both would give the animator two pivots on one
