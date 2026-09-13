@@ -614,26 +614,22 @@ def test_a_tweak_inherits_its_master_orientation():
             assert controller.shape_orient == master.shape_orient, role
 
 
-def test_a_world_mirrored_control_keeps_its_shape_orientation(build_context):
-    """mirror_orient undoes a 180 roll about X that a world control has not got.
+def test_only_a_behaviour_mirrored_control_is_reflected(build_context):
+    """Mirroring a control is a reflection, and only a rotation was applied.
 
-    A behaviour-mirrored control's joints carry that roll, so a shape
-    authored for the left arrives rolled and the conjugation puts it back. A
-    world-aligned control is identical on both sides, so conjugating it flips
-    a shape that was already correct.
+    A behaviour-mirrored side carries a 180 degree roll about X in its frame.
+    The old treatment conjugated the shape's ORIENTATION by that roll, which
+    reproduces a mirrored picture only for shapes symmetric under it -- circles,
+    cubes and diamonds are, which is why the arm never exposed the bug, and
+    curved arrows and pins are not, so the leg's foot controls came out flipped.
+    `det(-I) = -1`: no rotation is a reflection.
+
+    So the curve itself is reflected, and the declared orientation is stored
+    unchanged. A world-aligned control is identical on both sides and is not
+    reflected at all.
     """
-    from tik.trigger.maya.rig import mirror_orient
-
     turn = (0.0, 0.0, -90.0)
-    # The conjugation itself is unchanged and still correct where it applies.
-    assert mirror_orient(turn) == (0.0, 0.0, 90.0)
-
-    # "base" is deliberately unsided (a rig has one, regardless of side), so
-    # side="R" would be silently coerced back to CENTER and never reach the
-    # branch under test. "control" is an ordinary sided module.
     ctx = build_context("control", name="probe", side="R")
-    # control_orient_defaults is a classmethod reading cls.control_orients,
-    # so an instance attribute here would be invisible to rig.controller.
     module_cls = type(ctx.module)
     previous = module_cls.control_orients
     module_cls.control_orients = {"worldish": turn, "boney": turn}
@@ -643,8 +639,36 @@ def test_a_world_mirrored_control_keeps_its_shape_orientation(build_context):
     finally:
         module_cls.control_orients = previous
 
-    assert world.shape_orient == turn, "a world control must not be conjugated"
-    assert boney.shape_orient == mirror_orient(turn), "a bone control must be"
+    # The declared orientation survives verbatim on both -- it is no longer
+    # the thing that carries the mirroring.
+    assert world.shape_orient == turn
+    assert boney.shape_orient == turn
+
+    # Only the behaviour-mirrored one is reflected.
+    assert world.shape_mirrored is False
+    assert boney.shape_mirrored is True
+
+
+def test_a_reflected_shape_is_the_mirror_of_its_unreflected_self(build_context):
+    """The reflection is real, and it is the right one.
+
+    Point inversion, not a rotation: with a behaviour-mirrored frame
+    `F_R = Rx(180) . F_L`, asking for `F_R . S_R = M . F_L . S_L` solves to
+    `S_R = -S_L`. Asserted on the curve data rather than through a build, so
+    it holds regardless of what any module declares.
+    """
+    from tik.core.control_shapes import ControlShapeLibrary, mirror_data
+
+    data = ControlShapeLibrary.get_instance().load("CurvedArrow")
+    assert data, "CurvedArrow must exist for this test to mean anything"
+    flipped = mirror_data(data)
+
+    original = [tuple(p) for c in data["curves"] for p in c["point"]]
+    reflected = [tuple(p) for c in flipped["curves"] for p in c["point"]]
+    assert reflected == [(-x, -y, -z) for x, y, z in original]
+
+    # ...and the source is untouched, so a cached library entry cannot rot.
+    assert [tuple(p) for c in data["curves"] for p in c["point"]] == original
 
 
 #: The control shape vocabulary from AI/coding_rules.md. A module picks from
