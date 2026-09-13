@@ -453,3 +453,67 @@ def build_foot_bank(rig, result: FootResult, *, name: str = "foot") -> FootResul
     total.maximum(0.0) >> result.pivots["bank_out"]["rotateX"]
     total.minimum(0.0) >> result.pivots["bank_in"]["rotateX"]
     return result
+
+
+def build_foot_roll(
+    rig, result: FootResult, control, *, overlap: float, name: str = "foot"
+) -> None:
+    """One value walking the foot through heel, flat, ball peel and toe-off.
+
+    ``footRoll`` is sliced three ways and the slices always sum back to it::
+
+        h    = clamp((b - r) / (2w) + 0.5, 0, 1)
+        ball = max( lerp(b, r, h) - w*h*(1 - h), 0 )
+        heel = min(r, 0)
+        toe  = r - ball - heel
+
+    That is a quadratic smooth-minimum. Outside ``[b-w, b+w]`` it is exactly
+    ``min(r, b)``; at ``w == 0`` it is the hard break; at ``r == b`` the ball
+    sits ``0.25w`` short and the toe has already taken that up, which is what
+    makes the handover an *overlap* rather than a rounded corner. ``toe >= 0``
+    everywhere, because inside the band ``ball <= r`` reduces to ``b - r <= w``
+    -- the band's own definition.
+
+    A blend *toward* the break was tried first and overshoots: at
+    ``r=25, b=30, w=10`` it yields ``toe = -0.78``, rolling the toe backwards
+    before the break. The smooth-min undershoots, which turns that artefact
+    into the feature.
+
+    **The handover at zero stays hard.** The overlap is the ball-to-toe break
+    only. At ``footRoll == 0`` the foot is flat and the pivot genuinely
+    changes from the heel to the ball; softening it would blend two pivots at
+    foot-plant, which reads as the foot sliding exactly where it must not.
+
+    The three slices drive the controls' *offset groups*, never the pivots:
+    ``build_foot_controls`` sums offset and control onto each pivot, so the
+    automation and the animator's own value add and the controller rides on
+    top of the roll instead of drifting off the foot it drives.
+
+    Args:
+        rig: The module's ``ModuleRig``.
+        result: The foot, after ``build_foot_controls``.
+        control: The controller the two attributes appear on.
+        overlap: Degrees either side of ``rollBreak``. 0 is a hard switch.
+        name: Extra name token.
+    """
+    rig.separator(control, "roll_")
+    roll = control.transform["footRoll"].create("float", default=0.0)
+    brk = control.transform["rollBreak"].create("float", default=35.0)
+
+    if overlap <= 0.0:
+        # No band: short-circuit rather than divide by zero. This is the
+        # exact behaviour the soft form converges to, not an approximation.
+        ball = roll.minimum(brk).maximum(0.0)
+    else:
+        weight = ((brk - roll) / (2.0 * overlap) + 0.5).clamped(0.0, 1.0)
+        # lerp(self, other, w) == self + (other - self) * w, so this is
+        # lerp(b, r, h) -- b at h=0, r at h=1.
+        eased = brk.lerp(roll, weight)
+        ball = (eased - weight * (weight * -1.0 + 1.0) * overlap).maximum(0.0)
+
+    heel = roll.minimum(0.0)
+    toe = roll - ball - heel
+
+    heel >> result.controls["heel"].offset["rotateX"]
+    ball >> result.controls["ball"].offset["rotateY"]
+    toe >> result.controls["toe"].offset["rotateX"]

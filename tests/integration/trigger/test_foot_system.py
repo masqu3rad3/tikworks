@@ -755,3 +755,102 @@ def test_the_proxy_names_match_the_channel_table():
     }
     proxied = {(role, channel) for _name, role, channel in foot_system.PROXIES}
     assert wired == proxied
+
+
+def _roll_rig(ctx, overlap):
+    result = _built_foot(ctx)
+    host = ctx.controller("ik", size=1.0, mirror="world")
+    foot_system.build_foot_roll(ctx, result, host, overlap=overlap)
+    return result, host
+
+
+def _sample(result, host, value):
+    host.transform["footRoll"].value = value
+    return (
+        result.controls["heel"].offset["rotateX"].value,
+        result.controls["ball"].offset["rotateY"].value,
+        result.controls["toe"].offset["rotateX"].value,
+    )
+
+
+def test_a_hard_break_is_exactly_min_and_max(build_context):
+    """overlap 0 must be the hard behaviour, not an approximation of it."""
+    ctx = build_context("leg", name="probe")
+    result, host = _roll_rig(ctx, overlap=0.0)
+    host.transform["rollBreak"].value = 30.0
+
+    for value in (0.0, 10.0, 30.0, 55.0, 90.0):
+        heel, ball, toe = _sample(result, host, value)
+        assert heel == pytest.approx(min(value, 0.0), abs=1e-3), value
+        assert ball == pytest.approx(min(value, 30.0), abs=1e-3), value
+        assert toe == pytest.approx(max(value - 30.0, 0.0), abs=1e-3), value
+
+
+def test_outside_the_band_the_overlap_changes_nothing(build_context):
+    """The soft version is exact wherever it matters."""
+    ctx = build_context("leg", name="probe")
+    result, host = _roll_rig(ctx, overlap=10.0)
+    host.transform["rollBreak"].value = 30.0
+
+    for value in (0.0, 12.0, 19.9, 40.1, 75.0):
+        heel, ball, toe = _sample(result, host, value)
+        assert ball == pytest.approx(min(value, 30.0), abs=1e-3), value
+        assert toe == pytest.approx(max(value - 30.0, 0.0), abs=1e-3), value
+
+
+def test_the_toe_starts_before_the_break(build_context):
+    """A genuine overlap, not a rounded corner.
+
+    At r == b the ball sits 0.25w short and the toe has taken up that 0.25w.
+    """
+    ctx = build_context("leg", name="probe")
+    result, host = _roll_rig(ctx, overlap=10.0)
+    host.transform["rollBreak"].value = 30.0
+
+    heel, ball, toe = _sample(result, host, 30.0)
+    assert ball == pytest.approx(30.0 - 0.25 * 10.0, abs=1e-3)
+    assert toe == pytest.approx(0.25 * 10.0, abs=1e-3)
+
+
+def test_the_toe_never_goes_negative(build_context):
+    """The bug the naive blend had: toe == -0.78 at r=25, b=30, w=10."""
+    ctx = build_context("leg", name="probe")
+    result, host = _roll_rig(ctx, overlap=10.0)
+    host.transform["rollBreak"].value = 30.0
+
+    for step in range(-90, 91):
+        _heel, _ball, toe = _sample(result, host, float(step))
+        assert toe >= -1e-4, "toe went backwards at footRoll=%d" % step
+
+
+def test_the_three_slices_always_sum_to_the_roll(build_context):
+    """heel + ball + toe == footRoll, everywhere. The invariant."""
+    ctx = build_context("leg", name="probe")
+    result, host = _roll_rig(ctx, overlap=10.0)
+    host.transform["rollBreak"].value = 30.0
+
+    for value in (-40.0, -5.0, 0.0, 15.0, 29.0, 30.0, 31.0, 60.0):
+        heel, ball, toe = _sample(result, host, value)
+        assert (heel + ball + toe) == pytest.approx(value, abs=1e-3), value
+
+
+def test_negative_roll_drives_the_heel_and_nothing_else(build_context):
+    ctx = build_context("leg", name="probe")
+    result, host = _roll_rig(ctx, overlap=10.0)
+    host.transform["rollBreak"].value = 30.0
+
+    heel, ball, toe = _sample(result, host, -25.0)
+    assert heel == pytest.approx(-25.0, abs=1e-3)
+    assert ball == pytest.approx(0.0, abs=1e-3)
+    assert toe == pytest.approx(0.0, abs=1e-3)
+
+
+def test_the_roll_adds_to_the_animator_s_own_value(build_context):
+    """The offset group carries the automation; the control stays theirs."""
+    ctx = build_context("leg", name="probe")
+    result, host = _roll_rig(ctx, overlap=0.0)
+    host.transform["rollBreak"].value = 30.0
+    host.transform["footRoll"].value = 20.0
+    result.controls["ball"].transform["rotateY"].value = 7.0
+
+    assert result.pivots["ball_roll"]["rotateY"].value == pytest.approx(27.0, abs=1e-3)
