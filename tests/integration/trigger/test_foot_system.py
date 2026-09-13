@@ -366,7 +366,7 @@ def _built_foot(ctx, size=1.0):
     anchor = tm.Transform.create(name="anchor", parent=ctx.groups.rig.long_name)
     guides = _foot_guides()
     result = foot_system.build_foot_pivots(ctx, parent=anchor, guides=guides)
-    foot_system.build_foot_controls(ctx, result, size=size)
+    foot_system.build_foot_controls(ctx, result, size=size, guides=guides)
     return result
 
 

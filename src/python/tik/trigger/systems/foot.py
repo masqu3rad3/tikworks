@@ -217,6 +217,7 @@ def build_foot_controls(
     result: FootResult,
     *,
     size: float,
+    guides: dict,
     parent=None,
 ) -> FootResult:
     """Build the controller chain that mirrors the pivot stack.
@@ -272,6 +273,22 @@ def build_foot_controls(
     tm.MatrixConstraint.create(
         result.root, result.controls[CONTROL_CHAIN[0]].offset, maintain_offset=True
     )
+
+    # The ball control's pivot belongs on the ball, but a shape drawn there
+    # sits inside the foot where an animator cannot grab it. Lift the DRAWING
+    # -- not the pivot -- to the ankle's height, so it floats clear of the
+    # geometry while still rotating about the ball.
+    #
+    # Measured from the guides rather than fixed, because a rigger moves these:
+    # the lift is the height from the ball guide to the ankle guide, expressed
+    # along the control's own up axis. `offset_shape` works in object space, so
+    # this is the real scene distance, not shape units -- hard-coding a
+    # multiple of `size` would stop meaning "level with the ankle" the moment
+    # anyone moved either guide.
+    ball_control = result.controls["ball"]
+    to_ankle = guides["ankle"].world_position - guides["ball"].world_position
+    lift = to_ankle * ball_control.transform.world_axis("y")
+    ball_control.offset_shape((0.0, lift, 0.0))
 
     for role, channels in CONTROL_CHANNELS.items():
         if role == "bank":

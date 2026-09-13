@@ -229,6 +229,41 @@ class Controller:
         for shape in self.shapes:
             shape.delete()
 
+    @keepselection
+    def offset_shape(self, offset):
+        """Move every CV by ``offset``, in the controller's own object space.
+
+        The transform is not touched, so the controller stays on its pivot and
+        keeps its zeroed channels -- only the drawing moves. That is the whole
+        point: a control whose pivot must stay on a joint can still be drawn
+        somewhere the animator can actually grab it.
+
+        The offset is in object space, i.e. AFTER the size scaling that
+        ``set_shape`` applied, so a caller can pass a real distance measured in
+        the scene rather than converting it into shape units.
+
+        Args:
+            offset: ``(x, y, z)`` in the controller's local space.
+        """
+        if not offset or not any(offset):
+            return
+        for shape in self.shapes:
+            spans = cmds.getAttr("%s.spans" % shape.long_name)
+            degree = cmds.getAttr("%s.degree" % shape.long_name)
+            form = cmds.getAttr("%s.form" % shape.long_name)
+            # A periodic curve repeats `degree` CVs at the end; moving them
+            # twice would tear the curve open.
+            count = spans if form == 2 else spans + degree
+            for index in range(count):
+                cmds.move(
+                    offset[0],
+                    offset[1],
+                    offset[2],
+                    "%s.cv[%d]" % (shape.long_name, index),
+                    relative=True,
+                    objectSpace=True,
+                )
+
     def add_shape(self, curve_data: dict, size=1.0):
         """Add a curve shape under the controller transform.
 

@@ -150,7 +150,11 @@ class Leg(Module):
         # behaviour-mirrored, spec section 6.3), so these DO get conjugated on
         # the right side: a shape authored for the left arrives rolled 180
         # degrees about X on the mirrored frame, and the conjugation undoes it.
-        "heel": (90.0, 0.0, 0.0),
+        # The heel takes the toe's turn plus a 180 flip about X, so its arrows
+        # read the right way round from behind the foot -- rotations about the
+        # same axis compose, so Rx(90) + Rx(180) is Rx(-90). X-only, so
+        # `mirror_orient` (which negates Y and Z) leaves it alone on the right.
+        "heel": (-90.0, 0.0, 0.0),
         "toe": (90.0, 0.0, 0.0),
         "ball_spin": (-90.0, 0.0, 0.0),
     }
@@ -429,7 +433,13 @@ class Leg(Module):
         foot = build_foot_pivots(
             rig, parent=limb.ik_tweak.transform, guides=foot_guides
         )
-        build_foot_controls(rig, foot, size=size * 0.35, parent=limb.ik_control)
+        build_foot_controls(
+            rig,
+            foot,
+            size=size * 0.35,
+            guides=foot_guides,
+            parent=limb.ik_control,
+        )
         build_foot_bank(rig, foot)
 
         # The solve follows the bottom of the pivot stack, not the tweak:
