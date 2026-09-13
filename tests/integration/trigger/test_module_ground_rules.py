@@ -645,3 +645,48 @@ def test_a_world_mirrored_control_keeps_its_shape_orientation(build_context):
 
     assert world.shape_orient == turn, "a world control must not be conjugated"
     assert boney.shape_orient == mirror_orient(turn), "a bone control must be"
+
+
+#: The control shape vocabulary from AI/coding_rules.md. A module picks from
+#: this handful rather than from all 86 curves in the library, so that a shape
+#: is a statement about what a control affords rather than a free choice.
+SHAPE_VOCABULARY = {
+    "SpherePin",  # the pivot's location matters and must be visible
+    "CubePin",  # ditto, where a square head reads better
+    "CurvedCircle",  # limb attachment (collar, thigh)
+    "Diamond",  # translate-only target (pole)
+    "Circle",  # FK chain member, or rotates about three axes
+    "Cube",  # translates and rotates freely
+    "DualCurvedArrow",  # rotates about two axes
+    "CurvedArrow",  # rotates about one axis
+}
+
+
+@pytest.mark.parametrize("module_type", _shipped_module_types())
+def test_every_declared_shape_comes_from_the_vocabulary(module_type):
+    """Rule: shapes are drawn from a small, meaningful set.
+
+    A soft convention, not a hard one -- a rigger still overrides any control's
+    shape per instance through the Shapes table, and this says nothing about
+    which vocabulary entry a new control should get. What it catches is drift:
+    a module reaching into the 86-curve library for something expressive, so
+    that the shape stops telling an animator what the control affords.
+
+    `AI/coding_rules.md` carries the precedence rules and the orientation
+    table that goes with them.
+    """
+    module_cls = get_module(module_type)
+    for settings in CONTROL_VARIATIONS.get(module_type, [{}]):
+        instance = module_cls(settings=settings)
+        declared = module_cls.control_shape_defaults(instance.values())
+        outside = sorted(
+            "%s -> %s" % (role, shape)
+            for role, shape in declared.items()
+            if shape not in SHAPE_VOCABULARY
+        )
+        assert not outside, (
+            "%s declares shapes outside the vocabulary: %s. Either use a "
+            "vocabulary shape or add the new one to AI/coding_rules.md and "
+            "SHAPE_VOCABULARY together, with the rule it serves."
+            % (module_type, outside)
+        )

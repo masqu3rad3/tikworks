@@ -110,35 +110,49 @@ class Leg(Module):
         # No "ik" entry: the rigger wants a plain cube, which is already
         # ``limb_control_shapes``'s default -- no override needed.
         "fk_ball": "Circle",
-        "heel": "CurvedArrow",
-        "ball_spin": "Rotator",
-        "toe": "CurvedArrow",
-        "ball": "CurvedArrow",
-        "toe_wiggle": "Arrow",
-        "bank": "DualCurvedArrow",
+        # The foot controls follow the shape vocabulary in AI/coding_rules.md:
+        # a pin where the pivot's location must be visible, then one arc per
+        # free rotation axis. `toe_wiggle` is a toe, so it takes the pin.
+        "heel": "DualCurvedArrow",
+        "ball_spin": "CurvedArrow",
+        "toe": "DualCurvedArrow",
+        "ball": "DualCurvedArrow",
+        "toe_wiggle": "SpherePin",
+        "bank": "CurvedArrow",
     }
     control_orients = {
         **limb_control_orients(labels=LIMB_LABELS),
         "fk_ball": (0.0, 0.0, -90.0),
-        # Shapes are authored flat in XZ with the normal on +Y. In the foot
-        # frame X is side, Y is up, Z is forward: a roll pivot (heel lifts /
-        # toe dips) turns about X, so its arrow wants the normal on X:
-        # Rz(-90) maps +Y to +X. A spin (yaw) turns about Y and needs no turn
-        # at all -- the normal is already on Y. A lean/bank pivot (tips onto
-        # an edge) turns about Z: Rx(90) maps +Y to +Z. Toe wiggle bends
-        # about the same side axis as roll (X), so it takes the same
-        # Rz(-90).
+        # Per the shape vocabulary in AI/coding_rules.md, a shape's
+        # distinguished axis means different things per shape, so these are
+        # derived from the SHAPE as well as the control's free axes. In the
+        # foot frame X is side, Y is up, Z is forward.
         #
-        # Every foot control is `mirror="behaviour"` (the foot's own frame
-        # is behaviour-mirrored, spec §6.3), so these DO get conjugated on
-        # the right side, same as every other behaviour-mirrored control: a
-        # shape authored for the left arrives rolled 180 degrees about X on
-        # the mirrored frame, and the conjugation undoes it.
-        "heel": (0.0, 0.0, -90.0),
-        "toe": (0.0, 0.0, -90.0),
-        "ball": (0.0, 0.0, -90.0),
-        "bank": (90.0, 0.0, 0.0),
-        "toe_wiggle": (0.0, 0.0, -90.0),
+        # `DualCurvedArrow` is two arcs at right angles: its unused axis is
+        # +Y, and that is what goes onto the control's LOCKED axis, leaving
+        # the two arcs on the two free ones.
+        #   heel / toe  -- free X (roll) and Y (spin), locked Z
+        #                  -> Rx(90) puts the unused +Y onto Z
+        #   ball        -- free X (roll) and Z (lean), locked Y
+        #                  -> unused +Y is already on Y, no turn
+        #
+        # `CurvedArrow`'s distinguished axis is its NORMAL, on +Z, and it
+        # goes onto the single rotation axis.
+        #   ball_spin   -- turns about Y -> Rx(-90) maps +Z onto +Y
+        #   bank        -- turns about Z -> already there, no turn
+        #
+        # `SpherePin`'s stalk is +Y and aligns to the joint's UP vector, not
+        # to a rotation axis, so it never takes a turn at all. Giving
+        # `toe_wiggle` the roll correction would lay the pin flat along the
+        # foot instead of standing it up where the pivot can be seen.
+        #
+        # Every foot control is `mirror="behaviour"` (the foot's own frame is
+        # behaviour-mirrored, spec section 6.3), so these DO get conjugated on
+        # the right side: a shape authored for the left arrives rolled 180
+        # degrees about X on the mirrored frame, and the conjugation undoes it.
+        "heel": (90.0, 0.0, 0.0),
+        "toe": (90.0, 0.0, 0.0),
+        "ball_spin": (-90.0, 0.0, 0.0),
     }
     #: No entry for ``ik``: the reverse foot already owns that control's
     #: pivot, and offering both would give the animator two pivots on one

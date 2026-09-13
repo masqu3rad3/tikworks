@@ -77,7 +77,16 @@ gets one pivot, not two. Every control a module builds must be offered a pivot.
 are excluded from all of it by construction. The manifest must equal what
 `build()` actually creates, minus tweaks —
 `tests/integration/trigger/test_module_ground_rules.py` enforces it. Full text
-in `AI/coding_rules.md`.
+in `AI/coding_rules.md`. A module also picks its control shapes from a small
+**vocabulary** rather than the whole 86-curve library -- a pin where the pivot
+must be visible, then one arc per free rotation axis, with `Circle` reserved for
+FK and `Cube` for anything that translates and rotates freely. A shape's
+distinguished axis means different things per shape (a circle's normal aligns to
+the rotation axis; a pin's stalk aligns to the joint's *up* vector and so never
+rotates at all), which is why `control_orients` is derived from the shape as
+well as the control. `tests/integration/trigger/test_module_ground_rules.py`
+pins the vocabulary; the precedence and orientation tables are in
+`AI/coding_rules.md`.
 
 ### The `rig` object
 `rig` owns naming, tagging, group placement and registration; tik.maya owns the
