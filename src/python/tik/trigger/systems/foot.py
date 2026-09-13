@@ -20,8 +20,14 @@ Two parallel hierarchies, and they stay in lockstep by construction::
 
 Each controller sits at its pivot's position with the same ancestor chain, so
 it inherits its ancestors' rotation exactly as its pivot does. No constraint
-runs between the two and no cycle is possible. ``bank`` is the one exception
-and §6.4 of the spec says why.
+runs between the two and no cycle is possible. Two exceptions: ``bank`` (one
+channel feeds two mutually exclusive pivots, so it has no single pivot twin --
+and it is parented under the world-aligned IK control rather than a
+behaviour-mirrored sibling, so its offset carries a real rest rotation and
+must never be summed, §6.4) and ``toe_wiggle`` (its controller nests linearly
+under ``ball_ctrl`` while its pivot is a sibling of ``ball_roll`` under
+``toe``, so rotating ``ball_ctrl`` moves the gizmo but not the pivot --
+harmless, since the channel sum each pivot reads is local, §6.2).
 
 **The frame is behaviour-mirrored, and that is what needs no sign rule
 anywhere else.** A frame aimed heel-to-tip with the ankle as up, built
@@ -467,10 +473,14 @@ def build_foot_bank(rig, result: FootResult, *, name: str = "foot") -> FootResul
     a straight line, and expressing a straight line as an animation curve
     puts editable, serialising keyframes into a rig nobody keyed.
 
-    **Bank is the one place the two hierarchies are not twins.** One channel
-    feeds two mutually exclusive pivots, so there is no single pivot for the
-    control to correspond to: it is a handle for a value, and rotating it
-    does not tilt it onto the edge the foot banks over. A single pivot whose
+    **Bank is one of two places the two hierarchies are not twins** (the
+    other is ``toe_wiggle``, whose controller nests linearly under
+    ``ball_ctrl`` while its pivot sits as ``ball_roll``'s sibling under
+    ``toe`` -- harmless, since the channel sum each pivot reads is local).
+    Bank's own break is structural: one channel feeds two mutually exclusive
+    pivots, so there is no single pivot for the control to correspond to: it
+    is a handle for a value, and rotating it does not tilt it onto the edge
+    the foot banks over. A single pivot whose
     ``rotatePivot`` switched on the sign would restore the correspondence --
     and the switch would be free, because the rotation is zero at the instant
     the sign changes. Rejected for now as cleverness bought against a
