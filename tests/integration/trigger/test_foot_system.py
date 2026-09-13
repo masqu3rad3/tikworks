@@ -635,8 +635,20 @@ def test_build_foot_chains_never_touches_the_limbs_last_ik_joint(build_context):
         assert wrapped.start_joint.long_name != last_ik.long_name, handle
 
 
-def test_bank_is_mirrored_by_the_frame_not_by_a_multiplier(mirrored_pair):
-    """Same value, same magnitude, opposite world direction -- no side term."""
+def test_bank_behaviour_is_mirrored_between_the_two_feet(mirrored_pair):
+    """Same ``bank`` value lifts the two feet by the same magnitude, opposite direction.
+
+    This pins *behaviour*, not the frame mechanism: ``ankle_driver``'s bake
+    against ``ik_tweak`` erases the frame's baseline before the bank delta is
+    applied, so this assertion holds under either the behaviour-mirrored
+    frame or a naive mirror (verified by hand -- flipping ``foot_frame`` to
+    the naive convention does not make it fail). What it does catch is real:
+    it is the test that found the summed-offset bug in
+    ``build_foot_bank`` (see the regression test below). For the mechanism
+    itself -- the claim that the frame is uniquely the behaviour mirror, and
+    the one test that fails immediately if that regresses -- see
+    ``test_the_mirrored_frame_is_the_behaviour_mirror``.
+    """
     left, right = mirrored_pair("leg", LEG_POSES)
     for ctx in (left, right):
         ctx.controller_by_role("bank").transform["rotateX"].value = 30.0

@@ -1,7 +1,7 @@
 # The Leg: a foot is a second solver, not a longer arm
 
 **Date:** 2026-09-12
-**Status:** in implementation
+**Status:** implemented
 **Amends:** `2026-08-30-trigger-simplification-design.md` — `build_ikfk_limb` is no longer the
 only way into the limb system. It splits into a controls phase and a solve phase, and the solve
 phase takes a `driver`. The single-call entry point survives unchanged and the arm keeps using
@@ -266,6 +266,16 @@ The sum is what §8 needs: the auto-roll drives the **offset group**, the animat
 **controller**, and the pivot takes both. Without it, an auto-roll offset would move the rig and
 leave the animator's control behind, visually detached from the foot it is driving.
 
+**Two exceptions, not one.** §6.4 carves out `bank`: one control channel feeds two mutually
+exclusive pivots, so there is no single pivot node for `bank_ctrl` to be the twin of. The second
+is structural rather than semantic: the control chain is strictly linear (`toe_wiggle_ctrl` under
+`ball_ctrl`), while §6.1's own diagram has the pivots branch (`toe_wiggle` is a **sibling** of
+`ball_roll` under `toe`, not a child of it). Rotating `ball_ctrl` therefore moves the
+`toe_wiggle` gizmo even though the `toe_wiggle` pivot it is nominally the twin of does not move.
+It is harmless — the channel sum in each pivot's own local space is unaffected by where its
+controller's gizmo happens to be drawn, so the delivered value is correct — but it is a second
+place lockstep does not hold, and 6.2 should say so rather than let 6.4 read as the only one.
+
 The IK handles are *constrained* to `toe_wiggle`, not parented under it — the same pattern
 `_build_soft_ik` already uses to drive the leg's own handle from `soft_ik.goal_matrix`.
 
@@ -376,10 +386,26 @@ expressed as an animation curve. A build should not be laying down animation cur
 editable, they serialise into the scene, and a rigger who scrubs onto them cannot tell they were
 authored by code. Two clamps do the same job with no keys.
 
-**Bank is the one place §6.2's lockstep does not hold**, and it cannot: one control channel feeds
-two mutually exclusive pivots, so there is no single pivot node for `bank_ctrl` to be the twin of.
-It sits at the top of the control chain and is a handle for a value rather than a visual twin of
-the rig's motion — rotating it does not tilt it onto the edge the foot banks over.
+**Bank is one of §6.2's two places lockstep does not hold**, and it cannot: one control channel
+feeds two mutually exclusive pivots, so there is no single pivot node for `bank_ctrl` to be the
+twin of. It sits at the top of the control chain and is a handle for a value rather than a visual
+twin of the rig's motion — rotating it does not tilt it onto the edge the foot banks over.
+
+That position at the top of the chain has a mechanical consequence, and it is the one that
+actually drew blood during assembly: `bank_ctrl` is parented directly under the world-aligned IK
+control, not under a behaviour-mirrored sibling the way every other foot control is. Its offset
+group is therefore not frame-aligned, and its local decomposition of whatever rest rotation sits
+between the IK control and the frame is a *real* value, not zero. On the mirrored side that
+decomposition lands on exactly `rotateX = -180` (the frame's `Rx(180)`, read through a
+non-mirrored parent); on either side, a rolled ankle guide puts a nonzero rest rotation into that
+same offset regardless of side. Concretely: **§6.2's `pivot = offset + ctrl` rule does not apply
+to bank.** `bank`'s offset must never be summed into its live value — an implementation pass
+during this work did sum it, which pushed every pivot from `bank_in` down off its rest pose the
+instant the connection was wired (caught by
+`test_a_mirrored_foot_rests_and_rolls_exactly_like_the_source` in `test_foot_system.py`) — and a
+future auto-roll target must never be `bank` for the same reason: there is no meaningful "offset"
+to drive. The formula below has always been written without an offset term; the summed version
+was an implementation deviation, and removing it was a return to this spec, not a change to it.
 
 A single pivot node whose `rotatePivot` switches between the two marker positions on the sign of
 `bank` would restore the correspondence, and the switch is free because the rotation is zero at
@@ -483,9 +509,18 @@ This is a quadratic smooth-minimum. Properties, all checked:
 - At `r = b` the ball sits `0.25w` short of the break and the toe has already taken up that
   `0.25w`. **The overlap is a genuine overlap**, not a rounded corner: the toe begins to move
   before the ball has finished.
-- `toe >= 0` everywhere. Proof: inside the band, `ball <= r` reduces to `b - r <= w`, which is
-  the band's own definition.
-- C1 at both band edges — the derivative is 1 at `b-w` and 0 at `b+w`.
+- `toe >= 0` everywhere, and C1 at both band edges — both fall out of the same closed form.
+  Inside the band, write `x = r - b`. Then:
+
+  ```
+  toe = (x + w)^2 / (4w)
+  ```
+
+  This is a perfect square over a positive denominator, so `toe >= 0` is immediate — no
+  inequality argument needed, unlike the property-list version this replaces. Differentiating,
+  `d(toe)/dr = (x + w) / (2w)`, which is `0` at `x = -w` (i.e. `r = b - w`) and `1` at `x = +w`
+  (i.e. `r = b + w`) — exactly the slopes `toe` has outside the band (`0` below the break, `1`
+  above it, from `toe = max(r - b, 0)`), which **is** the C1 claim, proven rather than asserted.
 
 A naive blend *toward* the break point was tried first and is wrong: it overshoots, and at
 `r = 25, b = 30, w = 10` it yields `toe = -0.78`, rolling the toe backwards before the break. The
@@ -643,6 +678,24 @@ existed. That is the layering working.
 2. `derive_size` and `conventional_frames` made public (§3.1).
 3. The stale `MODULE_TYPES` tuple (§10.2).
 4. The mirrored-pair test helper (§10.4).
+5. `rig.controller` conjugated a shape orient for **every** right-side control, ignoring
+   `mirror=`. Correct for a behaviour-mirrored control (whose joints carry a 180-degree roll
+   about X), wrong for a world-aligned one. The arm never hit it because `limb_control_orients`
+   omits every world-aligned role.
+6. `systems/limb.py`'s `_build_pole` had a Gram-Schmidt singularity: for any limb whose end guide
+   is unrotated and hangs straight down — exactly the leg's default pose with `limb_lock` and
+   `auto_hip` on, both defaults — the twist-aware pole frame degenerated and threw the knee a full
+   segment off its guide. The arm never hit it because an A-pose arm hangs sideways. Fixed with
+   `_safe_twist_axis`, which picks whichever of the target's orthonormal X/Y is less parallel to
+   the aim; because they are orthonormal, `min(x_dot, y_dot) <= 1/sqrt(2)` always, so the chosen
+   reference is guaranteed at least 45 degrees off the aim for any input. This is shared code the
+   arm depends on, and the arm's choice is now pinned by a unit test.
+7. `tik.maya`'s `Node` gained a `__contains__` that **raises** `TypeError`. It previously had
+   `__getitem__` and no `__iter__`, so `"x" in node` fell back to Python's legacy iteration
+   protocol — `node[0]`, `node[1]`, ... — each building a `Plug` from an integer, which
+   **segfaults Maya** with an access violation and leaves the process spinning rather than dying.
+   Refusing beats implementing: a working `__contains__` would make the broken expression
+   silently mean something.
 
 ### 11.3 Gaps this surfaces — report only, not in scope
 
@@ -664,6 +717,14 @@ existed. That is the layering working.
 5. **No quadruped consideration.** `systems/foot.py` is deliberately reusable, but its guide roles
    are biped-shaped. A hindleg's extra segment is not designed for here and should not be
    speculatively accommodated.
+6. **`tm.listConnections` re-resolves every string result through the node registry even with
+   `plugs=True`**, silently dropping the `.attribute` suffix and returning a fresh identity-only
+   `Node` each call. Any before/after equality check written through that wrapper can therefore
+   never pass, even when nothing changed. Not fixed here: it is shared code used across the whole
+   repo, changing its return type mid-plan risks callers this branch never touches, and the leg
+   does not need it — the tests that need a real before/after comparison call
+   `cmds.listConnections` directly instead. The same unguarded
+   `__getitem__`-without-`__iter__` shape §11.2 item 7 fixed on `Node` still exists on `Plug`.
 
 ## 12. Out of scope
 
