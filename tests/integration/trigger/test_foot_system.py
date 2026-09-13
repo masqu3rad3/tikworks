@@ -3,6 +3,7 @@
 import math
 
 import pytest
+from maya import cmds
 
 import tik.maya as tm
 from tik.trigger.systems import foot as foot_system
@@ -516,6 +517,124 @@ def test_bank_lays_down_no_animation_curves(build_context):
         assert not curves, role
 
 
+def _built_limb(ctx):
+    from tik.trigger.systems import limb as limb_system
+
+    return limb_system.build_limb_controls(
+        ctx,
+        [
+            tm.Joint.create(name="lg%d" % index, position=position)
+            for index, position in enumerate([(2, 9.6, 0), (2, 5.3, 0.45), (2, 1, 0)])
+        ],
+        labels=("upper", "lower", "foot"),
+    )
+
+
+def test_the_foot_chains_make_two_sc_handles(build_context):
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    guides = _foot_guides()
+    guides["toe"] = tm.Joint.create(name="guide_toe", position=(2.0, 0.05, 2.4))
+
+    limb_result = _built_limb(ctx)
+    bind = [
+        tm.Joint.create(name="bind_ball", position=(2, 0.25, 1.3)),
+        tm.Joint.create(name="bind_toe", position=(2, 0.05, 2.4)),
+    ]
+    foot_system.build_foot_chains(
+        ctx, result, limb_result, guides=guides, bind_joints=bind, size=1.0
+    )
+    assert len(result.ball_joints) == 2
+    assert len(result.toe_joints) == 2
+    handles = [
+        node
+        for node in tm.ls(type="ikHandle")
+        if "ball" in node.name or "toe" in node.name
+    ]
+    assert len(handles) == 2
+
+
+def test_build_foot_chains_never_touches_the_limbs_last_ik_joint(build_context):
+    """The correction this task exists to make: no SC handle on the RP chain.
+
+    Starting an ``ikSCsolver`` on ``limb_result.ik_joints[-1]`` would contend
+    with the limb's own ``MatrixConstraint`` for that joint's rotate channels.
+    Captured before and after ``build_foot_chains`` runs: the connections
+    driving each rotate axis must come out byte-identical, and the new joint
+    is not a start joint of either SC handle -- a test that only checked one
+    of the two would pass on a fix that broke the other.
+    """
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    guides = _foot_guides()
+    guides["toe"] = tm.Joint.create(name="guide_toe", position=(2.0, 0.05, 2.4))
+
+    limb_result = _built_limb(ctx)
+    driver = tm.Transform.create(name="driver", parent=ctx.groups.rig.long_name)
+    driver.snap_to(limb_result.ik_joints[-1])
+    from tik.trigger.systems import limb as limb_system
+
+    limb_system.build_limb_solve(ctx, limb_result, driver=driver)
+    last_ik = limb_result.ik_joints[-1]
+
+    def _rotate_sources():
+        # MatrixConstraint connects the whole ``rotate`` compound in one shot
+        # when no axis is skipped (which is the case for the limb's own
+        # constraint here) -- ``listConnections`` on a *child* plug like
+        # ``rotateX`` reports nothing for a compound-to-compound connection,
+        # only the parent plug does. Check the compound first and only fall
+        # back to per-axis lookups for the (here unused) partial-skip case,
+        # so the sanity assertion below is checking the connection that
+        # actually exists rather than one that can never be found.
+        #
+        # Raw ``cmds.listConnections`` here, not ``tm.listConnections``: the
+        # tik wrapper resolves every string result through the node registry
+        # (``listConnections`` is a ``NODE_FACTORIES`` entry), which drops
+        # the ``.attribute`` suffix off a ``plugs=True`` result and returns a
+        # bare ``Node`` for the source -- a fresh, identity-only wrapper each
+        # call, so two calls that hit the very same plug would never compare
+        # equal. Comparing the plain plug-path strings is what actually
+        # proves the connection did not change.
+        compound = tuple(
+            cmds.listConnections(
+                last_ik["rotate"].path, source=True, destination=False, plugs=True
+            )
+            or []
+        )
+        if compound:
+            return {"rotate": compound}
+        sources = {}
+        for axis in ("X", "Y", "Z"):
+            sources[axis] = tuple(
+                cmds.listConnections(
+                    last_ik["rotate" + axis].path,
+                    source=True,
+                    destination=False,
+                    plugs=True,
+                )
+                or []
+            )
+        return sources
+
+    before = _rotate_sources()
+    # Sanity: the limb's own constraint really is driving it already, so an
+    # empty-everywhere before/after match would not be a pass by accident.
+    assert all(before.values()), before
+
+    bind = [
+        tm.Joint.create(name="bind_ball", position=(2, 0.25, 1.3)),
+        tm.Joint.create(name="bind_toe", position=(2, 0.05, 2.4)),
+    ]
+    foot_system.build_foot_chains(
+        ctx, result, limb_result, guides=guides, bind_joints=bind, size=1.0
+    )
+    assert _rotate_sources() == before
+
+    for handle in tm.ls(type="ikHandle"):
+        wrapped = tm.resolve(handle)
+        assert wrapped.start_joint.long_name != last_ik.long_name, handle
+
+
 @pytest.mark.xfail(reason="needs leg.build -- Task 15", strict=True)
 def test_bank_is_mirrored_by_the_frame_not_by_a_multiplier(mirrored_pair):
     """Same value, same magnitude, opposite world direction -- no side term."""
@@ -527,3 +646,55 @@ def test_bank_is_mirrored_by_the_frame_not_by_a_multiplier(mirrored_pair):
     right_up = right.outputs["foot"].world_axis("y")
     assert left_up[0] == pytest.approx(-right_up[0], abs=1e-3)
     assert left_up[1] == pytest.approx(right_up[1], abs=1e-3)
+
+
+@pytest.mark.xfail(reason="needs leg.build -- Task 15", strict=True)
+def test_the_ball_and_toe_blend_on_the_limb_switch(scene):
+    """One ikFk value covers the whole leg, ankle and foot alike."""
+    from tik.trigger.core import ParentRef, get_module
+    from tik.trigger.maya import Builder
+
+    body = scene.create_guides(get_module("base")(name="body"))
+    leg = scene.create_guides(
+        get_module("leg")(name="leg", side="L"),
+        parent=ParentRef(body.instance_id, "root"),
+    )
+    for role, (x, y, z) in LEG_POSES.items():
+        cmds.xform(
+            scene.guide_node(leg.instance_id, role).long_name, ws=True, t=(x, y, z)
+        )
+    ctx = (
+        Builder().build(document=scene.document, afterlife="keep").rigs[leg.instance_id]
+    )
+
+    switch = ctx.controller_by_role("ik").transform["ikFk"]
+    fk_ball = ctx.controller_by_role("fk_ball")
+
+    switch.value = 0.0
+    fk_ball.transform["rotateZ"].value = 25.0
+    fk_driven = ctx.outputs["ball"].world_axis("x")
+
+    switch.value = 1.0
+    ik_driven = ctx.outputs["ball"].world_axis("x")
+
+    assert (
+        fk_driven * ik_driven
+    ) < 0.999, "at ikFk 0 the ball must follow the FK control, at 1 it must not"
+
+
+def test_ikfk_is_one_switch_for_the_whole_leg(scene):
+    """There is no second switch on the foot.
+
+    Not marked xfail: unlike the blend test above, this needs no build at
+    all. ``controls`` is a plain class tuple the module author writes by
+    hand (``Leg.controls`` already exists), so the invariant it guards --
+    the foot never declares a second ``ikFk``-shaped control role -- holds
+    or fails today, regardless of whether ``Leg.build`` wires the foot in
+    yet. Marking it xfail(strict=True) before Task 15 would XPASS and fail
+    the suite for a reason that has nothing to do with Task 15.
+    """
+    from tik.trigger.core import get_module
+
+    assert "ikFk" not in [
+        control for control in get_module("leg").controls if control.endswith("Fk")
+    ]

@@ -264,6 +264,136 @@ def build_foot_controls(
     return result
 
 
+def build_foot_chains(
+    rig,
+    result: FootResult,
+    limb_result,
+    *,
+    guides: dict,
+    bind_joints,
+    size: float,
+    name: str = "foot",
+) -> FootResult:
+    """Extend both puppet chains with a ball and a toe, and blend them.
+
+    The limb solves three joints; a foot has five. The IK side does **not**
+    start its two SC handles on ``limb_result.ik_joints[-1]``: that joint's
+    rotation is already the output of the limb's own
+    ``MatrixConstraint(driver, ik_joints[-1], skip_translate="xyz",
+    skip_scale="xyz")`` (``build_limb_solve``), and a second solve rooted
+    there would contend with it for the same channels. Instead a fresh
+    ``ik_ankle`` joint is created *parented under* ``result.ankle_driver`` --
+    upstream of the limb's solve, where the reverse foot's pivot stack
+    already lives -- and both SC handles run inside that new joint:
+    ``ik_ankle -> ik_ball`` and ``ik_ball -> ik_toe``. The limb's RP chain is
+    left entirely alone; nothing here writes to it.
+
+    Every created joint under a non-identity parent gets its world position
+    set explicitly (``.world_position = ...``) rather than through
+    ``Joint.create(position=...)``, which sets local *translate* -- correct
+    only when the parent is at the origin, which none of these are.
+
+    The two extra joints take the same ``ikFk`` switch the limb made, so one
+    value covers the whole leg and there is no second switch for an animator
+    to find.
+
+    Args:
+        rig: The module's ``ModuleRig``.
+        result: The foot, after ``build_foot_controls``.
+        limb_result: What ``build_limb_controls`` returned.
+        guides: Guide nodes; needs ``ball`` and ``toe``.
+        bind_joints: ``[ball_bind, toe_bind]``.
+        size: Controller size for ``fk_ball``.
+        name: Extra name token.
+    """
+    ball_at = guides["ball"].world_position
+    toe_at = guides["toe"].world_position
+
+    # --- IK side: two SC handles inside the reverse foot -------------------
+    # Parented under the foot's own ankle driver (upstream of the limb's
+    # solve), not under the limb's last IK joint (whose rotation is already
+    # spoken for). No offset is set here: a freshly parented joint with no
+    # translate sits exactly at its parent's world position, which is
+    # exactly where the ankle driver already is.
+    ik_ankle = tm.Joint.create(
+        name=rig.name(name, "ikAnkle", suffix="jnt"), parent=result.ankle_driver
+    )
+    ik_ball = tm.Joint.create(
+        name=rig.name(name, "ikBall", suffix="jnt"), parent=ik_ankle
+    )
+    ik_ball.world_position = ball_at
+    ik_toe = tm.Joint.create(name=rig.name(name, "ikToe", suffix="jnt"), parent=ik_ball)
+    ik_toe.world_position = toe_at
+    tm.Joint.orient_chain([ik_ankle, ik_ball, ik_toe], aim_axis="x", up_axis="y")
+
+    ball_handle = tm.IkHandle.create(
+        ik_ankle,
+        ik_ball,
+        solver="ikSCsolver",
+        name=rig.name(name, "ball", suffix="ikHandle"),
+    )
+    toe_handle = tm.IkHandle.create(
+        ik_ball,
+        ik_toe,
+        solver="ikSCsolver",
+        name=rig.name(name, "toe", suffix="ikHandle"),
+    )
+    for handle in (ball_handle, toe_handle):
+        handle.parent = rig.groups.rig
+        # Constrained, never parented: toe_wiggle is a controller's twin in
+        # rig_grp, and an IK handle under control_grp would break the ground
+        # rules. This is the pattern _build_soft_ik already uses.
+        tm.MatrixConstraint.create(
+            result.pivots["toe_wiggle"],
+            handle,
+            maintain_offset=True,
+            skip_rotate="xyz",
+            skip_scale="xyz",
+        )
+
+    # --- FK side ----------------------------------------------------------
+    fk_ball = tm.Joint.create(
+        name=rig.name(name, "fkBall", suffix="jnt"), parent=limb_result.fk_joints[-1]
+    )
+    fk_ball.world_position = ball_at
+    fk_toe = tm.Joint.create(name=rig.name(name, "fkToe", suffix="jnt"), parent=fk_ball)
+    fk_toe.world_position = toe_at
+    tm.Joint.orient_chain([fk_ball, fk_toe], aim_axis="x", up_axis="y")
+
+    fk_control = rig.controller(
+        "fk_ball",
+        size=size,
+        parent=limb_result.fk_controls[-1],
+        match=fk_ball,
+        mirror="behaviour",
+    )
+    for channel in ("tx", "ty", "tz", "sx", "sy", "sz", "v"):
+        plug = fk_control[channel]
+        plug.locked = True
+        plug.visible = False
+    fk_control["ikFk"].create(proxy=limb_result.switch_plug)
+    tm.MatrixConstraint.create(
+        fk_control, fk_ball, maintain_offset=True, skip_scale="xyz"
+    )
+
+    # --- blend onto the deform skeleton -----------------------------------
+    result.ball_joints = [fk_ball, ik_ball]
+    result.toe_joints = [fk_toe, ik_toe]
+    for index, (fk_joint, ik_joint) in enumerate(
+        ((fk_ball, ik_ball), (fk_toe, ik_toe))
+    ):
+        blend = tm.MatrixBlend.create(
+            fk_joint,
+            [ik_joint],
+            [limb_result.switch_plug],
+            name=rig.name(name, "blend%d" % index),
+        )
+        tm.MatrixConstraint.create(
+            blend.output, bind_joints[index], maintain_offset=True
+        )
+    return result
+
+
 def build_foot_bank(rig, result: FootResult, *, name: str = "foot") -> FootResult:
     """Split the bank control's roll across the two edge pivots.
 
