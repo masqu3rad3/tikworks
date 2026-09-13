@@ -4,6 +4,7 @@ from maya import cmds
 
 import tik.maya as tm
 from tik.trigger.maya import tags
+from tik.trigger.systems import limb
 from tik.trigger.systems.limb import build_ikfk_limb
 
 
@@ -293,3 +294,44 @@ def test_fk_controls_have_no_tweak(build_context):
     result, _binds = _limb(build_context())
     names = {item.transform.name for item in result.fk_controls}
     assert not any("tweak" in name for name in names)
+
+
+# --------------------------------------------------------- controls/solve split
+def test_a_custom_driver_is_what_the_solve_follows(build_context):
+    """The seam the leg needs: something built between the two phases."""
+    ctx = build_context("base", name="probe")
+    guides = [
+        tm.Joint.create(name="g%d" % index, position=position)
+        for index, position in enumerate([(0, 10, 0), (0, 5, 1), (0, 0, 0)])
+    ]
+    result = limb.build_limb_controls(ctx, guides, labels=("upper", "lower", "end"))
+
+    # Stand-in for the leg's reverse foot: a node under the IK tweak.
+    relay = tm.Transform.create(
+        name="relay", parent=result.ik_tweak.transform.long_name
+    )
+    limb.build_limb_solve(ctx, result, driver=relay)
+
+    # The soft-IK network measures to the relay, not to the tweak.
+    assert result.soft_ik is not None
+    upstream = (
+        tm.listConnections(
+            result.soft_ik.measure.node.long_name, source=True, destination=False
+        )
+        or []
+    )
+    names = [tm.resolve(node).name for node in upstream]
+    assert "relay" in names
+
+
+def test_the_default_driver_is_still_the_ik_tweak(build_context):
+    """Phase two with no driver must behave exactly as the single call does."""
+    ctx = build_context("base", name="probe")
+    guides = [
+        tm.Joint.create(name="h%d" % index, position=position)
+        for index, position in enumerate([(0, 10, 0), (0, 5, 1), (0, 0, 0)])
+    ]
+    result = limb.build_limb_controls(ctx, guides, labels=("upper", "lower", "end"))
+    limb.build_limb_solve(ctx, result)
+    assert result.ik_handle is not None
+    assert result.pole_control is not None

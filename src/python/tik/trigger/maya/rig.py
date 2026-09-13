@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any, Optional, Sequence
 
 import tik.maya as tm
-from tik.core.control_shapes import rotate_data
+from tik.core.control_shapes import mirror_data, rotate_data
 from tik.core.side import Side
 from tik.maya import naming
 from tik.maya.roles.controller import Controller
@@ -58,7 +58,7 @@ def mirror_orient(orient):
     return (x, -y, -z)
 
 
-def _curve_for(shape, orient=None):
+def _curve_for(shape, orient=None, mirrored=False):
     """Curve data for a shape name, resolved through the *pinned* library.
 
     The data, not the name: ``Controller.create`` and ``Controller.set_shape``
@@ -76,7 +76,12 @@ def _curve_for(shape, orient=None):
         data = shape_library.library().load(shape)
         if not data:
             return shape
-    return rotate_data(data, orient) if orient else data
+    data = rotate_data(data, orient) if orient else data
+    # The reflection comes last: a mirrored control's frame carries a 180
+    # degree roll, and only a reflection reproduces a mirrored picture inside
+    # it. Symmetric shapes are unchanged, so this is inert where it is not
+    # needed -- see `mirror_data`.
+    return mirror_data(data) if mirrored else data
 
 
 def node_of(value):
@@ -459,11 +464,19 @@ class ModuleRig:
         shape, size_multiplier = self.module.resolve_control_shape(name)
         effective_size = size * size_multiplier
         orient = self.module.control_orient_defaults(self.module.values()).get(name)
-        if orient and self.side is Side.RIGHT:
-            orient = mirror_orient(orient)
+        # Only a behaviour-mirrored control is mirrored at all: a world-aligned
+        # one is identical on both sides and has nothing to undo.
+        #
+        # The treatment is a REFLECTION of the curve, not a conjugation of the
+        # orientation. Conjugating (`mirror_orient`) rotates, and no rotation
+        # produces a mirror image -- it only looks right on shapes that happen
+        # to be symmetric under the frame's 180 degree roll. Circles, cubes and
+        # diamonds are, which is why the arm never exposed this; curved arrows
+        # and pins are not, and came out flipped.
+        mirrored = self.side is Side.RIGHT and mirror == tags.BEHAVIOUR
         controller = Controller.create(
             name=self.name(name, suffix="ctrl"),
-            shape=_curve_for(shape, orient),
+            shape=_curve_for(shape, orient, mirrored=mirrored),
             size=effective_size,
             color=color if color is not None else SIDE_COLORS[self.side.value],
             parent=(
@@ -495,6 +508,9 @@ class ModuleRig:
         controller.shape_name = shape
         controller.shape_size = effective_size
         controller.shape_orient = orient
+        #: Whether the curve was reflected for a mirrored side. Stored beside
+        #: the orient so a tweak can reproduce its master exactly.
+        controller.shape_mirrored = mirrored
         self.controllers.append(controller)
         return controller
 
@@ -524,9 +540,10 @@ class ModuleRig:
         shape = shape if shape is not None else getattr(main, "shape_name", "Circle")
         if size is None:
             size = getattr(main, "shape_size", 1.0) * scale
-        # The master's turn too: a bone-aligned control wants a bone-aligned
-        # tweak, and the master has already had its side mirrored in.
+        # The master's turn AND its reflection: a bone-aligned control wants a
+        # bone-aligned tweak, and a mirrored one wants a mirrored tweak.
         orient = getattr(main, "shape_orient", None)
+        mirrored = getattr(main, "shape_mirrored", False)
         tweak = self.controller(
             f"{role}_tweak",
             size=size,
@@ -536,10 +553,11 @@ class ModuleRig:
             offset=False,
             tier=None,
         )
-        tweak.set_shape(_curve_for(shape, orient), size=size)
+        tweak.set_shape(_curve_for(shape, orient, mirrored=mirrored), size=size)
         tweak.shape_name = shape
         tweak.shape_size = size
         tweak.shape_orient = orient
+        tweak.shape_mirrored = mirrored
         visible = main.transform["tweakVis"].create(
             "bool", default=False, keyable=False
         )

@@ -279,6 +279,39 @@ def _scale_data(data, scale):
     return data
 
 
+def mirror_data(data):
+    """A copy of ``data`` with every CV point-inverted through the origin.
+
+    Mirroring a control is a **reflection**, and no rotation can produce one --
+    ``det(-I) = -1``. A behaviour-mirrored side carries a 180 degree roll about
+    X in its *frame*, and conjugating the shape's rotation by that roll only
+    reproduces a mirrored picture for shapes that happen to be symmetric under
+    it. A circle, a cube and a diamond are; a curved arrow and a pin are not,
+    and come out looking wrong in a way no orientation value can fix.
+
+    With a behaviour-mirrored frame ``F_R = Rx(180) . F_L``, asking for a
+    mirrored world appearance ``F_R . S_R = M . F_L . S_L`` (with
+    ``M = diag(-1, 1, 1)``) solves to ``S_R = -S_L``: negate every coordinate.
+    Shapes that were already symmetric are unchanged by it, so this is safe to
+    apply to every behaviour-mirrored control rather than only the chiral ones.
+
+    Args:
+        data: Curve data, as ``load`` returns it.
+
+    Returns:
+        dict: A new dict; ``data`` is left alone.
+    """
+    mirrored = dict(data)
+    mirrored["curves"] = [
+        {
+            **curve,
+            "point": [(-x, -y, -z) for x, y, z in curve["point"]],
+        }
+        for curve in data.get("curves", [])
+    ]
+    return mirrored
+
+
 def rotate_data(data, euler):
     """A copy of ``data`` with every CV rotated by an XYZ ``euler``, in degrees.
 

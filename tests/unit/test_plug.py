@@ -27,6 +27,22 @@ def test_plug_getitem_returns_nested_plug():
     assert node["input[0]"]["inputGeometry"]
 
 
+def test_plug_membership_test_raises_type_error():
+    """``"x" in plug`` must be refused, not silently mean something.
+
+    Without ``__contains__``, Python falls back to legacy iteration --
+    ``plug[0]``, ``plug[1]``, ... -- and each of those builds a
+    ``Plug(node, "<attr>.<int>")``, which takes Maya down with an access
+    violation instead of raising. ``Plug.__contains__`` must refuse this
+    outright -- the identical footgun ``Node.__contains__`` already closes.
+    """
+    transform = cmds.createNode("transform", name="containsTestPlug")
+    node = Node(cmds.ls(transform, long=True)[0])
+    plug = node["translate"]
+    with pytest.raises(TypeError):
+        "translateX" in plug
+
+
 def test_plug_set_and_get_numeric_float_on_builtin_attr():
     """Test setting and getting a float value on a built-in attribute."""
     transform = cmds.createNode("transform", name="item")

@@ -27,6 +27,15 @@ from typing import Optional, Sequence
 import tik.maya as tm
 
 
+def node_of(value):
+    """The Transform behind a role, or ``value`` unchanged.
+
+    A local copy of ``rig.node_of``: importing it would point this system at
+    the Maya rig layer for two lines.
+    """
+    return getattr(value, "transform", value)
+
+
 @dataclass
 class LimbResult:
     """Everything a module needs after the limb is built."""
@@ -48,24 +57,30 @@ class LimbResult:
     hinge_axis: Optional[str] = None
     ik_tweak: object = None
     pole_tweak: object = None
+    #: Pole rest position, captured in the controls phase. It MUST be read
+    #: before the solve is wired: the pole and soft-IK constraints move the
+    #: chain, and every offset baked afterwards depends on this pose.
+    pole_rest: object = None
+    #: Segment labels, resolved. The solve phase names attributes from them.
+    labels: list = field(default_factory=list)
+    #: The extra name token, carried for the same reason.
+    name: str = ""
 
 
-def build_ikfk_limb(
+def build_limb_controls(
     rig,
     guides: Sequence,
     *,
     name: str = "",
     parent=None,
-    bind_joints: Optional[Sequence] = None,
     controller_size: Optional[float] = None,
-    soft_ik: bool = True,
-    stretch: bool = True,
-    squash: bool = True,
-    stretch_limit_default: float = 50.0,
-    pole_pin: bool = False,
     labels: Optional[Sequence[str]] = None,
 ) -> LimbResult:
-    """Build an IK/FK limb driving ``bind_joints``.
+    """Build the puppet chains and the IK/FK controllers.
+
+    The first half of :func:`build_ikfk_limb`. It is its own entry point so a
+    module can build something *from* the IK control and feed it back in as
+    the solve's driver -- which is what a reverse foot is.
 
     Args:
         rig: The module's ``ModuleRig``.
@@ -74,39 +89,71 @@ def build_ikfk_limb(
             ``rig.name`` already prefixes the instance name. Set it only to
             disambiguate a module that builds two limbs.
         parent: Transform the limb hangs from; defaults to ``rig.groups.socket``.
-        bind_joints: Bind joints to drive, one per guide. When omitted the
-            puppet is built but nothing is blended onto a deform skeleton.
         controller_size: Base controller size; derived from the limb length
             when omitted.
-        soft_ik: Build the soft-IK network. Always True for an arm.
-        stretch: Build the extend-side factor and its limit clamp.
-        squash: Build the compress-side factor.
-        stretch_limit_default: Default percentage for the ``stretchLimit`` attr.
-        pole_pin: Build the elbow pin override.
         labels: Segment labels; defaults to indices.
 
     Returns:
-        A :class:`LimbResult`.
+        A partially filled :class:`LimbResult`, for :func:`build_limb_solve`.
     """
     guides = list(guides)
     if len(guides) < 3:
-        raise ValueError("build_ikfk_limb needs at least three guides.")
+        raise ValueError("a limb needs at least three guides.")
     labels = list(labels) if labels else [str(index) for index in range(len(guides))]
     parent = parent if parent is not None else rig.groups.socket
     if controller_size is None:
-        controller_size = _derive_size(guides)
+        controller_size = derive_size(guides)
     result = LimbResult()
     result.size = controller_size
+    result.labels = list(labels)
+    result.name = name
     side_sign = rig.side_mult
 
     _build_chains(rig, guides, name, parent, side_sign, result)
     # Captured before the solve is wired: the pole and soft-IK constraints
     # move the chain, and every offset baked afterwards depends on this pose.
-    pole_rest = _pole_rest_position(result.ik_joints)
+    result.pole_rest = _pole_rest_position(result.ik_joints)
     _build_pole_base(rig, name, parent, result)
     _build_controls(rig, name, parent, controller_size, labels, guides, result)
+    return result
+
+
+def build_limb_solve(
+    rig,
+    result: LimbResult,
+    *,
+    driver=None,
+    bind_joints: Optional[Sequence] = None,
+    soft_ik: bool = True,
+    stretch: bool = True,
+    squash: bool = True,
+    stretch_limit_default: float = 50.0,
+    pole_pin: bool = False,
+) -> LimbResult:
+    """Wire the solve onto controls that :func:`build_limb_controls` made.
+
+    Args:
+        rig: The module's ``ModuleRig``.
+        result: What ``build_limb_controls`` returned.
+        driver: What the solve follows. ``None`` means ``result.ik_tweak``,
+            which is what keeps the single-call entry point unchanged. A
+            module with a rig between its IK control and its IK handle -- a
+            leg's reverse foot -- passes the bottom of that stack here.
+        bind_joints: Bind joints to drive, one per guide.
+        soft_ik: Build the soft-IK network.
+        stretch: Build the extend-side factor and its limit clamp.
+        squash: Build the compress-side factor.
+        stretch_limit_default: Default percentage for ``stretchLimit``.
+        pole_pin: Build the mid-joint pin override.
+
+    Returns:
+        The same :class:`LimbResult`, fully filled.
+    """
+    name = result.name
+    labels = result.labels
+    side_sign = rig.side_mult
     control = result.ik_control  # animator-facing attributes
-    driver = result.ik_tweak  # what the rig actually follows
+    driver = node_of(driver) if driver is not None else result.ik_tweak
 
     rig.separator(control, "segments_")
     segment_scales = [
@@ -135,11 +182,73 @@ def build_ikfk_limb(
         rig, name, stretch, squash, stretch_limit_default, control, driver, result
     )
     _build_pole(
-        rig, name, controller_size, pole_pin, control, driver, pole_rest, result
+        rig, name, result.size, pole_pin, control, driver, result.pole_rest, result
     )
     _build_visibility(rig, name, result)
     _blend_to_bind(rig, name, bind_joints, result)
     return result
+
+
+def build_ikfk_limb(
+    rig,
+    guides: Sequence,
+    *,
+    name: str = "",
+    parent=None,
+    bind_joints: Optional[Sequence] = None,
+    controller_size: Optional[float] = None,
+    soft_ik: bool = True,
+    stretch: bool = True,
+    squash: bool = True,
+    stretch_limit_default: float = 50.0,
+    pole_pin: bool = False,
+    labels: Optional[Sequence[str]] = None,
+) -> LimbResult:
+    """Build an IK/FK limb driving ``bind_joints``.
+
+    The two phases back to back, for a module with nothing to insert between
+    them. Arguments and behaviour are unchanged; see
+    :func:`build_limb_controls` and :func:`build_limb_solve`.
+
+    Args:
+        rig: The module's ``ModuleRig``.
+        guides: Guide nodes, root first. At least three.
+        name: Extra token for every created name; empty by default, since
+            ``rig.name`` already prefixes the instance name. Set it only to
+            disambiguate a module that builds two limbs.
+        parent: Transform the limb hangs from; defaults to ``rig.groups.socket``.
+        bind_joints: Bind joints to drive, one per guide. When omitted the
+            puppet is built but nothing is blended onto a deform skeleton.
+        controller_size: Base controller size; derived from the limb length
+            when omitted.
+        soft_ik: Build the soft-IK network. Always True for an arm.
+        stretch: Build the extend-side factor and its limit clamp.
+        squash: Build the compress-side factor.
+        stretch_limit_default: Default percentage for the ``stretchLimit`` attr.
+        pole_pin: Build the elbow pin override.
+        labels: Segment labels; defaults to indices.
+
+    Returns:
+        A :class:`LimbResult`.
+    """
+    result = build_limb_controls(
+        rig,
+        guides,
+        name=name,
+        parent=parent,
+        controller_size=controller_size,
+        labels=labels,
+    )
+    return build_limb_solve(
+        rig,
+        result,
+        bind_joints=bind_joints,
+        soft_ik=soft_ik,
+        stretch=stretch,
+        squash=squash,
+        stretch_limit_default=stretch_limit_default,
+        pole_pin=pole_pin,
+    )
 
 
 # --------------------------------------------------------------------- puppet
@@ -350,6 +459,53 @@ def _build_stretch(
         result.ik_lengths.add_factor((compress - 1.0) * squash_plug + 1.0)
 
 
+def _safe_twist_axis(base, target) -> str:
+    """Which of ``target``'s own axes is safest as the pole frame's twist ref.
+
+    ``AimFrame``'s twist-aware secondary mode rotates the frame so one of its
+    own axes tracks a world direction read off ``target`` -- its local Y axis
+    for ``twist_axis="X"``, its local X axis for ``"Y"``/``"Z"`` (the two
+    distinct choices this API offers; ``TWIST_TARGETS`` maps "Y" and "Z" to
+    the same reference). That tracking is a Gram-Schmidt orthogonalization
+    against the frame's aim axis (``base`` toward ``target``), which is
+    undefined -- and numerically unstable near the undefined point -- exactly
+    when the chosen reference is (nearly) parallel to that aim direction.
+
+    "X" is safe for a limb whose end guide is oriented along the bone (an
+    elbow reads the wrist's Y, perpendicular to the forearm the wrist's X
+    tracks) but wrong for a limb hanging straight onto an unrotated end guide
+    (a knee under a straight ankle: the ankle's own Y then points straight
+    back up the aim line -- exactly the degenerate case). Measured at build
+    time from the actual guide pose rather than hardcoded, so this adapts
+    to whatever the rigger's guides turn out to describe.
+
+    The two candidates are ``target``'s own orthonormal X and Y axes, so
+    ``x_dot**2 + y_dot**2 <= 1`` always: ``aim`` is a unit vector and X, Y
+    and ``target``'s own Z form a complete orthonormal basis, so by
+    Parseval's identity ``x_dot**2 + y_dot**2 + z_dot**2 == 1`` exactly, and
+    dropping the (non-negative) ``z_dot**2`` term only weakens that to
+    ``<=``. That forces ``min(x_dot, y_dot) <= 1/sqrt(2)``: whichever this
+    function picks is guaranteed at least 45 degrees off the aim, for *any*
+    input -- it can never land in the degenerate neighbourhood it exists to
+    avoid.
+
+    This is a **build-time** measurement, not a runtime guarantee: it reads
+    ``target``'s pose once, when the pole is built. Nothing stops an animator
+    from later posing the limb so the chosen reference axis swings parallel
+    to the aim direction anyway -- the twist-aware pole space was already
+    living with that risk (any fixed reference can be driven into it by a
+    large enough pose), and this function only fixes the one guaranteed,
+    static degeneracy: the rest pose itself landing on the singularity.
+    """
+    aim = target.world_position - base.world_position
+    if aim.length() < 1e-6:
+        return "X"
+    aim.normalize()
+    y_dot = abs(aim * target.world_axis("y"))
+    x_dot = abs(aim * target.world_axis("x"))
+    return "X" if y_dot <= x_dot else "Y"
+
+
 # ----------------------------------------------------------------------- pole
 def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -> None:
     """Pole controller in a twist-aware auto space blended against a rest space."""
@@ -359,7 +515,7 @@ def _build_pole(rig, name, size, pole_pin, control, driver, pole_rest, result) -
         result.pole_base,
         driver,
         driver,
-        twist_axis="X",
+        twist_axis=_safe_twist_axis(result.pole_base, driver),
         parent=rig.groups.rig,
         name=rig.name(name, "pole"),
     )
@@ -547,14 +703,6 @@ def limb_pivot_controls(
     }
 
 
-def _derive_size(joints: Sequence) -> float:
-    """Base controller size from the chain's rest length."""
-    total = 0.0
-    for first, second in zip(joints, joints[1:]):
-        total += first.distance_to(second)
-    return total * 0.15
-
-
 def _pole_rest_position(joints: Sequence):
     """World position for the pole, in the chain's own bend plane.
 
@@ -585,3 +733,38 @@ def _pole_rest_position(joints: Sequence):
     for first, second in zip(joints, joints[1:]):
         total += first.distance_to(second)
     return mid + direction * (total * 0.25)
+
+
+def derive_size(joints: Sequence) -> float:
+    """Base controller size from the chain's rest length."""
+    total = 0.0
+    for first, second in zip(joints, joints[1:]):
+        total += first.distance_to(second)
+    return total * 0.15
+
+
+def conventional_frames(rig, positions):
+    """A throwaway chain on the convention, to read orientations off.
+
+    X to the next joint, Y up -- so in a T-pose Y is up for *every* joint on
+    *both* sides, which is what lets the arm bend on a single rotation.
+
+    No ``reverse_aim`` / ``reverse_up``. ``_build_chains`` passes those for the
+    puppet because a mirrored-behaviour limb needs a negative ``translateX``
+    for ``ChainLengths`` to read; the deform skeleton has no such requirement,
+    and flipping its Y would put the right arm's bend axis upside down.
+
+    Read off a throwaway rather than oriented in place: ``cmds.joint
+    -orientJoint`` silently *skips* a joint that has non-zero rotations (a
+    warning, no error), and ``match=`` leaves the guide's rotation exactly
+    there. Copying the world rotation also keeps the orientation in ``rotate``
+    with ``jointOrient`` at zero, which is where ``match=`` always put it.
+    """
+    source = tm.Joint.chain(
+        [tuple(position) for position in positions],
+        name_pattern=rig.name("convention", "src{index}", suffix="jnt"),
+        parent=rig.groups.rig,
+        orient=False,
+    )
+    tm.Joint.orient_chain(source, aim_axis="x", up_axis="y")
+    return source

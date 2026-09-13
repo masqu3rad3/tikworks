@@ -325,6 +325,77 @@ it created, minus tweaks and pivots. A control the module forgot to declare is i
 in the anim-space table — which is exactly how `fkchain` and `ribbon` once
 shipped with animation spaces that could not be used at all.
 
+### Control Shape Vocabulary
+
+The shape is not decoration: it is the fastest statement a rig makes about what
+a control *affords*. An animator who can tell a hinge from a ball joint without
+selecting anything is reading the shape. So shapes are a **soft convention** --
+a module author picks from a small vocabulary rather than from all 86 curves,
+and a rigger may still override any of it per instance through the Shapes table.
+
+It cannot be a preference. `control_shapes` is on the build path, and
+*preferences never reach the rig* (above): two artists must build the same rig
+from the same `.tr` whatever their settings say.
+
+**Precedence -- the first tier that matches wins.**
+
+| # | Rule | Shape |
+|---|---|---|
+| 1 | The pivot's *location* matters and must be visible (toes, fingers) | `SpherePin` |
+| 2 | Limb attachment (`collar`, `thigh`) | `CurvedCircle` |
+| 2 | Translate-only target (`pole`) | `Diamond` |
+| 2 | Member of an FK chain, whatever its constraints | `Circle` |
+| 3 | Translates *and* rotates freely (IK handles, `root`) | `Cube` |
+| 3 | Rotates about three axes | `Circle` |
+| 3 | Rotates about two axes | `DualCurvedArrow` |
+| 3 | Rotates about one axis | `CurvedArrow` |
+
+Tier 2 is identity, tier 3 is capability. FK is listed in tier 2 deliberately:
+an elbow is a hinge and rotates about one axis, but it stays a `Circle` because
+reading the FK chain as one family matters more than marking the hinge. `root`
+needs no entry -- it rotates freely, so tier 3 already gives it a `Circle`.
+
+#### Orienting a shape
+
+Shapes are authored in a fixed pose and must be turned to match the control.
+Each has a **distinguished axis** and -- the part that is easy to get wrong --
+that axis means different things for different shapes:
+
+| Shape | Distinguished axis | Aligns to |
+|---|---|---|
+| `Circle` | normal, **+Y** | the rotation axis |
+| `CurvedArrow` | normal, **+Z** | the rotation axis |
+| `DualCurvedArrow` | *unused* axis, **+Y** | the **locked** axis |
+| `SpherePin`, `CubePin` | stalk, **+Y** | the joint's up vector |
+| `Cube`, `Diamond` | none | nothing -- never rotate them |
+
+`DualCurvedArrow` is two arcs at right angles: it depicts the two axes a control
+*can* turn about, so what you align is the third one. And a pin is not a ring --
+its stalk shows where the control pivots *from*, which is the joint's up vector,
+never the rotation axis.
+
+Two worked examples on a conventionally oriented joint (X down the bone, Y up,
+Z to the side):
+
+- An FK **circle** must encircle the bone, so its `+Y` normal goes onto the
+  joint's `X`: `Rz(-90)`, since `(0,1,0)` rotated `-90` about Z is `(1,0,0)`.
+  This is what `limb_control_orients` returns for every FK role.
+- A **pin** on that same joint must stand up off the bone, so its stalk stays on
+  `+Y` and it takes **no rotation at all**. Applying the circle's `Rz(-90)` lays
+  the pin flat along the bone -- the 90-degree error this table exists to stop.
+
+Orientations are declared in `control_orients` and baked into the CVs at build
+time, so the controller's transform stays aligned to its joint. They are
+module-level: which way a shape faces is the module author's business, and a
+rigger-facing column would crowd the shape table.
+
+**Known gap.** `control_shapes` is overridable per instance but `control_orients`
+is not, and the builder applies the module's orientation to whatever shape
+resolved. Overriding a `CurvedArrow` (normal Z) with a `Circle` (normal Y)
+therefore keeps a correction meant for the other shape. Documented rather than
+fixed: closing it means the builder deriving the rotation from the resolved
+shape, which is a manifest change.
+
 ### Animator switches
 
 A switch changes what a control *does*, and the pose survives it. That is the

@@ -227,6 +227,20 @@ def test_node_m_obj_re_resolves_when_stale() -> None:
     assert node.name == "staleNode"
 
 
+def test_membership_test_raises_type_error():
+    """``"x" in node`` must be refused, not silently mean something.
+
+    Without ``__contains__``, Python falls back to legacy iteration --
+    ``node[0]``, ``node[1]``, ... -- and each of those builds a
+    ``Plug(node, <int>)``, which takes Maya down with an access violation
+    instead of raising. ``Node.__contains__`` must refuse this outright.
+    """
+    transform = cmds.createNode("transform", name="containsTest")
+    node = Node(cmds.ls(transform, long=True)[0])
+    with pytest.raises(TypeError):
+        "translateX" in node
+
+
 def test_delete_history_removes_construction_history():
     """Test delete_history removes construction history from node."""
     # Create a mesh with construction history

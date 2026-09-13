@@ -190,6 +190,25 @@ class Node:
         """Get a Plug for the given attribute name."""
         return Plug(self, attr)
 
+    def __contains__(self, _):
+        """Refuse membership testing -- it crashes Maya, it does not fail.
+
+        ``Node`` defines ``__getitem__`` but neither ``__contains__`` nor
+        ``__iter__``, so ``"x" in node`` falls back to Python's legacy
+        iteration protocol: it calls ``node[0]``, ``node[1]``, ... until
+        ``IndexError``. Each of those builds a ``Plug(self, <int>)``, and
+        Maya dereferencing an integer as an attribute name takes an access
+        violation -- the process segfaults instead of raising, which is far
+        worse than a wrong answer. There is no sane attribute-name meaning
+        to give this expression either, so it is refused outright rather
+        than implemented: test against ``node.name`` instead.
+        """
+        raise TypeError(
+            "membership testing on a Node is not supported and crashes "
+            "Maya (falls back to integer indexing via __getitem__); "
+            'test against `node.name` instead, e.g. `"x" in node.name`.'
+        )
+
     def __str__(self):
         """Return the node's name as its string representation."""
         return self.name

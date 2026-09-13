@@ -18,8 +18,6 @@ from tik.trigger.core import ParentRef, get_module
 from tik.trigger.guides import GuideScene
 from tik.trigger.maya import Builder, tags
 
-MODULE_TYPES = ("base", "fkchain", "arm")
-
 
 def _solo(module_type):
     """Build one unconnected instance and return its context."""
@@ -178,7 +176,7 @@ def test_connected_module_leaves_its_bind_group_empty(connected_rig):
     assert children == [], f"bind_grp should be empty when connected, holds {children}"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_no_controller_outside_the_control_group(module_type):
     """Rule 1.3: control_grp holds controllers and their offset groups only."""
     ctx = _solo(module_type)
@@ -189,7 +187,7 @@ def test_no_controller_outside_the_control_group(module_type):
         ), f"{controller.transform.name} is outside {control_group}"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_every_output_is_a_tagged_bind_joint(module_type):
     """Rule 1.5: ctx.bind_parent reads outputs, so they must be bind joints."""
     ctx = _solo(module_type)
@@ -199,11 +197,18 @@ def test_every_output_is_a_tagged_bind_joint(module_type):
         assert node in ctx.deform_joints, f"output '{name}' is not a bind joint"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_every_controller_declares_a_mirror_rule(module_type):
     """Rule 1.6: a pose-mirror tool needs the rule per control."""
     ctx = _solo(module_type)
-    assert ctx.controllers, f"'{module_type}' produced no controllers"
+    # Not `assert ctx.controllers`: a module may legitimately build none
+    # (twist's joints ride an aimed frame), and the rule below is about the
+    # controllers that exist, not about there being any.
+    declared = get_module(module_type).control_names(ctx.instance.settings)
+    assert bool(ctx.controllers) == bool(declared), (
+        f"'{module_type}' declares {len(declared)} controls and built "
+        f"{len(ctx.controllers)}"
+    )
     for controller in ctx.controllers:
         rule = controller.transform.meta[tags.MIRROR]
         assert rule in (
@@ -212,7 +217,7 @@ def test_every_controller_declares_a_mirror_rule(module_type):
         ), f"{controller.transform.name} declares mirror rule {rule!r}"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_module_has_exactly_the_four_groups(module_type):
     """Rule 1.3: socket / control / rig / bind, and nothing else."""
     ctx = _solo(module_type)
@@ -231,7 +236,7 @@ def test_module_has_exactly_the_four_groups(module_type):
     }
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_bind_joints_carry_live_trs(module_type):
     """Rule 1.4: bind joints bake and export, so TRS must be driven.
 
@@ -244,7 +249,7 @@ def test_bind_joints_carry_live_trs(module_type):
         ), f"{joint.name} is driven through offsetParentMatrix"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_module_builds_without_a_cycle(module_type):
     _solo(module_type)
     cmds.dgdirty(allPlugs=True)
@@ -252,7 +257,7 @@ def test_module_builds_without_a_cycle(module_type):
     assert not cycles, f"'{module_type}' evaluates with a cycle: {cycles}"
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_module_parents_everything_it_creates(module_type):
     """Rule 1.7: nothing a module builds is left at the world root."""
     cmds.file(new=True, force=True)
@@ -273,7 +278,7 @@ def test_module_parents_everything_it_creates(module_type):
 
 
 # ------------------------------------------------- sockets from declarations
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_every_declared_input_gets_a_socket(module_type):
     """Declaring an input is what creates its socket; a module cannot forget."""
     rig = _solo(module_type)
@@ -310,7 +315,7 @@ def test_space_inputs_get_no_socket():
     assert "ik_world" not in rig.attachments
 
 
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_every_top_level_controller_has_an_offset_group(module_type):
     """A control that hangs from control_grp gets its offset group for free.
 
@@ -318,7 +323,14 @@ def test_every_top_level_controller_has_an_offset_group(module_type):
     refines, so it rides along and needs no offset of its own.
     """
     rig = _solo(module_type)
-    assert rig.controllers
+    # Not `assert rig.controllers`: a module may legitimately build none
+    # (twist's joints ride an aimed frame), and the rule below is about the
+    # controllers that exist, not about there being any.
+    declared = get_module(module_type).control_names(rig.instance.settings)
+    assert bool(rig.controllers) == bool(declared), (
+        f"'{module_type}' declares {len(declared)} controls and built "
+        f"{len(rig.controllers)}"
+    )
     tweaks = {
         control.transform.long_name
         for control in rig.controllers
@@ -337,7 +349,7 @@ def test_every_top_level_controller_has_an_offset_group(module_type):
 
 
 # ------------------------------------------------------------------- tiers
-@pytest.mark.parametrize("module_type", MODULE_TYPES)
+@pytest.mark.parametrize("module_type", _shipped_module_types())
 def test_every_controller_carries_a_valid_tier(module_type):
     """Rule: a tweak has no tier; everything else declares one of TIERS."""
     from tik.trigger.core import TIERS
@@ -600,3 +612,105 @@ def test_a_tweak_inherits_its_master_orientation():
         if role and role.endswith("_tweak"):
             master = by_role[role[: -len("_tweak")]]
             assert controller.shape_orient == master.shape_orient, role
+
+
+def test_only_a_behaviour_mirrored_control_is_reflected(build_context):
+    """Mirroring a control is a reflection, and only a rotation was applied.
+
+    A behaviour-mirrored side carries a 180 degree roll about X in its frame.
+    The old treatment conjugated the shape's ORIENTATION by that roll, which
+    reproduces a mirrored picture only for shapes symmetric under it -- circles,
+    cubes and diamonds are, which is why the arm never exposed the bug, and
+    curved arrows and pins are not, so the leg's foot controls came out flipped.
+    `det(-I) = -1`: no rotation is a reflection.
+
+    So the curve itself is reflected, and the declared orientation is stored
+    unchanged. A world-aligned control is identical on both sides and is not
+    reflected at all.
+    """
+    turn = (0.0, 0.0, -90.0)
+    ctx = build_context("control", name="probe", side="R")
+    module_cls = type(ctx.module)
+    previous = module_cls.control_orients
+    module_cls.control_orients = {"worldish": turn, "boney": turn}
+    try:
+        world = ctx.controller("worldish", mirror="world")
+        boney = ctx.controller("boney", mirror="behaviour")
+    finally:
+        module_cls.control_orients = previous
+
+    # The declared orientation survives verbatim on both -- it is no longer
+    # the thing that carries the mirroring.
+    assert world.shape_orient == turn
+    assert boney.shape_orient == turn
+
+    # Only the behaviour-mirrored one is reflected.
+    assert world.shape_mirrored is False
+    assert boney.shape_mirrored is True
+
+
+def test_a_reflected_shape_is_the_mirror_of_its_unreflected_self(build_context):
+    """The reflection is real, and it is the right one.
+
+    Point inversion, not a rotation: with a behaviour-mirrored frame
+    `F_R = Rx(180) . F_L`, asking for `F_R . S_R = M . F_L . S_L` solves to
+    `S_R = -S_L`. Asserted on the curve data rather than through a build, so
+    it holds regardless of what any module declares.
+    """
+    from tik.core.control_shapes import ControlShapeLibrary, mirror_data
+
+    data = ControlShapeLibrary.get_instance().load("CurvedArrow")
+    assert data, "CurvedArrow must exist for this test to mean anything"
+    flipped = mirror_data(data)
+
+    original = [tuple(p) for c in data["curves"] for p in c["point"]]
+    reflected = [tuple(p) for c in flipped["curves"] for p in c["point"]]
+    assert reflected == [(-x, -y, -z) for x, y, z in original]
+
+    # ...and the source is untouched, so a cached library entry cannot rot.
+    assert [tuple(p) for c in data["curves"] for p in c["point"]] == original
+
+
+#: The control shape vocabulary from AI/coding_rules.md. A module picks from
+#: this handful rather than from all 86 curves in the library, so that a shape
+#: is a statement about what a control affords rather than a free choice.
+SHAPE_VOCABULARY = {
+    "SpherePin",  # the pivot's location matters and must be visible
+    "CubePin",  # ditto, where a square head reads better
+    "CurvedCircle",  # limb attachment (collar, thigh)
+    "Diamond",  # translate-only target (pole)
+    "Circle",  # FK chain member, or rotates about three axes
+    "Cube",  # translates and rotates freely
+    "DualCurvedArrow",  # rotates about two axes
+    "CurvedArrow",  # rotates about one axis
+}
+
+
+@pytest.mark.parametrize("module_type", _shipped_module_types())
+def test_every_declared_shape_comes_from_the_vocabulary(module_type):
+    """Rule: shapes are drawn from a small, meaningful set.
+
+    A soft convention, not a hard one -- a rigger still overrides any control's
+    shape per instance through the Shapes table, and this says nothing about
+    which vocabulary entry a new control should get. What it catches is drift:
+    a module reaching into the 86-curve library for something expressive, so
+    that the shape stops telling an animator what the control affords.
+
+    `AI/coding_rules.md` carries the precedence rules and the orientation
+    table that goes with them.
+    """
+    module_cls = get_module(module_type)
+    for settings in CONTROL_VARIATIONS.get(module_type, [{}]):
+        instance = module_cls(settings=settings)
+        declared = module_cls.control_shape_defaults(instance.values())
+        outside = sorted(
+            "%s -> %s" % (role, shape)
+            for role, shape in declared.items()
+            if shape not in SHAPE_VOCABULARY
+        )
+        assert not outside, (
+            "%s declares shapes outside the vocabulary: %s. Either use a "
+            "vocabulary shape or add the new one to AI/coding_rules.md and "
+            "SHAPE_VOCABULARY together, with the rule it serves."
+            % (module_type, outside)
+        )
