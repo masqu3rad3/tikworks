@@ -406,7 +406,7 @@ def test_every_declared_channel_reaches_its_pivot(build_context):
     for control_role, channels in foot_system.CONTROL_CHANNELS.items():
         for channel, pivot_role in channels.items():
             if control_role == "bank":
-                continue  # two clamps, not a direct sum -- see Task 10
+                continue  # two clamps, not a direct sum -- see build_foot_bank
             result.controls[control_role].transform[channel].value = 7.0
             assert result.pivots[pivot_role][channel].value == pytest.approx(
                 7.0, abs=1e-4
@@ -419,11 +419,11 @@ def test_a_control_sits_exactly_on_its_twin_pivot(build_context):
 
     A test that only checked position (e.g. ``distance_to``) would pass even
     if the control's world rotation drifted from its pivot -- and a drifted
-    rotation is exactly what the brief's snap-then-align-then-zero bug would
-    have produced, since ``offset.snap_to(control.transform)`` moves the
-    parent the control is about to be re-parented under. Checking both axes
-    and position together is what makes this a real lockstep check rather
-    than a coincidence.
+    rotation is exactly what a snap-then-align-then-zero bug would produce,
+    since ``offset.snap_to(control.transform)`` moves the parent the control
+    is about to be re-parented under. Checking both axes and position
+    together is what makes this a real lockstep check rather than a
+    coincidence.
     """
     ctx = build_context("leg", name="probe")
     result = _built_foot(ctx)
@@ -555,7 +555,7 @@ def test_the_foot_chains_make_two_sc_handles(build_context):
 
 
 def test_build_foot_chains_never_touches_the_limbs_last_ik_joint(build_context):
-    """The correction this task exists to make: no SC handle on the RP chain.
+    """No SC handle on the RP chain.
 
     Starting an ``ikSCsolver`` on ``limb_result.ik_joints[-1]`` would contend
     with the limb's own ``MatrixConstraint`` for that joint's rotate channels.
@@ -662,7 +662,7 @@ def test_bank_behaviour_is_mirrored_between_the_two_feet(mirrored_pair):
 def test_a_mirrored_foot_rests_and_rolls_exactly_like_the_source(mirrored_pair):
     """Both sides of a real, two-legged build -- not just the isolated frame.
 
-    Regression test for a defect found while completing this task: every
+    Regression test for a defect found while building this module: every
     pivot's world rotation is proven behaviour-mirrored in isolation (the
     tests above), but ``build_foot_bank`` summed the bank control's own
     OFFSET group into the live bank value -- and on the mirrored side that
@@ -708,8 +708,9 @@ def test_fk_ball_mirrors_on_every_axis_not_just_the_one_that_reads_zero(mirrored
 
     By spec 6.3's own algebra a local rotation only mirrors correctly when
     its world axis is the mirror normal. ``fk_ball``'s local Z happens to
-    map to world -X, so driving ``rotateZ`` alone (as the task's first pass
-    did) reads as correct BY COINCIDENCE -- rotateX and rotateY do not, and
+    map to world -X, so driving ``rotateZ`` alone (as an earlier, incomplete
+    version of this test did) reads as correct BY COINCIDENCE -- rotateX
+    and rotateY do not, and
     both are unlocked on the control, so an animator can reach them. This is
     exactly the trap spec 6.3 names: "a claim proven only where its
     mechanism is inert is not proven." Driving all three channels here is
@@ -744,37 +745,51 @@ def test_fk_ball_mirrors_on_every_axis_not_just_the_one_that_reads_zero(mirrored
         ctx.controller_by_role("ik").transform["ikFk"].value = 1.0
 
 
-def test_the_ball_and_toe_blend_on_the_limb_switch(scene):
-    """One ikFk value covers the whole leg, ankle and foot alike."""
-    from tik.trigger.core import ParentRef, get_module
-    from tik.trigger.maya import Builder
+def test_the_ball_and_toe_blend_on_the_limb_switch(build_context):
+    """``ikFk`` at 0 and 1 puts the ball and toe bind joints exactly where FK
+    and IK respectively say (spec 10.3), not merely "the two switch extremes
+    differ".
 
-    body = scene.create_guides(get_module("base")(name="body"))
-    leg = scene.create_guides(
-        get_module("leg")(name="leg", side="L"),
-        parent=ParentRef(body.instance_id, "root"),
+    The earlier version of this test asserted only
+    ``fk_driven * ik_driven < 0.999`` on the ball's world X axis -- which an
+    inverted blend weight (``MatrixBlend(ik_joint, [fk_joint], [switch])``
+    instead of the correct ``MatrixBlend(fk_joint, [ik_joint], [switch])``)
+    would satisfy just as readily: the two sampled orientations still
+    differ, they are simply attached to the wrong end of the switch. Direct
+    positional equality against ``result.ball_joints``/``toe_joints`` --
+    which ``build_foot_chains`` already exposes -- catches that: it fails
+    immediately if the extremes are swapped, because the bind joint would
+    then sit on the *other* joint's position at each switch value.
+    """
+    ctx = build_context("leg", name="probe")
+    result = _built_foot(ctx)
+    guides = _foot_guides()
+    guides["toe"] = tm.Joint.create(name="guide_toe", position=(2.0, 0.05, 2.4))
+
+    limb_result = _built_limb(ctx)
+    bind = [
+        tm.Joint.create(name="bind_ball", position=(2, 0.25, 1.3)),
+        tm.Joint.create(name="bind_toe", position=(2, 0.05, 2.4)),
+    ]
+    foot_system.build_foot_chains(
+        ctx, result, limb_result, guides=guides, bind_joints=bind, size=1.0
     )
-    for role, (x, y, z) in LEG_POSES.items():
-        cmds.xform(
-            scene.guide_node(leg.instance_id, role).long_name, ws=True, t=(x, y, z)
-        )
-    ctx = (
-        Builder().build(document=scene.document, afterlife="keep").rigs[leg.instance_id]
-    )
+    ball_bind, toe_bind = bind
 
-    switch = ctx.controller_by_role("ik").transform["ikFk"]
-    fk_ball = ctx.controller_by_role("fk_ball")
+    # Move the FK ball off the IK ball's position: at rest the two coincide
+    # (both are set to the same guide position), so a positional check could
+    # not tell a correct blend from a swapped one without a real difference
+    # to attribute to the right side.
+    ctx.controller_by_role("fk_ball").transform["rotateZ"].value = 25.0
 
+    switch = limb_result.switch_plug
     switch.value = 0.0
-    fk_ball.transform["rotateZ"].value = 25.0
-    fk_driven = ctx.outputs["ball"].world_axis("x")
+    assert ball_bind.distance_to(result.ball_joints[0]) == pytest.approx(0.0, abs=1e-4)
+    assert toe_bind.distance_to(result.toe_joints[0]) == pytest.approx(0.0, abs=1e-4)
 
     switch.value = 1.0
-    ik_driven = ctx.outputs["ball"].world_axis("x")
-
-    assert (
-        fk_driven * ik_driven
-    ) < 0.999, "at ikFk 0 the ball must follow the FK control, at 1 it must not"
+    assert ball_bind.distance_to(result.ball_joints[1]) == pytest.approx(0.0, abs=1e-4)
+    assert toe_bind.distance_to(result.toe_joints[1]) == pytest.approx(0.0, abs=1e-4)
 
 
 def test_ikfk_is_one_switch_for_the_whole_leg(scene):

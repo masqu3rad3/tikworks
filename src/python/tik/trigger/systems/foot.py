@@ -14,7 +14,7 @@ Two parallel hierarchies, and they stay in lockstep by construction::
             heel                             ball_spin_ctrl
               ball_spin                        toe_ctrl
                 toe                              ball_ctrl
-                  ball_roll                      toe_wiggle_ctrl
+                  ball_roll                        toe_wiggle_ctrl
                     ankle_driver
                   toe_wiggle
 
@@ -57,7 +57,6 @@ auto-roll, none anywhere.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 import tik.maya as tm
 
@@ -110,10 +109,7 @@ def foot_frame(rig, guides: dict, *, parent=None, name: str = "foot"):
     in with no side term. ``aim_at`` bakes plain rotation values, so the
     frame is static once created.
     """
-    frame = tm.Transform.create(
-        name=rig.name(name, "frame", suffix="grp"),
-        parent=parent.long_name if parent is not None else rig.groups.rig.long_name,
-    )
+    frame = rig.group(name, "frame", under=parent if parent is not None else "rig")
     frame.snap_to(guides["heel"], rotation=False)
     aim, up = ((0, 0, -1), (0, -1, 0)) if rig.side_mult < 0 else ((0, 0, 1), (0, 1, 0))
     frame.aim_at(
@@ -181,9 +177,10 @@ def build_foot_pivots(rig, *, parent, guides: dict, name: str = "foot") -> FootR
     return result
 
 
-#: Which controller channel drives which pivot channel. The single place the
-#: mapping lives -- the proxy names in ``PROXIES`` key off it, so a channel
-#: cannot be wired one way and proxied another.
+#: Which controller channel drives which pivot channel. ``PROXIES`` below is
+#: an independent literal, not derived from this table -- the two staying in
+#: step is a real invariant, but one guarded by
+#: ``test_the_proxy_names_match_the_channel_table``, not by construction.
 CONTROL_CHANNELS = {
     "bank": {"rotateX": "bank_in"},  # special-cased: two clamped pivots
     "heel": {"rotateX": "heel", "rotateY": "heel"},
@@ -215,9 +212,7 @@ def build_foot_controls(
     result: FootResult,
     *,
     size: float,
-    guides: Optional[dict] = None,
     parent=None,
-    name: str = "foot",
 ) -> FootResult:
     """Build the controller chain that mirrors the pivot stack.
 
@@ -236,9 +231,18 @@ def build_foot_controls(
 
     ``tier="secondary"`` puts all six behind the rig's ``visibilities_ctrl``,
     so an animator who prefers the proxy attributes never sees them.
+
+    Every rotate axis ``CONTROL_CHANNELS[role]`` does not drive is locked
+    alongside the translate/scale/visibility channels: ``CONTROL_CHAIN``
+    nests these controls linearly, so an unlocked, undriven axis on one
+    control turns every control below it off its twin pivot while the
+    pivots themselves stay put -- the detachment spec sections 6.2 and 6.4
+    describe for the one channel each singles out. Deriving the lock list
+    from ``CONTROL_CHANNELS`` rather than hardcoding it is what keeps the
+    two from drifting apart.
     """
-    guides = guides if guides is not None else {}
     under = parent if parent is not None else rig.groups.control
+    rotate_channel_names = {"rotateX": "rx", "rotateY": "ry", "rotateZ": "rz"}
     for role in CONTROL_CHAIN:
         control = rig.controller(
             role,
@@ -248,7 +252,11 @@ def build_foot_controls(
             mirror="behaviour",
             tier="secondary",
         )
-        for channel in ("tx", "ty", "tz", "sx", "sy", "sz", "v"):
+        driven = {rotate_channel_names[channel] for channel in CONTROL_CHANNELS[role]}
+        undriven_rotates = [
+            channel for channel in ("rx", "ry", "rz") if channel not in driven
+        ]
+        for channel in ("tx", "ty", "tz", *undriven_rotates, "sx", "sy", "sz", "v"):
             plug = control[channel]
             plug.locked = True
             plug.visible = False
@@ -283,8 +291,8 @@ def build_foot_chains(
     """Extend both puppet chains with a ball and a toe, and blend them.
 
     The limb solves three joints; a foot has five. The IK side does **not**
-    start its two SC handles on ``limb_result.ik_joints[-1]``: that joint's
-    rotation is already the output of the limb's own
+    start its two SC handles on ``limb_result.ik_joints[-1]`` directly: that
+    joint's rotation is already the output of the limb's own
     ``MatrixConstraint(driver, ik_joints[-1], skip_translate="xyz",
     skip_scale="xyz")`` (``build_limb_solve``), and a second solve rooted
     there would contend with it for the same channels. Instead a fresh
@@ -293,6 +301,25 @@ def build_foot_chains(
     already lives -- and both SC handles run inside that new joint:
     ``ik_ankle -> ik_ball`` and ``ik_ball -> ik_toe``. The limb's RP chain is
     left entirely alone; nothing here writes to it.
+
+    ``ik_ankle`` needs both halves of ``ankle_driver`` and neither alone is
+    enough. Its *orientation* has to come from ``ankle_driver`` -- the
+    reverse foot's own pivot stack -- which is what makes rolling onto the
+    toe twist the ball and toe along with the ankle, the knee and the hip.
+    But ``ankle_driver`` rigidly follows the IK control (it descends from
+    ``parent`` in ``build_foot_pivots``, upstream of any solve), and the
+    limb's actual solved ankle does not: at the shipped ``stretch``/
+    ``softIk`` defaults the soft-IK goal saturates at chain length
+    (``SoftIk._build_curve`` / ``_build_goal`` in ``systems/limb.py``), so
+    past full reach the RP chain's ankle stops short of wherever
+    ``ankle_driver`` keeps going. Parenting ``ik_ankle`` under
+    ``ankle_driver`` and stopping there would let the ball and toe keep
+    travelling with the control while the shin stops short -- the foot
+    tears off the leg. A translate-only ``MatrixConstraint`` from
+    ``limb_result.ik_joints[-1]`` (the limb's own solved ankle) pins
+    ``ik_ankle``'s *position* to where the leg actually ends up, while its
+    *rotation* still comes from its parent, so the reverse foot keeps
+    steering it.
 
     Every created joint under a non-identity parent gets its world position
     set explicitly (``.world_position = ...``) rather than through
@@ -343,9 +370,20 @@ def build_foot_chains(
     # solve), not under the limb's last IK joint (whose rotation is already
     # spoken for). No offset is set here: a freshly parented joint with no
     # translate sits exactly at its parent's world position, which is
-    # exactly where the ankle driver already is.
+    # exactly where the ankle driver already is -- at rest. Past full reach
+    # ``ankle_driver`` and the limb's actual solved ankle part ways (soft IK
+    # saturates the goal at chain length; ``ankle_driver`` does not), so a
+    # translate-only constraint below pins this joint's position to the
+    # solved ankle while its rotation still comes from its parent.
     ik_ankle = tm.Joint.create(
         name=rig.name(name, "ikAnkle", suffix="jnt"), parent=result.ankle_driver
+    )
+    tm.MatrixConstraint.create(
+        limb_result.ik_joints[-1],
+        ik_ankle,
+        maintain_offset=True,
+        skip_rotate="xyz",
+        skip_scale="xyz",
     )
     ik_ball = tm.Joint.create(
         name=rig.name(name, "ikBall", suffix="jnt"), parent=ik_ankle
@@ -466,7 +504,7 @@ def build_foot_proxies(rig, result: FootResult, control) -> None:
         )
 
 
-def build_foot_bank(rig, result: FootResult, *, name: str = "foot") -> FootResult:
+def build_foot_bank(rig, result: FootResult) -> FootResult:
     """Split the bank control's roll across the two edge pivots.
 
     Two clamps, not the legacy's pair of set-driven keys: the relationship is
@@ -506,9 +544,7 @@ def build_foot_bank(rig, result: FootResult, *, name: str = "foot") -> FootResul
     return result
 
 
-def build_foot_roll(
-    rig, result: FootResult, control, *, overlap: float, name: str = "foot"
-) -> None:
+def build_foot_roll(rig, result: FootResult, control, *, overlap: float) -> None:
     """One value walking the foot through heel, flat, ball peel and toe-off.
 
     ``footRoll`` is sliced three ways and the slices always sum back to it::
@@ -521,9 +557,14 @@ def build_foot_roll(
     That is a quadratic smooth-minimum. Outside ``[b-w, b+w]`` it is exactly
     ``min(r, b)``; at ``w == 0`` it is the hard break; at ``r == b`` the ball
     sits ``0.25w`` short and the toe has already taken that up, which is what
-    makes the handover an *overlap* rather than a rounded corner. ``toe >= 0``
-    everywhere, because inside the band ``ball <= r`` reduces to ``b - r <= w``
-    -- the band's own definition.
+    makes the handover an *overlap* rather than a rounded corner. Inside the
+    band, writing ``x = r - b`` collapses ``toe`` to the closed form
+    ``toe = (x + w)^2 / (4w)`` -- a perfect square over a positive
+    denominator, so ``toe >= 0`` everywhere is immediate, no inequality
+    argument needed. Differentiating gives ``d(toe)/dr = (x + w) / (2w)``,
+    which is ``0`` at ``x = -w`` and ``1`` at ``x = +w`` -- exactly the
+    slopes ``toe`` has outside the band -- so the same closed form also
+    carries the C1-continuity proof for free.
 
     A blend *toward* the break was tried first and overshoots: at
     ``r=25, b=30, w=10`` it yields ``toe = -0.78``, rolling the toe backwards
@@ -545,7 +586,6 @@ def build_foot_roll(
         result: The foot, after ``build_foot_controls``.
         control: The controller the two attributes appear on.
         overlap: Degrees either side of ``rollBreak``. 0 is a hard switch.
-        name: Extra name token.
     """
     rig.separator(control, "roll_")
     roll = control.transform["footRoll"].create("float", default=0.0)
@@ -560,7 +600,7 @@ def build_foot_roll(
         # lerp(self, other, w) == self + (other - self) * w, so this is
         # lerp(b, r, h) -- b at h=0, r at h=1.
         eased = brk.lerp(roll, weight)
-        ball = (eased - weight * (weight * -1.0 + 1.0) * overlap).maximum(0.0)
+        ball = (eased - weight * (1.0 - weight) * overlap).maximum(0.0)
 
     heel = roll.minimum(0.0)
     toe = roll - ball - heel

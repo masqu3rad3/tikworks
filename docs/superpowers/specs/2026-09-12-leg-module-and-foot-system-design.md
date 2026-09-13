@@ -151,11 +151,12 @@ def build_limb_solve(rig, result, *, driver=None, bind_joints=None, soft_ik=True
                      pole_pin=False) -> LimbResult
 ```
 
-`driver=None` means `result.ik_tweak`, which is what makes the arm's behaviour identical. Two
-values that phase one computes and phase two needs move onto `LimbResult`: `pole_rest` and
-`parent`. `pole_rest` **must** be captured in phase one — it is read before the solve is wired
-precisely because the pole and soft-IK constraints move the chain, and every offset baked
-afterwards depends on that untouched pose.
+`driver=None` means `result.ik_tweak`, which is what makes the arm's behaviour identical. One
+value that phase one computes and phase two needs moves onto `LimbResult`: `pole_rest`. It
+**must** be captured in phase one — it is read before the solve is wired precisely because the
+pole and soft-IK constraints move the chain, and every offset baked afterwards depends on that
+untouched pose. (`parent` was considered for the same treatment and was not needed: each phase
+already receives it directly as an argument.)
 
 `build_ikfk_limb` keeps its signature and becomes six lines. **The arm is not edited.** The
 existing `test_arm_trigger.py`, `test_limb_system.py` and `test_module_ground_rules.py` are the
@@ -420,8 +421,15 @@ extends both with `ball` and `toe`:
 
 - **FK side:** an `fk_ball` controller drives the FK ball joint, exactly as the limb's own FK
   controls drive theirs. The FK toe follows its parent and has no control.
-- **IK side:** the `ikBall` handle (ankle → ball) and the `ikToe` handle (ball → toe), both
-  `ikSCsolver`, constrained to `toe_wiggle`.
+- **IK side:** a fresh `ikAnkle` joint, parented under the reverse foot's `ankle_driver` rather
+  than the limb's own solved ankle joint (whose rotation is already spoken for), carries the
+  `ikBall` handle (`ikAnkle` → ball) and the `ikToe` handle (ball → toe), both `ikSCsolver`,
+  constrained to `toe_wiggle`. `ikAnkle` takes its *rotation* from `ankle_driver` but its
+  *position* from a translate-only constraint off the limb's actual solved ankle
+  (`limb_result.ik_joints[-1]`): at the shipped stretch/soft-IK defaults the solved ankle
+  saturates at chain length past full reach while `ankle_driver` keeps following the control, and
+  without the position pin the ball and toe would keep travelling with it while the shin stopped
+  — the foot tearing off the leg (C1).
 - **Blend:** the ball and toe bind joints take `MatrixBlend(fk, ik, switch_plug)` — the same
   switch plug the limb already created, so a single `ikFk` value covers the whole leg.
 

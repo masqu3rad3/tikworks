@@ -63,8 +63,13 @@ LIMB_GUIDES = ("thigh", "knee", "ankle")
 FOOT_CONTROLS = ("heel", "ball_spin", "toe", "ball", "toe_wiggle", "bank")
 
 #: How far past the ankle the ``neutral`` guide sits, as a multiple of the
-#: hip-to-ankle distance. Only the direction matters to the reach network;
-#: sitting beyond the ankle keeps the guide selectable rather than buried.
+#: hip-to-ankle distance. Only the direction matters to the reach network,
+#: which reads the hip-to-neutral direction and nothing else -- the
+#: multiplier itself is shared with the arm's own ``NEUTRAL_REACH`` for
+#: consistency across limb modules, not chosen for where it lands. Unlike
+#: the arm, where beyond-the-hand sits in open space, on the leg this puts
+#: the guide below the floor plane; harmless, since its position is never
+#: read as a rest-pose landmark, only the ray from the hip through it.
 NEUTRAL_REACH = 1.4
 
 

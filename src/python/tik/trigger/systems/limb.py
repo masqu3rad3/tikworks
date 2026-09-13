@@ -98,7 +98,7 @@ def build_limb_controls(
     """
     guides = list(guides)
     if len(guides) < 3:
-        raise ValueError("build_limb_controls needs at least three guides.")
+        raise ValueError("a limb needs at least three guides.")
     labels = list(labels) if labels else [str(index) for index in range(len(guides))]
     parent = parent if parent is not None else rig.groups.socket
     if controller_size is None:

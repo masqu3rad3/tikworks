@@ -157,12 +157,12 @@ def test_the_foot_markers_sit_near_the_ground_plane(scene):
 
 
 def test_the_leg_builds_standalone_with_no_parent(scene):
-    """No parent, no inputs: the module still builds the deform skeleton.
+    """No parent, no inputs: the module still builds completely.
 
-    ``build()`` now creates the bind chain and the socket (Task 7); the
-    limb, foot and controls still don't exist (Tasks 8-15), but nothing in
-    the bind chain requires the ``root`` input to be wired -- the socket
-    simply stands free at the hip guide.
+    ``root`` is not ``required``, so the socket simply stands free at the
+    hip guide when nothing feeds it -- nothing in the build, from the bind
+    chain through the limb and the reverse foot, depends on that input
+    being wired.
     """
     leg = scene.create_guides(get_module("leg")(name="leg", side="L"))
     report = Builder().build(document=scene.document, afterlife="delete")
@@ -177,7 +177,7 @@ def test_the_bank_markers_straddle_the_ankle_in_x(scene):
     ``bank_in`` is the marker nearer the body midline (x=0) and ``bank_out``
     the one farther from it -- a different X *sign* on each side, but on
     both sides the ankle's X must land strictly between them. If the two
-    were ever swapped or misplaced in ``draw_guides``, Task 8's reverse-foot
+    were ever swapped or misplaced in ``draw_guides``, the reverse foot's
     bank pivots would roll the wrong way.
     """
     for side in ("L", "R"):
@@ -193,10 +193,10 @@ def test_the_bank_markers_straddle_the_ankle_in_x(scene):
 def test_heel_and_tip_bracket_the_ankle_in_z(scene):
     """``heel`` sits behind the ankle in Z, ``tip`` in front of it.
 
-    Task 8 builds the foot's frame by aiming heel-to-tip; if the two were
-    swapped the frame would point backwards and every later test would
-    agree with it, since Task 8's own tests build their own hardcoded
-    guides rather than reading the module's.
+    The foot's frame is built by aiming heel-to-tip (``systems/foot.py``); if
+    the two were swapped here the frame would point backwards and every
+    later test would agree with it, since ``systems/foot.py``'s own tests
+    build their own hardcoded guides rather than reading the module's.
     """
     for side in ("L", "R"):
         leg = scene.create_guides(get_module("leg")(name="leg", side=side))
@@ -364,9 +364,9 @@ def test_auto_hip_off_builds_no_reach_network(scene):
     internal node's name, so matching for it here would never find anything
     regardless of whether ``build_reach`` ran.
 
-    This also has to prove it discriminates: before this task nothing ever
-    called ``build_reach``, so "no reach nodes" held trivially regardless of
-    the flag. The second half re-runs the identical query with
+    This also has to prove it discriminates: on a leg that never wires
+    ``build_reach`` in at all, "no reach nodes" would hold trivially
+    regardless of the flag. The second half re-runs the identical query with
     ``auto_hip=True`` and requires it to find something, or the query would
     still be asserting nothing.
     """
@@ -415,3 +415,105 @@ def test_the_bind_pose_is_exact_with_every_automation_full_on(scene):
         # `pole_base.distance_to(driver)` elsewhere in this codebase) --
         # subtract-and-measure-length is the same computation.
         assert (actual - expected).length() == pytest.approx(0.0, abs=1e-4), name
+
+
+# ------------------------------------------------------------- limb lock (hip)
+#
+# The arm's two ``lock_from`` modes are both covered
+# (``tests/unit/test_limb_lock_trigger.py``); the leg only ever built the
+# default ``"thigh"``. In the ``locks_hip`` branch ``hang_from`` is driven by
+# ``build_limb_lock`` *and* read by ``build_reach`` as ``rest_from`` -- the one
+# topology on this module where a cycle is plausible -- so this also asserts
+# no cycle, not just that the length holds.
+def test_thigh_mode_moves_the_upperleg_but_not_the_hip(scene):
+    """The default: a thigh-to-ankle lock leaves the hip on the pelvis."""
+    ctx = _build_leg(scene, limb_lock=True, lock_from="thigh")
+    control = ctx.controller_by_role("ik").transform
+    hip = ctx.outputs["hip"]
+    upperleg = ctx.outputs["upperleg"]
+
+    control.world_position = (2.0, -15.0, 3.0)
+    hip_before, upperleg_before = hip.world_position, upperleg.world_position
+    control["limbLock"].value = 1.0
+
+    assert (upperleg.world_position - upperleg_before).length() > 1.0
+    assert (
+        hip.world_position - hip_before
+    ).length() < 1e-3, "the hip should not move in thigh mode"
+
+
+def test_hip_mode_carries_the_hip_along(scene):
+    ctx = _build_leg(scene, limb_lock=True, lock_from="hip")
+    control = ctx.controller_by_role("ik").transform
+    hip = ctx.outputs["hip"]
+    upperleg = ctx.outputs["upperleg"]
+
+    control.world_position = (2.0, -15.0, 3.0)
+    hip_before, upperleg_before = hip.world_position, upperleg.world_position
+    control["limbLock"].value = 1.0
+
+    assert (upperleg.world_position - upperleg_before).length() > 1.0
+    assert (
+        hip.world_position - hip_before
+    ).length() > 1.0, "the hip should travel with the push in hip mode"
+
+
+def test_both_lock_modes_hold_the_thigh_to_ankle_length_with_no_cycle(scene):
+    for index, mode in enumerate(("thigh", "hip")):
+        if index:
+            # A fresh scene per mode: `_build_leg` names its instances
+            # `body`/`leg` unconditionally, so reusing one scene across
+            # iterations would collide on those names.
+            cmds.file(new=True, force=True)
+            scene = GuideScene()
+        ctx = _build_leg(scene, limb_lock=True, lock_from=mode)
+        control = ctx.controller_by_role("ik").transform
+        upperleg = ctx.outputs["upperleg"]
+        ankle_tweak = ctx.controller_by_role("ik_tweak").transform
+
+        rest = control["lockLength"].value
+        control["limbLock"].value = 1.0
+        for pose in ((2.0, -15.0, 3.0), (-4.0, -8.0, 6.0)):
+            control.world_position = pose
+            held = (ankle_tweak.world_position - upperleg.world_position).length()
+            assert abs(held - rest) < 1e-2, f"{mode} at {pose}: {held} != {rest}"
+
+        for node in ctx.outputs.values():
+            node.world_position  # force evaluation
+        assert (cmds.cycleCheck(all=True, list=True) or []) == [], mode
+
+
+# ------------------------------------------------------------------- C1: soft
+# IK saturation vs. the reverse foot's ankle driver
+def test_pulling_the_ik_control_past_reach_keeps_the_foot_together(scene):
+    """A straight-leg contact pose: plant the foot, raise the hips.
+
+    At the shipped ``stretch``/``softIk`` attribute defaults (both 0), the
+    limb's soft-IK goal saturates at chain length
+    (``SoftIk._build_curve``/``_build_goal`` in ``systems/limb.py``) the
+    moment the IK control is pulled past hip-to-ankle reach. Before the fix,
+    ``ik_ankle`` hung rigidly off ``foot.ankle_driver``, which keeps
+    following the control with no such ceiling, while the limb's actual
+    solved ankle (``outputs["foot"]``) stopped at full reach: the ball and
+    toe kept travelling with the control, tearing the foot away from the
+    shin. Measured on this exact build and pull target: foot-to-ball comes
+    back at ``21.7419`` without the fix (rest is ``1.5008``) and at the rest
+    distance, within tolerance, with it.
+    """
+    ctx = _build_leg(scene)
+    rest_distance = (
+        ctx.outputs["ball"].world_position - ctx.outputs["foot"].world_position
+    ).length()
+
+    control = ctx.controller_by_role("ik").transform
+    # Straight down through the ankle, and well past hip -> ankle reach
+    # (~9.45 units on this module's guide pose).
+    control.world_position = (2.0, -20.0, 0.0)
+
+    pulled_distance = (
+        ctx.outputs["ball"].world_position - ctx.outputs["foot"].world_position
+    ).length()
+    assert pulled_distance == pytest.approx(rest_distance, abs=1e-2), (
+        f"the foot separated from the shin: rest={rest_distance}, "
+        f"pulled={pulled_distance}"
+    )
